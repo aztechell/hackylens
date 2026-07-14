@@ -1,13 +1,23 @@
-# HackyLens
+<div align="center">
+  <img src="docs/images/hackylens-hero.png" alt="HackyLens" width="320">
+  <h1>HackyLens</h1>
+  <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
+  <p>
+    <a href="VERSION"><img alt="Firmware version 1.0.0" src="https://img.shields.io/badge/firmware-v1.0.0-45d483?style=flat-square"></a>
+    <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
+    <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
+    <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
+  </p>
+</div>
 
-<p align="center">
-  <img src="docs/images/hackylens-hero.png" alt="HackyLens" width="800">
-</p>
-
-HackyLens is an open-source, modular firmware for the DFRobot HUSKYLENS camera. It targets the Kendryte K210 and provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
+HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
 
 > [!WARNING]
 > Flashing custom firmware replaces the firmware currently installed on the device. Make sure you are comfortable entering the K210 bootloader and restoring your preferred firmware before proceeding.
+
+## Hardware
+
+Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN0305](https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF). Other HUSKYLENS revisions may differ, so verify the board, flash layout, and pin mapping before using this firmware on another revision.
 
 ## Features
 
@@ -75,6 +85,12 @@ python tools\build_firmware.py full --disable-app pong --disable-app terminal
 ```
 
 ## Flash and debug
+
+There are three ways to install firmware:
+
+- [HLWF Desktop](https://github.com/aztechell/HLWF-desktop) — an offline Windows x64 flasher with package validation, progress reporting, and recovery support.
+- [HLWF](https://github.com/aztechell/HLWF) — a dependency-free browser uploader built on Web Serial.
+- `tools/hkflash.py` — the repository's Python flashing and debug tool, intended for development workflows.
 
 List detected serial adapters:
 
