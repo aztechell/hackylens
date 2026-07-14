@@ -1,6 +1,6 @@
 # RAM / Flash Budget
 
-The firmware keeps the v58 static buffers, including camera frame buffers, LCD shadow, SD sectors, PNG inflate buffers, and quirc storage.
+The firmware uses statically allocated camera frame buffers, an LCD shadow, SD sectors, PNG inflate buffers, and quirc storage.
 
 Current ownership:
 

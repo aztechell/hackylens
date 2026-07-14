@@ -23,7 +23,7 @@ static const hk_menu_view_t g_menu_view = {
 static void boot_log_banner(void)
 {
     printf("[BOOT] HackyLens 1.0.0 full\r\n");
-    printf("[BOOT] full modular v58 port alive\r\n");
+    printf("[BOOT] modular firmware ready\r\n");
     printf("[LCD] IO18=DC via GPIOHS output bit15, IO22=RST, IO19=SPI0_SS3\r\n");
     printf("[BTN] map LEFT=1 OK=2 RIGHT=4 BACK=8\r\n");
     printf("[LED] illum candidate IO23 PWM2_CH3 default OFF\r\n");

@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     extract_isp_stub()
     write_env(toolchain)
 
-    print("[DONE] run: . hackylens\\env.ps1")
+    print("[DONE] run: . .\\env.ps1")
     return 0
 
 

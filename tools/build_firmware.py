@@ -332,7 +332,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     toolchain = find_toolchain_bin()
     if not toolchain:
-        print("[ERR] Kendryte toolchain not found. Run bootstrap_deps.py and . hackylens\\env.ps1", file=sys.stderr)
+        print("[ERR] Kendryte toolchain not found. Run python tools\\bootstrap_deps.py and . .\\env.ps1", file=sys.stderr)
         return 1
 
     build_target(args.target, sdk, toolchain, set(args.disable_app))

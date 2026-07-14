@@ -1,7 +1,9 @@
 _deps/
 build/
 dist/
+screenshots/
 __pycache__/
 *.pyc
 *.bin
 *.elf
+env.ps1

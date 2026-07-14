@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check HackyLens firmware layer boundaries.
 
-The allowlist records legacy couplings that still exist after the v58 port.
+The allowlist records intentional low-level coupling exceptions.
 Future refactors should remove entries from ALLOWLIST, not add new ones.
 """
 

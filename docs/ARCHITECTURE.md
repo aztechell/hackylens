@@ -1,6 +1,6 @@
 # Architecture
 
-HackyLens 1.0.0 is a modular port of the known-working v58 firmware. The firmware is built from separate C translation units under `core`, `runtime`, `controllers`, `services`, `storage`, `ui`, `drivers`, `hal`, and `apps`.
+HackyLens 1.0.0 is modular firmware built from separate C translation units under `core`, `runtime`, `controllers`, `services`, `storage`, `ui`, `drivers`, `hal`, and `apps`.
 
 `firmware/targets/full.c` is a small composition root. It configures the runtime loop in `runtime/hk_main.c`, whose input polling and sleep timing remain platform-dependent. `core` owns app contracts, screen model, dispatch contracts, and neutral data contracts such as `core/pixel_source.h`; it does not access `hk_input` or `hal_time` directly.
 
