@@ -7,6 +7,7 @@
 #include "../config/input_config.h"
 #include "../config/settings_config.h"
 #include "../config/settings_layout.h"
+#include "hk_config.h"
 #include "settings_actions.h"
 #include "settings_model.h"
 #include "../core/hk_back_exit.h"
@@ -126,7 +127,7 @@ static void settings_ok(void)
         return;
     }
 
-    printf("[SETTINGS] version HackyLens v1.0.0\r\n");
+    printf("[SETTINGS] version HackyLens v%s\r\n", HACKYLENS_VERSION);
 }
 
 void settings_controller_handle_buttons(const hk_input_snapshot_t *input)

@@ -11,6 +11,7 @@
 #include "../config/settings_config.h"
 #include "../config/photo_storage_config.h"
 #include "../config/camera_layout.h"
+#include "hk_config.h"
 
 #include "../services/settings_lights.h"
 #include "../services/qr_service.h"
@@ -81,7 +82,7 @@ static void camera_settings_row_value(uint8_t index, char *value, size_t value_s
         else if(index == QR_SETTINGS_RGB_BLUE)
             snprintf(value, value_size, "%u", camera_service_rgb_channel(CAMERA_RGB_BLUE));
         else
-            snprintf(value, value_size, "v1.0.0");
+            snprintf(value, value_size, "v%s", HACKYLENS_VERSION);
         return;
     }
 
@@ -104,7 +105,7 @@ static void camera_settings_row_value(uint8_t index, char *value, size_t value_s
     else if(index == CAMERA_SETTINGS_SIZE)
         snprintf(value, value_size, "%s", camera_size_label(camera_service_size()));
     else
-        snprintf(value, value_size, "v1.0.0");
+        snprintf(value, value_size, "v%s", HACKYLENS_VERSION);
 }
 
 static void camera_settings_build_model(camera_settings_view_model_t *model)

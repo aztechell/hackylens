@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the local HackyLens 1.0.0 development environment."""
+"""Check the local HackyLens 0.1.0 development environment."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def status(ok: bool, name: str, detail: str = "") -> bool:
 
 
 def main() -> int:
-    print("HackyLens 1.0.0 full environment check")
+    print("HackyLens 0.1.0 full environment check")
     print("=======================================")
     ok = True
 

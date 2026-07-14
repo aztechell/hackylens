@@ -4,6 +4,7 @@
 
 #include "../config/settings_config.h"
 #include "../config/settings_layout.h"
+#include "hk_config.h"
 
 #include "../services/settings_service.h"
 #include "../ui/settings_view.h"
@@ -36,7 +37,7 @@ static void settings_row_value(uint8_t index, uint8_t selected, uint8_t editing,
     else if(index == SETTINGS_AUTO_SLEEP)
         snprintf(value, value_size, "%umin%s", settings_auto_sleep_minutes(), edit_mark);
     else
-        snprintf(value, value_size, "v1.0.0");
+        snprintf(value, value_size, "v%s", HACKYLENS_VERSION);
 }
 
 static void settings_build_model(settings_view_model_t *model, uint8_t index, uint8_t top, uint8_t editing)

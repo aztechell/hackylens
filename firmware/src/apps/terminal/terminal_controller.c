@@ -1,6 +1,7 @@
 #include "terminal_controller.h"
 
 #include "../../config/input_config.h"
+#include "hk_config.h"
 #include "../../core/hk_log.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
@@ -97,7 +98,7 @@ void terminal_controller_enter(const hk_input_snapshot_t *input)
     if(first_init)
     {
         shell_printf("[BOOT] HackyLens LCD terminal\r\n");
-        shell_printf("[BOOT] HackyLens 1.0.0 full\r\n");
+        shell_printf("[BOOT] HackyLens %s full\r\n", HACKYLENS_VERSION);
         shell_printf("[LCD] ST7789-compatible 320x240\r\n");
         shell_printf("[TERM] LEFT/RIGHT scroll, OK latest\r\n");
         shell_printf("[TERM] hold OK toggles font, BACK menu\r\n");

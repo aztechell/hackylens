@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 1.0.0" src="https://img.shields.io/badge/firmware-v1.0.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.1.0" src="https://img.shields.io/badge/firmware-v0.1.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
@@ -33,9 +33,9 @@ Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN030
 
 ## Screenshots
 
-| Main menu | Live camera |
-| --- | --- |
-| ![HackyLens main menu](docs/images/menu.png) | ![HackyLens camera preview](docs/images/camera.png) |
+| Main menu | Live camera | Settings |
+| --- | --- | --- |
+| ![HackyLens main menu](docs/images/menu.png) | ![HackyLens camera preview with FPS overlay](docs/images/camera.png) | ![HackyLens settings](docs/images/settings.png) |
 
 These 320 x 240 images were captured directly from a running HUSKYLENS over the firmware's UART screenshot protocol.
 
@@ -108,6 +108,12 @@ Capture the current LCD contents without a camera or screen-grabber:
 
 ```powershell
 python tools\hkflash.py screenshot --port COM10 --output screen.bmp
+```
+
+Debug commands can also open firmware screens directly; for example:
+
+```powershell
+python tools\hkflash.py cmd HKSETTINGS --port COM10
 ```
 
 Run `python tools\hkflash.py --help` or the help for an individual subcommand to see reset, baud-rate, verification, monitor, command, and frame-capture options.

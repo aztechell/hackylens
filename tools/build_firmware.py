@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build HackyLens 1.0.0 full firmware through Kendryte standalone SDK."""
+"""Build HackyLens 0.1.0 full firmware through Kendryte standalone SDK."""
 
 from __future__ import annotations
 
@@ -224,7 +224,7 @@ def write_config(stage: Path, disabled_apps: set[str]) -> None:
     lines = [
         "#ifndef HK_CONFIG_H",
         "#define HK_CONFIG_H",
-        '#define HACKYLENS_VERSION "1.0.0"',
+        '#define HACKYLENS_VERSION "0.1.0"',
     ]
     for app, flag in APP_MODULES.items():
         lines.append(f"#define {flag} {0 if app in disabled_apps else 1}")
