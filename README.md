@@ -27,3 +27,7 @@ hackylens\build\hackylens.bin
 python hackylens\tools\hkflash.py flash hackylens\build\hackylens.bin --port COM10
 python hackylens\tools\hkflash.py monitor --port COM10 --reset-before-read --duration 10
 ```
+
+## License
+
+HackyLens is released under the [MIT License](LICENSE).
