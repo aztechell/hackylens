@@ -1,0 +1,35 @@
+#ifndef HK_PONG_CONFIG_H
+#define HK_PONG_CONFIG_H
+
+#include "../../config/menu_layout.h"
+#include "../../core/hk_app.h"
+
+#define HK_PONG_SCREEN SCREEN_APP_SLOT_0
+
+#define PONG_FIELD_X 2
+#define PONG_FIELD_Y (MENU_BAR_H + 2)
+#define PONG_FIELD_W (LCD_W - 4)
+#define PONG_FIELD_H (LCD_H - MENU_BAR_H - 4)
+#define PONG_PADDLE_W 52
+#define PONG_PADDLE_H 5
+#define PONG_BALL_SIZE 6
+#define PONG_PLAYER_Y (LCD_H - 14)
+#define PONG_AI_Y (PONG_FIELD_Y + 10)
+#define PONG_PADDLE_SPEED 6
+#define PONG_AI_SPEED 4
+#define PONG_AI_REACTION_TICKS 5
+#define PONG_AI_DEAD_ZONE 3
+#define PONG_AI_ERROR_PX 11
+#define PONG_BALL_START_DX 2
+#define PONG_BALL_START_DY 3
+#define PONG_BALL_MAX_DX 7
+#define PONG_BALL_MAX_DY 7
+#define PONG_RALLY_SPEEDUP_EVERY 3
+#define PONG_SERVE_DELAY_TICKS 18
+#define PONG_FLASH_TICKS 3
+#define PONG_TRAIL_LENGTH 2
+#define PONG_TRAIL_COLOR 0x03E0
+#define PONG_BALL_COLOR COLOR_WHITE
+#define PONG_FLASH_COLOR COLOR_WHITE
+
+#endif

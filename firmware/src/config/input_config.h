@@ -1,0 +1,11 @@
+#ifndef HK_INPUT_CONFIG_H
+#define HK_INPUT_CONFIG_H
+
+#define BUTTON_LEFT 0x1U
+#define BUTTON_OK 0x2U
+#define BUTTON_RIGHT 0x4U
+#define BUTTON_BACK 0x8U
+#define BUTTON_ALL 0xFU
+#define BUTTON_DEBOUNCE_POLLS 2U
+
+#endif

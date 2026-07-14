@@ -1,0 +1,12 @@
+#ifndef HK_IMAGE_DECODE_CONFIG_H
+#define HK_IMAGE_DECODE_CONFIG_H
+
+#include "camera_config.h"
+
+#define PNG_COMP_MAX (512U * 1024U)
+#define PNG_OUT_MAX (CAMERA_MAX_FRAME_PIXELS * 2U)
+#define HUFF_TABLE_BITS 15U
+#define HUFF_TABLE_SIZE (1U << HUFF_TABLE_BITS)
+#define HUFF_INVALID 0xFFFFU
+
+#endif
