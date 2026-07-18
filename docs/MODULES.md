@@ -2,7 +2,7 @@
 
 Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
-Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. `--disable-app pong` removes PONG and its complete `apps/pong/` implementation. Likewise, `--disable-app terminal` omits all of `apps/terminal/` (app, controller, view, buffer, configuration, and feature types). Shared logging, debug-console, UART, and settings services remain available to other features.
+Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. `--disable-app pong`, `--disable-app terminal`, and `--disable-app face-detect` each omit the corresponding complete feature directory. Shared camera, FAT32, KPU/DVP HAL, logging, debug-console, UART, and settings facilities remain available when required by other features.
 
 Key public interfaces:
 
@@ -13,7 +13,7 @@ Key public interfaces:
 - `services/debug_console_service.h` for narrow debug UART read/write access.
 - `services/debug_screenshot_stream.h` and `services/screenshot_source.h` for screenshot UART transport and LCD shadow sourcing.
 - `drivers/camera_stream.h` for the IRQ-driven two-slot camera stream and its explicit frame-lease contract; SDK interrupt details remain private to `hal/hal_dvp.c`.
-- `services/face_detector.h` for KPU face detection and `storage/face_model_storage.h` for the model stored in flash.
+- `apps/face_detect/face_detect_app.h` is the sole public FACE DETECT interface; its private detector, storage, controller, view, configuration, and types remain inside the module. The KPU model is read from `/hackylens.kmodels/detect.kmodel` on the SD card.
 - `drivers/hk_lcd.h` for the synchronous full-frame RGB565-BE surface lease; UI composes into the existing LCD shadow before a single driver-owned SPI present.
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
 - `ui/hk_ui.h` and per-screen view headers for UI rendering.

@@ -5,6 +5,7 @@
 #include "../config/debug_config.h"
 
 #include "../core/hk_menu.h"
+#include "../core/hk_app_registry.h"
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "hk_config.h"
@@ -13,9 +14,6 @@
 #endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "debug_camera_controller.h"
-#endif
-#if HK_ENABLE_APP_FACE_DETECT
-#include "../services/face_detector.h"
 #endif
 #include "../services/debug_console_service.h"
 #include "../services/screenshot_source.h"
@@ -36,15 +34,8 @@ void debug_uart_handle_command(const char *cmd)
     if(debug_camera_controller_handle_command(cmd))
         return;
 #endif
-#if HK_ENABLE_APP_FACE_DETECT
-    if(str_eq_ci(cmd, "HKFACEINFO"))
-    {
-        char line[192];
-        face_detector_format_info(line, sizeof(line));
-        debug_console_write_text(line);
+    if(hk_app_registry_handle_debug_command(cmd))
         return;
-    }
-#endif
     if(str_eq_ci(cmd, "HKMENU"))
     {
         activity_note();
@@ -73,10 +64,18 @@ void debug_uart_handle_command(const char *cmd)
     if(str_eq_ci(cmd, "HKHELP"))
     {
 #if HK_ENABLE_CAMERA_FEATURE
-        debug_console_write_text("HKHELP HKSHOT HKFRAME HKCAMINFO HKQRINFO HKFACEINFO HKQR/HKQRCAM HKQRDECODE HKFPS/HKFPSON/HKFPSOFF HKCAMPROBE HKCAMREGS HKCAMDVP HKCAMBAR HKCAMERA ");
+        debug_console_write_text("HKHELP HKSHOT HKFRAME HKCAMINFO HKQRINFO HKQR/HKQRCAM HKQRDECODE HKFPS/HKFPSON/HKFPSOFF HKCAMPROBE HKCAMREGS HKCAMDVP HKCAMBAR HKCAMERA ");
 #else
         debug_console_write_text("HKHELP HKSHOT ");
 #endif
+        for(uint8_t i = 0; i < g_menu_item_count; i++)
+        {
+            if(g_menu_items[i].debug_help)
+            {
+                debug_console_write_text(g_menu_items[i].debug_help);
+                debug_console_write_text(" ");
+            }
+        }
 #if HK_ENABLE_APP_SETTINGS
         debug_console_write_text("HKSETTINGS ");
 #endif

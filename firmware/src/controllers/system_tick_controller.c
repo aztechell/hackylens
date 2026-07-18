@@ -1,6 +1,7 @@
 #include "system_tick_controller.h"
 
 #include "../core/hk_app.h"
+#include "../core/hk_app_registry.h"
 #include "../core/hk_events.h"
 
 #include "hk_config.h"
@@ -9,16 +10,11 @@
 #include "../core/hk_screen.h"
 #include "../services/settings_persistence.h"
 #include "../services/sd_service.h"
-#if HK_ENABLE_APP_FACE_DETECT
-#include "../services/face_detector.h"
-#endif
 #include "sleep_controller.h"
 
 void system_tick_controller_tick(const hk_input_snapshot_t *input)
 {
-#if HK_ENABLE_APP_FACE_DETECT
-    face_detector_service_tick();
-#endif
+    hk_app_registry_background_tick();
 #if HK_ENABLE_APP_SLEEP
     auto_sleep_controller_tick(input);
 #endif

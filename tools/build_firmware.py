@@ -49,11 +49,18 @@ APP_SOURCE_MODULES = {
         Path("firmware/src/apps/app_qr_camera.c"),
     ],
     "face-detect": [
-        Path("firmware/src/apps/app_face_detect.c"),
-        Path("firmware/src/controllers/face_detect_controller.c"),
-        Path("firmware/src/hal/hal_kpu.c"),
-        Path("firmware/src/services/face_detector.c"),
-        Path("firmware/src/storage/face_model_storage.c"),
+        Path("firmware/src/apps/face_detect/face_detect_app.c"),
+        Path("firmware/src/apps/face_detect/face_detect_app.h"),
+        Path("firmware/src/apps/face_detect/face_detect_config.h"),
+        Path("firmware/src/apps/face_detect/face_detect_controller.c"),
+        Path("firmware/src/apps/face_detect/face_detect_controller.h"),
+        Path("firmware/src/apps/face_detect/face_detect_detector.c"),
+        Path("firmware/src/apps/face_detect/face_detect_detector.h"),
+        Path("firmware/src/apps/face_detect/face_detect_model_storage.c"),
+        Path("firmware/src/apps/face_detect/face_detect_model_storage.h"),
+        Path("firmware/src/apps/face_detect/face_detect_types.h"),
+        Path("firmware/src/apps/face_detect/face_detect_view.c"),
+        Path("firmware/src/apps/face_detect/face_detect_view.h"),
     ],
     "buttons": [
         Path("firmware/src/apps/app_buttons.c"),
@@ -202,7 +209,9 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
     for app in disabled_apps:
         for rel in APP_SOURCE_MODULES.get(app, []):
             disabled_sources.add(rel)
-    camera_feature_enabled = "camera" not in disabled_apps or "qr-camera" not in disabled_apps
+    camera_feature_enabled = ("camera" not in disabled_apps or
+                              "qr-camera" not in disabled_apps or
+                              "face-detect" not in disabled_apps)
     if not camera_feature_enabled:
         disabled_sources.update(CAMERA_FEATURE_SOURCE_MODULES)
 
@@ -252,7 +261,9 @@ def stage_target(sdk: Path, target_name: str, disabled_apps: set[str]) -> Path:
         shutil.copy2(header, stage / header.name)
     shutil.copy2(ROOT / "firmware" / "config" / "hk_config_default.h", stage / "hk_config_default.h")
 
-    camera_feature_enabled = "camera" not in disabled_apps or "qr-camera" not in disabled_apps
+    camera_feature_enabled = ("camera" not in disabled_apps or
+                              "qr-camera" not in disabled_apps or
+                              "face-detect" not in disabled_apps)
     if camera_feature_enabled:
         quirc = ROOT / "firmware" / "third_party" / "quirc"
         for source in quirc.glob("*.c"):

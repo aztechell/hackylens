@@ -9,5 +9,7 @@ extern const uint8_t g_menu_item_count;
 #define MENU_ITEM_COUNT g_menu_item_count
 
 const hk_app_t *hk_app_for_screen(screen_t screen);
+void hk_app_registry_background_tick(void);
+uint8_t hk_app_registry_handle_debug_command(const char *cmd);
 
 #endif

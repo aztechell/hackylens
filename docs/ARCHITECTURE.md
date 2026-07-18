@@ -25,7 +25,9 @@ Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol an
 
 ## Feature modules
 
-`apps/pong/` and `apps/terminal/` are self-contained app modules. Their app entry points, controllers, views, configuration, state, and menu icons live inside each feature directory. The app registry is the sole shared-layer connection to either module; the corresponding feature flag and build manifest select each module as a unit. Feature code may use core lifecycle, input, LCD/UI, logging, settings, and menu/back-navigation contracts, while drivers, HAL, runtime, menu, and shared UI remain in the layered architecture. Other apps, including FACE DETECT, use the shared layered directories and are still selected through the same compile-time registry.
+`apps/pong/`, `apps/terminal/`, and `apps/face_detect/` are self-contained app modules. Their app entry points, controllers, views, configuration, state/types, and menu icons live inside each feature directory. The app registry is the sole shared-layer connection to each module and includes only its public app header; the corresponding feature flag and build manifest select each module as a unit. Feature code may use core lifecycle, input, LCD/UI, logging, settings, and menu/back-navigation contracts, while drivers, HAL, runtime, menu, and shared UI remain in the layered architecture.
+
+FACE DETECT owns its detector adapter, model-storage adapter, view, icon, debug command, and deferred KPU-unload lifecycle. It reuses the shared camera runtime, FAT32 implementation, and KPU/DVP HAL. Its model is loaded from `/hackylens.kmodels/detect.kmodel` on the SD card; it is not embedded in firmware flash.
 
 Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log-sink lifecycle. The shared logging service exposes only a generic optional sink and remains independent of Terminal. Font selection is stored in reserved feature bits of the existing version-1 settings payload, so old records and erased flash continue to decode as `TERMINAL_FONT_NORMAL` without changing record size or storage version.
 

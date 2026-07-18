@@ -89,6 +89,57 @@ TERMINAL_ALLOWED_SHARED_INCLUDES = {
     "../../services/settings_persistence.h",
     "../../services/settings_service.h",
 }
+FACE_FEATURE_PREFIX = "apps/face_detect/"
+FACE_LEGACY_PATHS = {
+    "firmware/src/apps/app_face_detect.c",
+    "firmware/src/apps/app_face_detect.h",
+    "firmware/src/config/face_detect_config.h",
+    "firmware/src/controllers/face_detect_controller.c",
+    "firmware/src/controllers/face_detect_controller.h",
+    "firmware/src/services/face_detector.c",
+    "firmware/src/services/face_detector.h",
+    "firmware/src/storage/face_model_storage.c",
+    "firmware/src/storage/face_model_storage.h",
+}
+FACE_MODULE_FILES = {
+    "face_detect_app.c",
+    "face_detect_app.h",
+    "face_detect_config.h",
+    "face_detect_controller.c",
+    "face_detect_controller.h",
+    "face_detect_detector.c",
+    "face_detect_detector.h",
+    "face_detect_model_storage.c",
+    "face_detect_model_storage.h",
+    "face_detect_types.h",
+    "face_detect_view.c",
+    "face_detect_view.h",
+}
+FACE_SPECIFIC_FILE_RE = re.compile(
+    r"^(?:app_face_detect|face_detect(?:_.*)?|face_detector|face_model_storage)\.[ch]$"
+)
+FACE_ALLOWED_SHARED_INCLUDES = {
+    "../../config/display_config.h",
+    "../../config/fat32_config.h",
+    "../../config/input_config.h",
+    "../../controllers/camera_runtime_controller.h",
+    "../../core/hk_app.h",
+    "../../core/hk_menu.h",
+    "../../core/hk_screen.h",
+    "../../core/hk_string.h",
+    "../../drivers/hk_lcd.h",
+    "../../hal/hal_dvp.h",
+    "../../hal/hal_kpu.h",
+    "../../hal/hal_time.h",
+    "../../services/camera_photo.h",
+    "../../services/debug_console_service.h",
+    "../../storage/fat32_file.h",
+    "../../storage/fat32_volume.h",
+    "../../storage/file_mount.h",
+    "../../storage/file_path.h",
+    "../../ui/camera_status_view.h",
+    "../../ui/camera_view.h",
+}
 DEBUG_SCREENSHOT_CONSOLE_API_RE = re.compile(r"\bdebug_uart_send_(bytes|text)\b")
 SDK_TOKEN_RE = re.compile(
     r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|sysctl_get_time_us|"
@@ -367,6 +418,23 @@ def terminal_include_violation(path: Path, inc: str) -> str | None:
     return None
 
 
+def face_include_violation(path: Path, inc: str) -> str | None:
+    path_rel = rel(path)
+    target = resolve_local_include(path, inc)
+
+    if path_rel.startswith("apps/face_detect/face_detect_controller.") and Path(inc).name == "face_detect_app.h":
+        return "Face Detect controller must not include the app entry-point header"
+    if target and target.startswith(FACE_FEATURE_PREFIX):
+        if path_rel.startswith(FACE_FEATURE_PREFIX):
+            return None
+        if path_rel == "apps/app_registry.c" and target == "apps/face_detect/face_detect_app.h":
+            return None
+        return "shared layers must not include Face Detect feature headers"
+    if path_rel.startswith(FACE_FEATURE_PREFIX) and inc.startswith("../../") and inc not in FACE_ALLOWED_SHARED_INCLUDES:
+        return "Face Detect feature may include only declared shared contracts"
+    return None
+
+
 def pong_layout_failures() -> list[str]:
     failures: list[str] = []
     build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
@@ -403,6 +471,29 @@ def terminal_layout_failures() -> list[str]:
         path_rel = rel(path)
         if not path_rel.startswith(TERMINAL_FEATURE_PREFIX) and TERMINAL_SPECIFIC_FILE_RE.match(path.name):
             failures.append(f"{path_rel}: Terminal-specific file must live in {TERMINAL_FEATURE_PREFIX}")
+    return failures
+
+
+def face_layout_failures() -> list[str]:
+    failures: list[str] = []
+    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
+
+    for legacy_path in sorted(FACE_LEGACY_PATHS):
+        if (ROOT / legacy_path).exists():
+            failures.append(f"{legacy_path}: legacy Face Detect path must not exist")
+        if legacy_path in build_manifest:
+            failures.append(f"tools/build_firmware.py: legacy Face Detect source path: {legacy_path}")
+    for name in sorted(FACE_MODULE_FILES):
+        path = SRC / FACE_FEATURE_PREFIX / name
+        manifest_path = f"firmware/src/{FACE_FEATURE_PREFIX}{name}"
+        if not path.is_file():
+            failures.append(f"{path.relative_to(ROOT).as_posix()}: Face Detect module file is missing")
+        if manifest_path not in build_manifest:
+            failures.append(f"tools/build_firmware.py: Face Detect module is not disabled as a unit: {manifest_path}")
+    for path in sorted(SRC.rglob("*.[ch]")):
+        path_rel = rel(path)
+        if not path_rel.startswith(FACE_FEATURE_PREFIX) and FACE_SPECIFIC_FILE_RE.match(path.name):
+            failures.append(f"{path_rel}: Face Detect-specific file must live in {FACE_FEATURE_PREFIX}")
     return failures
 
 
@@ -458,6 +549,9 @@ def main() -> int:
             terminal_violation = terminal_include_violation(path, inc)
             if terminal_violation:
                 failures.append(f"{path_rel}:{line_no}: {terminal_violation}: {inc}")
+            face_violation = face_include_violation(path, inc)
+            if face_violation:
+                failures.append(f"{path_rel}:{line_no}: {face_violation}: {inc}")
             if path_rel.startswith("drivers/") and inc in SDK_HEADERS and (path_rel, inc) in SDK_DRIVER_ALLOWLIST:
                 allowed += 1
             violation = classify_violation(path_rel, inc)
@@ -475,6 +569,7 @@ def main() -> int:
 
     failures.extend(pong_layout_failures())
     failures.extend(terminal_layout_failures())
+    failures.extend(face_layout_failures())
     failures.extend(include_graph_failures())
 
     if failures:

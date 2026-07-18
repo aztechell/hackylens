@@ -1,14 +1,14 @@
-#include "face_detector.h"
+#include "face_detect_detector.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "../config/face_detect_config.h"
-#include "../hal/hal_dvp.h"
-#include "../hal/hal_kpu.h"
-#include "../hal/hal_time.h"
-#include "../storage/face_model_storage.h"
+#include "../../hal/hal_dvp.h"
+#include "../../hal/hal_kpu.h"
+#include "../../hal/hal_time.h"
+#include "face_detect_config.h"
+#include "face_detect_model_storage.h"
 
 /* Exact tensor contract of kendryte-standalone-demo/face_detect/detect.kmodel. */
 #define FACE_W 320U
@@ -216,17 +216,17 @@ static uint8_t release_resources(void)
         return 0;
     model = g_model;
     if(model)
-        face_model_storage_free(model);
+        face_detect_model_storage_free(model);
     reset_runtime_state();
     return 1;
 }
 
-face_detect_load_result_t face_detector_load(void)
+face_detect_load_result_t face_detect_detector_load(void)
 {
     face_model_storage_result_t storage;
     hal_kpu_load_result_t load_result;
 
-    face_detector_service_tick();
+    face_detect_detector_service_tick();
     if(g_state != FACE_DETECT_STATE_UNLOADED || hal_kpu_is_busy() || hal_kpu_is_loaded())
     {
         g_result = FACE_DETECT_LOAD_KPU;
@@ -239,7 +239,7 @@ face_detect_load_result_t face_detector_load(void)
         return g_result;
     }
     g_state = FACE_DETECT_STATE_LOADING;
-    storage = face_model_storage_load(&g_model, &g_model_size);
+    storage = face_detect_model_storage_load(&g_model, &g_model_size);
     if(storage != FACE_MODEL_STORAGE_OK)
     {
         face_detect_load_result_t result =
@@ -268,7 +268,7 @@ face_detect_load_result_t face_detector_load(void)
     return g_result;
 }
 
-void face_detector_unload(void)
+void face_detect_detector_unload(void)
 {
     hal_dvp_output_ai(0);
     if(g_state == FACE_DETECT_STATE_RUNNING)
@@ -281,7 +281,7 @@ void face_detector_unload(void)
         release_resources();
 }
 
-void face_detector_service_tick(void)
+void face_detect_detector_service_tick(void)
 {
     hal_kpu_stop_result_t stop_result;
 
@@ -307,14 +307,14 @@ void face_detector_service_tick(void)
     printf("[FACE] KPU stop failed, reboot required\r\n");
 }
 
-uint8_t face_detector_ready(void)
+uint8_t face_detect_detector_ready(void)
 {
     return g_result == FACE_DETECT_LOAD_OK &&
            (g_state == FACE_DETECT_STATE_READY || g_state == FACE_DETECT_STATE_RUNNING) &&
            hal_kpu_is_loaded();
 }
 
-void face_detector_attach_camera(void)
+void face_detect_detector_attach_camera(void)
 {
     uint8_t *input = face_input_uncached();
 
@@ -325,11 +325,11 @@ void face_detector_attach_camera(void)
                           (uint32_t)(uintptr_t)(input + FACE_PIXELS * 2U));
 }
 
-void face_detector_process_frame(void)
+void face_detect_detector_process_frame(void)
 {
     uint8_t *input = face_input_uncached();
     uint8_t inference_finished;
-    if(!face_detector_ready()) return;
+    if(!face_detect_detector_ready()) return;
     inference_finished = g_done;
     finish_inference();
     /* The just-finished UI frame was captured with AI output disabled; wait
@@ -349,22 +349,22 @@ void face_detector_process_frame(void)
     }
 }
 
-const face_detect_box_t *face_detector_boxes(uint8_t *count)
+const face_detect_box_t *face_detect_detector_boxes(uint8_t *count)
 {
     if(count) *count = g_box_count;
     return g_boxes;
 }
 
-const char *face_detector_error_label(face_detect_load_result_t result)
+const char *face_detect_detector_error_label(face_detect_load_result_t result)
 {
     static const char *labels[] = {"NONE", "NO SD", "MODEL DIR", "MODEL FILE", "MODEL READ", "MODEL ALLOC", "MODEL FORMAT", "MODEL LOAD"};
     return result <= FACE_DETECT_LOAD_KPU ? labels[result] : "MODEL LOAD";
 }
 
-void face_detector_format_info(char *line, size_t line_size)
+void face_detect_detector_format_info(char *line, size_t line_size)
 {
     static const char *states[] = {"UNLOADED", "LOADING", "READY", "RUNNING", "UNLOAD_PENDING", "FAULT"};
     snprintf(line, line_size, "HKFACEINFO state=%s error=%s size=%u KPU-V3 320x240 grid=20x15x30 us=%u candidates=%u boxes=%u\r\n",
-             states[g_state], face_detector_error_label(g_result), (unsigned)g_model_size,
+             states[g_state], face_detect_detector_error_label(g_result), (unsigned)g_model_size,
              (unsigned)g_last_us, (unsigned)g_candidates_count, (unsigned)g_box_count);
 }

@@ -68,14 +68,6 @@ void menu_draw_qr_camera_icon(uint16_t x, uint16_t y, uint16_t color)
     lcd_fill_rect(x + 30, y + 42, 12, 2, color);
 }
 
-static void menu_draw_face_detect_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_draw_rect(x + 15, y + 10, 30, 34, 2, color);
-    lcd_fill_rect(x + 23, y + 22, 4, 4, color);
-    lcd_fill_rect(x + 34, y + 22, 4, 4, color);
-    lcd_fill_rect(x + 25, y + 34, 12, 2, color);
-}
-
 void menu_draw_files_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)bg;
@@ -144,8 +136,6 @@ void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
         menu_draw_camera_icon(x, y, fg);
     else if(app->screen == SCREEN_QR_CAMERA)
         menu_draw_qr_camera_icon(x, y, fg);
-    else if(app->screen == SCREEN_FACE_DETECT)
-        menu_draw_face_detect_icon(x, y, fg);
     else if(app->screen == SCREEN_FILES)
         menu_draw_files_icon(x, y, fg, bg);
     else if(app->screen == SCREEN_BUTTONS)

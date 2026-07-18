@@ -16,7 +16,7 @@
 #include "app_qr_camera.h"
 #endif
 #if HK_ENABLE_APP_FACE_DETECT
-#include "app_face_detect.h"
+#include "face_detect/face_detect_app.h"
 #endif
 #if HK_ENABLE_APP_FILES
 #include "app_files.h"
@@ -36,31 +36,46 @@
 
 const hk_app_t g_menu_items[] = {
 #if HK_ENABLE_APP_TERMINAL
-    {"terminal", "TERMINAL", HK_TERMINAL_SCREEN, terminal_enter, terminal_exit, terminal_tick, terminal_handle_buttons, terminal_draw_icon},
+    {.id = "terminal", .title = "TERMINAL", .screen = HK_TERMINAL_SCREEN,
+     .enter = terminal_enter, .exit = terminal_exit, .tick = terminal_tick,
+     .handle_input = terminal_handle_buttons, .draw_icon = terminal_draw_icon},
 #endif
 #if HK_ENABLE_APP_CAMERA
-    {"camera", "CAMERA", SCREEN_CAMERA, camera_enter, NULL, camera_tick, camera_handle_buttons, NULL},
+    {.id = "camera", .title = "CAMERA", .screen = SCREEN_CAMERA,
+     .enter = camera_enter, .tick = camera_tick, .handle_input = camera_handle_buttons},
 #endif
 #if HK_ENABLE_APP_QR_CAMERA
-    {"qr_camera", "QR-CAMERA", SCREEN_QR_CAMERA, qr_camera_enter, NULL, qr_camera_tick, qr_camera_handle_buttons, NULL},
+    {.id = "qr_camera", .title = "QR-CAMERA", .screen = SCREEN_QR_CAMERA,
+     .enter = qr_camera_enter, .tick = qr_camera_tick, .handle_input = qr_camera_handle_buttons},
 #endif
 #if HK_ENABLE_APP_FACE_DETECT
-    {"face_detect", "FACE DETECT", SCREEN_FACE_DETECT, face_detect_enter, NULL, face_detect_tick, face_detect_handle_buttons, NULL},
+    {.id = "face_detect", .title = "FACE DETECT", .screen = SCREEN_FACE_DETECT,
+     .enter = face_detect_enter, .exit = face_detect_exit, .tick = face_detect_tick,
+     .handle_input = face_detect_handle_buttons, .draw_icon = face_detect_draw_icon,
+     .background_tick = face_detect_background_tick,
+     .handle_debug_command = face_detect_handle_debug_command,
+     .debug_help = g_face_detect_debug_help},
 #endif
 #if HK_ENABLE_APP_FILES
-    {"files", "FILES", SCREEN_FILES, files_enter, NULL, files_tick, files_handle_buttons, NULL},
+    {.id = "files", .title = "FILES", .screen = SCREEN_FILES,
+     .enter = files_enter, .tick = files_tick, .handle_input = files_handle_buttons},
 #endif
 #if HK_ENABLE_APP_BUTTONS
-    {"buttons", "BUTTONS", SCREEN_BUTTONS, buttons_enter, NULL, NULL, buttons_handle_buttons, NULL},
+    {.id = "buttons", .title = "BUTTONS", .screen = SCREEN_BUTTONS,
+     .enter = buttons_enter, .handle_input = buttons_handle_buttons},
 #endif
 #if HK_ENABLE_APP_PONG
-    {"pong", "PONG", HK_PONG_SCREEN, pong_enter, NULL, pong_tick, pong_handle_buttons, pong_draw_icon},
+    {.id = "pong", .title = "PONG", .screen = HK_PONG_SCREEN,
+     .enter = pong_enter, .tick = pong_tick, .handle_input = pong_handle_buttons,
+     .draw_icon = pong_draw_icon},
 #endif
 #if HK_ENABLE_APP_SETTINGS
-    {"settings", "SETTINGS", SCREEN_SETTINGS, settings_enter, NULL, settings_tick, settings_handle_buttons, NULL},
+    {.id = "settings", .title = "SETTINGS", .screen = SCREEN_SETTINGS,
+     .enter = settings_enter, .tick = settings_tick, .handle_input = settings_handle_buttons},
 #endif
 #if HK_ENABLE_APP_SLEEP
-    {"sleep", "SLEEP", SCREEN_SLEEP, sleep_enter, NULL, NULL, sleep_handle_buttons, NULL},
+    {.id = "sleep", .title = "SLEEP", .screen = SCREEN_SLEEP,
+     .enter = sleep_enter, .handle_input = sleep_handle_buttons},
 #endif
 };
 
@@ -74,4 +89,23 @@ const hk_app_t *hk_app_for_screen(screen_t screen)
             return &g_menu_items[i];
     }
     return NULL;
+}
+
+void hk_app_registry_background_tick(void)
+{
+    for(uint8_t i = 0; i < g_menu_item_count; i++)
+    {
+        if(g_menu_items[i].background_tick)
+            g_menu_items[i].background_tick();
+    }
+}
+
+uint8_t hk_app_registry_handle_debug_command(const char *cmd)
+{
+    for(uint8_t i = 0; i < g_menu_item_count; i++)
+    {
+        if(g_menu_items[i].handle_debug_command && g_menu_items[i].handle_debug_command(cmd))
+            return 1;
+    }
+    return 0;
 }

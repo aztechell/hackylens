@@ -1,18 +1,18 @@
-#include "face_model_storage.h"
+#include "face_detect_model_storage.h"
 
 #include <stdlib.h>
 
-#include "../config/fat32_config.h"
-#include "fat32_file.h"
-#include "fat32_volume.h"
-#include "file_mount.h"
-#include "file_path.h"
+#include "../../config/fat32_config.h"
+#include "../../storage/fat32_file.h"
+#include "../../storage/fat32_volume.h"
+#include "../../storage/file_mount.h"
+#include "../../storage/file_path.h"
 
 #define FACE_MODEL_DIR_PATH "/hackylens.kmodels"
 #define FACE_MODEL_FILE_PATH "/hackylens.kmodels/detect.kmodel"
 #define FACE_MODEL_MAX_BYTES (1024U * 1024U)
 
-face_model_storage_result_t face_model_storage_load(uint8_t **buffer, uint32_t *size)
+face_model_storage_result_t face_detect_model_storage_load(uint8_t **buffer, uint32_t *size)
 {
     fat_file_entry_t entry;
     uint8_t *raw;
@@ -46,7 +46,7 @@ face_model_storage_result_t face_model_storage_load(uint8_t **buffer, uint32_t *
     return FACE_MODEL_STORAGE_OK;
 }
 
-void face_model_storage_free(uint8_t *buffer)
+void face_detect_model_storage_free(uint8_t *buffer)
 {
     if(buffer)
         free(((void **)buffer)[-1]);

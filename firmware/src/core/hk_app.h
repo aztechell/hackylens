@@ -37,6 +37,9 @@ typedef struct hk_app
     void (*tick)(const hk_input_snapshot_t *input);
     void (*handle_input)(const hk_input_snapshot_t *input);
     void (*draw_icon)(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+    void (*background_tick)(void);
+    uint8_t (*handle_debug_command)(const char *cmd);
+    const char *debug_help;
 } hk_app_t;
 
 #endif
