@@ -12,6 +12,7 @@
 
 uint8_t files_on_sd_event(hk_sd_event_t event)
 {
+    files_presenter_close_image();
     if(event == HK_SD_EVENT_REMOVED || event == HK_SD_EVENT_ERROR)
     {
         files_reset_depth();
@@ -35,6 +36,7 @@ uint8_t files_on_sd_event(hk_sd_event_t event)
 
 void files_backend_enter(void)
 {
+    files_presenter_close_image();
     files_presenter_enter();
     files_reset_depth();
     files_set_mode(FILES_MODE_LIST);

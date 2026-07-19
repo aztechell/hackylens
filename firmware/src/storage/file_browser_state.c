@@ -27,7 +27,19 @@ const file_list_item_t *files_list_items(void)
     return g_file_list_items;
 }
 
-uint8_t files_append_entry(const char *name, uint8_t attr, uint32_t cluster, uint32_t size, uint32_t dir_ordinal, uint8_t lfn_count)
+static void files_refresh_list_items(void)
+{
+    for(uint8_t i = 0; i < g_files_count; i++)
+    {
+        g_file_list_items[i].name = g_files[i].name;
+        g_file_list_items[i].size = g_files[i].size;
+        g_file_list_items[i].kind =
+            (g_files[i].attr & FAT_ATTR_DIR) ? FILE_ITEM_DIRECTORY : FILE_ITEM_REGULAR;
+    }
+}
+
+uint8_t files_append_entry(const char *name, uint8_t attr, uint32_t cluster, uint32_t size,
+                           uint32_t modified, uint32_t dir_ordinal, uint8_t lfn_count)
 {
     fat_file_entry_t *entry;
     file_list_item_t *item;
@@ -42,6 +54,7 @@ uint8_t files_append_entry(const char *name, uint8_t attr, uint32_t cluster, uin
     entry->attr = attr;
     entry->cluster = cluster;
     entry->size = size;
+    entry->modified = modified;
     entry->dir_ordinal = dir_ordinal;
     entry->lfn_count = lfn_count;
 
@@ -49,6 +62,26 @@ uint8_t files_append_entry(const char *name, uint8_t attr, uint32_t cluster, uin
     item->size = size;
     item->kind = (attr & FAT_ATTR_DIR) ? FILE_ITEM_DIRECTORY : FILE_ITEM_REGULAR;
     return 1;
+}
+
+void files_sort_newest_first(void)
+{
+    for(uint8_t i = 1; i < g_files_count; i++)
+    {
+        fat_file_entry_t key = g_files[i];
+        uint8_t insert = i;
+
+        while(insert > 0U &&
+              (g_files[insert - 1U].modified < key.modified ||
+               (g_files[insert - 1U].modified == key.modified &&
+                g_files[insert - 1U].dir_ordinal < key.dir_ordinal)))
+        {
+            g_files[insert] = g_files[insert - 1U];
+            insert--;
+        }
+        g_files[insert] = key;
+    }
+    files_refresh_list_items();
 }
 
 const fat_file_entry_t *files_entry_at(uint8_t index)

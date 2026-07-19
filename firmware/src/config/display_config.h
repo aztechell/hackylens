@@ -2,6 +2,7 @@
 #define HK_DISPLAY_CONFIG_H
 
 #include "hackylens_font_1bpp.h"
+#include "hackylens_font_cyrillic_1bpp.h"
 
 #define LCD_W 320
 #define LCD_H 240

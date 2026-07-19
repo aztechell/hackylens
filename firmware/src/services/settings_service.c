@@ -24,6 +24,7 @@ static uint8_t g_rgb_blue = 20;
 static uint8_t g_screen_brightness = 90;
 static uint8_t g_auto_sleep_minutes = 1;
 static uint8_t g_feature_flags;
+static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
 
 uint8_t hk_auto_sleep_minutes(void)
 {
@@ -120,6 +121,39 @@ void settings_set_feature_flags(uint8_t flags)
     g_feature_flags = flags & SETTINGS_FEATURE_FLAGS_MASK;
 }
 
+external_link_transport_t settings_external_link_transport(void)
+{
+    return (g_feature_flags & SETTINGS_EXTERNAL_LINK_I2C_FLAG) ? EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
+}
+
+void settings_set_external_link_transport(external_link_transport_t transport)
+{
+    if(transport == EXTERNAL_LINK_I2C)
+        g_feature_flags |= SETTINGS_EXTERNAL_LINK_I2C_FLAG;
+    else
+        g_feature_flags &= (uint8_t)~SETTINGS_EXTERNAL_LINK_I2C_FLAG;
+}
+
+external_link_uart_speed_t settings_external_link_uart_speed(void)
+{
+    return g_external_link_uart_speed;
+}
+
+uint32_t settings_external_link_uart_baud(void)
+{
+    if(g_external_link_uart_speed == EXTERNAL_LINK_UART_SPEED_9600)
+        return 9600U;
+    if(g_external_link_uart_speed == EXTERNAL_LINK_UART_SPEED_1000000)
+        return 1000000U;
+    return 115200U;
+}
+
+void settings_set_external_link_uart_speed(external_link_uart_speed_t speed)
+{
+    g_external_link_uart_speed = speed < EXTERNAL_LINK_UART_SPEED_COUNT ?
+                                 speed : EXTERNAL_LINK_UART_SPEED_115200;
+}
+
 void settings_defaults(void)
 {
     g_led_enabled = 0;
@@ -131,6 +165,7 @@ void settings_defaults(void)
     g_screen_brightness = 90;
     g_auto_sleep_minutes = 1;
     g_feature_flags = 0;
+    g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
 #endif
@@ -154,6 +189,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->screen_brightness = clamp_u8(g_screen_brightness, 10, 100);
     snapshot->auto_sleep_minutes = clamp_u8(g_auto_sleep_minutes, 1, 30);
     snapshot->feature_flags = g_feature_flags & SETTINGS_FEATURE_FLAGS_MASK;
+    snapshot->external_link_uart_speed = (uint8_t)g_external_link_uart_speed;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
@@ -176,6 +212,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     settings_set_screen_brightness(snapshot->screen_brightness);
     settings_set_auto_sleep_minutes(snapshot->auto_sleep_minutes);
     settings_set_feature_flags(snapshot->feature_flags);
+    settings_set_external_link_uart_speed((external_link_uart_speed_t)snapshot->external_link_uart_speed);
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif

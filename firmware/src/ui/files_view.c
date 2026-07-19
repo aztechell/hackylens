@@ -4,12 +4,33 @@
 #include <string.h>
 
 #include "../core/file_list_item.h"
+#include "../core/file_name.h"
+#include "../core/hk_string.h"
 
 #include "../config/display_config.h"
 #include "../config/files_layout.h"
 
 #include "../drivers/hk_lcd.h"
+#include "../drivers/frame_pool.h"
 #include "../core/files_view_port.h"
+
+static lcd_frame_surface_t g_animation_surface;
+static hk_indexed_frame_t g_animation_previous_frame;
+static hk_indexed_frame_t g_animation_current_frame;
+static uint16_t g_animation_canvas_w;
+static uint16_t g_animation_canvas_h;
+static uint16_t g_animation_view_x;
+static uint16_t g_animation_view_y;
+static uint16_t g_animation_view_w;
+static uint16_t g_animation_view_h;
+static uint16_t g_animation_background;
+static uint16_t g_animation_source_x[LCD_W];
+static uint16_t g_animation_source_y[LCD_H];
+static uint8_t *g_animation_backup;
+static uint8_t g_animation_frame_open;
+static uint8_t g_animation_reset_pending;
+static uint8_t g_animation_previous_valid;
+static uint8_t g_animation_backup_valid;
 
 static void files_view_enter_impl(void)
 {
@@ -28,13 +49,15 @@ static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items,
     uint8_t selected = entry_index == index;
     uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
     uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
-    char line[32];
+    char line[FILE_NAME_MAX + 4U];
 
     lcd_fill_rect(6, y, LCD_W - 12, FILES_ROW_H - 2, bg);
     if(entry_index >= count)
         return;
 
-    snprintf(line, sizeof(line), "%c %-18.18s", items[entry_index].kind == FILE_ITEM_DIRECTORY ? 'D' : 'F', items[entry_index].name);
+    line[0] = items[entry_index].kind == FILE_ITEM_DIRECTORY ? 'D' : 'F';
+    line[1] = ' ';
+    utf8_copy_glyphs(&line[2], sizeof(line) - 2U, items[entry_index].name, 18U);
     lcd_draw_text_at(10, y + 1, line, fg, bg);
 }
 
@@ -149,6 +172,195 @@ static void files_view_render_image_row_span_impl(uint32_t src_y, uint32_t src_h
     }
 }
 
+static void files_view_surface_pixel(uint16_t x, uint16_t y, uint16_t color)
+{
+    uint8_t *pixel;
+
+    if(x >= g_animation_surface.width || y >= g_animation_surface.height)
+        return;
+    pixel = g_animation_surface.rgb565_be +
+            (uint32_t)y * g_animation_surface.stride_bytes + (uint32_t)x * 2U;
+    pixel[0] = (uint8_t)(color >> 8);
+    pixel[1] = (uint8_t)color;
+}
+
+static uint8_t files_view_source_inside(uint16_t dst_x, uint16_t dst_y,
+                                        uint16_t src_x, uint16_t src_y,
+                                        uint16_t src_w, uint16_t src_h)
+{
+    uint16_t logical_x = g_animation_source_x[dst_x];
+    uint16_t logical_y = g_animation_source_y[dst_y];
+    return logical_x >= src_x && logical_x < (uint32_t)src_x + src_w &&
+           logical_y >= src_y && logical_y < (uint32_t)src_y + src_h;
+}
+
+static void files_view_fill_logical_rect(uint16_t src_x, uint16_t src_y,
+                                         uint16_t src_w, uint16_t src_h,
+                                         uint16_t color)
+{
+    for(uint16_t y = 0; y < g_animation_view_h; y++)
+    {
+        for(uint16_t x = 0; x < g_animation_view_w; x++)
+        {
+            if(files_view_source_inside(x, y, src_x, src_y, src_w, src_h))
+                files_view_surface_pixel((uint16_t)(g_animation_view_x + x),
+                                         (uint16_t)(g_animation_view_y + y), color);
+        }
+    }
+}
+
+static void files_view_reset_animation_surface(void)
+{
+    memset(g_animation_surface.rgb565_be, 0,
+           (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height);
+    files_view_fill_logical_rect(0, 0, g_animation_canvas_w, g_animation_canvas_h,
+                                 g_animation_background);
+    g_animation_reset_pending = 0;
+    g_animation_previous_valid = 0;
+    g_animation_backup_valid = 0;
+}
+
+static void files_view_apply_previous_disposal(void)
+{
+    if(!g_animation_previous_valid)
+        return;
+    if(g_animation_previous_frame.disposal == 2U)
+    {
+        files_view_fill_logical_rect(g_animation_previous_frame.frame_x,
+                                     g_animation_previous_frame.frame_y,
+                                     g_animation_previous_frame.frame_w,
+                                     g_animation_previous_frame.frame_h,
+                                     g_animation_background);
+    }
+    else if(g_animation_previous_frame.disposal == 3U &&
+            g_animation_backup_valid && g_animation_backup)
+    {
+        memcpy(g_animation_surface.rgb565_be, g_animation_backup,
+               (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height);
+    }
+}
+
+static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canvas_h,
+                                               uint16_t background_rgb565)
+{
+    if(canvas_w == 0 || canvas_h == 0)
+        return 0;
+    if(g_animation_frame_open)
+    {
+        lcd_frame_cancel(g_animation_surface.lease_id);
+        g_animation_frame_open = 0;
+    }
+    g_animation_canvas_w = canvas_w;
+    g_animation_canvas_h = canvas_h;
+    g_animation_background = background_rgb565;
+    image_fit_viewport(canvas_w, canvas_h, &g_animation_view_x, &g_animation_view_y,
+                       &g_animation_view_w, &g_animation_view_h);
+    for(uint16_t x = 0; x < g_animation_view_w; x++)
+        g_animation_source_x[x] = (uint16_t)((uint32_t)x * canvas_w / g_animation_view_w);
+    for(uint16_t y = 0; y < g_animation_view_h; y++)
+        g_animation_source_y[y] = (uint16_t)((uint32_t)y * canvas_h / g_animation_view_h);
+    g_animation_backup = frame_pool_scratch_buffer(LCD_W * LCD_H * 2U);
+    g_animation_reset_pending = 1;
+    g_animation_previous_valid = 0;
+    g_animation_backup_valid = 0;
+    return g_animation_backup != NULL;
+}
+
+static uint8_t files_view_animation_frame_begin_impl(const hk_indexed_frame_t *frame)
+{
+    uint32_t surface_bytes;
+
+    if(!frame || frame->canvas_w != g_animation_canvas_w ||
+       frame->canvas_h != g_animation_canvas_h || g_animation_frame_open ||
+       !lcd_frame_acquire(&g_animation_surface))
+        return 0;
+    g_animation_frame_open = 1;
+    surface_bytes = (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height;
+    if(g_animation_reset_pending)
+        files_view_reset_animation_surface();
+    else
+        files_view_apply_previous_disposal();
+
+    g_animation_current_frame = *frame;
+    if(frame->disposal == 3U)
+    {
+        memcpy(g_animation_backup, g_animation_surface.rgb565_be, surface_bytes);
+        g_animation_backup_valid = 1;
+    }
+    else
+    {
+        g_animation_backup_valid = 0;
+    }
+    return 1;
+}
+
+static void files_view_animation_render_indexed_row_impl(const hk_indexed_frame_t *frame,
+                                                         uint16_t frame_row,
+                                                         const uint8_t *indices,
+                                                         const uint16_t *palette,
+                                                         uint16_t palette_size)
+{
+    uint16_t logical_y;
+
+    if(!g_animation_frame_open || !frame || !indices || !palette ||
+       frame_row >= frame->frame_h)
+        return;
+    logical_y = (uint16_t)(frame->frame_y + frame_row);
+    for(uint16_t y = 0; y < g_animation_view_h; y++)
+    {
+        uint16_t source_y = g_animation_source_y[y];
+        if(source_y != logical_y)
+            continue;
+        for(uint16_t x = 0; x < g_animation_view_w; x++)
+        {
+            uint16_t source_x = g_animation_source_x[x];
+            uint16_t local_x;
+            uint8_t index;
+
+            if(source_x < frame->frame_x || source_x >= (uint32_t)frame->frame_x + frame->frame_w)
+                continue;
+            local_x = (uint16_t)(source_x - frame->frame_x);
+            index = indices[local_x];
+            if(index >= palette_size || index == frame->transparent_index)
+                continue;
+            files_view_surface_pixel((uint16_t)(g_animation_view_x + x),
+                                     (uint16_t)(g_animation_view_y + y), palette[index]);
+        }
+    }
+}
+
+static uint8_t files_view_animation_frame_end_impl(void)
+{
+    uint32_t lease_id;
+
+    if(!g_animation_frame_open)
+        return 0;
+    lease_id = g_animation_surface.lease_id;
+    g_animation_frame_open = 0;
+    g_animation_previous_frame = g_animation_current_frame;
+    g_animation_previous_valid = 1;
+    if(!lcd_frame_present(lease_id))
+    {
+        lcd_frame_cancel(lease_id);
+        return 0;
+    }
+    return 1;
+}
+
+static void files_view_animation_end_impl(void)
+{
+    if(g_animation_frame_open)
+        lcd_frame_cancel(g_animation_surface.lease_id);
+    memset(&g_animation_surface, 0, sizeof(g_animation_surface));
+    memset(&g_animation_previous_frame, 0, sizeof(g_animation_previous_frame));
+    memset(&g_animation_current_frame, 0, sizeof(g_animation_current_frame));
+    g_animation_frame_open = 0;
+    g_animation_reset_pending = 0;
+    g_animation_previous_valid = 0;
+    g_animation_backup_valid = 0;
+    g_animation_backup = NULL;
+}
+
 static void files_view_draw_delete_confirm_impl(const char *name)
 {
     menu_draw_chrome("DELETE");
@@ -168,6 +380,11 @@ void files_view_init(void)
         .render_preview = files_view_render_preview_impl,
         .clear_image = files_view_clear_image_impl,
         .render_image_row_span = files_view_render_image_row_span_impl,
+        .animation_begin = files_view_animation_begin_impl,
+        .animation_frame_begin = files_view_animation_frame_begin_impl,
+        .animation_render_indexed_row = files_view_animation_render_indexed_row_impl,
+        .animation_frame_end = files_view_animation_frame_end_impl,
+        .animation_end = files_view_animation_end_impl,
         .draw_delete_confirm = files_view_draw_delete_confirm_impl,
     };
 

@@ -4,6 +4,7 @@
 
 #include "../board/board_pins.h"
 #include "../config/display_config.h"
+#include "../core/hk_string.h"
 #include "hackylens_boot_logo_1bpp.h"
 
 #include "../hal/hal_gpio.h"
@@ -317,17 +318,31 @@ void lcd_draw_boot_logo(void)
     }
 }
 
-const uint8_t *term_glyph(char c)
+const uint8_t *term_glyph(uint32_t codepoint)
 {
-    if(c < HACKYLENS_FONT_FIRST || c > HACKYLENS_FONT_LAST)
-        c = '?';
-    uint32_t glyph_index = (uint32_t)(c - HACKYLENS_FONT_FIRST);
-    return &g_hackylens_font_1bpp[glyph_index * HACKYLENS_FONT_H * HACKYLENS_FONT_ROW_BYTES];
+    uint32_t glyph_index;
+
+    if(codepoint == HACKYLENS_CYRILLIC_YO_UPPER)
+        glyph_index = 0U;
+    else if(codepoint >= HACKYLENS_CYRILLIC_FIRST && codepoint <= HACKYLENS_CYRILLIC_LAST)
+        glyph_index = 1U + codepoint - HACKYLENS_CYRILLIC_FIRST;
+    else if(codepoint == HACKYLENS_CYRILLIC_YO_LOWER)
+        glyph_index = HACKYLENS_CYRILLIC_COUNT - 1U;
+    else
+    {
+        if(codepoint < HACKYLENS_FONT_FIRST || codepoint > HACKYLENS_FONT_LAST)
+            codepoint = '?';
+        glyph_index = codepoint - HACKYLENS_FONT_FIRST;
+        return &g_hackylens_font_1bpp[
+            glyph_index * HACKYLENS_FONT_H * HACKYLENS_FONT_ROW_BYTES];
+    }
+    return &g_hackylens_font_cyrillic_1bpp[
+        glyph_index * HACKYLENS_FONT_H * HACKYLENS_FONT_ROW_BYTES];
 }
 
-void lcd_draw_glyph_at(uint16_t x0, uint16_t y0, char c, uint16_t fg, uint16_t bg)
+void lcd_draw_glyph_at(uint16_t x0, uint16_t y0, uint32_t codepoint, uint16_t fg, uint16_t bg)
 {
-    const uint8_t *glyph = term_glyph(c);
+    const uint8_t *glyph = term_glyph(codepoint);
     for(uint16_t y = 0; y < HACKYLENS_FONT_H; y++)
     {
         for(uint16_t x = 0; x < HACKYLENS_FONT_W; x++)
@@ -350,14 +365,15 @@ void lcd_draw_text_at(uint16_t x, uint16_t y, const char *text, uint16_t fg, uin
 {
     while(*text && x + HACKYLENS_FONT_W <= LCD_W)
     {
-        lcd_draw_glyph_at(x, y, *text++, fg, bg);
+        uint32_t codepoint = utf8_next(&text);
+        lcd_draw_glyph_at(x, y, codepoint, fg, bg);
         x += HACKYLENS_FONT_W;
     }
 }
 
 void lcd_draw_text_centered(uint16_t y, const char *text, uint16_t fg, uint16_t bg)
 {
-    uint16_t width = (uint16_t)(strlen(text) * HACKYLENS_FONT_W);
+    uint16_t width = (uint16_t)(utf8_glyph_count(text) * HACKYLENS_FONT_W);
     uint16_t x = width < LCD_W ? (LCD_W - width) / 2 : 0;
     lcd_draw_text_at(x, y, text, fg, bg);
 }

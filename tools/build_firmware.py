@@ -87,6 +87,8 @@ APP_SOURCE_MODULES = {
         Path("firmware/src/storage/files_view_bridge.c"),
         Path("firmware/src/storage/image_decode_bmp.c"),
         Path("firmware/src/storage/image_decode_common.c"),
+        Path("firmware/src/storage/image_decode_gif.c"),
+        Path("firmware/src/storage/image_decode_gif.h"),
         Path("firmware/src/storage/image_decode_png.c"),
         Path("firmware/src/storage/image_decode_png_inflate.c"),
         Path("firmware/src/storage/image_decode_ppm.c"),

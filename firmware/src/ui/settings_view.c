@@ -26,6 +26,10 @@ const char *settings_view_row_title(uint8_t index)
         return "Screen Bright";
     if(index == SETTINGS_AUTO_SLEEP)
         return "Auto Sleep";
+    if(index == SETTINGS_EXTERNAL_LINK)
+        return "External Link";
+    if(index == SETTINGS_UART_SPEED)
+        return "UART Speed";
     return "Version";
 }
 

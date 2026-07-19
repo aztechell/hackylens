@@ -5,6 +5,7 @@
 #include "../config/settings_config.h"
 
 #include "../services/settings_lights.h"
+#include "../services/external_link_service.h"
 #include "../services/settings_persistence.h"
 #include "../services/settings_service.h"
 #include "../core/hk_screen.h"
@@ -16,7 +17,9 @@ uint8_t settings_action_is_editable_row(uint8_t index)
            index == SETTINGS_RGB_GREEN ||
            index == SETTINGS_RGB_BLUE ||
            index == SETTINGS_SCREEN_BRIGHTNESS ||
-           index == SETTINGS_AUTO_SLEEP;
+           index == SETTINGS_AUTO_SLEEP ||
+           index == SETTINGS_EXTERNAL_LINK ||
+           index == SETTINGS_UART_SPEED;
 }
 
 uint8_t settings_action_toggle_led(void)
@@ -128,6 +131,33 @@ uint8_t settings_action_adjust_value(uint8_t index, int8_t delta)
         settings_mark_dirty(0);
         printf("[SETTINGS] auto_sleep=%u min\r\n", settings_auto_sleep_minutes());
         return SETTINGS_AUTO_SLEEP;
+    }
+
+    if(index == SETTINGS_EXTERNAL_LINK)
+    {
+        external_link_transport_t transport = settings_external_link_transport() == EXTERNAL_LINK_UART ?
+                                              EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
+        (void)delta;
+        settings_set_external_link_transport(transport);
+        external_link_service_set_transport(transport);
+        settings_mark_dirty(0);
+        printf("[LINK] setting=%s\r\n", transport == EXTERNAL_LINK_I2C ? "I2C" : "UART");
+        return SETTINGS_EXTERNAL_LINK;
+    }
+
+    if(index == SETTINGS_UART_SPEED)
+    {
+        external_link_uart_speed_t speed = settings_external_link_uart_speed();
+        if(delta < 0)
+            speed = speed == EXTERNAL_LINK_UART_SPEED_9600 ?
+                    EXTERNAL_LINK_UART_SPEED_1000000 : (external_link_uart_speed_t)(speed - 1);
+        else
+            speed = (external_link_uart_speed_t)((speed + 1) % EXTERNAL_LINK_UART_SPEED_COUNT);
+        settings_set_external_link_uart_speed(speed);
+        external_link_service_set_uart_baud(settings_external_link_uart_baud());
+        settings_mark_dirty(0);
+        printf("[LINK] uart=%u\r\n", (unsigned)settings_external_link_uart_baud());
+        return SETTINGS_UART_SPEED;
     }
 
     return SETTINGS_ACTION_NO_ROW;

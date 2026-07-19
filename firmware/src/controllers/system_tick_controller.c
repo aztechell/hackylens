@@ -9,11 +9,13 @@
 #include "../core/hk_dispatch.h"
 #include "../core/hk_screen.h"
 #include "../services/settings_persistence.h"
+#include "../services/external_link_service.h"
 #include "../services/sd_service.h"
 #include "sleep_controller.h"
 
 void system_tick_controller_tick(const hk_input_snapshot_t *input)
 {
+    external_link_service_tick();
     hk_app_registry_background_tick();
 #if HK_ENABLE_APP_SLEEP
     auto_sleep_controller_tick(input);

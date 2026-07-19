@@ -7,6 +7,7 @@
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
 #include "../../services/camera_photo.h"
+#include "../../services/vision_result_service.h"
 #include "../../ui/camera_status_view.h"
 #include "face_detect_detector.h"
 #include "face_detect_view.h"
@@ -19,6 +20,7 @@ void face_detect_controller_enter(const hk_input_snapshot_t *input)
     g_error = result != FACE_DETECT_LOAD_OK;
     if(g_error)
     {
+        vision_result_clear(VISION_SOURCE_FACE);
         hk_screen_set(SCREEN_FACE_DETECT);
         camera_status_view_draw("FACE ERROR", face_detect_detector_error_label(result));
         printf("[FACE] load %s\r\n", face_detect_detector_error_label(result));
@@ -30,6 +32,7 @@ void face_detect_controller_enter(const hk_input_snapshot_t *input)
 
 void face_detect_controller_exit(void)
 {
+    vision_result_clear(VISION_SOURCE_FACE);
     face_detect_detector_unload();
 }
 
@@ -39,12 +42,26 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
     uint16_t width;
     uint16_t height;
     uint8_t count;
+    vision_result_item_t items[FACE_DETECT_BOX_MAX];
 
     if(g_error || !camera_runtime_tick(input))
         return;
     face_detect_detector_process_frame();
     boxes = face_detect_detector_boxes(&count);
     camera_service_photo_info(NULL, &width, &height);
+    for(uint8_t i = 0U; i < count; i++)
+    {
+        items[i].kind = VISION_ITEM_BLOCK;
+        items[i].flags = 0U;
+        items[i].id = i;
+        items[i].x0 = (uint16_t)boxes[i].x;
+        items[i].y0 = (uint16_t)boxes[i].y;
+        items[i].x1 = (uint16_t)(boxes[i].x + boxes[i].w);
+        items[i].y1 = (uint16_t)(boxes[i].y + boxes[i].h);
+        items[i].confidence = 1000U;
+        items[i].reserved = 0U;
+    }
+    vision_result_publish(VISION_SOURCE_FACE, width, height, items, count);
     face_detect_view_draw_boxes(width, height, boxes, count);
 }
 

@@ -10,6 +10,7 @@
 #include "../core/hk_binary.h"
 #include "../core/hk_camera_sizes.h"
 #include "hk_config.h"
+#include "external_link_types.h"
 
 settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
 {
@@ -43,9 +44,12 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
     payload.rgb_green = clamp_u8(snapshot->rgb_green, 0, 100);
     payload.rgb_blue = clamp_u8(snapshot->rgb_blue, 0, 100);
     payload.rgb_schema_mark = SETTINGS_RGB_MARK;
+    payload.fps_rgb_blue = (uint8_t)(SETTINGS_UART_SPEED_MARK |
+                                    (((uint8_t)snapshot->external_link_uart_speed << SETTINGS_UART_SPEED_SHIFT) &
+                                     SETTINGS_UART_SPEED_MASK));
 #if HK_ENABLE_CAMERA_FEATURE
-    payload.fps_rgb_blue = (uint8_t)((snapshot->camera.fps_enabled ? 1U : 0U) |
-                                    ((clamp_u8(snapshot->camera.rgb_blue, 0, 100) / 10U) << 4));
+    payload.fps_rgb_blue |= (uint8_t)((snapshot->camera.fps_enabled ? 1U : 0U) |
+                                     ((clamp_u8(snapshot->camera.rgb_blue, 0, 100) / 10U) << 4));
 #endif
 #if HK_ENABLE_QR_FEATURE
     payload.qr_rate_fps_mark = (uint8_t)((clamp_u8(snapshot->qr_decode_rate, QR_DECODE_RATE_MIN, QR_DECODE_RATE_MAX) << 4) |
@@ -100,6 +104,15 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
                                    (uint8_t)(payload->auto_sleep_minutes & SETTINGS_PAYLOAD_AUTO_SLEEP_MASK) : 1;
     snapshot->feature_flags = (uint8_t)((payload->auto_sleep_minutes >> SETTINGS_PAYLOAD_FEATURE_SHIFT) &
                                         SETTINGS_FEATURE_FLAGS_MASK);
+    if(payload->fps_rgb_blue & SETTINGS_UART_SPEED_MARK)
+    {
+        uint8_t speed = (uint8_t)((payload->fps_rgb_blue & SETTINGS_UART_SPEED_MASK) >>
+                                  SETTINGS_UART_SPEED_SHIFT);
+        snapshot->external_link_uart_speed = speed < EXTERNAL_LINK_UART_SPEED_COUNT ?
+                                             speed : EXTERNAL_LINK_UART_SPEED_115200;
+    }
+    else
+        snapshot->external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
 #if HK_ENABLE_CAMERA_FEATURE
     if(payload->camera_schema_mark == SETTINGS_CAMERA_MARK || payload->camera_schema_mark == SETTINGS_CAMERA_MARK_V1)
     {

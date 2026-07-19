@@ -104,3 +104,21 @@ void board_camera_init_pins(void)
 
     hal_spi0_enable_dvp_data();
 }
+
+void board_external_link_uart_pins(void)
+{
+    fpioa_set_function(IO_EXTERNAL_UART_R, FUNC_UART1_RX);
+    fpioa_set_function(IO_EXTERNAL_UART_T, FUNC_UART1_TX);
+    fpioa_set_io_pull(IO_EXTERNAL_UART_R, FPIOA_PULL_UP);
+    fpioa_set_io_driving(IO_EXTERNAL_UART_T, FPIOA_DRIVING_7);
+}
+
+void board_external_link_i2c_pins(void)
+{
+    fpioa_set_function(IO_EXTERNAL_I2C_R, FUNC_I2C0_SCLK);
+    fpioa_set_function(IO_EXTERNAL_I2C_T, FUNC_I2C0_SDA);
+    fpioa_set_io_pull(IO_EXTERNAL_I2C_R, FPIOA_PULL_UP);
+    fpioa_set_io_pull(IO_EXTERNAL_I2C_T, FPIOA_PULL_UP);
+    fpioa_set_io_driving(IO_EXTERNAL_I2C_R, FPIOA_DRIVING_7);
+    fpioa_set_io_driving(IO_EXTERNAL_I2C_T, FPIOA_DRIVING_7);
+}

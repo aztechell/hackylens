@@ -30,33 +30,33 @@ static void file_path_short_name(const uint8_t *raw, char *name, size_t name_siz
         snprintf(name, name_size, "%s", base);
 }
 
-static void file_path_lfn_store(const uint8_t *raw, char *lfn, size_t lfn_size)
+static void file_path_lfn_store(const uint8_t *raw, uint16_t *lfn, size_t lfn_units)
 {
     static const uint8_t positions[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
     uint8_t sequence = (uint8_t)(raw[0] & 0x1FU);
     uint16_t offset;
 
     if(raw[0] & 0x40U)
-        memset(lfn, 0, lfn_size);
+        memset(lfn, 0, lfn_units * sizeof(*lfn));
     if(sequence == 0)
         return;
     offset = (uint16_t)(sequence - 1U) * 13U;
-    for(uint8_t i = 0; i < 13 && offset + i + 1U < lfn_size; i++)
+    for(uint8_t i = 0; i < 13 && offset + i + 1U < lfn_units; i++)
     {
         uint16_t character = rd16(&raw[positions[i]]);
         if(character == 0x0000U || character == 0xFFFFU)
         {
-            lfn[offset + i] = '\0';
+            lfn[offset + i] = 0U;
             break;
         }
-        lfn[offset + i] = character < 0x80U ? (char)character : '?';
+        lfn[offset + i] = character;
     }
 }
 
 static file_path_result_t file_path_find_in_directory(uint32_t directory_cluster, const char *wanted,
                                                       fat_file_entry_t *found)
 {
-    char lfn[FILE_NAME_MAX] = {0};
+    uint16_t lfn[FILE_LFN_MAX_UNITS] = {0};
     uint32_t current = directory_cluster;
     uint32_t ordinal = 0;
     uint8_t lfn_count = 0;
@@ -81,34 +81,35 @@ static file_path_result_t file_path_find_in_directory(uint32_t directory_cluster
                     return FILE_PATH_NOT_FOUND;
                 if(raw[0] == 0xE5U)
                 {
-                    lfn[0] = '\0';
+                    lfn[0] = 0U;
                     lfn_count = 0;
                     continue;
                 }
                 if(attr == 0x0FU)
                 {
-                    file_path_lfn_store(raw, lfn, sizeof(lfn));
+                    file_path_lfn_store(raw, lfn, FILE_LFN_MAX_UNITS);
                     if(lfn_count < 20U)
                         lfn_count++;
                     continue;
                 }
                 if((attr & 0x08U) || raw[0] == '.')
                 {
-                    lfn[0] = '\0';
+                    lfn[0] = 0U;
                     lfn_count = 0;
                     continue;
                 }
                 if(lfn[0])
-                    snprintf(name, sizeof(name), "%s", lfn);
+                    utf16_to_utf8(lfn, FILE_LFN_MAX_UNITS, name, sizeof(name));
                 else
                     file_path_short_name(raw, name, sizeof(name));
-                lfn[0] = '\0';
+                lfn[0] = 0U;
                 if(str_eq_ci(name, wanted))
                 {
                     snprintf(found->name, sizeof(found->name), "%s", name);
                     found->attr = attr;
                     found->cluster = ((uint32_t)rd16(&raw[20]) << 16) | rd16(&raw[26]);
                     found->size = rd32(&raw[28]);
+                    found->modified = ((uint32_t)rd16(&raw[24]) << 16) | rd16(&raw[22]);
                     found->dir_ordinal = entry_ordinal;
                     found->lfn_count = lfn_count;
                     return FILE_PATH_OK;

@@ -58,7 +58,8 @@ const hk_app_t g_menu_items[] = {
 #endif
 #if HK_ENABLE_APP_FILES
     {.id = "files", .title = "FILES", .screen = SCREEN_FILES,
-     .enter = files_enter, .tick = files_tick, .handle_input = files_handle_buttons},
+     .enter = files_enter, .exit = files_exit, .tick = files_tick,
+     .handle_input = files_handle_buttons},
 #endif
 #if HK_ENABLE_APP_BUTTONS
     {.id = "buttons", .title = "BUTTONS", .screen = SCREEN_BUTTONS,

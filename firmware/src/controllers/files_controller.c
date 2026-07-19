@@ -152,6 +152,7 @@ static void files_controller_handle_preview_buttons(uint32_t pressed, uint32_t c
     if(pressed & BUTTON_BACK)
     {
         files_repeat_reset();
+        files_presenter_close_image();
         files_set_mode(FILES_MODE_LIST);
         files_ok_reset();
         files_presenter_render_list();
@@ -174,7 +175,11 @@ static void files_controller_handle_preview_buttons(uint32_t pressed, uint32_t c
         return;
     }
     if((changed & BUTTON_OK) && !(input_state & BUTTON_OK))
+    {
+        if(files_ok_release_should_open() && files_mode() == FILES_MODE_IMAGE)
+            (void)files_presenter_toggle_image_pause(now_us);
         files_ok_reset();
+    }
 }
 
 static uint8_t files_controller_handle_list_back(void)
@@ -219,15 +224,26 @@ void files_controller_enter(const hk_input_snapshot_t *input)
     files_backend_enter();
 }
 
+void files_controller_exit(void)
+{
+    files_presenter_close_image();
+    files_controller_reset_input();
+}
+
 void files_controller_tick(const hk_input_snapshot_t *input)
 {
+    uint64_t now_us;
+
     if(hk_screen_get() != SCREEN_FILES)
     {
         files_repeat_reset();
         return;
     }
 
-    files_controller_tick_delete(input->state, hal_time_us());
+    now_us = hal_time_us();
+    files_controller_tick_delete(input->state, now_us);
+    if(files_mode() == FILES_MODE_IMAGE)
+        files_presenter_tick_image(now_us);
 }
 
 void files_controller_handle_buttons(const hk_input_snapshot_t *input)

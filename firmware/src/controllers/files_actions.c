@@ -5,6 +5,8 @@
 #include "../config/display_config.h"
 #include "../config/files_layout.h"
 #include "../config/fat32_config.h"
+#include "../core/file_name.h"
+#include "../core/hk_string.h"
 #include "../storage/file_browser_list.h"
 #include "../storage/file_browser_mode.h"
 #include "../storage/file_browser_navigation.h"
@@ -205,7 +207,7 @@ uint8_t files_back_from_list(void)
 uint8_t files_delete_confirm_enter(void)
 {
     const fat_file_entry_t *entry;
-    char name[24];
+    char name[FILE_NAME_MAX];
 
     if(!hk_fat_mounted() || files_count() == 0)
         return 0;
@@ -214,8 +216,10 @@ uint8_t files_delete_confirm_enter(void)
     if(!entry)
         return 0;
 
-    snprintf(name, sizeof(name), "%.20s", entry->name);
+    utf8_copy_glyphs(name, sizeof(name), entry->name, 20U);
     g_files_delete_origin_mode = files_mode();
+    if(g_files_delete_origin_mode == FILES_MODE_IMAGE)
+        files_presenter_close_image();
     files_set_mode(FILES_MODE_DELETE_CONFIRM);
     files_presenter_draw_delete_confirm(name);
     return 1;

@@ -20,6 +20,7 @@ typedef struct
     uint8_t screen_brightness;
     uint8_t auto_sleep_minutes;
     uint8_t feature_flags;
+    uint8_t external_link_uart_speed;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_persist_settings_t camera;
 #endif

@@ -18,12 +18,15 @@
 #include "../services/debug_console_service.h"
 #include "../services/screenshot_source.h"
 #include "../services/debug_screenshot_stream.h"
+#include "../services/external_link_service.h"
 
 static char g_debug_cmd[DEBUG_CMD_MAX];
 static uint8_t g_debug_cmd_len;
 
 void debug_uart_handle_command(const char *cmd)
 {
+    if(external_link_service_handle_debug_command(cmd))
+        return;
     if(str_eq_ci(cmd, "HKSHOT") || str_eq_ci(cmd, "SHOT") || str_eq_ci(cmd, "SCREENSHOT"))
     {
         activity_note();
@@ -79,7 +82,7 @@ void debug_uart_handle_command(const char *cmd)
 #if HK_ENABLE_APP_SETTINGS
         debug_console_write_text("HKSETTINGS ");
 #endif
-        debug_console_write_text("HKMENU HKPING\n");
+        debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKPING\n");
         return;
     }
 }

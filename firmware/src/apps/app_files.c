@@ -8,6 +8,11 @@ void files_enter(const hk_input_snapshot_t *input)
     files_controller_enter(input);
 }
 
+void files_exit(void)
+{
+    files_controller_exit();
+}
+
 void files_tick(const hk_input_snapshot_t *input)
 {
     files_controller_tick(input);

@@ -24,8 +24,8 @@ uint8_t lcd_frame_present(uint32_t lease_id);
 void lcd_frame_cancel(uint32_t lease_id);
 void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 void lcd_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t thickness, uint16_t color);
-const uint8_t *term_glyph(char c);
-void lcd_draw_glyph_at(uint16_t x0, uint16_t y0, char c, uint16_t fg, uint16_t bg);
+const uint8_t *term_glyph(uint32_t codepoint);
+void lcd_draw_glyph_at(uint16_t x0, uint16_t y0, uint32_t codepoint, uint16_t fg, uint16_t bg);
 void lcd_draw_text_at(uint16_t x, uint16_t y, const char *text, uint16_t fg, uint16_t bg);
 void lcd_draw_text_centered(uint16_t y, const char *text, uint16_t fg, uint16_t bg);
 

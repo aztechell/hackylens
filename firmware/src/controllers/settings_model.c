@@ -36,6 +36,11 @@ static void settings_row_value(uint8_t index, uint8_t selected, uint8_t editing,
         snprintf(value, value_size, "%u%s", settings_screen_brightness(), edit_mark);
     else if(index == SETTINGS_AUTO_SLEEP)
         snprintf(value, value_size, "%umin%s", settings_auto_sleep_minutes(), edit_mark);
+    else if(index == SETTINGS_EXTERNAL_LINK)
+        snprintf(value, value_size, "%s%s",
+                 settings_external_link_transport() == EXTERNAL_LINK_I2C ? "I2C" : "UART", edit_mark);
+    else if(index == SETTINGS_UART_SPEED)
+        snprintf(value, value_size, "%u%s", (unsigned)settings_external_link_uart_baud(), edit_mark);
     else
         snprintf(value, value_size, "v%s", HACKYLENS_VERSION);
 }

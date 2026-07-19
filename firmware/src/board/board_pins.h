@@ -33,6 +33,12 @@
 #define IO_SD_D1 26
 #define IO_SD_CS 29
 
+/* External four-pin T/R/-/+ connector. */
+#define IO_EXTERNAL_UART_R 34
+#define IO_EXTERNAL_UART_T 35
+#define IO_EXTERNAL_I2C_R 34
+#define IO_EXTERNAL_I2C_T 35
+
 #define GPIOHS_BTN_LEFT 2
 #define GPIOHS_BTN_OK 3
 #define GPIOHS_BTN_RIGHT 4

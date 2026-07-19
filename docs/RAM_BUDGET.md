@@ -8,6 +8,7 @@ Current ownership:
 - Two camera stream slots: `drivers/frame_pool.c`; preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c` without allocating a third frame.
 - SD/FAT sector buffers: `storage/fat32_sd.c`.
 - PNG inflate and image row buffers: `storage/image_decode_png_inflate.c` and `storage/image_decode_common.c`.
+- GIF decoding uses fixed 12-bit LZW tables, one 255-byte sub-block buffer, the shared image row buffer, and small precomputed viewport maps. Frames are composited directly into the 320x240 LCD shadow; disposal mode 3 temporarily reuses one existing camera frame-pool slot, so no GIF-sized logical canvas or additional framebuffer is allocated.
 - Terminal history ring and viewport: `apps/terminal/terminal_buffer.c`; they are omitted when Terminal is disabled.
 
 Build guard: `hackylens.bin` must remain below `0x007FE000`, preserving the two 4 KB settings slots at `0x007FE000` and `0x007FF000`.

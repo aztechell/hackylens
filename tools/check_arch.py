@@ -133,6 +133,7 @@ FACE_ALLOWED_SHARED_INCLUDES = {
     "../../hal/hal_time.h",
     "../../services/camera_photo.h",
     "../../services/debug_console_service.h",
+    "../../services/vision_result_service.h",
     "../../storage/fat32_file.h",
     "../../storage/fat32_volume.h",
     "../../storage/file_mount.h",

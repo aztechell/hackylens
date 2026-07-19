@@ -73,6 +73,63 @@ static void files_presenter_render_image_row(void *context, uint32_t src_y, uint
         g_files_view_ops->render_image_row_span(src_y, src_h, row, src_w, bpp, bgr_order);
 }
 
+static uint8_t files_presenter_animation_begin(void *context, uint16_t canvas_w,
+                                               uint16_t canvas_h, uint16_t background_rgb565)
+{
+    (void)context;
+    return g_files_view_ops && g_files_view_ops->animation_begin &&
+           g_files_view_ops->animation_begin(canvas_w, canvas_h, background_rgb565);
+}
+
+static uint8_t files_presenter_animation_frame_begin(void *context, const file_gif_frame_t *frame)
+{
+    (void)context;
+    return g_files_view_ops && g_files_view_ops->animation_frame_begin &&
+           g_files_view_ops->animation_frame_begin(frame);
+}
+
+static void files_presenter_animation_render_indexed_row(void *context,
+                                                         const file_gif_frame_t *frame,
+                                                         uint16_t frame_row,
+                                                         const uint8_t *indices,
+                                                         const uint16_t *palette,
+                                                         uint16_t palette_size)
+{
+    (void)context;
+    if(g_files_view_ops && g_files_view_ops->animation_render_indexed_row)
+        g_files_view_ops->animation_render_indexed_row(frame, frame_row, indices,
+                                                       palette, palette_size);
+}
+
+static uint8_t files_presenter_animation_frame_end(void *context)
+{
+    (void)context;
+    return g_files_view_ops && g_files_view_ops->animation_frame_end &&
+           g_files_view_ops->animation_frame_end();
+}
+
+static void files_presenter_animation_end(void *context)
+{
+    (void)context;
+    if(g_files_view_ops && g_files_view_ops->animation_end)
+        g_files_view_ops->animation_end();
+}
+
+static const file_image_sink_t *files_presenter_image_sink(void)
+{
+    static const file_image_sink_t sink = {
+        .begin = files_presenter_begin_image,
+        .render_row_span = files_presenter_render_image_row,
+        .animation_begin = files_presenter_animation_begin,
+        .animation_frame_begin = files_presenter_animation_frame_begin,
+        .animation_render_indexed_row = files_presenter_animation_render_indexed_row,
+        .animation_frame_end = files_presenter_animation_frame_end,
+        .animation_end = files_presenter_animation_end,
+        .context = NULL,
+    };
+    return &sink;
+}
+
 void files_presenter_show_result(file_result_t result)
 {
     if(result == FILE_RESULT_READ_ERROR)
@@ -89,14 +146,35 @@ void files_presenter_show_result(file_result_t result)
 
 file_result_t files_presenter_render_image(const fat_file_entry_t *entry)
 {
-    static const file_image_sink_t sink = {
-        .begin = files_presenter_begin_image,
-        .render_row_span = files_presenter_render_image_row,
-        .context = NULL,
-    };
-    file_result_t result = files_open_image_entry(entry, &sink);
+    file_result_t result = files_open_image_entry(entry, files_presenter_image_sink());
 
     if(result != FILE_RESULT_OK)
         files_presenter_show_result(result);
     return result;
+}
+
+void files_presenter_tick_image(uint64_t now_us)
+{
+    file_result_t result = files_image_viewer_tick(now_us);
+
+    if(result != FILE_RESULT_OK)
+    {
+        files_presenter_show_result(result);
+        files_image_viewer_close();
+    }
+}
+
+void files_presenter_close_image(void)
+{
+    files_image_viewer_close();
+}
+
+uint8_t files_presenter_image_is_animation(void)
+{
+    return files_image_viewer_is_animation();
+}
+
+uint8_t files_presenter_toggle_image_pause(uint64_t now_us)
+{
+    return files_image_viewer_toggle_pause(now_us);
 }
