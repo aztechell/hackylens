@@ -46,8 +46,8 @@ CRC parameters are polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 and no final XOR.
 
 UART is a byte stream; the device resynchronizes on `HK`. For I2C, the master
-writes one complete request transaction and waits at least one firmware tick
-(2 ms is recommended). Read the 8-byte header, then the declared payload plus
+writes one complete request transaction and waits at least 20 ms after its
+write STOP. Read the 8-byte header, then the declared payload plus
 the 2-byte CRC. The response cursor continues across multiple I2C read
 transactions, allowing masters with 32-byte Wire buffers to read in chunks.
 A new valid request prepares a new response and resets the cursor to byte zero;

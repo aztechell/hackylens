@@ -9,9 +9,15 @@
 
 static const hal_external_i2c_callbacks_t *g_i2c_callbacks;
 static uint8_t g_i2c_active;
+static uint8_t g_i2c_skip_sdk_receive;
 
 static void i2c_receive(uint32_t data)
 {
+    if(g_i2c_skip_sdk_receive)
+    {
+        g_i2c_skip_sdk_receive = 0U;
+        return;
+    }
     if(g_i2c_callbacks && g_i2c_callbacks->receive)
         g_i2c_callbacks->receive((uint8_t)data);
 }
@@ -27,6 +33,18 @@ static void i2c_event(i2c_event_t event)
 {
     if(!g_i2c_callbacks || !g_i2c_callbacks->event)
         return;
+    if(event == I2C_EV_STOP)
+    {
+        volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
+        uint8_t sdk_will_read = (adapter->intr_stat & I2C_INTR_STAT_RX_FULL) != 0U;
+
+        /* The SDK announces STOP before servicing RX_FULL and consumes only
+           one FIFO byte per IRQ. Drain the completed write here so the main
+           loop can prepare the response before the master's read START. */
+        while(adapter->rxflr & I2C_RXFLR_VALUE_MASK)
+            g_i2c_callbacks->receive((uint8_t)adapter->data_cmd);
+        g_i2c_skip_sdk_receive = sdk_will_read;
+    }
     g_i2c_callbacks->event(event == I2C_EV_STOP ? HAL_EXTERNAL_I2C_EVENT_STOP :
                                                 HAL_EXTERNAL_I2C_EVENT_START);
 }
@@ -60,6 +78,7 @@ void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *
 {
     hal_external_i2c_stop();
     g_i2c_callbacks = callbacks;
+    g_i2c_skip_sdk_receive = 0U;
     board_external_link_i2c_pins();
     i2c_init_as_slave(I2C_DEVICE_0, address, 7U, &g_i2c_handler);
     g_i2c_active = 1U;
@@ -77,4 +96,5 @@ void hal_external_i2c_stop(void)
     plic_irq_disable(IRQN_I2C0_INTERRUPT);
     g_i2c_callbacks = NULL;
     g_i2c_active = 0U;
+    g_i2c_skip_sdk_receive = 0U;
 }
