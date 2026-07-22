@@ -26,9 +26,28 @@ typedef struct
 typedef struct
 {
     uint32_t lease_id;
+    uint8_t *rgb565_be;
+    uint16_t width;
+    uint16_t height;
+    uint16_t stride_bytes;
 } camera_view_present_t;
 
 uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_present_t *present);
+void camera_view_compose_rects(camera_view_present_t *present,
+                               const camera_view_frame_t *frame,
+                               const camera_view_rect_t *rects,
+                               uint8_t count,
+                               uint16_t color);
+void camera_view_compose_text_at(camera_view_present_t *present,
+                                 uint16_t x,
+                                 uint16_t y,
+                                 const char *text,
+                                 uint16_t fg,
+                                 uint16_t bg);
+void camera_view_compose_crosshair(camera_view_present_t *present,
+                                   uint16_t x,
+                                   uint16_t y,
+                                   uint16_t color);
 uint8_t camera_view_present(camera_view_present_t *present);
 void camera_view_discard(camera_view_present_t *present);
 void camera_view_draw_rects(const camera_view_frame_t *frame, const camera_view_rect_t *rects, uint8_t count, uint16_t color);

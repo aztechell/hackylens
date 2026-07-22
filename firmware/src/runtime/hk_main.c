@@ -43,7 +43,8 @@ int hk_main(void)
             app->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
-        hal_sleep_ms((hk_screen_get() == SCREEN_CAMERA || hk_screen_get() == SCREEN_QR_CAMERA || hk_screen_get() == SCREEN_FACE_DETECT) ? 1 : 20);
+        hal_sleep_ms((hk_screen_get() == SCREEN_CAMERA || hk_screen_get() == SCREEN_QR_CAMERA ||
+                      hk_screen_get() == SCREEN_FACE_DETECT || hk_screen_get() == SCREEN_APRILTAG) ? 1 : 20);
     }
 
     return 0;

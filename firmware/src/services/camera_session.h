@@ -24,6 +24,8 @@ uint8_t camera_service_is_face_detect_mode(void);
 void camera_service_clear_mode(void);
 uint8_t camera_service_capture_ready(void);
 void camera_service_freeze(uint8_t frozen);
-camera_settings_return_t camera_service_prepare_settings_return(uint8_t ok_is_down);
+void camera_service_resume_from_settings(uint8_t ok_is_down);
+camera_settings_return_t camera_service_prepare_settings_return(uint8_t qr_mode,
+                                                                 uint8_t ok_is_down);
 
 #endif

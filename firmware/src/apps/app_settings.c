@@ -8,6 +8,11 @@ void settings_enter(const hk_input_snapshot_t *input)
     settings_controller_enter(input);
 }
 
+void settings_exit(void)
+{
+    settings_controller_exit();
+}
+
 void settings_handle_buttons(const hk_input_snapshot_t *input)
 {
     settings_controller_handle_buttons(input);

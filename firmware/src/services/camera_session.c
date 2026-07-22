@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include "camera_light.h"
 #include "camera_persist_settings.h"
-#include "camera_settings_navigation.h"
 #include "camera_status.h"
 
 #include "../core/camera_types.h"
@@ -169,14 +168,14 @@ void camera_stop(void)
     }
 }
 
-camera_settings_return_t camera_service_prepare_settings_return(uint8_t ok_is_down)
+camera_settings_return_t camera_service_prepare_settings_return(uint8_t qr_mode,
+                                                                 uint8_t ok_is_down)
 {
-    if(camera_service_settings_qr_mode())
+    if(qr_mode)
     {
         camera_session_set_frozen(0);
         camera_capture_reset_flow();
         camera_input_return_from_settings(ok_is_down);
-        camera_settings_clear_qr_mode();
         return CAMERA_SETTINGS_RETURN_QR_CAMERA;
     }
 
@@ -189,4 +188,11 @@ camera_settings_return_t camera_service_prepare_settings_return(uint8_t ok_is_do
     camera_capture_reset_flow();
     camera_input_return_from_settings(ok_is_down);
     return CAMERA_SETTINGS_RETURN_CAMERA;
+}
+
+void camera_service_resume_from_settings(uint8_t ok_is_down)
+{
+    camera_session_set_frozen(0);
+    camera_capture_reset_flow();
+    camera_input_return_from_settings(ok_is_down);
 }

@@ -2,13 +2,13 @@
 
 #include <stdio.h>
 
-#include "camera_light.h"
-
 #include "../core/camera_types.h"
 #include "../core/hk_binary.h"
 #include "../drivers/hk_lights.h"
 #include "hk_config.h"
 #if HK_ENABLE_CAMERA_FEATURE
+#include "camera_light.h"
+#include "camera_session_preferences.h"
 #endif
 
 void screen_brightness_apply(void)
@@ -52,11 +52,11 @@ void camera_light_apply(void)
     uint8_t level = clamp_u8(camera_service_light_level(), 0, 100);
 
     camera_service_set_light_level(level);
-    lights_camera_set(camera_service_light_mode(),
+    lights_camera_set(camera_session_preferences_light_mode(),
                       level,
-                      camera_service_rgb_channel(CAMERA_RGB_RED),
-                      camera_service_rgb_channel(CAMERA_RGB_GREEN),
-                      camera_service_rgb_channel(CAMERA_RGB_BLUE));
+                      camera_session_preferences_rgb_red(),
+                      camera_session_preferences_rgb_green(),
+                      camera_session_preferences_rgb_blue());
 }
 
 void camera_light_restore_global(void)
@@ -82,10 +82,10 @@ void camera_light_adjust(int8_t delta)
     camera_service_set_light_level((uint8_t)next);
     camera_light_apply();
     printf("[CAM] light mode=%s level=%u rgb=%u/%u/%u\r\n",
-           camera_light_mode_label(camera_service_light_mode()),
+           camera_light_mode_label(camera_session_preferences_light_mode()),
            camera_service_light_level(),
-           camera_service_rgb_channel(CAMERA_RGB_RED),
-           camera_service_rgb_channel(CAMERA_RGB_GREEN),
-           camera_service_rgb_channel(CAMERA_RGB_BLUE));
+           camera_session_preferences_rgb_red(),
+           camera_session_preferences_rgb_green(),
+           camera_session_preferences_rgb_blue());
 }
 #endif

@@ -171,7 +171,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
     uint16_t dst_h;
 
     if(present)
-        present->lease_id = 0;
+        memset(present, 0, sizeof(*present));
     if(!frame || !present || !frame->pixels || frame->width == 0 || frame->height == 0)
         return 0;
     if(!lcd_frame_acquire(&surface))
@@ -232,7 +232,143 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
                                     light_width);
     }
     present->lease_id = surface.lease_id;
+    present->rgb565_be = surface.rgb565_be;
+    present->width = surface.width;
+    present->height = surface.height;
+    present->stride_bytes = surface.stride_bytes;
     return 1;
+}
+
+static void camera_view_compose_fill_rect(camera_view_present_t *present,
+                                          uint16_t x, uint16_t y,
+                                          uint16_t w, uint16_t h,
+                                          uint16_t color)
+{
+    if(!present || !present->lease_id || !present->rgb565_be || !w || !h ||
+       x >= present->width || y >= present->height)
+        return;
+    if(x + w > present->width)
+        w = present->width - x;
+    if(y + h > present->height)
+        h = present->height - y;
+
+    for(uint16_t row = 0; row < h; row++)
+    {
+        uint8_t *dst = present->rgb565_be +
+            (uint32_t)(y + row) * present->stride_bytes + (uint32_t)x * 2U;
+        for(uint16_t column = 0; column < w; column++)
+            camera_view_write_pixel(dst + (uint32_t)column * 2U, color);
+    }
+}
+
+void camera_view_compose_crosshair(camera_view_present_t *present,
+                                   uint16_t x,
+                                   uint16_t y,
+                                   uint16_t color)
+{
+    const uint16_t arm = 12U;
+    const uint16_t gap = 3U;
+
+    if(!present || x >= present->width || y >= present->height)
+        return;
+    if(x > arm)
+        camera_view_compose_fill_rect(present, x - arm, y, arm - gap, 1U, color);
+    camera_view_compose_fill_rect(present, x + gap + 1U, y, arm - gap, 1U, color);
+    if(y > arm)
+        camera_view_compose_fill_rect(present, x, y - arm, 1U, arm - gap, color);
+    camera_view_compose_fill_rect(present, x, y + gap + 1U, 1U, arm - gap, color);
+}
+
+static void camera_view_compose_rect(camera_view_present_t *present,
+                                     uint16_t x, uint16_t y,
+                                     uint16_t w, uint16_t h,
+                                     uint16_t thickness, uint16_t color)
+{
+    for(uint16_t i = 0; i < thickness; i++)
+    {
+        if(w <= i * 2U || h <= i * 2U)
+            break;
+        camera_view_compose_fill_rect(present, x + i, y + i, w - i * 2U, 1U, color);
+        camera_view_compose_fill_rect(present, x + i, y + h - 1U - i, w - i * 2U, 1U, color);
+        camera_view_compose_fill_rect(present, x + i, y + i, 1U, h - i * 2U, color);
+        camera_view_compose_fill_rect(present, x + w - 1U - i, y + i, 1U, h - i * 2U, color);
+    }
+}
+
+void camera_view_compose_rects(camera_view_present_t *present,
+                               const camera_view_frame_t *frame,
+                               const camera_view_rect_t *rects,
+                               uint8_t count,
+                               uint16_t color)
+{
+    uint16_t logical_w;
+    uint16_t logical_h;
+    uint16_t dst_x;
+    uint16_t dst_y;
+    uint16_t dst_w;
+    uint16_t dst_h;
+
+    if(!present || !frame || !rects || !frame->width || !frame->height)
+        return;
+    logical_w = frame->rotate ? frame->height : frame->width;
+    logical_h = frame->rotate ? frame->width : frame->height;
+    image_fit_viewport(logical_w, logical_h, &dst_x, &dst_y, &dst_w, &dst_h);
+    for(uint8_t i = 0; i < count; i++)
+    {
+        int32_t x0 = rects[i].x;
+        int32_t y0 = rects[i].y;
+        int32_t x1 = x0 + rects[i].w;
+        int32_t y1 = y0 + rects[i].h;
+        uint16_t draw_x;
+        uint16_t draw_y;
+        uint16_t draw_w;
+        uint16_t draw_h;
+
+        if(frame->rotate || rects[i].w <= 0 || rects[i].h <= 0)
+            continue;
+        if(x0 < 0) x0 = 0;
+        if(y0 < 0) y0 = 0;
+        if(x1 > frame->width) x1 = frame->width;
+        if(y1 > frame->height) y1 = frame->height;
+        if(x1 <= x0 || y1 <= y0)
+            continue;
+        draw_x = (uint16_t)(dst_x + (uint32_t)x0 * dst_w / frame->width);
+        draw_y = (uint16_t)(dst_y + (uint32_t)y0 * dst_h / frame->height);
+        draw_w = (uint16_t)(((uint32_t)(x1 - x0) * dst_w + frame->width - 1U) / frame->width);
+        draw_h = (uint16_t)(((uint32_t)(y1 - y0) * dst_h + frame->height - 1U) / frame->height);
+        camera_view_compose_rect(present, draw_x, draw_y,
+                                 draw_w ? draw_w : 1U, draw_h ? draw_h : 1U,
+                                 2U, color);
+    }
+}
+
+void camera_view_compose_text_at(camera_view_present_t *present,
+                                 uint16_t x,
+                                 uint16_t y,
+                                 const char *text,
+                                 uint16_t fg,
+                                 uint16_t bg)
+{
+    if(!present || !text)
+        return;
+    while(*text && x + HACKYLENS_FONT_W <= present->width &&
+          y + HACKYLENS_FONT_H <= present->height)
+    {
+        const uint8_t *glyph = term_glyph((uint8_t)*text++);
+
+        for(uint16_t glyph_y = 0; glyph_y < HACKYLENS_FONT_H; glyph_y++)
+        {
+            uint8_t *dst = present->rgb565_be +
+                (uint32_t)(y + glyph_y) * present->stride_bytes + (uint32_t)x * 2U;
+            for(uint16_t glyph_x = 0; glyph_x < HACKYLENS_FONT_W; glyph_x++)
+            {
+                uint8_t bit = glyph[glyph_y * HACKYLENS_FONT_ROW_BYTES + glyph_x / 8U] &
+                    (uint8_t)(0x80U >> (glyph_x & 7U));
+                camera_view_write_pixel(dst + (uint32_t)glyph_x * 2U, bit ? fg : bg);
+            }
+        }
+        x += HACKYLENS_FONT_W;
+    }
 }
 
 uint8_t camera_view_present(camera_view_present_t *present)
@@ -243,7 +379,7 @@ uint8_t camera_view_present(camera_view_present_t *present)
     if(!present || present->lease_id == 0)
         return 0;
     lease_id = present->lease_id;
-    present->lease_id = 0;
+    memset(present, 0, sizeof(*present));
     result = lcd_frame_present(lease_id);
     if(!result)
         lcd_frame_cancel(lease_id);
@@ -255,7 +391,7 @@ void camera_view_discard(camera_view_present_t *present)
     if(!present || present->lease_id == 0)
         return;
     lcd_frame_cancel(present->lease_id);
-    present->lease_id = 0;
+    memset(present, 0, sizeof(*present));
 }
 
 void camera_view_draw_rects(const camera_view_frame_t *frame, const camera_view_rect_t *rects, uint8_t count, uint16_t color)

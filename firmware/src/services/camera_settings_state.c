@@ -3,7 +3,6 @@
 #include "camera_light.h"
 #include "camera_session.h"
 #include "camera_persist_settings.h"
-#include "camera_settings_navigation.h"
 
 #include "../core/photo_types.h"
 #include "../core/camera_types.h"
@@ -14,9 +13,6 @@
 #include "settings_lights.h"
 #include "settings_persistence.h"
 
-static uint8_t g_camera_settings_index;
-static uint8_t g_camera_settings_top;
-static uint8_t g_camera_settings_qr_mode;
 static uint8_t g_camera_review_after_shot;
 static camera_light_mode_t g_camera_light_mode = CAMERA_LIGHT_LED;
 static uint8_t g_camera_rgb_red = 100;
@@ -74,38 +70,6 @@ void camera_service_persist_apply(const camera_persist_settings_t *settings)
     g_camera_photo_format = settings->photo_format < PHOTO_FORMAT_COUNT ? settings->photo_format : PHOTO_FORMAT_RAW565;
     camera_settings_force_size(settings->size);
     camera_active_size_set(g_camera_size);
-}
-
-uint8_t camera_service_settings_qr_mode(void)
-{
-    return g_camera_settings_qr_mode;
-}
-
-uint8_t camera_service_settings_index(void)
-{
-    return g_camera_settings_index;
-}
-
-uint8_t camera_service_settings_top(void)
-{
-    return g_camera_settings_top;
-}
-
-void camera_service_settings_begin(uint8_t qr_mode)
-{
-    g_camera_settings_qr_mode = qr_mode ? 1 : 0;
-    g_camera_settings_index = 0;
-    g_camera_settings_top = 0;
-}
-
-void camera_service_settings_set_index(uint8_t index)
-{
-    g_camera_settings_index = index;
-}
-
-void camera_service_settings_set_top(uint8_t top)
-{
-    g_camera_settings_top = top;
 }
 
 uint8_t camera_service_review_after_shot(void)
@@ -185,11 +149,6 @@ camera_size_t camera_service_cycle_size(void)
 void camera_settings_force_size(camera_size_t size)
 {
     g_camera_size = camera_size_is_safe(size) ? size : CAMERA_SIZE_320X240;
-}
-
-void camera_settings_clear_qr_mode(void)
-{
-    g_camera_settings_qr_mode = 0;
 }
 
 uint8_t camera_settings_consume_size_pending(void)

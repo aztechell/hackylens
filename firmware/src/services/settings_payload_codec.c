@@ -55,6 +55,7 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
     payload.qr_rate_fps_mark = (uint8_t)((clamp_u8(snapshot->qr_decode_rate, QR_DECODE_RATE_MIN, QR_DECODE_RATE_MAX) << 4) |
                                          SETTINGS_FPS_MARK_LOW);
 #endif
+    memcpy(payload.app_data, snapshot->app_data, sizeof(payload.app_data));
     return payload;
 }
 
@@ -78,6 +79,7 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
         return;
 
     memset(snapshot, 0, sizeof(*snapshot));
+    memcpy(snapshot->app_data, payload->app_data, sizeof(snapshot->app_data));
 
     snapshot->led_enabled = payload->led_enabled ? 1 : 0;
     snapshot->led_brightness = clamp_u8(payload->led_brightness, 0, 100);

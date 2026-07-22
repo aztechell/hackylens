@@ -5,7 +5,6 @@
 #include "../services/camera_frame.h"
 #include "../services/camera_session.h"
 #include "../services/camera_persist_settings.h"
-#include "../services/camera_settings_navigation.h"
 #include "../services/camera_status.h"
 
 #include "../core/hk_app.h"
@@ -14,6 +13,7 @@
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "camera_photo_mode_controller.h"
+#include "camera_settings_controller.h"
 #include "qr_camera_mode_controller.h"
 #include "../services/camera_debug.h"
 #include "../services/qr_service.h"
@@ -32,7 +32,7 @@ static void debug_uart_send_bytes(const uint8_t *data, size_t len)
 static const char *debug_camera_screen_label(void)
 {
     screen_t screen = hk_screen_get();
-    if(screen == SCREEN_CAMERA_SETTINGS && camera_service_settings_qr_mode())
+    if(screen == SCREEN_CAMERA_SETTINGS && camera_settings_is_qr())
         return "QR-SETTINGS";
     return screen_label(screen);
 }
@@ -117,7 +117,10 @@ static void debug_uart_send_camera_frame(void)
         debug_uart_send_bytes(src + offset, take);
         offset += take;
     }
-    camera_service_frame_snapshot_done(hk_screen_get() == SCREEN_CAMERA || hk_screen_get() == SCREEN_QR_CAMERA || hk_screen_get() == SCREEN_FACE_DETECT);
+    camera_service_frame_snapshot_done(hk_screen_get() == SCREEN_CAMERA ||
+                                       hk_screen_get() == SCREEN_QR_CAMERA ||
+                                       hk_screen_get() == SCREEN_FACE_DETECT ||
+                                       hk_screen_get() == SCREEN_APRILTAG);
 
     snprintf(footer, sizeof(footer), "\nHKFRAME END %08X\n", (unsigned)crc);
     debug_uart_send_text(footer);

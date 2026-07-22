@@ -18,6 +18,9 @@
 #if HK_ENABLE_APP_FACE_DETECT
 #include "face_detect/face_detect_app.h"
 #endif
+#if HK_ENABLE_APP_APRILTAG
+#include "apriltag/apriltag_app.h"
+#endif
 #if HK_ENABLE_APP_FILES
 #include "app_files.h"
 #endif
@@ -56,6 +59,13 @@ const hk_app_t g_menu_items[] = {
      .handle_debug_command = face_detect_handle_debug_command,
      .debug_help = g_face_detect_debug_help},
 #endif
+#if HK_ENABLE_APP_APRILTAG
+    {.id = "apriltag", .title = "APRILTAG", .screen = SCREEN_APRILTAG,
+     .enter = apriltag_enter, .exit = apriltag_exit, .tick = apriltag_tick,
+     .handle_input = apriltag_handle_buttons, .draw_icon = apriltag_draw_icon,
+     .handle_debug_command = apriltag_handle_debug_command,
+     .debug_help = g_apriltag_debug_help},
+#endif
 #if HK_ENABLE_APP_FILES
     {.id = "files", .title = "FILES", .screen = SCREEN_FILES,
      .enter = files_enter, .exit = files_exit, .tick = files_tick,
@@ -72,7 +82,8 @@ const hk_app_t g_menu_items[] = {
 #endif
 #if HK_ENABLE_APP_SETTINGS
     {.id = "settings", .title = "SETTINGS", .screen = SCREEN_SETTINGS,
-     .enter = settings_enter, .tick = settings_tick, .handle_input = settings_handle_buttons},
+     .enter = settings_enter, .exit = settings_exit, .tick = settings_tick,
+     .handle_input = settings_handle_buttons},
 #endif
 #if HK_ENABLE_APP_SLEEP
     {.id = "sleep", .title = "SLEEP", .screen = SCREEN_SLEEP,

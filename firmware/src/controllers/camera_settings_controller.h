@@ -13,6 +13,7 @@ typedef enum
 
 void camera_settings_enter(void);
 void qr_settings_enter(void);
+uint8_t camera_settings_is_qr(void);
 camera_settings_exit_t camera_settings_handle_buttons(const hk_input_snapshot_t *input);
 
 #endif

@@ -6,6 +6,7 @@
 #include "camera_persist_settings.h"
 #include "camera_status.h"
 #include "camera_fps.h"
+#include "camera_session_preferences.h"
 
 #include "settings_persistence.h"
 #include "../hal/hal_time.h"
@@ -77,7 +78,8 @@ void camera_service_fps_reset(void)
     g_camera_present_max_us = 0;
     g_camera_fps_start_us = now;
     g_camera_fps_window_us = now;
-    printf("%s fps counter %s\r\n", camera_log_prefix(), g_camera_fps_enabled ? "ON" : "OFF");
+    printf("%s fps counter %s\r\n", camera_log_prefix(),
+           camera_session_preferences_fps_enabled() ? "ON" : "OFF");
 }
 
 void camera_service_fps_note_present(uint32_t compose_us, uint32_t present_us)
@@ -114,7 +116,7 @@ void camera_service_fps_on_frame(void)
         g_camera_fps_value_x10 = camera_fps_calc_x10(g_camera_fps_window_frames, elapsed);
         g_camera_fps_window_frames = 0;
         g_camera_fps_window_us = now;
-        if(g_camera_fps_enabled)
+        if(camera_session_preferences_fps_enabled())
         {
             uint16_t width = 0;
             uint16_t height = 0;
@@ -160,7 +162,7 @@ void camera_fps_log_summary(const char *prefix, uint16_t width, uint16_t height)
 
 uint8_t camera_service_fps_overlay_enabled(void)
 {
-    return g_camera_fps_enabled;
+    return camera_session_preferences_fps_enabled();
 }
 
 void camera_service_format_fps_overlay(char *line, size_t line_size)

@@ -22,6 +22,7 @@ APP_MODULES = {
     "camera": "HK_ENABLE_APP_CAMERA",
     "qr-camera": "HK_ENABLE_APP_QR_CAMERA",
     "face-detect": "HK_ENABLE_APP_FACE_DETECT",
+    "apriltag": "HK_ENABLE_APP_APRILTAG",
     "files": "HK_ENABLE_APP_FILES",
     "buttons": "HK_ENABLE_APP_BUTTONS",
     "pong": "HK_ENABLE_APP_PONG",
@@ -62,6 +63,22 @@ APP_SOURCE_MODULES = {
         Path("firmware/src/apps/face_detect/face_detect_view.c"),
         Path("firmware/src/apps/face_detect/face_detect_view.h"),
     ],
+    "apriltag": [
+        Path("firmware/src/apps/apriltag/apriltag_app.c"),
+        Path("firmware/src/apps/apriltag/apriltag_app.h"),
+        Path("firmware/src/apps/apriltag/apriltag_config.h"),
+        Path("firmware/src/apps/apriltag/apriltag_controller.c"),
+        Path("firmware/src/apps/apriltag/apriltag_controller.h"),
+        Path("firmware/src/apps/apriltag/apriltag_detector.c"),
+        Path("firmware/src/apps/apriltag/apriltag_detector.h"),
+        Path("firmware/src/apps/apriltag/apriltag_settings.c"),
+        Path("firmware/src/apps/apriltag/apriltag_settings.h"),
+        Path("firmware/src/apps/apriltag/apriltag_settings_menu.c"),
+        Path("firmware/src/apps/apriltag/apriltag_settings_menu.h"),
+        Path("firmware/src/apps/apriltag/apriltag_types.h"),
+        Path("firmware/src/apps/apriltag/apriltag_view.c"),
+        Path("firmware/src/apps/apriltag/apriltag_view.h"),
+    ],
     "buttons": [
         Path("firmware/src/apps/app_buttons.c"),
         Path("firmware/src/controllers/buttons_controller.c"),
@@ -73,10 +90,9 @@ APP_SOURCE_MODULES = {
     ],
     "settings": [
         Path("firmware/src/apps/app_settings.c"),
-        Path("firmware/src/controllers/settings_actions.c"),
+        Path("firmware/src/controllers/settings_app_menu.c"),
+        Path("firmware/src/controllers/settings_app_menu.h"),
         Path("firmware/src/controllers/settings_controller.c"),
-        Path("firmware/src/controllers/settings_model.c"),
-        Path("firmware/src/ui/settings_view.c"),
     ],
     "files": [
         Path("firmware/src/apps/app_files.c"),
@@ -109,7 +125,8 @@ CAMERA_FEATURE_SOURCE_MODULES = [
     Path("firmware/src/controllers/camera_runtime_controller.c"),
     Path("firmware/src/controllers/camera_settings_controller.c"),
     Path("firmware/src/controllers/camera_settings_coordinator.c"),
-    Path("firmware/src/controllers/camera_settings_model.c"),
+    Path("firmware/src/controllers/camera_settings_menu.c"),
+    Path("firmware/src/controllers/camera_settings_menu.h"),
     Path("firmware/src/controllers/debug_camera_controller.c"),
     Path("firmware/src/controllers/qr_result_controller.c"),
     Path("firmware/src/controllers/qr_camera_mode_controller.c"),
@@ -124,6 +141,8 @@ CAMERA_FEATURE_SOURCE_MODULES = [
     Path("firmware/src/services/camera_light_state.c"),
     Path("firmware/src/services/camera_session.c"),
     Path("firmware/src/services/camera_session_state.c"),
+    Path("firmware/src/services/camera_session_preferences.c"),
+    Path("firmware/src/services/camera_session_preferences.h"),
     Path("firmware/src/services/camera_settings_state.c"),
     Path("firmware/src/services/photo_service.c"),
     Path("firmware/src/services/qr_decoder_engine.c"),
@@ -135,7 +154,6 @@ CAMERA_FEATURE_SOURCE_MODULES = [
     Path("firmware/src/storage/photo_writer.c"),
     Path("firmware/src/storage/qr_text_path.c"),
     Path("firmware/src/storage/qr_text_writer.c"),
-    Path("firmware/src/ui/camera_settings_view.c"),
     Path("firmware/src/ui/camera_status_view.c"),
     Path("firmware/src/ui/camera_view.c"),
     Path("firmware/src/ui/qr_result_view.c"),
@@ -213,7 +231,8 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
             disabled_sources.add(rel)
     camera_feature_enabled = ("camera" not in disabled_apps or
                               "qr-camera" not in disabled_apps or
-                              "face-detect" not in disabled_apps)
+                              "face-detect" not in disabled_apps or
+                              "apriltag" not in disabled_apps)
     if not camera_feature_enabled:
         disabled_sources.update(CAMERA_FEATURE_SOURCE_MODULES)
 
@@ -240,7 +259,7 @@ def write_config(stage: Path, disabled_apps: set[str]) -> None:
     for app, flag in APP_MODULES.items():
         lines.append(f"#define {flag} {0 if app in disabled_apps else 1}")
     lines.extend([
-        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT)",
+        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_APRILTAG)",
         "#define HK_ENABLE_QR_FEATURE HK_ENABLE_APP_QR_CAMERA",
         '#include "hk_config_default.h"',
         "#endif",
@@ -265,13 +284,17 @@ def stage_target(sdk: Path, target_name: str, disabled_apps: set[str]) -> Path:
 
     camera_feature_enabled = ("camera" not in disabled_apps or
                               "qr-camera" not in disabled_apps or
-                              "face-detect" not in disabled_apps)
+                              "face-detect" not in disabled_apps or
+                              "apriltag" not in disabled_apps)
     if camera_feature_enabled:
         quirc = ROOT / "firmware" / "third_party" / "quirc"
         for source in quirc.glob("*.c"):
             shutil.copy2(source, stage / source.name)
         for header in quirc.glob("*.h"):
             shutil.copy2(header, stage / header.name)
+
+    if "apriltag" not in disabled_apps:
+        copy_tree_files(ROOT / "firmware" / "third_party" / "apriltag", stage)
 
     write_config(stage, disabled_apps)
     return stage

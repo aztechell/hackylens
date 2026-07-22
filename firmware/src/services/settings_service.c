@@ -8,6 +8,7 @@
 #include "../config/camera_config.h"
 #include "../config/settings_config.h"
 #include "settings_service.h"
+#include "settings_app_data.h"
 #include "hk_config.h"
 #if HK_ENABLE_CAMERA_FEATURE
 #endif
@@ -25,6 +26,19 @@ static uint8_t g_screen_brightness = 90;
 static uint8_t g_auto_sleep_minutes = 1;
 static uint8_t g_feature_flags;
 static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
+
+void settings_app_data_read(uint8_t data[SETTINGS_APP_DATA_SIZE])
+{
+    if(data)
+        memcpy(data, g_app_data, sizeof(g_app_data));
+}
+
+void settings_app_data_write(const uint8_t data[SETTINGS_APP_DATA_SIZE])
+{
+    if(data)
+        memcpy(g_app_data, data, sizeof(g_app_data));
+}
 
 uint8_t hk_auto_sleep_minutes(void)
 {
@@ -166,6 +180,7 @@ void settings_defaults(void)
     g_auto_sleep_minutes = 1;
     g_feature_flags = 0;
     g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+    memset(g_app_data, 0, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
 #endif
@@ -190,6 +205,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->auto_sleep_minutes = clamp_u8(g_auto_sleep_minutes, 1, 30);
     snapshot->feature_flags = g_feature_flags & SETTINGS_FEATURE_FLAGS_MASK;
     snapshot->external_link_uart_speed = (uint8_t)g_external_link_uart_speed;
+    memcpy(snapshot->app_data, g_app_data, sizeof(snapshot->app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
@@ -213,6 +229,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     settings_set_auto_sleep_minutes(snapshot->auto_sleep_minutes);
     settings_set_feature_flags(snapshot->feature_flags);
     settings_set_external_link_uart_speed((external_link_uart_speed_t)snapshot->external_link_uart_speed);
+    memcpy(g_app_data, snapshot->app_data, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif

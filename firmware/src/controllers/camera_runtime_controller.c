@@ -13,6 +13,7 @@
 #include "../services/camera_input.h"
 #include "../services/camera_light.h"
 #include "../services/camera_session.h"
+#include "../services/camera_session_preferences.h"
 #include "../services/camera_status.h"
 #include "../services/settings_lights.h"
 #include "../ui/camera_status_view.h"
@@ -57,7 +58,10 @@ static void camera_light_repeat_tick(uint32_t button_state)
     g_camera_light_repeat_deadline_us = now + CAMERA_LIGHT_REPEAT_NEXT_US;
 }
 
-static uint8_t camera_runtime_present_preview(void)
+static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t consumer,
+                                              void *consumer_context,
+                                              camera_runtime_frame_overlay_t overlay,
+                                              void *overlay_context)
 {
     camera_preview_frame_t service_frame;
     camera_view_frame_t view_frame;
@@ -68,11 +72,13 @@ static uint8_t camera_runtime_present_preview(void)
 
     if(!camera_service_preview_acquire(&service_frame))
         return 0;
+    if(consumer)
+        consumer(service_frame.pixels, service_frame.width, service_frame.height, consumer_context);
     view_frame.pixels = service_frame.pixels;
     view_frame.width = service_frame.width;
     view_frame.height = service_frame.height;
     view_frame.rotate = service_frame.rotate;
-    view_frame.fps_overlay = camera_service_fps_overlay_enabled();
+    view_frame.fps_overlay = camera_session_preferences_fps_enabled();
     view_frame.light_overlay = camera_service_light_overlay_enabled();
     camera_service_format_fps_overlay(view_frame.fps_text, sizeof(view_frame.fps_text));
     camera_service_format_light_overlay(view_frame.light_text, sizeof(view_frame.light_text));
@@ -84,6 +90,8 @@ static uint8_t camera_runtime_present_preview(void)
         return 0;
     }
     compose_finished_us = hal_time_us();
+    if(overlay)
+        overlay(&present, service_frame.width, service_frame.height, overlay_context);
     camera_service_preview_release(&service_frame);
     if(!camera_view_present(&present))
         return 0;
@@ -95,7 +103,7 @@ static uint8_t camera_runtime_present_preview(void)
 
 void camera_runtime_redraw_preview(void)
 {
-    (void)camera_runtime_present_preview();
+    (void)camera_runtime_present_preview(NULL, NULL, NULL, NULL);
 }
 
 void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t *input)
@@ -103,18 +111,24 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
     uint32_t button_state = input ? input->state : 0;
     uint8_t qr_mode = mode == CAMERA_RUNTIME_QR ? 1 : 0;
     uint8_t face_mode = mode == CAMERA_RUNTIME_FACE_DETECT ? 1 : 0;
+    uint8_t apriltag_mode = mode == CAMERA_RUNTIME_APRILTAG ? 1 : 0;
+    const char *init_title = qr_mode ? "QR INIT" :
+        (face_mode ? "FACE INIT" : (apriltag_mode ? "TAG INIT" : "CAMERA INIT"));
+    const char *fail_title = qr_mode ? "QR FAIL" :
+        (face_mode ? "FACE FAIL" : (apriltag_mode ? "TAG FAIL" : "CAMERA FAIL"));
 
-    hk_screen_set(qr_mode ? SCREEN_QR_CAMERA : (face_mode ? SCREEN_FACE_DETECT : SCREEN_CAMERA));
-    camera_service_set_face_detect_mode(face_mode);
+    hk_screen_set(qr_mode ? SCREEN_QR_CAMERA :
+                  (face_mode ? SCREEN_FACE_DETECT : (apriltag_mode ? SCREEN_APRILTAG : SCREEN_CAMERA)));
+    camera_service_set_face_detect_mode(face_mode || apriltag_mode);
     hk_back_exit_set_armed(0);
     camera_light_repeat_reset();
     camera_service_enter_begin(qr_mode, (button_state & BUTTON_OK) ? 1 : 0);
-    camera_status_view_draw(qr_mode ? "QR INIT" : (face_mode ? "FACE INIT" : "CAMERA INIT"), "OV2640 PROBE");
+    camera_status_view_draw(init_title, "OV2640 PROBE");
     printf("[SHELL] screen %s\r\n", screen_label(hk_screen_get()));
 
     if(!camera_service_start())
     {
-        camera_status_view_draw(qr_mode ? "QR FAIL" : (face_mode ? "FACE FAIL" : "CAMERA FAIL"), camera_service_fail_reason());
+        camera_status_view_draw(fail_title, camera_service_fail_reason());
         return;
     }
 
@@ -122,6 +136,22 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
 }
 
 uint8_t camera_runtime_tick(const hk_input_snapshot_t *input)
+{
+    return camera_runtime_tick_with_pipeline(input, NULL, NULL, NULL, NULL);
+}
+
+uint8_t camera_runtime_tick_with_consumer(const hk_input_snapshot_t *input,
+                                          camera_runtime_frame_consumer_t consumer,
+                                          void *context)
+{
+    return camera_runtime_tick_with_pipeline(input, consumer, context, NULL, NULL);
+}
+
+uint8_t camera_runtime_tick_with_pipeline(const hk_input_snapshot_t *input,
+                                          camera_runtime_frame_consumer_t consumer,
+                                          void *consumer_context,
+                                          camera_runtime_frame_overlay_t overlay,
+                                          void *overlay_context)
 {
     if(!input)
         return 0;
@@ -132,7 +162,7 @@ uint8_t camera_runtime_tick(const hk_input_snapshot_t *input)
 
     if(camera_service_capture_frame_tick())
     {
-        if(camera_runtime_present_preview())
+        if(camera_runtime_present_preview(consumer, consumer_context, overlay, overlay_context))
         {
             camera_service_fps_on_frame();
             return 1;

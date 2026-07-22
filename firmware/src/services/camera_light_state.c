@@ -4,6 +4,7 @@
 
 #include "../core/hk_binary.h"
 #include "settings_lights.h"
+#include "camera_session_preferences.h"
 
 static uint8_t g_camera_light_level;
 static uint8_t g_camera_light_active;
@@ -15,7 +16,7 @@ uint8_t camera_service_light_overlay_enabled(void)
 
 void camera_service_format_light_overlay(char *line, size_t line_size)
 {
-    snprintf(line, line_size, "%s %u", camera_light_mode_label(camera_service_light_mode()), g_camera_light_level);
+    snprintf(line, line_size, "%s %u", camera_light_mode_label(camera_session_preferences_light_mode()), g_camera_light_level);
 }
 
 uint8_t camera_service_light_level(void)

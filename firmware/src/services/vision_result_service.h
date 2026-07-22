@@ -16,6 +16,7 @@ typedef enum
     VISION_SOURCE_NONE = 0,
     VISION_SOURCE_FACE = 1,
     VISION_SOURCE_QR = 2,
+    VISION_SOURCE_APRILTAG = 3,
     VISION_SOURCE_USER = 255,
 } vision_source_t;
 

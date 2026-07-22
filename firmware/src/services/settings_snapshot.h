@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "hk_config.h"
+#include "../config/settings_config.h"
 
 #if HK_ENABLE_CAMERA_FEATURE
 #include "camera_persist_settings.h"
@@ -21,6 +22,7 @@ typedef struct
     uint8_t auto_sleep_minutes;
     uint8_t feature_flags;
     uint8_t external_link_uart_speed;
+    uint8_t app_data[SETTINGS_APP_DATA_SIZE];
 #if HK_ENABLE_CAMERA_FEATURE
     camera_persist_settings_t camera;
 #endif

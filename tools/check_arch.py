@@ -141,6 +141,55 @@ FACE_ALLOWED_SHARED_INCLUDES = {
     "../../ui/camera_status_view.h",
     "../../ui/camera_view.h",
 }
+APRILTAG_FEATURE_PREFIX = "apps/apriltag/"
+APRILTAG_MODULE_FILES = {
+    "apriltag_app.c",
+    "apriltag_app.h",
+    "apriltag_config.h",
+    "apriltag_controller.c",
+    "apriltag_controller.h",
+    "apriltag_detector.c",
+    "apriltag_detector.h",
+    "apriltag_settings.c",
+    "apriltag_settings.h",
+    "apriltag_settings_menu.c",
+    "apriltag_settings_menu.h",
+    "apriltag_types.h",
+    "apriltag_view.c",
+    "apriltag_view.h",
+}
+APRILTAG_SPECIFIC_FILE_RE = re.compile(r"^apriltag(?:_.*)?\.[ch]$")
+APRILTAG_ALLOWED_SHARED_INCLUDES = {
+    "../../config/display_config.h",
+    "../../config/input_config.h",
+    "../../controllers/camera_runtime_controller.h",
+    "../../controllers/settings_menu_controller.h",
+    "../../core/hk_app.h",
+    "../../core/hk_menu.h",
+    "../../core/hk_screen.h",
+    "../../core/hk_string.h",
+    "../../core/camera_types.h",
+    "../../drivers/hk_lcd.h",
+    "../../hal/hal_core.h",
+    "../../hal/hal_time.h",
+    "../../services/camera_photo.h",
+    "../../services/camera_session.h",
+    "../../services/camera_session_preferences.h",
+    "../../services/debug_console_service.h",
+    "../../services/settings_app_data.h",
+    "../../services/settings_lights.h",
+    "../../services/settings_persistence.h",
+    "../../services/vision_result_service.h",
+    "../../ui/camera_status_view.h",
+    "../../ui/camera_view.h",
+}
+SETTINGS_MENU_SHARED_PATHS = {
+    "config/settings_menu_layout.h",
+    "controllers/settings_menu_controller.c",
+    "controllers/settings_menu_controller.h",
+    "ui/settings_menu_view.c",
+    "ui/settings_menu_view.h",
+}
 DEBUG_SCREENSHOT_CONSOLE_API_RE = re.compile(r"\bdebug_uart_send_(bytes|text)\b")
 SDK_TOKEN_RE = re.compile(
     r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|sysctl_get_time_us|"
@@ -169,6 +218,18 @@ FORBIDDEN_FILES = {
     "storage/fat32_state_private.h": "FAT32 private state is storage-internal",
     "services/settings_types.h": "settings payload format belongs to storage/settings_store_types.h",
     "apps/app_entrypoints.h": "app entrypoints must be declared by per-app headers",
+    "config/settings_layout.h": "settings menus use the shared settings_menu layout",
+    "controllers/camera_settings_model.c": "camera settings use descriptor adapters",
+    "controllers/camera_settings_model.h": "camera settings use descriptor adapters",
+    "controllers/settings_actions.c": "system settings actions belong to its descriptor adapter",
+    "controllers/settings_actions.h": "system settings actions belong to its descriptor adapter",
+    "controllers/settings_model.c": "system settings use the shared settings_menu state",
+    "controllers/settings_model.h": "system settings use the shared settings_menu state",
+    "services/camera_settings_navigation.h": "settings_menu owns camera menu navigation state",
+    "ui/camera_settings_view.c": "camera settings use the shared settings_menu view",
+    "ui/camera_settings_view.h": "camera settings use the shared settings_menu view",
+    "ui/settings_view.c": "system settings use the shared settings_menu view",
+    "ui/settings_view.h": "system settings use the shared settings_menu view",
 }
 FORBIDDEN_INCLUDE_TARGETS = set(FORBIDDEN_FILES)
 
@@ -436,6 +497,37 @@ def face_include_violation(path: Path, inc: str) -> str | None:
     return None
 
 
+def apriltag_include_violation(path: Path, inc: str) -> str | None:
+    path_rel = rel(path)
+    target = resolve_local_include(path, inc)
+
+    if path_rel.startswith("apps/apriltag/apriltag_controller.") and Path(inc).name == "apriltag_app.h":
+        return "AprilTag controller must not include the app entry-point header"
+    if target and target.startswith(APRILTAG_FEATURE_PREFIX):
+        if path_rel.startswith(APRILTAG_FEATURE_PREFIX):
+            return None
+        if path_rel == "apps/app_registry.c" and target == "apps/apriltag/apriltag_app.h":
+            return None
+        return "shared layers must not include AprilTag feature headers"
+    if path_rel.startswith(APRILTAG_FEATURE_PREFIX) and inc.startswith("../../") and inc not in APRILTAG_ALLOWED_SHARED_INCLUDES:
+        return "AprilTag feature may include only declared shared contracts"
+    return None
+
+
+def settings_menu_include_violation(path: Path, inc: str) -> str | None:
+    path_rel = rel(path)
+    target = resolve_local_include(path, inc)
+
+    if target == "ui/settings_menu_view.h" and path_rel not in {
+            "controllers/settings_menu_controller.c", "ui/settings_menu_view.c"}:
+        return "only the shared settings-menu controller may include its private view"
+    if path_rel not in SETTINGS_MENU_SHARED_PATHS or not target:
+        return None
+    if target.startswith(("apps/", "services/", "storage/", "runtime/")) or "camera" in target:
+        return "shared settings-menu must stay independent of apps, camera, services, storage, and runtime"
+    return None
+
+
 def pong_layout_failures() -> list[str]:
     failures: list[str] = []
     build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
@@ -498,6 +590,26 @@ def face_layout_failures() -> list[str]:
     return failures
 
 
+def apriltag_layout_failures() -> list[str]:
+    failures: list[str] = []
+    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
+
+    for name in sorted(APRILTAG_MODULE_FILES):
+        path = SRC / APRILTAG_FEATURE_PREFIX / name
+        manifest_path = f"firmware/src/{APRILTAG_FEATURE_PREFIX}{name}"
+        if not path.is_file():
+            failures.append(f"{path.relative_to(ROOT).as_posix()}: AprilTag module file is missing")
+        if manifest_path not in build_manifest:
+            failures.append(f"tools/build_firmware.py: AprilTag module is not disabled as a unit: {manifest_path}")
+    if 'firmware" / "third_party" / "apriltag"' not in build_manifest:
+        failures.append("tools/build_firmware.py: AprilTag third-party detector is not feature-gated")
+    for path in sorted(SRC.rglob("*.[ch]")):
+        path_rel = rel(path)
+        if not path_rel.startswith(APRILTAG_FEATURE_PREFIX) and APRILTAG_SPECIFIC_FILE_RE.match(path.name):
+            failures.append(f"{path_rel}: AprilTag-specific file must live in {APRILTAG_FEATURE_PREFIX}")
+    return failures
+
+
 def include_graph_failures() -> list[str]:
     graph: dict[str, list[str]] = {}
     for path in sorted(SRC.rglob("*.[ch]")):
@@ -553,6 +665,12 @@ def main() -> int:
             face_violation = face_include_violation(path, inc)
             if face_violation:
                 failures.append(f"{path_rel}:{line_no}: {face_violation}: {inc}")
+            apriltag_violation = apriltag_include_violation(path, inc)
+            if apriltag_violation:
+                failures.append(f"{path_rel}:{line_no}: {apriltag_violation}: {inc}")
+            settings_menu_violation = settings_menu_include_violation(path, inc)
+            if settings_menu_violation:
+                failures.append(f"{path_rel}:{line_no}: {settings_menu_violation}: {inc}")
             if path_rel.startswith("drivers/") and inc in SDK_HEADERS and (path_rel, inc) in SDK_DRIVER_ALLOWLIST:
                 allowed += 1
             violation = classify_violation(path_rel, inc)
@@ -571,6 +689,7 @@ def main() -> int:
     failures.extend(pong_layout_failures())
     failures.extend(terminal_layout_failures())
     failures.extend(face_layout_failures())
+    failures.extend(apriltag_layout_failures())
     failures.extend(include_graph_failures())
 
     if failures:

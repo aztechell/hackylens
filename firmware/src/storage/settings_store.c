@@ -14,6 +14,45 @@ static uint8_t g_settings_storage_ok;
 static uint8_t g_settings_storage_slot = 0xFF;
 static uint32_t g_settings_sequence;
 
+typedef struct
+{
+    uint8_t led_enabled;
+    uint8_t led_brightness;
+    uint8_t rgb_enabled;
+    uint8_t rgb_brightness;
+    uint8_t screen_brightness;
+    uint8_t camera_review_after_shot;
+    uint8_t auto_sleep_minutes;
+    uint8_t camera_format_rgb_red;
+    uint8_t camera_size_rgb_green;
+    uint8_t camera_schema_mark;
+    uint8_t rgb_red_light_mode;
+    uint8_t rgb_green;
+    uint8_t rgb_blue;
+    uint8_t rgb_schema_mark;
+    uint8_t fps_rgb_blue;
+    uint8_t qr_rate_fps_mark;
+} settings_payload_v1_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t payload_size;
+    uint32_t sequence;
+    settings_payload_v1_t payload;
+    uint32_t crc32;
+} settings_record_v1_t;
+
+typedef union
+{
+    settings_record_t current;
+    settings_record_v1_t legacy;
+} settings_slot_t;
+
+_Static_assert(sizeof(settings_payload_v1_t) == 16U, "legacy settings payload layout changed");
+_Static_assert(sizeof(settings_record_v1_t) == 32U, "legacy settings record layout changed");
+
 static uint32_t flash_slot_addr(uint8_t slot)
 {
     return slot ? SETTINGS_FLASH_SLOT1 : SETTINGS_FLASH_SLOT0;
@@ -41,9 +80,50 @@ static uint8_t settings_record_valid(const settings_record_t *record)
     return record->crc32 == settings_record_crc(record);
 }
 
+static uint32_t settings_record_v1_crc(const settings_record_v1_t *record)
+{
+    uint32_t crc = 0;
+    crc = crc32_update(crc, (const uint8_t *)&record->magic, sizeof(record->magic));
+    crc = crc32_update(crc, (const uint8_t *)&record->version, sizeof(record->version));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload_size, sizeof(record->payload_size));
+    crc = crc32_update(crc, (const uint8_t *)&record->sequence, sizeof(record->sequence));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload, sizeof(record->payload));
+    return crc;
+}
+
+static uint8_t settings_record_v1_valid(const settings_record_v1_t *record)
+{
+    return record->magic == SETTINGS_MAGIC &&
+           record->version == SETTINGS_STORAGE_LEGACY_VERSION &&
+           record->payload_size == sizeof(settings_payload_v1_t) &&
+           record->crc32 == settings_record_v1_crc(record);
+}
+
+static uint8_t settings_slot_valid(const settings_slot_t *slot)
+{
+    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+        return settings_record_valid(&slot->current);
+    return settings_record_v1_valid(&slot->legacy);
+}
+
+static uint32_t settings_slot_sequence(const settings_slot_t *slot)
+{
+    return slot->current.version == SETTINGS_STORAGE_VERSION ?
+           slot->current.sequence : slot->legacy.sequence;
+}
+
+static void settings_slot_payload(const settings_slot_t *slot, settings_payload_t *payload)
+{
+    memset(payload, 0, sizeof(*payload));
+    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+        *payload = slot->current.payload;
+    else
+        memcpy(payload, &slot->legacy.payload, sizeof(slot->legacy.payload));
+}
+
 void settings_store_init(settings_store_load_t *result)
 {
-    settings_record_t slots[2];
+    settings_slot_t slots[2];
     uint8_t jedec[3] = {0};
     uint8_t valid0;
     uint8_t valid1;
@@ -63,13 +143,13 @@ void settings_store_init(settings_store_load_t *result)
         return;
     }
 
-    boot_flash_read(SETTINGS_FLASH_SLOT0, (uint8_t *)&slots[0], sizeof(settings_record_t));
-    boot_flash_read(SETTINGS_FLASH_SLOT1, (uint8_t *)&slots[1], sizeof(settings_record_t));
-    valid0 = settings_record_valid(&slots[0]);
-    valid1 = settings_record_valid(&slots[1]);
+    boot_flash_read(SETTINGS_FLASH_SLOT0, (uint8_t *)&slots[0], sizeof(settings_slot_t));
+    boot_flash_read(SETTINGS_FLASH_SLOT1, (uint8_t *)&slots[1], sizeof(settings_slot_t));
+    valid0 = settings_slot_valid(&slots[0]);
+    valid1 = settings_slot_valid(&slots[1]);
 
     if(valid0 && valid1)
-        selected = slots[1].sequence > slots[0].sequence ? 1 : 0;
+        selected = settings_slot_sequence(&slots[1]) > settings_slot_sequence(&slots[0]) ? 1 : 0;
     else if(valid0)
         selected = 0;
     else if(valid1)
@@ -81,11 +161,12 @@ void settings_store_init(settings_store_load_t *result)
         if(result)
         {
             result->has_payload = 1;
-            result->payload = slots[selected].payload;
+            settings_slot_payload(&slots[selected], &result->payload);
         }
-        g_settings_sequence = slots[selected].sequence;
+        g_settings_sequence = settings_slot_sequence(&slots[selected]);
         g_settings_storage_slot = selected;
-        printf("[SETTINGS] loaded slot=%u seq=%u\r\n", selected, g_settings_sequence);
+        printf("[SETTINGS] loaded slot=%u seq=%u schema=v%u\r\n", selected,
+               g_settings_sequence, slots[selected].current.version);
     }
     else
     {
