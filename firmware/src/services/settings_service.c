@@ -26,6 +26,7 @@ static uint8_t g_screen_brightness = 90;
 static uint8_t g_auto_sleep_minutes = 1;
 static uint8_t g_feature_flags;
 static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
 
 void settings_app_data_read(uint8_t data[SETTINGS_APP_DATA_SIZE])
@@ -168,6 +169,17 @@ void settings_set_external_link_uart_speed(external_link_uart_speed_t speed)
                                  speed : EXTERNAL_LINK_UART_SPEED_115200;
 }
 
+hk_autostart_id_t settings_autostart_id(void)
+{
+    return g_autostart_id;
+}
+
+void settings_set_autostart_id(hk_autostart_id_t id)
+{
+    g_autostart_id = id >= HK_AUTOSTART_OFF && id < HK_AUTOSTART_COUNT ?
+                     id : HK_AUTOSTART_OFF;
+}
+
 void settings_defaults(void)
 {
     g_led_enabled = 0;
@@ -180,6 +192,7 @@ void settings_defaults(void)
     g_auto_sleep_minutes = 1;
     g_feature_flags = 0;
     g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+    g_autostart_id = HK_AUTOSTART_OFF;
     memset(g_app_data, 0, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
@@ -205,6 +218,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->auto_sleep_minutes = clamp_u8(g_auto_sleep_minutes, 1, 30);
     snapshot->feature_flags = g_feature_flags & SETTINGS_FEATURE_FLAGS_MASK;
     snapshot->external_link_uart_speed = (uint8_t)g_external_link_uart_speed;
+    snapshot->autostart_id = (uint8_t)g_autostart_id;
     memcpy(snapshot->app_data, g_app_data, sizeof(snapshot->app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
@@ -229,6 +243,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     settings_set_auto_sleep_minutes(snapshot->auto_sleep_minutes);
     settings_set_feature_flags(snapshot->feature_flags);
     settings_set_external_link_uart_speed((external_link_uart_speed_t)snapshot->external_link_uart_speed);
+    settings_set_autostart_id((hk_autostart_id_t)snapshot->autostart_id);
     memcpy(g_app_data, snapshot->app_data, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);

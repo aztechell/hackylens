@@ -44,14 +44,48 @@ typedef struct
     uint32_t crc32;
 } settings_record_v1_t;
 
+typedef struct
+{
+    uint8_t led_enabled;
+    uint8_t led_brightness;
+    uint8_t rgb_enabled;
+    uint8_t rgb_brightness;
+    uint8_t screen_brightness;
+    uint8_t camera_review_after_shot;
+    uint8_t auto_sleep_minutes;
+    uint8_t camera_format_rgb_red;
+    uint8_t camera_size_rgb_green;
+    uint8_t camera_schema_mark;
+    uint8_t rgb_red_light_mode;
+    uint8_t rgb_green;
+    uint8_t rgb_blue;
+    uint8_t rgb_schema_mark;
+    uint8_t fps_rgb_blue;
+    uint8_t qr_rate_fps_mark;
+    uint8_t app_data[SETTINGS_APP_DATA_SIZE];
+} settings_payload_v2_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t payload_size;
+    uint32_t sequence;
+    settings_payload_v2_t payload;
+    uint32_t crc32;
+} settings_record_v2_t;
+
 typedef union
 {
     settings_record_t current;
+    settings_record_v2_t previous;
     settings_record_v1_t legacy;
 } settings_slot_t;
 
 _Static_assert(sizeof(settings_payload_v1_t) == 16U, "legacy settings payload layout changed");
 _Static_assert(sizeof(settings_record_v1_t) == 32U, "legacy settings record layout changed");
+_Static_assert(sizeof(settings_payload_v2_t) == 96U, "settings v2 payload layout changed");
+_Static_assert(sizeof(settings_record_v2_t) == 112U, "settings v2 record layout changed");
 
 static uint32_t flash_slot_addr(uint8_t slot)
 {
@@ -99,17 +133,41 @@ static uint8_t settings_record_v1_valid(const settings_record_v1_t *record)
            record->crc32 == settings_record_v1_crc(record);
 }
 
+static uint32_t settings_record_v2_crc(const settings_record_v2_t *record)
+{
+    uint32_t crc = 0;
+    crc = crc32_update(crc, (const uint8_t *)&record->magic, sizeof(record->magic));
+    crc = crc32_update(crc, (const uint8_t *)&record->version, sizeof(record->version));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload_size, sizeof(record->payload_size));
+    crc = crc32_update(crc, (const uint8_t *)&record->sequence, sizeof(record->sequence));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload, sizeof(record->payload));
+    return crc;
+}
+
+static uint8_t settings_record_v2_valid(const settings_record_v2_t *record)
+{
+    return record->magic == SETTINGS_MAGIC &&
+           record->version == SETTINGS_STORAGE_PREVIOUS_VERSION &&
+           record->payload_size == sizeof(settings_payload_v2_t) &&
+           record->crc32 == settings_record_v2_crc(record);
+}
+
 static uint8_t settings_slot_valid(const settings_slot_t *slot)
 {
     if(slot->current.version == SETTINGS_STORAGE_VERSION)
         return settings_record_valid(&slot->current);
+    if(slot->previous.version == SETTINGS_STORAGE_PREVIOUS_VERSION)
+        return settings_record_v2_valid(&slot->previous);
     return settings_record_v1_valid(&slot->legacy);
 }
 
 static uint32_t settings_slot_sequence(const settings_slot_t *slot)
 {
-    return slot->current.version == SETTINGS_STORAGE_VERSION ?
-           slot->current.sequence : slot->legacy.sequence;
+    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+        return slot->current.sequence;
+    if(slot->previous.version == SETTINGS_STORAGE_PREVIOUS_VERSION)
+        return slot->previous.sequence;
+    return slot->legacy.sequence;
 }
 
 static void settings_slot_payload(const settings_slot_t *slot, settings_payload_t *payload)
@@ -117,6 +175,8 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
     memset(payload, 0, sizeof(*payload));
     if(slot->current.version == SETTINGS_STORAGE_VERSION)
         *payload = slot->current.payload;
+    else if(slot->previous.version == SETTINGS_STORAGE_PREVIOUS_VERSION)
+        memcpy(payload, &slot->previous.payload, sizeof(slot->previous.payload));
     else
         memcpy(payload, &slot->legacy.payload, sizeof(slot->legacy.payload));
 }

@@ -48,6 +48,34 @@ static int32_t settings_menu_read_value(const settings_menu_session_t *session,
     return session->definition->read(session->definition->context, item->id);
 }
 
+static uint8_t settings_menu_choice_count(const settings_menu_session_t *session,
+                                          const settings_menu_item_t *item)
+{
+    if(session->definition->choice_count)
+    {
+        uint8_t count = session->definition->choice_count(session->definition->context, item->id);
+        if(count != 0U)
+            return count;
+    }
+    return item->choice_count;
+}
+
+static const char *settings_menu_choice_label(const settings_menu_session_t *session,
+                                              const settings_menu_item_t *item,
+                                              uint8_t index)
+{
+    if(session->definition->choice_label)
+    {
+        const char *label = session->definition->choice_label(session->definition->context,
+                                                              item->id, index);
+        if(label)
+            return label;
+    }
+    if(item->choices && index < item->choice_count)
+        return item->choices[index];
+    return NULL;
+}
+
 static void settings_menu_format_value(const settings_menu_session_t *session,
                                        const settings_menu_item_t *item,
                                        char *value,
@@ -66,8 +94,11 @@ static void settings_menu_format_value(const settings_menu_session_t *session,
         snprintf(value, value_size, "%s", current ? "ON" : "OFF");
     else if(item->kind == SETTINGS_MENU_ITEM_CHOICE)
     {
-        if(current >= 0 && current < item->choice_count && item->choices)
-            snprintf(value, value_size, "%s", item->choices[current]);
+        uint8_t count = settings_menu_choice_count(session, item);
+        const char *label = current >= 0 && current < count ?
+                            settings_menu_choice_label(session, item, (uint8_t)current) : NULL;
+        if(label)
+            snprintf(value, value_size, "%s", label);
     }
     else if(item->kind == SETTINGS_MENU_ITEM_RANGE)
         snprintf(value, value_size, "%ld", (long)current);
@@ -182,13 +213,14 @@ static void settings_menu_select_delta(settings_menu_session_t *session, int8_t 
     }
 }
 
-static int32_t settings_menu_adjusted_value(const settings_menu_item_t *item,
+static int32_t settings_menu_adjusted_value(const settings_menu_session_t *session,
+                                            const settings_menu_item_t *item,
                                             int32_t current,
                                             int8_t delta)
 {
     int32_t minimum = item->kind == SETTINGS_MENU_ITEM_CHOICE ? 0 : item->minimum;
     int32_t maximum = item->kind == SETTINGS_MENU_ITEM_CHOICE ?
-                      (int32_t)item->choice_count - 1 : item->maximum;
+                      (int32_t)settings_menu_choice_count(session, item) - 1 : item->maximum;
     int32_t step = item->kind == SETTINGS_MENU_ITEM_CHOICE ? 1 : item->step;
 
     if(step <= 0 || maximum < minimum)
@@ -234,7 +266,7 @@ static void settings_menu_adjust(settings_menu_session_t *session, int8_t delta)
                  item->kind != SETTINGS_MENU_ITEM_RANGE))
         return;
     current = settings_menu_read_value(session, item);
-    next = settings_menu_adjusted_value(item, current, delta);
+    next = settings_menu_adjusted_value(session, item, current, delta);
     if(next != current)
         settings_menu_write_value(session, item, next);
 }

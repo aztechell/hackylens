@@ -3,6 +3,7 @@
 #include "platform_bootstrap.h"
 
 #include "../controllers/boot_controller.h"
+#include "../controllers/autostart_controller.h"
 #include "../core/hk_menu.h"
 #include "../services/settings_lights.h"
 #include "../services/external_link_service.h"
@@ -23,5 +24,5 @@ void firmware_startup(void)
     boot_controller_startup();
     boot_controller_show_boot_screen();
     topbar_set_sd_mounted(files_mount_if_needed());
-    shell_show_menu();
+    autostart_controller_start();
 }

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "../core/hk_app.h"
 #include "external_link_types.h"
 
 void settings_defaults(void);
@@ -30,5 +31,7 @@ void settings_set_external_link_transport(external_link_transport_t transport);
 external_link_uart_speed_t settings_external_link_uart_speed(void);
 uint32_t settings_external_link_uart_baud(void);
 void settings_set_external_link_uart_speed(external_link_uart_speed_t speed);
+hk_autostart_id_t settings_autostart_id(void);
+void settings_set_autostart_id(hk_autostart_id_t id);
 
 #endif

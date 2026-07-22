@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "hk_config.h"
+#include "../core/hk_app_registry.h"
 #include "../core/hk_screen.h"
 #include "../services/external_link_service.h"
 #include "../services/external_link_types.h"
@@ -22,6 +23,7 @@ typedef enum
     SETTINGS_APP_AUTO_SLEEP,
     SETTINGS_APP_EXTERNAL_LINK,
     SETTINGS_APP_UART_SPEED,
+    SETTINGS_APP_AUTOSTART,
     SETTINGS_APP_VERSION,
     SETTINGS_APP_ITEM_COUNT,
 } settings_app_item_id_t;
@@ -59,6 +61,9 @@ static const settings_menu_item_t g_items[] = {
      .kind = SETTINGS_MENU_ITEM_CHOICE, .interaction = SETTINGS_MENU_EDIT_ON_OK,
      .choices = g_uart_speed_choices, .choice_count = EXTERNAL_LINK_UART_SPEED_COUNT,
      .flags = SETTINGS_MENU_ITEM_WRAP},
+    {.id = SETTINGS_APP_AUTOSTART, .title = "Autostart",
+     .kind = SETTINGS_MENU_ITEM_CHOICE, .interaction = SETTINGS_MENU_EDIT_ON_OK,
+     .flags = SETTINGS_MENU_ITEM_WRAP},
     {.id = SETTINGS_APP_VERSION, .title = "Version", .kind = SETTINGS_MENU_ITEM_TEXT},
 };
 
@@ -88,6 +93,20 @@ static int32_t settings_app_read(void *context, uint16_t id)
         return settings_external_link_transport();
     if(id == SETTINGS_APP_UART_SPEED)
         return settings_external_link_uart_speed();
+    if(id == SETTINGS_APP_AUTOSTART)
+    {
+        hk_autostart_id_t selected = settings_autostart_id();
+
+        if(selected == HK_AUTOSTART_OFF)
+            return 0;
+        for(uint8_t index = 0U; index < hk_app_autostart_count(); index++)
+        {
+            const hk_app_t *app = hk_app_autostart_at(index);
+            if(app && app->autostart_id == selected)
+                return (int32_t)index + 1;
+        }
+        return 0;
+    }
     return 0;
 }
 
@@ -177,6 +196,19 @@ static uint8_t settings_app_write(void *context, uint16_t id, int32_t value)
         printf("[LINK] uart=%u\r\n", (unsigned)settings_external_link_uart_baud());
         return 1U;
     }
+    if(id == SETTINGS_APP_AUTOSTART)
+    {
+        const hk_app_t *app = value > 0 ? hk_app_autostart_at((uint8_t)value - 1U) : NULL;
+        hk_autostart_id_t selected = app ? app->autostart_id : HK_AUTOSTART_OFF;
+
+        if(selected == settings_autostart_id())
+            return 0U;
+        settings_set_autostart_id(selected);
+        settings_mark_dirty(0U);
+        printf("[SETTINGS] autostart=%u %s\r\n", (unsigned)selected,
+               app ? app->title : "OFF");
+        return 1U;
+    }
     return 0U;
 }
 
@@ -188,11 +220,35 @@ static uint8_t settings_app_format(void *context,
     (void)context;
     if(id == SETTINGS_APP_AUTO_SLEEP)
         snprintf(value, value_size, "%umin", settings_auto_sleep_minutes());
+    else if(id == SETTINGS_APP_AUTOSTART &&
+            settings_autostart_id() != HK_AUTOSTART_OFF &&
+            !hk_app_for_autostart_id(settings_autostart_id()))
+        snprintf(value, value_size, "UNAVAILABLE");
     else if(id == SETTINGS_APP_VERSION)
         snprintf(value, value_size, "v%s", HACKYLENS_VERSION);
     else
         return 0U;
     return 1U;
+}
+
+static uint8_t settings_app_choice_count(void *context, uint16_t id)
+{
+    (void)context;
+    return id == SETTINGS_APP_AUTOSTART ?
+           (uint8_t)(hk_app_autostart_count() + 1U) : 0U;
+}
+
+static const char *settings_app_choice_label(void *context, uint16_t id, uint8_t index)
+{
+    const hk_app_t *app;
+
+    (void)context;
+    if(id != SETTINGS_APP_AUTOSTART)
+        return NULL;
+    if(index == 0U)
+        return "OFF";
+    app = hk_app_autostart_at(index - 1U);
+    return app ? app->title : NULL;
 }
 
 static void settings_app_committed(void *context, uint16_t id)
@@ -209,6 +265,8 @@ static const settings_menu_definition_t g_definition = {
     .read = settings_app_read,
     .write = settings_app_write,
     .format = settings_app_format,
+    .choice_count = settings_app_choice_count,
+    .choice_label = settings_app_choice_label,
     .committed = settings_app_committed,
 };
 

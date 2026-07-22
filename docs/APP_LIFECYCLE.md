@@ -1,8 +1,10 @@
 # App Lifecycle
 
-Apps are described by `hk_app_t`: `id`, `title`, `screen`, `enter`, optional `exit`, optional `tick`, optional `handle_input`, optional `draw_icon`, optional `background_tick`, optional `handle_debug_command`, and optional `debug_help`. Registry entries use designated initializers so optional fields are independent of structure order.
+Apps are described by `hk_app_t`: `id`, `title`, `screen`, stable `autostart_id`, `enter`, optional `exit`, optional `tick`, optional `handle_input`, optional `draw_icon`, optional `background_tick`, optional `handle_debug_command`, and optional `debug_help`. Registry entries use designated initializers so optional fields are independent of structure order. SETTINGS and SLEEP retain the zero/OFF autostart ID and cannot be selected as boot targets.
 
 `runtime/hk_main.c` runs the firmware superloop: it processes debug input, polls buttons, dispatches shell input, ticks the menu and active app, runs the system tick, then sleeps for the configured camera or non-camera interval. `SCREEN_MENU` opens the selected registry entry through its `enter` callback. `SCREEN_CAMERA_SETTINGS` remains a service screen owned by CAMERA/QR-CAMERA rather than a top-level app.
+
+After settings load, boot UI, and SD mount, startup resolves the persisted autostart ID through the registry and calls the target's normal `enter` with an empty input snapshot. The menu index is set to the target before entry, so BACK returns with that item selected. OFF or a target omitted by the current build opens the menu; an omitted target remains persisted and becomes active again when a later build restores it. `HKMENU` and ordinary exits never retrigger autostart.
 
 Screen state is exposed through `core/hk_screen.h`. Apps and controllers receive `hk_input_snapshot_t` from the runtime loop and must not access input driver state directly.
 

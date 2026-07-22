@@ -190,6 +190,10 @@ SETTINGS_MENU_SHARED_PATHS = {
     "ui/settings_menu_view.c",
     "ui/settings_menu_view.h",
 }
+AUTOSTART_TARGET_ID_RE = re.compile(
+    r"\bHK_AUTOSTART_(?:TERMINAL|CAMERA|QR_CAMERA|FACE_DETECT|APRILTAG|FILES|BUTTONS|PONG)\b"
+)
+AUTOSTART_TARGET_ID_ALLOWED_PATHS = {"core/hk_app.h", "apps/app_registry.c"}
 DEBUG_SCREENSHOT_CONSOLE_API_RE = re.compile(r"\bdebug_uart_send_(bytes|text)\b")
 SDK_TOKEN_RE = re.compile(
     r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|sysctl_get_time_us|"
@@ -442,6 +446,9 @@ def feature_reference_violations(path: Path) -> list[tuple[int, str]]:
                 path_rel not in TERMINAL_REFERENCE_ALLOWED_PATHS and
                 TERMINAL_REFERENCE_RE.search(line)):
             violations.append((number, "Terminal reference outside feature module"))
+        if (path_rel not in AUTOSTART_TARGET_ID_ALLOWED_PATHS and
+                AUTOSTART_TARGET_ID_RE.search(line)):
+            violations.append((number, "autostart target IDs must be declared only by core and app registry"))
     return violations
 
 

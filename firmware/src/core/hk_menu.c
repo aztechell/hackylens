@@ -69,14 +69,30 @@ void shell_show_menu(void)
     printf("[SHELL] screen MENU item=%s\r\n", g_menu_items[s_menu_index].title);
 }
 
-void shell_open_selected(const hk_input_snapshot_t *input)
+uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
-    const hk_app_t *app = &g_menu_items[s_menu_index];
+    uint8_t index;
+
+    if(!app || !app->enter)
+        return 0U;
+    for(index = 0U; index < g_menu_item_count; index++)
+    {
+        if(&g_menu_items[index] == app)
+            break;
+    }
+    if(index >= g_menu_item_count)
+        return 0U;
+    s_menu_index = index;
     s_menu_repeat_button = 0;
     s_menu_repeat_ticks = 0;
     printf("[MENU] open %s\r\n", app->title);
-    if(app->enter)
-        app->enter(input);
+    app->enter(input);
+    return 1U;
+}
+
+void shell_open_selected(const hk_input_snapshot_t *input)
+{
+    (void)shell_open_app(&g_menu_items[s_menu_index], input);
 }
 
 void menu_select_delta(int8_t delta)

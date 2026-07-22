@@ -21,6 +21,20 @@ typedef enum
     SCREEN_SLEEP,
 } screen_t;
 
+typedef enum
+{
+    HK_AUTOSTART_OFF = 0,
+    HK_AUTOSTART_TERMINAL,
+    HK_AUTOSTART_CAMERA,
+    HK_AUTOSTART_QR_CAMERA,
+    HK_AUTOSTART_FACE_DETECT,
+    HK_AUTOSTART_APRILTAG,
+    HK_AUTOSTART_FILES,
+    HK_AUTOSTART_BUTTONS,
+    HK_AUTOSTART_PONG,
+    HK_AUTOSTART_COUNT,
+} hk_autostart_id_t;
+
 typedef struct
 {
     uint32_t state;
@@ -33,6 +47,7 @@ typedef struct hk_app
     const char *id;
     const char *title;
     screen_t screen;
+    hk_autostart_id_t autostart_id;
     void (*enter)(const hk_input_snapshot_t *input);
     void (*exit)(void);
     void (*tick)(const hk_input_snapshot_t *input);

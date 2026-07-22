@@ -6,7 +6,7 @@ HackyLens 0.1.0 is modular firmware built from separate C translation units unde
 
 ## Startup
 
-`runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `runtime/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, mounts storage, and enters the menu.
+`runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `runtime/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, and mounts storage. The neutral autostart controller then opens the persisted registry target or falls back to the menu; it never includes feature headers.
 
 `platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, writes the boot banner, and initializes optional UI state; it does not depend on runtime or low-level board/HAL headers.
 
@@ -23,7 +23,7 @@ Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol an
 
 `tools/check_arch.py` guards include boundaries, forbidden compatibility headers, SDK-token placement, include cycles, and feature-module ownership.
 
-The shared `settings_menu` controller is an instance-based UI state machine driven by a constant item descriptor table and owner callbacks. Its passive view owns only LCD rendering. It has no camera, application, storage, persistence, or screen-navigation dependencies; owner controllers retain opening/closing lifecycle and all settings side effects. CAMERA, QR, APRILTAG, and the system SETTINGS app supply separate descriptor adapters. Cycle-on-OK and edit-on-OK rows share navigation, partial redraw, hold-repeat, and commit lifecycle without sharing their data models.
+The shared `settings_menu` controller is an instance-based UI state machine driven by a constant item descriptor table and owner callbacks. Its passive view owns only LCD rendering. It has no camera, application, storage, persistence, or screen-navigation dependencies; owner controllers retain opening/closing lifecycle and all settings side effects. CAMERA, QR, APRILTAG, and the system SETTINGS app supply separate descriptor adapters. Cycle-on-OK and edit-on-OK rows share navigation, partial redraw, hold-repeat, commit lifecycle, and optional dynamic choice providers without sharing their data models.
 
 ## Feature modules
 
@@ -35,7 +35,7 @@ APRILTAG owns its TAG36H11 detector adapter, grayscale downsampler, settings/sel
 
 Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log-sink lifecycle. The shared logging service exposes only a generic optional sink and remains independent of Terminal. Font selection remains in reserved feature bits inherited from the legacy settings payload, so old records and erased flash continue to decode as `TERMINAL_FONT_NORMAL`.
 
-Settings record v2 retains the legacy 16-byte settings prefix and adds a fixed 80-byte opaque app-data block. The storage layer validates and migrates both v1 and v2 records; APRILTAG alone interprets its app-data schema and 587-bit selected-ID map. Keeping the block opaque and layout-stable preserves it across builds where APRILTAG is disabled.
+Settings record v3 retains the v2 settings prefix and fixed 80-byte opaque app-data block, then appends one stable autostart ID byte. The storage layer validates and migrates v1, v2, and v3 records; v1/v2 migration defaults autostart to OFF without changing prior CAMERA, external-link, or APRILTAG data. APRILTAG alone interprets the opaque app-data schema and 587-bit selected-ID map.
 
 ## Architecture freeze
 

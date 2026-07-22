@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../core/photo_types.h"
+#include "../core/hk_app.h"
 
 #include "../config/camera_config.h"
 #include "../config/settings_config.h"
@@ -56,6 +57,8 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
                                          SETTINGS_FPS_MARK_LOW);
 #endif
     memcpy(payload.app_data, snapshot->app_data, sizeof(payload.app_data));
+    payload.autostart_id = snapshot->autostart_id < HK_AUTOSTART_COUNT ?
+                           snapshot->autostart_id : HK_AUTOSTART_OFF;
     return payload;
 }
 
@@ -80,6 +83,8 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
 
     memset(snapshot, 0, sizeof(*snapshot));
     memcpy(snapshot->app_data, payload->app_data, sizeof(snapshot->app_data));
+    snapshot->autostart_id = payload->autostart_id < HK_AUTOSTART_COUNT ?
+                             payload->autostart_id : HK_AUTOSTART_OFF;
 
     snapshot->led_enabled = payload->led_enabled ? 1 : 0;
     snapshot->led_brightness = clamp_u8(payload->led_brightness, 0, 100);

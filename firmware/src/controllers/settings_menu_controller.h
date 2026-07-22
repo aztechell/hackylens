@@ -53,6 +53,10 @@ typedef uint8_t (*settings_menu_format_fn)(void *context,
                                            uint16_t id,
                                            char *value,
                                            size_t value_size);
+typedef uint8_t (*settings_menu_choice_count_fn)(void *context, uint16_t id);
+typedef const char *(*settings_menu_choice_label_fn)(void *context,
+                                                     uint16_t id,
+                                                     uint8_t index);
 typedef void (*settings_menu_changed_fn)(void *context, uint16_t id);
 typedef void (*settings_menu_committed_fn)(void *context, uint16_t id);
 
@@ -66,6 +70,8 @@ typedef struct
     settings_menu_write_fn write;
     settings_menu_action_fn action;
     settings_menu_format_fn format;
+    settings_menu_choice_count_fn choice_count;
+    settings_menu_choice_label_fn choice_label;
     settings_menu_changed_fn changed;
     settings_menu_committed_fn committed;
 } settings_menu_definition_t;
