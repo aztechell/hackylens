@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "fat_file_entry.h"
+
 typedef enum {
     FILE_DIR_SCAN_ERROR = 0,
     FILE_DIR_SCAN_FOUND,

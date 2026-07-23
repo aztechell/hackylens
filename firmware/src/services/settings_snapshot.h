@@ -27,9 +27,7 @@ typedef struct
 #if HK_ENABLE_CAMERA_FEATURE
     camera_persist_settings_t camera;
 #endif
-#if HK_ENABLE_QR_FEATURE
     uint8_t qr_decode_rate;
-#endif
 } settings_snapshot_t;
 
 void settings_snapshot_capture(settings_snapshot_t *snapshot);

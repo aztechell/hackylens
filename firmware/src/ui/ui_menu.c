@@ -47,74 +47,6 @@ void menu_draw_title(const char *title)
     lcd_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
-void menu_draw_camera_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_draw_rect(x + 10, y + 18, 40, 28, 2, color);
-    lcd_fill_rect(x + 18, y + 12, 18, 6, color);
-    lcd_draw_rect(x + 23, y + 24, 14, 14, 2, color);
-    lcd_fill_rect(x + 28, y + 29, 4, 4, color);
-    lcd_fill_rect(x + 43, y + 22, 4, 4, color);
-}
-
-void menu_draw_qr_camera_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_draw_rect(x + 8, y + 14, 44, 32, 2, color);
-    lcd_fill_rect(x + 18, y + 8, 18, 6, color);
-    lcd_draw_rect(x + 14, y + 20, 10, 10, 2, color);
-    lcd_draw_rect(x + 36, y + 20, 10, 10, 2, color);
-    lcd_draw_rect(x + 14, y + 34, 10, 10, 2, color);
-    lcd_fill_rect(x + 30, y + 34, 4, 4, color);
-    lcd_fill_rect(x + 38, y + 36, 8, 2, color);
-    lcd_fill_rect(x + 30, y + 42, 12, 2, color);
-}
-
-void menu_draw_files_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
-{
-    (void)bg;
-    lcd_fill_rect(x + 20, y + 8, 20, 2, color);
-    lcd_fill_rect(x + 18, y + 12, 2, 38, color);
-    lcd_fill_rect(x + 42, y + 14, 2, 36, color);
-    lcd_fill_rect(x + 20, y + 50, 22, 2, color);
-    lcd_fill_rect(x + 38, y + 8, 2, 8, color);
-    lcd_fill_rect(x + 40, y + 14, 4, 2, color);
-    lcd_fill_rect(x + 23, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 29, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 35, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 24, y + 39, 14, 2, color);
-    lcd_fill_rect(x + 24, y + 44, 10, 2, color);
-}
-
-void menu_draw_buttons_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_draw_rect(x + 13, y + 12, 14, 14, 2, color);
-    lcd_draw_rect(x + 33, y + 12, 14, 14, 2, color);
-    lcd_draw_rect(x + 13, y + 34, 14, 14, 2, color);
-    lcd_draw_rect(x + 33, y + 34, 14, 14, 2, color);
-}
-
-void menu_draw_settings_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_fill_rect(x + 27, y + 7, 6, 9, color);
-    lcd_fill_rect(x + 27, y + 44, 6, 9, color);
-    lcd_fill_rect(x + 7, y + 27, 9, 6, color);
-    lcd_fill_rect(x + 44, y + 27, 9, 6, color);
-    lcd_fill_rect(x + 14, y + 14, 7, 7, color);
-    lcd_fill_rect(x + 39, y + 14, 7, 7, color);
-    lcd_fill_rect(x + 14, y + 39, 7, 7, color);
-    lcd_fill_rect(x + 39, y + 39, 7, 7, color);
-    lcd_draw_rect(x + 18, y + 18, 24, 24, 3, color);
-    lcd_draw_rect(x + 24, y + 24, 12, 12, 2, color);
-    lcd_fill_rect(x + 28, y + 28, 4, 4, color);
-}
-
-void menu_draw_sleep_icon(uint16_t x, uint16_t y, uint16_t color)
-{
-    lcd_draw_rect(x + 20, y + 10, 20, 30, 2, color);
-    lcd_fill_rect(x + 28, y + 6, 4, 14, color);
-    lcd_fill_rect(x + 22, y + 44, 16, 2, color);
-    lcd_fill_rect(x + 18, y + 49, 24, 2, color);
-}
-
 void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
 {
     uint8_t col = (uint8_t)(index % MENU_GRID_COLS);
@@ -132,16 +64,4 @@ void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
 
     if(app->draw_icon)
         app->draw_icon(x, y, fg, bg);
-    else if(app->screen == SCREEN_CAMERA)
-        menu_draw_camera_icon(x, y, fg);
-    else if(app->screen == SCREEN_QR_CAMERA)
-        menu_draw_qr_camera_icon(x, y, fg);
-    else if(app->screen == SCREEN_FILES)
-        menu_draw_files_icon(x, y, fg, bg);
-    else if(app->screen == SCREEN_BUTTONS)
-        menu_draw_buttons_icon(x, y, fg);
-    else if(app->screen == SCREEN_SETTINGS)
-        menu_draw_settings_icon(x, y, fg);
-    else if(app->screen == SCREEN_SLEEP)
-        menu_draw_sleep_icon(x, y, fg);
 }

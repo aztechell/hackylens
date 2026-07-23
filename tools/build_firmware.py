@@ -30,134 +30,37 @@ APP_MODULES = {
     "sleep": "HK_ENABLE_APP_SLEEP",
 }
 
-APP_SOURCE_MODULES = {
-    "terminal": [
-        Path("firmware/src/apps/terminal/terminal_app.c"),
-        Path("firmware/src/apps/terminal/terminal_app.h"),
-        Path("firmware/src/apps/terminal/terminal_controller.c"),
-        Path("firmware/src/apps/terminal/terminal_controller.h"),
-        Path("firmware/src/apps/terminal/terminal_view.c"),
-        Path("firmware/src/apps/terminal/terminal_view.h"),
-        Path("firmware/src/apps/terminal/terminal_buffer.c"),
-        Path("firmware/src/apps/terminal/terminal_buffer.h"),
-        Path("firmware/src/apps/terminal/terminal_config.h"),
-        Path("firmware/src/apps/terminal/terminal_types.h"),
-    ],
-    "camera": [
-        Path("firmware/src/apps/app_camera.c"),
-    ],
-    "qr-camera": [
-        Path("firmware/src/apps/app_qr_camera.c"),
-    ],
-    "face-detect": [
-        Path("firmware/src/apps/face_detect/face_detect_app.c"),
-        Path("firmware/src/apps/face_detect/face_detect_app.h"),
-        Path("firmware/src/apps/face_detect/face_detect_config.h"),
-        Path("firmware/src/apps/face_detect/face_detect_controller.c"),
-        Path("firmware/src/apps/face_detect/face_detect_controller.h"),
-        Path("firmware/src/apps/face_detect/face_detect_detector.c"),
-        Path("firmware/src/apps/face_detect/face_detect_detector.h"),
-        Path("firmware/src/apps/face_detect/face_detect_model_storage.c"),
-        Path("firmware/src/apps/face_detect/face_detect_model_storage.h"),
-        Path("firmware/src/apps/face_detect/face_detect_types.h"),
-        Path("firmware/src/apps/face_detect/face_detect_view.c"),
-        Path("firmware/src/apps/face_detect/face_detect_view.h"),
-    ],
-    "apriltag": [
-        Path("firmware/src/apps/apriltag/apriltag_app.c"),
-        Path("firmware/src/apps/apriltag/apriltag_app.h"),
-        Path("firmware/src/apps/apriltag/apriltag_config.h"),
-        Path("firmware/src/apps/apriltag/apriltag_controller.c"),
-        Path("firmware/src/apps/apriltag/apriltag_controller.h"),
-        Path("firmware/src/apps/apriltag/apriltag_detector.c"),
-        Path("firmware/src/apps/apriltag/apriltag_detector.h"),
-        Path("firmware/src/apps/apriltag/apriltag_settings.c"),
-        Path("firmware/src/apps/apriltag/apriltag_settings.h"),
-        Path("firmware/src/apps/apriltag/apriltag_settings_menu.c"),
-        Path("firmware/src/apps/apriltag/apriltag_settings_menu.h"),
-        Path("firmware/src/apps/apriltag/apriltag_types.h"),
-        Path("firmware/src/apps/apriltag/apriltag_view.c"),
-        Path("firmware/src/apps/apriltag/apriltag_view.h"),
-    ],
-    "buttons": [
-        Path("firmware/src/apps/app_buttons.c"),
-        Path("firmware/src/controllers/buttons_controller.c"),
-    ],
-    "pong": [
-        Path("firmware/src/apps/pong/pong_app.c"),
-        Path("firmware/src/apps/pong/pong_controller.c"),
-        Path("firmware/src/apps/pong/pong_view.c"),
-    ],
-    "settings": [
-        Path("firmware/src/apps/app_settings.c"),
-        Path("firmware/src/controllers/settings_app_menu.c"),
-        Path("firmware/src/controllers/settings_app_menu.h"),
-        Path("firmware/src/controllers/settings_controller.c"),
-    ],
-    "files": [
-        Path("firmware/src/apps/app_files.c"),
-        Path("firmware/src/controllers/files_controller.c"),
-        Path("firmware/src/storage/file_browser_actions.c"),
-        Path("firmware/src/storage/file_delete.c"),
-        Path("firmware/src/storage/file_preview.c"),
-        Path("firmware/src/storage/files_view_bridge.c"),
-        Path("firmware/src/storage/image_decode_bmp.c"),
-        Path("firmware/src/storage/image_decode_common.c"),
-        Path("firmware/src/storage/image_decode_gif.c"),
-        Path("firmware/src/storage/image_decode_gif.h"),
-        Path("firmware/src/storage/image_decode_png.c"),
-        Path("firmware/src/storage/image_decode_png_inflate.c"),
-        Path("firmware/src/storage/image_decode_ppm.c"),
-        Path("firmware/src/storage/image_decode_raw.c"),
-        Path("firmware/src/storage/image_viewer.c"),
-        Path("firmware/src/storage/photos_files.c"),
-        Path("firmware/src/ui/files_view.c"),
-    ],
-    "sleep": [
-        Path("firmware/src/apps/app_sleep.c"),
-        Path("firmware/src/controllers/sleep_controller.c"),
-    ],
+APP_SOURCE_DIRS = {
+    "terminal": Path("firmware/src/apps/terminal"),
+    "camera": Path("firmware/src/apps/camera"),
+    "qr-camera": Path("firmware/src/apps/qr_camera"),
+    "face-detect": Path("firmware/src/apps/face_detect"),
+    "apriltag": Path("firmware/src/apps/apriltag"),
+    "files": Path("firmware/src/apps/files"),
+    "buttons": Path("firmware/src/apps/buttons"),
+    "pong": Path("firmware/src/apps/pong"),
+    "settings": Path("firmware/src/apps/settings"),
+    "sleep": Path("firmware/src/apps/sleep"),
 }
 
-CAMERA_FEATURE_SOURCE_MODULES = [
-    Path("firmware/src/controllers/camera_photo_controller.c"),
-    Path("firmware/src/controllers/camera_photo_mode_controller.c"),
+CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/controllers/camera_runtime_controller.c"),
-    Path("firmware/src/controllers/camera_settings_controller.c"),
-    Path("firmware/src/controllers/camera_settings_coordinator.c"),
-    Path("firmware/src/controllers/camera_settings_menu.c"),
-    Path("firmware/src/controllers/camera_settings_menu.h"),
+    Path("firmware/src/controllers/camera_runtime_controller.h"),
     Path("firmware/src/controllers/debug_camera_controller.c"),
-    Path("firmware/src/controllers/qr_result_controller.c"),
-    Path("firmware/src/controllers/qr_camera_mode_controller.c"),
-    Path("firmware/src/drivers/ov2640_sensor.c"),
+    Path("firmware/src/controllers/debug_camera_controller.h"),
     Path("firmware/src/drivers/camera_stream.c"),
+    Path("firmware/src/drivers/camera_stream.h"),
+    Path("firmware/src/drivers/ov2640_sensor.c"),
+    Path("firmware/src/drivers/ov2640_sensor.h"),
     Path("firmware/src/hal/hal_dvp.c"),
-    Path("firmware/src/services/camera_capture.c"),
-    Path("firmware/src/services/camera_debug.c"),
-    Path("firmware/src/services/camera_fps.c"),
-    Path("firmware/src/services/camera_frame_access.c"),
-    Path("firmware/src/services/camera_input_state.c"),
-    Path("firmware/src/services/camera_light_state.c"),
-    Path("firmware/src/services/camera_session.c"),
-    Path("firmware/src/services/camera_session_state.c"),
-    Path("firmware/src/services/camera_session_preferences.c"),
-    Path("firmware/src/services/camera_session_preferences.h"),
-    Path("firmware/src/services/camera_settings_state.c"),
-    Path("firmware/src/services/photo_service.c"),
-    Path("firmware/src/services/qr_decoder_engine.c"),
-    Path("firmware/src/services/qr_camera_frame_adapter.c"),
-    Path("firmware/src/services/qr_luma.c"),
-    Path("firmware/src/services/qr_result_state.c"),
-    Path("firmware/src/services/qr_service.c"),
-    Path("firmware/src/storage/photo_path.c"),
-    Path("firmware/src/storage/photo_writer.c"),
-    Path("firmware/src/storage/qr_text_path.c"),
-    Path("firmware/src/storage/qr_text_writer.c"),
-    Path("firmware/src/ui/camera_status_view.c"),
-    Path("firmware/src/ui/camera_view.c"),
-    Path("firmware/src/ui/qr_result_view.c"),
-]
+    Path("firmware/src/hal/hal_dvp.h"),
+}
+for camera_path in (ROOT / "firmware" / "src" / "services").glob("camera_*"):
+    CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
+for camera_path in (ROOT / "firmware" / "src" / "services" / "internal").glob("camera_*"):
+    CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
+for camera_path in (ROOT / "firmware" / "src" / "ui").glob("camera_*"):
+    CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
 
 TARGETS = {
     "full": {
@@ -225,16 +128,11 @@ def copy_tree_files(src: Path, dst: Path) -> None:
 
 
 def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
-    disabled_sources: set[Path] = set()
-    for app in disabled_apps:
-        for rel in APP_SOURCE_MODULES.get(app, []):
-            disabled_sources.add(rel)
+    disabled_dirs = {APP_SOURCE_DIRS[app] for app in disabled_apps}
     camera_feature_enabled = ("camera" not in disabled_apps or
                               "qr-camera" not in disabled_apps or
                               "face-detect" not in disabled_apps or
                               "apriltag" not in disabled_apps)
-    if not camera_feature_enabled:
-        disabled_sources.update(CAMERA_FEATURE_SOURCE_MODULES)
 
     for path in (ROOT / "firmware" / "src").rglob("*"):
         if not path.is_file():
@@ -242,8 +140,11 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
         rel = path.relative_to(ROOT)
         if rel.suffix == ".inc":
             continue
-        if rel in disabled_sources:
+        if any(rel.is_relative_to(disabled_dir) for disabled_dir in disabled_dirs):
             print(f"[SKIP] disabled app source {rel}")
+            continue
+        if not camera_feature_enabled and rel in CAMERA_FEATURE_SOURCE_MODULES:
+            print(f"[SKIP] unused camera source {rel}")
             continue
         out = stage / path.relative_to(ROOT / "firmware" / "src")
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -282,11 +183,7 @@ def stage_target(sdk: Path, target_name: str, disabled_apps: set[str]) -> Path:
         shutil.copy2(header, stage / header.name)
     shutil.copy2(ROOT / "firmware" / "config" / "hk_config_default.h", stage / "hk_config_default.h")
 
-    camera_feature_enabled = ("camera" not in disabled_apps or
-                              "qr-camera" not in disabled_apps or
-                              "face-detect" not in disabled_apps or
-                              "apriltag" not in disabled_apps)
-    if camera_feature_enabled:
+    if "qr-camera" not in disabled_apps:
         quirc = ROOT / "firmware" / "third_party" / "quirc"
         for source in quirc.glob("*.c"):
             shutil.copy2(source, stage / source.name)
@@ -329,7 +226,7 @@ def build_target(name: str, sdk: Path, toolchain_bin: Path, disabled_apps: set[s
         f"-DTOOLCHAIN={cmake_path(toolchain_bin)}",
         "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
     ])
-    run([cmake, "--build", cmake_path(build_dir)])
+    run([cmake, "--build", cmake_path(build_dir), "--parallel"])
 
     built = build_dir / f"{project}.bin"
     if not built.is_file() or built.stat().st_size == 0:

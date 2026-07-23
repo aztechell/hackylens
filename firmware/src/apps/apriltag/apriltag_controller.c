@@ -7,7 +7,7 @@
 #include "../../controllers/settings_menu_controller.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../services/camera_photo.h"
+#include "../../services/camera_frame.h"
 #include "../../services/camera_session.h"
 #include "../../services/camera_session_preferences.h"
 #include "../../services/vision_result_service.h"
@@ -172,7 +172,7 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
         return;
     apriltag_display_refresh();
     results = apriltag_detector_results(&count);
-    camera_service_photo_info(NULL, &width, &height);
+    camera_service_frame_info(&width, &height);
     for(uint8_t i = 0; i < count; i++)
     {
         if(apriltag_settings_preferences()->output_mode == APRILTAG_OUTPUT_SELECTED &&

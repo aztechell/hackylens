@@ -1,21 +1,58 @@
 #include "screenshot_bmp.h"
 
+#include <string.h>
+
 #include "../config/display_config.h"
-#include "../config/photo_storage_config.h"
-#include "photo_format.h"
+#include "../config/screenshot_config.h"
+
+static uint32_t screenshot_bmp_row_bytes(uint16_t width)
+{
+    return ((uint32_t)width * 3U + 3U) & ~3U;
+}
+
+static void screenshot_write_u16(uint8_t *dst, uint16_t value)
+{
+    dst[0] = (uint8_t)value;
+    dst[1] = (uint8_t)(value >> 8);
+}
+
+static void screenshot_write_u32(uint8_t *dst, uint32_t value)
+{
+    dst[0] = (uint8_t)value;
+    dst[1] = (uint8_t)(value >> 8);
+    dst[2] = (uint8_t)(value >> 16);
+    dst[3] = (uint8_t)(value >> 24);
+}
+
+static void screenshot_make_bmp_header(uint8_t header[SCREENSHOT_BMP_HEADER_SIZE])
+{
+    uint32_t data_size = screenshot_bmp_row_bytes(LCD_W) * LCD_H;
+
+    memset(header, 0, SCREENSHOT_BMP_HEADER_SIZE);
+    header[0] = 'B';
+    header[1] = 'M';
+    screenshot_write_u32(&header[2], SCREENSHOT_BMP_HEADER_SIZE + data_size);
+    screenshot_write_u32(&header[10], SCREENSHOT_BMP_HEADER_SIZE);
+    screenshot_write_u32(&header[14], 40U);
+    screenshot_write_u32(&header[18], LCD_W);
+    screenshot_write_u32(&header[22], LCD_H);
+    screenshot_write_u16(&header[26], 1U);
+    screenshot_write_u16(&header[28], 24U);
+    screenshot_write_u32(&header[34], data_size);
+}
 
 uint32_t screenshot_bmp_file_size(void)
 {
-    return SCREENSHOT_BMP_HEADER_SIZE + photo_bmp24_row_bytes(LCD_W) * LCD_H;
+    return SCREENSHOT_BMP_HEADER_SIZE + screenshot_bmp_row_bytes(LCD_W) * LCD_H;
 }
 
 void screenshot_bmp_fill_bytes(const screenshot_pixel_source_t *source, uint32_t offset, uint8_t *dst, uint16_t len)
 {
     uint8_t header[SCREENSHOT_BMP_HEADER_SIZE];
-    uint32_t row_bytes = photo_bmp24_row_bytes(LCD_W);
+    uint32_t row_bytes = screenshot_bmp_row_bytes(LCD_W);
     uint32_t data_size = row_bytes * LCD_H;
 
-    photo_make_bmp_header(header, LCD_W, LCD_H);
+    screenshot_make_bmp_header(header);
 
     for(uint16_t i = 0; i < len; i++)
     {

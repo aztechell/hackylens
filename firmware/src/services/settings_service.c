@@ -2,18 +2,14 @@
 
 #include <string.h>
 
-#include "camera_persist_settings.h"
 #include "settings_snapshot.h"
 
-#include "../config/camera_config.h"
 #include "../config/settings_config.h"
 #include "settings_service.h"
 #include "settings_app_data.h"
 #include "hk_config.h"
 #if HK_ENABLE_CAMERA_FEATURE
-#endif
-#if HK_ENABLE_QR_FEATURE
-#include "qr_service.h"
+#include "camera_persist_settings.h"
 #endif
 
 static uint8_t g_led_enabled = 0;
@@ -26,6 +22,7 @@ static uint8_t g_screen_brightness = 90;
 static uint8_t g_auto_sleep_minutes = 1;
 static uint8_t g_feature_flags;
 static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+static uint8_t g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
 static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
 
@@ -169,6 +166,18 @@ void settings_set_external_link_uart_speed(external_link_uart_speed_t speed)
                                  speed : EXTERNAL_LINK_UART_SPEED_115200;
 }
 
+uint8_t settings_qr_decode_rate(void)
+{
+    return g_qr_decode_rate;
+}
+
+void settings_set_qr_decode_rate(uint8_t rate)
+{
+    g_qr_decode_rate = clamp_u8(rate,
+                                SETTINGS_QR_DECODE_RATE_MIN,
+                                SETTINGS_QR_DECODE_RATE_MAX);
+}
+
 hk_autostart_id_t settings_autostart_id(void)
 {
     return g_autostart_id;
@@ -192,13 +201,11 @@ void settings_defaults(void)
     g_auto_sleep_minutes = 1;
     g_feature_flags = 0;
     g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
+    g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
     g_autostart_id = HK_AUTOSTART_OFF;
     memset(g_app_data, 0, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
-#endif
-#if HK_ENABLE_QR_FEATURE
-    qr_service_set_decode_rate(QR_DECODE_RATE_DEFAULT);
 #endif
 }
 
@@ -223,9 +230,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
-#if HK_ENABLE_QR_FEATURE
-    snapshot->qr_decode_rate = clamp_u8(qr_service_decode_rate(), QR_DECODE_RATE_MIN, QR_DECODE_RATE_MAX);
-#endif
+    snapshot->qr_decode_rate = g_qr_decode_rate;
 }
 
 void settings_snapshot_apply(const settings_snapshot_t *snapshot)
@@ -248,7 +253,5 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif
-#if HK_ENABLE_QR_FEATURE
-    qr_service_set_decode_rate(clamp_u8(snapshot->qr_decode_rate, QR_DECODE_RATE_MIN, QR_DECODE_RATE_MAX));
-#endif
+    settings_set_qr_decode_rate(snapshot->qr_decode_rate);
 }

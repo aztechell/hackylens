@@ -11,11 +11,12 @@ pin and peripheral operations stay in board/HAL. See
 
 Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
-Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. `--disable-app pong`, `--disable-app terminal`, `--disable-app face-detect`, and `--disable-app apriltag` each omit the corresponding complete feature directory. Disabling APRILTAG also omits its vendored detector core and TAG36H11 table. Shared camera, FAT32, KPU/DVP HAL, logging, debug-console, UART, and settings facilities remain available when required by other features.
+Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. Every `--disable-app <name>` omits the corresponding complete `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling APRILTAG omits its vendored detector core and TAG36H11 table. Shared camera sources are retained only while at least one camera consumer is enabled.
 
 Key public interfaces:
 
 - `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for app metadata, stable autostart IDs, lookup, and screen model. Registry enumeration is the only source of enabled autostart choices; SETTINGS and SLEEP have no autostart ID.
+- `apps/camera/camera_app.h`, `apps/qr_camera/qr_camera_app.h`, `apps/files/files_app.h`, `apps/buttons/buttons_app.h`, `apps/settings/settings_app.h`, and `apps/sleep/sleep_app.h` are the sole public contracts for the newly isolated modules. Their private controllers, adapters, decoders, views, and configuration are not shared APIs.
 - `controllers/settings_menu_controller.h` for reusable instance-based settings menus. Owners supply item descriptors and callbacks; the component owns navigation, edit/cycle interaction, static or dynamic choices, partial redraw, repeat, and commit notification but never persistence or application lifecycle. CAMERA, QR, APRILTAG, and system SETTINGS are current consumers.
 - `core/pixel_source.h` for a neutral pixel-reader contract.
 - `runtime/hk_main.h` and `runtime/firmware_startup.h` for the platform loop and startup composition.
@@ -29,7 +30,8 @@ Key public interfaces:
 - Settings storage v3 keeps the fixed opaque 80-byte app block and appends one autostart ID byte. The loader accepts v1/v2, defaults their autostart to OFF, and preserves CAMERA, external-link, and APRILTAG data.
 - `drivers/hk_lcd.h` for the synchronous full-frame RGB565-BE surface lease; UI composes into the existing LCD shadow before a single driver-owned SPI present.
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
-- `storage/image_viewer.h` for BMP/PNG/PPM/RAW and streaming animated GIF87a/GIF89a viewing. GIF playback supports palettes, transparency, interlace, disposal, pause/resume, bulk sub-block reads, and a 1600x1200 logical-canvas limit without loading the complete file into RAM. FILES decodes FAT long names from UTF-16 to UTF-8, renders Russian Cyrillic, and sorts entries by FAT modification time with newest entries first.
+- `storage/file_mount.h` and `storage/file_dir_scan.h` for neutral FAT mount and directory queries. Browser lists and image viewing are private FILES APIs.
+- `apps/files/image_viewer.h` is private to FILES and supports BMP/PNG/PPM/RAW plus streaming animated GIF87a/GIF89a. GIF playback supports palettes, transparency, interlace, disposal, pause/resume, bulk sub-block reads, and a 1600x1200 logical-canvas limit without loading the complete file into RAM. FILES decodes FAT long names from UTF-16 to UTF-8, renders Russian Cyrillic, and sorts entries by FAT modification time with newest entries first.
 - `ui/hk_ui.h` and per-screen view headers for UI rendering.
 
 Private headers are allowed only within their subsystem boundary; they are not compatibility facades or new global contracts.

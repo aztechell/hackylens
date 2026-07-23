@@ -5,7 +5,7 @@
 
 #include "fat32_types.h"
 
-#include "../config/photo_storage_config.h"
+#include "../config/screenshot_config.h"
 #include "../config/fat32_config.h"
 
 #include "file_dir_scan.h"

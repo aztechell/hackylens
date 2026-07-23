@@ -6,7 +6,8 @@
 #include "../../controllers/camera_runtime_controller.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../services/camera_photo.h"
+#include "../../services/camera_frame.h"
+#include "../../services/camera_session.h"
 #include "../../services/vision_result_service.h"
 #include "../../ui/camera_status_view.h"
 #include "face_detect_detector.h"
@@ -33,6 +34,8 @@ void face_detect_controller_enter(const hk_input_snapshot_t *input)
 void face_detect_controller_exit(void)
 {
     vision_result_clear(VISION_SOURCE_FACE);
+    camera_stop();
+    camera_service_clear_mode();
     face_detect_detector_unload();
 }
 
@@ -48,7 +51,7 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
         return;
     face_detect_detector_process_frame();
     boxes = face_detect_detector_boxes(&count);
-    camera_service_photo_info(NULL, &width, &height);
+    camera_service_frame_info(&width, &height);
     for(uint8_t i = 0U; i < count; i++)
     {
         items[i].kind = VISION_ITEM_BLOCK;

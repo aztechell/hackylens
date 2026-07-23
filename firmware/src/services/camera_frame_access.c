@@ -1,17 +1,6 @@
 #include "camera_frame.h"
 
-#include <stdio.h>
-#include "camera_photo.h"
-#include "camera_persist_settings.h"
-#include "camera_status.h"
-
-#include "../core/photo_types.h"
-
-#include "../config/camera_config.h"
-
-#include "../storage/photo_format.h"
 #include "camera_capture.h"
-#include "camera_input.h"
 #include "internal/camera_session_state.h"
 
 uint16_t camera_service_frame_pixel(uint32_t x, uint32_t y)
@@ -22,41 +11,12 @@ uint16_t camera_service_frame_pixel(uint32_t x, uint32_t y)
     return src[y * camera_session_width() + x];
 }
 
-void camera_service_photo_info(photo_format_t *format, uint16_t *width, uint16_t *height)
+void camera_service_frame_info(uint16_t *width, uint16_t *height)
 {
-    if(format)
-        *format = camera_service_photo_format();
     if(width)
         *width = camera_session_width();
     if(height)
         *height = camera_session_height();
-}
-
-camera_photo_begin_t camera_service_photo_begin(char *status, size_t status_size)
-{
-    if(!camera_session_ready())
-        return CAMERA_PHOTO_BEGIN_NOT_READY;
-
-    if(!camera_capture_snapshot(camera_session_width(), camera_session_height(), CAMERA_FRAME_WAIT_MS, camera_log_prefix()))
-        return CAMERA_PHOTO_BEGIN_NO_FRAME;
-
-    camera_session_set_frozen(1);
-    if(status && status_size)
-    {
-        snprintf(status,
-                 status_size,
-                 "%s %ux%u",
-                 photo_format_label(camera_service_photo_format()),
-                 camera_session_width(),
-                 camera_session_height());
-    }
-    return CAMERA_PHOTO_BEGIN_READY;
-}
-
-void camera_service_photo_end(void)
-{
-    camera_capture_resume_preview();
-    camera_session_set_frozen(0);
 }
 
 uint8_t camera_service_preview_acquire(camera_preview_frame_t *frame)

@@ -1,7 +1,5 @@
 #include "debug_controller.h"
 
-#include "../services/camera_session.h"
-
 #include "../config/debug_config.h"
 
 #include "../core/hk_menu.h"
@@ -9,9 +7,6 @@
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "hk_config.h"
-#if HK_ENABLE_APP_SETTINGS
-#include "settings_controller.h"
-#endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "debug_camera_controller.h"
 #endif
@@ -42,23 +37,9 @@ void debug_uart_handle_command(const char *cmd)
     if(str_eq_ci(cmd, "HKMENU"))
     {
         activity_note();
-#if HK_ENABLE_CAMERA_FEATURE
-        camera_stop();
-#endif
         shell_show_menu();
         return;
     }
-#if HK_ENABLE_APP_SETTINGS
-    if(str_eq_ci(cmd, "HKSETTINGS"))
-    {
-        activity_note();
-#if HK_ENABLE_CAMERA_FEATURE
-        camera_stop();
-#endif
-        settings_controller_enter((const hk_input_snapshot_t *)0);
-        return;
-    }
-#endif
     if(str_eq_ci(cmd, "HKPING"))
     {
         debug_console_write_text("HKPONG\n");
@@ -67,7 +48,7 @@ void debug_uart_handle_command(const char *cmd)
     if(str_eq_ci(cmd, "HKHELP"))
     {
 #if HK_ENABLE_CAMERA_FEATURE
-        debug_console_write_text("HKHELP HKSHOT HKFRAME HKCAMINFO HKQRINFO HKQR/HKQRCAM HKQRDECODE HKFPS/HKFPSON/HKFPSOFF HKCAMPROBE HKCAMREGS HKCAMDVP HKCAMBAR HKCAMERA ");
+        debug_console_write_text("HKHELP HKSHOT HKFRAME HKCAMINFO HKFPS/HKFPSON/HKFPSOFF HKCAMPROBE HKCAMREGS HKCAMDVP HKCAMBAR ");
 #else
         debug_console_write_text("HKHELP HKSHOT ");
 #endif
@@ -79,9 +60,6 @@ void debug_uart_handle_command(const char *cmd)
                 debug_console_write_text(" ");
             }
         }
-#if HK_ENABLE_APP_SETTINGS
-        debug_console_write_text("HKSETTINGS ");
-#endif
         debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKPING\n");
         return;
     }

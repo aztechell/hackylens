@@ -12,11 +12,7 @@
 #include "../core/hk_binary.h"
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
-#include "camera_photo_mode_controller.h"
-#include "camera_settings_controller.h"
-#include "qr_camera_mode_controller.h"
 #include "../services/camera_debug.h"
-#include "../services/qr_service.h"
 #include "../services/debug_console_service.h"
 
 static void debug_uart_send_text(const char *text)
@@ -31,10 +27,7 @@ static void debug_uart_send_bytes(const uint8_t *data, size_t len)
 
 static const char *debug_camera_screen_label(void)
 {
-    screen_t screen = hk_screen_get();
-    if(screen == SCREEN_CAMERA_SETTINGS && camera_settings_is_qr())
-        return "QR-SETTINGS";
-    return screen_label(screen);
+    return screen_label(hk_screen_get());
 }
 
 static void debug_uart_send_camera_info(void)
@@ -42,14 +35,6 @@ static void debug_uart_send_camera_info(void)
     char line[512];
 
     camera_debug_format_camera_info(line, sizeof(line), debug_camera_screen_label());
-    debug_uart_send_text(line);
-}
-
-static void debug_uart_send_qr_info(void)
-{
-    char line[640];
-
-    qr_service_format_info(line, sizeof(line), debug_camera_screen_label());
     debug_uart_send_text(line);
 }
 
@@ -133,11 +118,6 @@ uint8_t debug_camera_controller_handle_command(const char *cmd)
         debug_uart_send_camera_info();
         return 1;
     }
-    if(str_eq_ci(cmd, "HKQRINFO"))
-    {
-        debug_uart_send_qr_info();
-        return 1;
-    }
     if(str_eq_ci(cmd, "HKFPS"))
     {
         char line[160];
@@ -193,36 +173,5 @@ uint8_t debug_camera_controller_handle_command(const char *cmd)
         debug_uart_send_camera_frame();
         return 1;
     }
-    if(str_eq_ci(cmd, "HKCAMERA") || str_eq_ci(cmd, "HKCAM"))
-    {
-        hk_input_snapshot_t input = {0, 0, 0};
-
-        activity_note();
-        camera_stop();
-        camera_photo_mode_enter(&input);
-        return 1;
-    }
-    if(str_eq_ci(cmd, "HKQRCAM") || str_eq_ci(cmd, "HKQR"))
-    {
-        hk_input_snapshot_t input = {0, 0, 0};
-
-        activity_note();
-        camera_stop();
-        qr_camera_mode_enter(&input);
-        return 1;
-    }
-    if(str_eq_ci(cmd, "HKQRDECODE"))
-    {
-        activity_note();
-        if(hk_screen_get() != SCREEN_QR_CAMERA)
-            debug_uart_send_text("HKQRDECODE ERR NOTQR\n");
-        else
-        {
-            qr_service_decode_force();
-            debug_uart_send_qr_info();
-        }
-        return 1;
-    }
-
     return 0;
 }

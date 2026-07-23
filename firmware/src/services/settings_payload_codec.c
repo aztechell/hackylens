@@ -52,10 +52,10 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
     payload.fps_rgb_blue |= (uint8_t)((snapshot->camera.fps_enabled ? 1U : 0U) |
                                      ((clamp_u8(snapshot->camera.rgb_blue, 0, 100) / 10U) << 4));
 #endif
-#if HK_ENABLE_QR_FEATURE
-    payload.qr_rate_fps_mark = (uint8_t)((clamp_u8(snapshot->qr_decode_rate, QR_DECODE_RATE_MIN, QR_DECODE_RATE_MAX) << 4) |
+    payload.qr_rate_fps_mark = (uint8_t)((clamp_u8(snapshot->qr_decode_rate,
+                                                  SETTINGS_QR_DECODE_RATE_MIN,
+                                                  SETTINGS_QR_DECODE_RATE_MAX) << 4) |
                                          SETTINGS_FPS_MARK_LOW);
-#endif
     memcpy(payload.app_data, snapshot->app_data, sizeof(payload.app_data));
     payload.autostart_id = snapshot->autostart_id < HK_AUTOSTART_COUNT ?
                            snapshot->autostart_id : HK_AUTOSTART_OFF;
@@ -156,30 +156,28 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
     if((payload->qr_rate_fps_mark & 0x0FU) == SETTINGS_FPS_MARK_LOW)
     {
         camera.fps_enabled = (payload->fps_rgb_blue & 0x01U) ? 1 : 0;
-#if HK_ENABLE_QR_FEATURE
-        snapshot->qr_decode_rate = (payload->qr_rate_fps_mark >> 4) >= QR_DECODE_RATE_MIN &&
-                                   (payload->qr_rate_fps_mark >> 4) <= QR_DECODE_RATE_MAX ?
-                                   (uint8_t)(payload->qr_rate_fps_mark >> 4) : QR_DECODE_RATE_DEFAULT;
-#endif
+        snapshot->qr_decode_rate =
+            (payload->qr_rate_fps_mark >> 4) >= SETTINGS_QR_DECODE_RATE_MIN &&
+            (payload->qr_rate_fps_mark >> 4) <= SETTINGS_QR_DECODE_RATE_MAX ?
+            (uint8_t)(payload->qr_rate_fps_mark >> 4) : SETTINGS_QR_DECODE_RATE_DEFAULT;
     }
     else
     {
         camera.fps_enabled = 1;
-#if HK_ENABLE_QR_FEATURE
-        snapshot->qr_decode_rate = QR_DECODE_RATE_DEFAULT;
-#endif
+        snapshot->qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
     }
     snapshot->camera = camera;
-#elif HK_ENABLE_QR_FEATURE
+#else
     if((payload->qr_rate_fps_mark & 0x0FU) == SETTINGS_FPS_MARK_LOW)
     {
-        snapshot->qr_decode_rate = (payload->qr_rate_fps_mark >> 4) >= QR_DECODE_RATE_MIN &&
-                                   (payload->qr_rate_fps_mark >> 4) <= QR_DECODE_RATE_MAX ?
-                                   (uint8_t)(payload->qr_rate_fps_mark >> 4) : QR_DECODE_RATE_DEFAULT;
+        snapshot->qr_decode_rate =
+            (payload->qr_rate_fps_mark >> 4) >= SETTINGS_QR_DECODE_RATE_MIN &&
+            (payload->qr_rate_fps_mark >> 4) <= SETTINGS_QR_DECODE_RATE_MAX ?
+            (uint8_t)(payload->qr_rate_fps_mark >> 4) : SETTINGS_QR_DECODE_RATE_DEFAULT;
     }
     else
     {
-        snapshot->qr_decode_rate = QR_DECODE_RATE_DEFAULT;
+        snapshot->qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
     }
 #endif
 }

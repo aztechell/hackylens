@@ -9,13 +9,7 @@
 #include "hk_menu.h"
 #include "hk_screen.h"
 
-static hk_screen_input_handler_t s_screen_input_handler;
 static hk_sd_event_handler_t s_sd_event_handler;
-
-void shell_set_screen_input_handler(hk_screen_input_handler_t handler)
-{
-    s_screen_input_handler = handler;
-}
 
 void shell_set_sd_event_handler(hk_sd_event_handler_t handler)
 {
@@ -46,9 +40,6 @@ void shell_handle_buttons(const hk_input_snapshot_t *input)
             menu_select_vertical();
         return;
     }
-
-    if(s_screen_input_handler && s_screen_input_handler(screen, input))
-        return;
 
     app = hk_app_for_screen(screen);
     if(app && app->handle_input)

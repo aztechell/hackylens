@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""Check HackyLens firmware layer boundaries.
-
-The allowlist records intentional low-level coupling exceptions.
-Future refactors should remove entries from ALLOWLIST, not add new ones.
-"""
+"""Check HackyLens firmware layer and feature-module boundaries."""
 
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
 
@@ -16,623 +11,220 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "firmware" / "src"
 INCLUDE_RE = re.compile(r'^\s*#include\s+[<"]([^>"]+)[>"]')
 SDK_HEADERS = {
-    "bsp.h",
-    "dmac.h",
-    "dvp.h",
-    "fpioa.h",
-    "gpiohs.h",
-    "kpu.h",
-    "platform.h",
-    "pwm.h",
-    "sleep.h",
-    "spi.h",
-    "sysctl.h",
-    "uart.h",
+    "bsp.h", "dmac.h", "dvp.h", "fpioa.h", "gpiohs.h", "kpu.h",
+    "platform.h", "pwm.h", "sleep.h", "spi.h", "sysctl.h", "uart.h",
 }
-LOW_LEVEL_PREFIXES = ("board/", "hal/")
-SDK_DRIVER_ALLOWLIST = set()
-
-PONG_FEATURE_PREFIX = "apps/pong/"
-PONG_REFERENCE_ALLOWED_PATHS = {"apps/app_registry.c"}
-PONG_REFERENCE_RE = re.compile(r"\bpong(?:\b|_)")
-PONG_SPECIFIC_FILE_RE = re.compile(r"^(?:app_pong|pong(?:_.*)?)\.[ch]$")
-PONG_LEGACY_PATHS = {
-    "firmware/src/apps/app_pong.c",
-    "firmware/src/apps/app_pong.h",
-    "firmware/src/controllers/pong_controller.c",
-    "firmware/src/controllers/pong_controller.h",
-    "firmware/src/ui/pong_view.c",
-    "firmware/src/ui/pong_view.h",
-}
-PONG_ALLOWED_SHARED_INCLUDES = {
-    "../../config/display_config.h",
-    "../../config/input_config.h",
-    "../../config/menu_layout.h",
-    "../../core/hk_app.h",
-    "../../core/hk_back_exit.h",
-    "../../core/hk_menu.h",
-    "../../core/hk_screen.h",
-    "../../drivers/hk_lcd.h",
-    "../../ui/hk_ui.h",
-}
-TERMINAL_FEATURE_PREFIX = "apps/terminal/"
-TERMINAL_REFERENCE_ALLOWED_PATHS = {"apps/app_registry.c"}
-TERMINAL_REFERENCE_RE = re.compile(r"\bterminal(?:\b|_)", re.IGNORECASE)
-TERMINAL_SPECIFIC_FILE_RE = re.compile(r"^(?:app_terminal|terminal(?:_.*)?)\.[ch]$")
-TERMINAL_LEGACY_PATHS = {
-    "firmware/src/apps/app_terminal.c",
-    "firmware/src/apps/app_terminal.h",
-    "firmware/src/controllers/terminal_controller.c",
-    "firmware/src/controllers/terminal_controller.h",
-    "firmware/src/ui/ui_terminal.c",
-}
-TERMINAL_MODULE_FILES = {
-    "terminal_app.c",
-    "terminal_app.h",
-    "terminal_controller.c",
-    "terminal_controller.h",
-    "terminal_view.c",
-    "terminal_view.h",
-    "terminal_buffer.c",
-    "terminal_buffer.h",
-    "terminal_config.h",
-    "terminal_types.h",
-}
-TERMINAL_ALLOWED_SHARED_INCLUDES = {
-    "../../config/display_config.h",
-    "../../config/input_config.h",
-    "../../core/hk_app.h",
-    "../../core/hk_log.h",
-    "../../core/hk_menu.h",
-    "../../core/hk_screen.h",
-    "../../drivers/hk_lcd.h",
-    "../../services/settings_persistence.h",
-    "../../services/settings_service.h",
-}
-FACE_FEATURE_PREFIX = "apps/face_detect/"
-FACE_LEGACY_PATHS = {
-    "firmware/src/apps/app_face_detect.c",
-    "firmware/src/apps/app_face_detect.h",
-    "firmware/src/config/face_detect_config.h",
-    "firmware/src/controllers/face_detect_controller.c",
-    "firmware/src/controllers/face_detect_controller.h",
-    "firmware/src/services/face_detector.c",
-    "firmware/src/services/face_detector.h",
-    "firmware/src/storage/face_model_storage.c",
-    "firmware/src/storage/face_model_storage.h",
-}
-FACE_MODULE_FILES = {
-    "face_detect_app.c",
-    "face_detect_app.h",
-    "face_detect_config.h",
-    "face_detect_controller.c",
-    "face_detect_controller.h",
-    "face_detect_detector.c",
-    "face_detect_detector.h",
-    "face_detect_model_storage.c",
-    "face_detect_model_storage.h",
-    "face_detect_types.h",
-    "face_detect_view.c",
-    "face_detect_view.h",
-}
-FACE_SPECIFIC_FILE_RE = re.compile(
-    r"^(?:app_face_detect|face_detect(?:_.*)?|face_detector|face_model_storage)\.[ch]$"
+SDK_TOKEN_RE = re.compile(
+    r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|"
+    r"sysctl_get_time_us|DVP_|FUNC_CMOS|FUNC_SCCB|FUNC_SPI|FPIOA_|"
+    r"SPI_DEVICE|SPI_CHIP|SPI_WORK)"
 )
-FACE_ALLOWED_SHARED_INCLUDES = {
-    "../../config/display_config.h",
-    "../../config/fat32_config.h",
-    "../../config/input_config.h",
-    "../../controllers/camera_runtime_controller.h",
-    "../../core/hk_app.h",
-    "../../core/hk_menu.h",
-    "../../core/hk_screen.h",
-    "../../core/hk_string.h",
-    "../../drivers/hk_lcd.h",
-    "../../hal/hal_dvp.h",
-    "../../hal/hal_kpu.h",
-    "../../hal/hal_time.h",
-    "../../services/camera_photo.h",
-    "../../services/debug_console_service.h",
-    "../../services/vision_result_service.h",
-    "../../storage/fat32_file.h",
-    "../../storage/fat32_volume.h",
-    "../../storage/file_mount.h",
-    "../../storage/file_path.h",
-    "../../ui/camera_status_view.h",
-    "../../ui/camera_view.h",
+PUBLIC_MUTABLE_EXTERN_RE = re.compile(
+    r"^\s*extern\s+(?!const\b)(?!.*\()\S.*\s+\**[A-Za-z_]\w*"
+    r"(?:\s*\[[^\]]*\])?\s*;"
+)
+
+FEATURES = {
+    "terminal": ("terminal", "terminal_app.h"),
+    "camera": ("camera", "camera_app.h"),
+    "qr-camera": ("qr_camera", "qr_camera_app.h"),
+    "face-detect": ("face_detect", "face_detect_app.h"),
+    "apriltag": ("apriltag", "apriltag_app.h"),
+    "files": ("files", "files_app.h"),
+    "buttons": ("buttons", "buttons_app.h"),
+    "pong": ("pong", "pong_app.h"),
+    "settings": ("settings", "settings_app.h"),
+    "sleep": ("sleep", "sleep_app.h"),
 }
-APRILTAG_FEATURE_PREFIX = "apps/apriltag/"
-APRILTAG_MODULE_FILES = {
-    "apriltag_app.c",
-    "apriltag_app.h",
-    "apriltag_config.h",
-    "apriltag_controller.c",
-    "apriltag_controller.h",
-    "apriltag_detector.c",
-    "apriltag_detector.h",
-    "apriltag_settings.c",
-    "apriltag_settings.h",
-    "apriltag_settings_menu.c",
-    "apriltag_settings_menu.h",
-    "apriltag_types.h",
-    "apriltag_view.c",
-    "apriltag_view.h",
+FEATURE_DIRS = {f"apps/{directory}/": (name, public)
+                for name, (directory, public) in FEATURES.items()}
+REGISTRY = "apps/app_registry.c"
+
+LEGACY_PATHS = {
+    "apps/app_terminal.c", "apps/app_terminal.h",
+    "apps/app_camera.c", "apps/app_camera.h",
+    "apps/app_qr_camera.c", "apps/app_qr_camera.h",
+    "apps/app_face_detect.c", "apps/app_face_detect.h",
+    "apps/app_files.c", "apps/app_files.h",
+    "apps/app_buttons.c", "apps/app_buttons.h",
+    "apps/app_pong.c", "apps/app_pong.h",
+    "apps/app_settings.c", "apps/app_settings.h",
+    "apps/app_sleep.c", "apps/app_sleep.h",
+    "controllers/buttons_controller.c", "controllers/buttons_controller.h",
+    "controllers/camera_photo_controller.c", "controllers/camera_photo_controller.h",
+    "controllers/camera_photo_mode_controller.c", "controllers/camera_photo_mode_controller.h",
+    "controllers/camera_settings_controller.c", "controllers/camera_settings_controller.h",
+    "controllers/camera_settings_coordinator.c", "controllers/camera_settings_coordinator.h",
+    "controllers/camera_settings_menu.c", "controllers/camera_settings_menu.h",
+    "controllers/files_actions.c", "controllers/files_actions.h",
+    "controllers/files_backend.c", "controllers/files_controller.c",
+    "controllers/files_controller.h", "controllers/files_presenter.c",
+    "controllers/files_presenter.h",
+    "controllers/qr_camera_mode_controller.c", "controllers/qr_camera_mode_controller.h",
+    "controllers/qr_result_controller.c", "controllers/qr_result_controller.h",
+    "controllers/settings_app_menu.c", "controllers/settings_app_menu.h",
+    "controllers/settings_controller.c", "controllers/settings_controller.h",
+    "controllers/sleep_controller.c", "controllers/sleep_controller.h",
+    "controllers/screen_controller.c", "controllers/screen_controller.h",
+    "services/photo_service.c", "services/photo_service.h",
+    "services/qr_camera_frame_adapter.c", "services/qr_camera_frame_adapter.h",
+    "services/qr_decoder_engine.c", "services/qr_decoder_engine.h",
+    "services/qr_luma.c", "services/qr_luma.h",
+    "services/qr_result.h", "services/qr_result_state.c",
+    "services/qr_service.c", "services/qr_service.h",
+    "storage/file_browser_state.c", "storage/file_delete.c", "storage/file_delete.h",
+    "storage/file_dir.c", "storage/file_dir.h",
+    "storage/file_preview.c", "storage/file_preview.h",
+    "storage/image_decode.h", "storage/image_decode_bmp.c",
+    "storage/image_decode_common.c", "storage/image_decode_gif.c",
+    "storage/image_decode_gif.h", "storage/image_decode_png.c",
+    "storage/image_decode_png_inflate.c", "storage/image_decode_png_inflate.h",
+    "storage/image_decode_ppm.c", "storage/image_decode_raw.c",
+    "storage/image_viewer.c", "storage/image_viewer.h",
+    "storage/photo_encode.c", "storage/photo_encode.h",
+    "storage/photo_format.c", "storage/photo_format.h",
+    "storage/photo_path.c", "storage/photo_path.h",
+    "storage/photo_writer.c", "storage/photo_writer.h",
+    "storage/qr_text_path.c", "storage/qr_text_path.h",
+    "storage/qr_text_writer.c", "storage/qr_text_writer.h",
+    "ui/buttons_view.c", "ui/buttons_view.h", "ui/files_view.c",
+    "ui/qr_result_view.c", "ui/qr_result_view.h",
+    "ui/sleep_view.c", "ui/sleep_view.h",
+    "config/file_browser_config.h", "config/files_input_config.h",
+    "config/files_layout.h", "config/image_decode_config.h",
+    "config/photo_storage_config.h", "config/qr_layout.h",
+    "core/files_view_port.h", "core/indexed_image.h",
 }
-APRILTAG_SPECIFIC_FILE_RE = re.compile(r"^apriltag(?:_.*)?\.[ch]$")
-APRILTAG_ALLOWED_SHARED_INCLUDES = {
-    "../../config/display_config.h",
-    "../../config/input_config.h",
-    "../../controllers/camera_runtime_controller.h",
-    "../../controllers/settings_menu_controller.h",
-    "../../core/hk_app.h",
-    "../../core/hk_menu.h",
-    "../../core/hk_screen.h",
-    "../../core/hk_string.h",
-    "../../core/camera_types.h",
-    "../../drivers/hk_lcd.h",
-    "../../hal/hal_core.h",
-    "../../hal/hal_time.h",
-    "../../services/camera_photo.h",
-    "../../services/camera_session.h",
-    "../../services/camera_session_preferences.h",
-    "../../services/debug_console_service.h",
-    "../../services/settings_app_data.h",
-    "../../services/settings_lights.h",
-    "../../services/settings_persistence.h",
-    "../../services/vision_result_service.h",
-    "../../ui/camera_status_view.h",
-    "../../ui/camera_view.h",
+
+FORBIDDEN_FILES = {
+    "core/hk_settings.h", "core/hk_board_config.h", "core/hk_types.h",
+    "services/camera_types.h", "services/camera_service.h",
+    "services/camera_settings.h", "services/camera_input_state.h",
+    "services/qr_result_state.h", "storage/hk_fat32.h",
+    "services/camera_photo.h",
+    "storage/file_types.h", "storage/file_view_bridge.h",
+    "storage/file_browser_state.h", "storage/fat32_state_private.h",
+    "services/settings_types.h", "apps/app_entrypoints.h",
+    "config/settings_layout.h", "controllers/camera_settings_model.c",
+    "controllers/camera_settings_model.h", "controllers/settings_actions.c",
+    "controllers/settings_actions.h", "controllers/settings_model.c",
+    "controllers/settings_model.h", "services/camera_settings_navigation.h",
+    "ui/camera_settings_view.c", "ui/camera_settings_view.h",
+    "ui/settings_view.c", "ui/settings_view.h",
 }
-SETTINGS_MENU_SHARED_PATHS = {
+
+SETTINGS_MENU_SHARED = {
     "config/settings_menu_layout.h",
     "controllers/settings_menu_controller.c",
     "controllers/settings_menu_controller.h",
     "ui/settings_menu_view.c",
     "ui/settings_menu_view.h",
 }
-AUTOSTART_TARGET_ID_RE = re.compile(
-    r"\bHK_AUTOSTART_(?:TERMINAL|CAMERA|QR_CAMERA|FACE_DETECT|APRILTAG|FILES|BUTTONS|PONG)\b"
-)
-AUTOSTART_TARGET_ID_ALLOWED_PATHS = {"core/hk_app.h", "apps/app_registry.c"}
-DEBUG_SCREENSHOT_CONSOLE_API_RE = re.compile(r"\bdebug_uart_send_(bytes|text)\b")
-SDK_TOKEN_RE = re.compile(
-    r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|sysctl_get_time_us|"
-    r"DVP_|FUNC_CMOS|FUNC_SCCB|FUNC_SPI|FPIOA_|SPI_DEVICE|SPI_CHIP|SPI_WORK)"
-)
-STORAGE_INPUT_TOKEN_RE = re.compile(
-    r"\b(BUTTON_(LEFT|RIGHT|OK|BACK)|FILES_OK_HOLD_US|FILES_REPEAT_(INITIAL|NEXT)_TICKS)\b"
-)
-PUBLIC_PHOTO_ROW_RE = re.compile(r"\bextern\s+uint8_t\s+g_photo_row\s*\[")
-PUBLIC_MUTABLE_EXTERN_RE = re.compile(
-    r"^\s*extern\s+(?!const\b)(?!.*\()\S.*\s+\**[A-Za-z_]\w*(?:\s*\[[^\]]*\])?\s*;"
-)
-FORBIDDEN_FILES = {
-    "core/hk_settings.h": "settings service API must live in services/ narrow headers",
-    "core/hk_board_config.h": "board compatibility facade was removed; include focused config headers",
-    "core/hk_types.h": "type compatibility facade was removed; include focused type headers",
-    "services/camera_types.h": "camera_types compatibility facade was removed; include core/camera_types.h",
-    "services/camera_service.h": "camera service compatibility facade was removed; include narrow camera service headers",
-    "services/camera_settings.h": "camera settings API is split into persist and navigation headers",
-    "services/camera_input_state.h": "camera input state must be accessed through services/camera_input.h",
-    "services/qr_result_state.h": "QR result state must be accessed through services/qr_result.h",
-    "storage/hk_fat32.h": "FAT32 API is split into volume/allocation/directory/file/stream headers",
-    "storage/file_types.h": "neutral file entry type belongs to core/file_types.h",
-    "storage/file_view_bridge.h": "file view callback contract belongs to core/files_view_port.h",
-    "storage/file_browser_state.h": "file browser state is storage-internal",
-    "storage/fat32_state_private.h": "FAT32 private state is storage-internal",
-    "services/settings_types.h": "settings payload format belongs to storage/settings_store_types.h",
-    "apps/app_entrypoints.h": "app entrypoints must be declared by per-app headers",
-    "config/settings_layout.h": "settings menus use the shared settings_menu layout",
-    "controllers/camera_settings_model.c": "camera settings use descriptor adapters",
-    "controllers/camera_settings_model.h": "camera settings use descriptor adapters",
-    "controllers/settings_actions.c": "system settings actions belong to its descriptor adapter",
-    "controllers/settings_actions.h": "system settings actions belong to its descriptor adapter",
-    "controllers/settings_model.c": "system settings use the shared settings_menu state",
-    "controllers/settings_model.h": "system settings use the shared settings_menu state",
-    "services/camera_settings_navigation.h": "settings_menu owns camera menu navigation state",
-    "ui/camera_settings_view.c": "camera settings use the shared settings_menu view",
-    "ui/camera_settings_view.h": "camera settings use the shared settings_menu view",
-    "ui/settings_view.c": "system settings use the shared settings_menu view",
-    "ui/settings_view.h": "system settings use the shared settings_menu view",
-}
-FORBIDDEN_INCLUDE_TARGETS = set(FORBIDDEN_FILES)
 
 
-ALLOWLIST = set()
-
-
-def rel(path: Path) -> str:
+def relative(path: Path) -> str:
     return path.relative_to(SRC).as_posix()
 
 
-def include_lines(path: Path) -> list[tuple[int, str]]:
-    lines: list[tuple[int, str]] = []
+def includes(path: Path) -> list[tuple[int, str]]:
+    result = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         match = INCLUDE_RE.match(line)
         if match:
-            lines.append((number, match.group(1)))
-    return lines
+            result.append((number, match.group(1)))
+    return result
 
 
-def resolve_local_include(path: Path, inc: str) -> str | None:
-    if inc in SDK_HEADERS:
+def resolve_include(path: Path, include: str) -> str | None:
+    if include in SDK_HEADERS:
         return None
-
-    candidates = [
-        path.parent / inc,
-        SRC / inc,
-    ]
-    for candidate in candidates:
+    for candidate in (path.parent / include, SRC / include):
         try:
             resolved = candidate.resolve()
             resolved.relative_to(SRC.resolve())
         except ValueError:
             continue
-        if resolved.exists() and resolved.is_file():
+        if resolved.is_file():
             return resolved.relative_to(SRC.resolve()).as_posix()
     return None
 
 
-def forbidden_include_reason(inc: str) -> str | None:
-    normalized = inc.replace("\\", "/")
-    if normalized.startswith("../"):
-        parts = []
-        for part in normalized.split("/"):
-            if part == "..":
-                continue
-            parts.append(part)
-        normalized = "/".join(parts)
-    for target in FORBIDDEN_INCLUDE_TARGETS:
-        if normalized == target or normalized.endswith("/" + target):
-            return FORBIDDEN_FILES[target]
+def feature_for(path: str) -> tuple[str, str, str] | None:
+    for prefix, (name, public) in FEATURE_DIRS.items():
+        if path.startswith(prefix):
+            return prefix, name, public
     return None
 
 
-def classify_violation(path: str, inc: str) -> str | None:
-    forbidden_reason = forbidden_include_reason(inc)
-    if forbidden_reason:
-        return f"forbidden compatibility/private include: {forbidden_reason}"
-
-    if inc in SDK_HEADERS:
-        if path.startswith(LOW_LEVEL_PREFIXES):
-            return None
+def layer_violation(path: str, include: str, target: str | None) -> str | None:
+    if include in SDK_HEADERS and not path.startswith(("board/", "hal/")):
         return "SDK headers are limited to board/hal"
-
-    if not path.startswith("runtime/") and (inc.startswith("../runtime/") or inc.startswith("runtime/")):
+    if not path.startswith("runtime/") and target and target.startswith("runtime/"):
         return "only runtime may include runtime"
-
-    if path.startswith("drivers/"):
-        if inc.startswith("../ui/"):
-            return "drivers must not include ui"
-        if inc.startswith("../apps/"):
-            return "drivers must not include apps"
-        if inc.startswith("../services/internal/"):
-            return "drivers must not include service internal headers"
-        if inc.startswith("../storage/internal/"):
-            return "drivers must not include storage internal headers"
-        if inc.startswith("../storage/") and inc.endswith("_private.h"):
-            return "drivers must not include storage private headers"
-        if inc == "../core/hk_shell.h":
-            return "drivers must not include shell"
-
-    if path.startswith("core/"):
-        if inc.startswith("../services/internal/"):
-            return "core must not include service internal headers"
-        if inc.startswith("../storage/internal/"):
-            return "core must not include storage internal headers"
-        if inc.startswith("../services/"):
-            return "core must not include services"
-        if inc.startswith("../storage/"):
-            return "core must not include storage"
-        if inc.startswith("../ui/"):
-            return "core must not include ui"
-        if inc.startswith("../apps/"):
-            return "core must not include apps"
-        if inc.startswith("../controllers/"):
-            return "core must not include controllers"
-
-    if path.startswith("storage/"):
-        if inc == "../hal/hal_uart.h":
-            return "storage must not include debug UART"
-        if inc.startswith("../storage/internal/"):
-            return "storage must include internal headers as internal/... from inside storage"
-        if inc.startswith("../ui/"):
-            return "storage must not include ui"
-        if inc.startswith("../apps/"):
-            return "storage must not include apps"
-        if inc.startswith("../services/"):
-            return "storage must not include services"
-        if inc in ("../core/hk_menu.h", "../core/hk_screen.h"):
-            return "storage must not include screen/menu controllers"
-        if inc == "../core/hk_shell.h":
-            return "storage must not include shell"
-        if inc == "../drivers/hk_input.h":
-            return "storage must not handle input directly"
-        if inc.startswith("../drivers/") and inc.endswith("_private.h"):
-            return "storage must not include driver private headers"
-
-    if path.startswith("services/"):
-        if inc.startswith("../storage/internal/"):
-            return "services must not include storage internal headers"
-        if inc.startswith("../services/internal/"):
-            return "services must include internal headers as internal/... from inside services"
-        if inc.startswith("../ui/"):
-            return "services must not include ui"
-        if inc.startswith("../apps/"):
-            return "services must not include apps"
-        if inc in ("../core/hk_menu.h", "../core/hk_screen.h", "../core/hk_shell.h"):
-            return "services must not control screens directly"
-        if inc.endswith("_private.h") and not inc.startswith("internal/"):
-            return "services private-header include is temporary only"
-
-    if path.startswith("controllers/"):
-        if inc == "../hal/hal_uart.h":
-            return "controllers must use debug console service instead of debug UART"
-        if inc.startswith("../apps/"):
-            return "controllers must not include apps"
-        if inc.startswith("../services/internal/"):
-            return "controllers must not include service internal headers"
-        if inc.startswith("../storage/internal/"):
-            return "controllers must not include storage internal headers"
-        if inc.startswith("../drivers/") and inc.endswith("_private.h"):
-            return "controllers must not include driver private headers"
-        if inc.startswith("../storage/") and inc.endswith("_private.h"):
-            return "controllers must not include storage private headers"
-
-    if path.startswith("ui/"):
-        if inc.startswith("../storage/"):
-            return "ui must not include storage directly"
-        if inc.startswith("../services/internal/"):
-            return "ui must not include service internal headers"
-        if inc.startswith("../services/"):
-            return "ui must not include services"
-        if inc.startswith("../drivers/") and inc.endswith("_private.h"):
-            return "ui must not include driver private headers"
-        if inc.startswith("../storage/") and inc.endswith("_private.h"):
-            return "ui must not include storage private headers"
-
-    if path.startswith(PONG_FEATURE_PREFIX) and inc.startswith("../../") and inc not in PONG_ALLOWED_SHARED_INCLUDES:
-        return "Pong feature may include only declared shared contracts"
-
-    if path.startswith("apps/"):
-        if inc.startswith("../services/internal/"):
-            return "apps must not include service internal headers"
-        if inc.startswith("../storage/internal/"):
-            return "apps must not include storage internal headers"
-        if inc.startswith("../drivers/") and inc.endswith("_private.h"):
-            return "apps must not include driver private headers"
-        if inc.startswith("../storage/") and inc.endswith("_private.h"):
-            return "apps must not include storage private headers"
-
+    if path.startswith("drivers/") and target and target.startswith(
+            ("ui/", "apps/", "services/internal/", "storage/internal/")):
+        return "drivers must not depend on UI, apps, or private state"
+    if path.startswith("core/") and target and target.startswith(
+            ("services/", "storage/", "ui/", "apps/", "controllers/")):
+        return "core must not depend on upper layers"
+    if path.startswith("storage/") and target and target.startswith(
+            ("ui/", "apps/", "services/")):
+        return "storage must not depend on UI, apps, or services"
+    if path.startswith("services/") and target and target.startswith(
+            ("ui/", "apps/")):
+        return "services must not depend on UI or apps"
+    if path.startswith("controllers/") and target and target.startswith(
+            ("apps/", "services/internal/", "storage/internal/")):
+        return "shared controllers must not depend on apps or private state"
+    if path.startswith("ui/") and target and target.startswith(
+            ("storage/", "services/")):
+        return "shared UI must not depend on storage or services"
+    if (path.startswith(("services/", "controllers/")) and
+            path != "services/debug_console_service.c" and
+            include == "../hal/hal_uart.h"):
+        return "use the debug console service instead of debug UART"
     return None
 
 
-def source_token_violations(path: Path) -> list[tuple[int, str]]:
-    path_rel = rel(path)
-    if path_rel.startswith(LOW_LEVEL_PREFIXES):
-        return []
-
-    violations: list[tuple[int, str]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if line.lstrip().startswith("#include"):
-            continue
-        match = SDK_TOKEN_RE.search(line)
-        if match:
-            violations.append((number, match.group(0)))
-        if path_rel.startswith("storage/"):
-            match = STORAGE_INPUT_TOKEN_RE.search(line)
-            if match:
-                violations.append((number, f"storage input token {match.group(0)}"))
-        if PUBLIC_PHOTO_ROW_RE.search(line):
-            violations.append((number, "public mutable image decode row buffer"))
-        if PUBLIC_MUTABLE_EXTERN_RE.search(line):
-            violations.append((number, "public mutable extern variable"))
-        if path_rel == "services/debug_screenshot_stream.c":
-            match = DEBUG_SCREENSHOT_CONSOLE_API_RE.search(line)
-            if match:
-                violations.append((number, "debug screenshot stream must not expose console API"))
-    return violations
+def feature_include_violation(path: str, target: str | None) -> str | None:
+    if not target:
+        return None
+    source_feature = feature_for(path)
+    target_feature = feature_for(target)
+    if not target_feature:
+        return None
+    target_prefix, target_name, target_public = target_feature
+    if source_feature and source_feature[0] == target_prefix:
+        return None
+    if path == REGISTRY and target == f"{target_prefix}{target_public}":
+        return None
+    return f"only app registry may include the public {target_name} app header"
 
 
-def feature_reference_violations(path: Path) -> list[tuple[int, str]]:
-    path_rel = rel(path)
-    violations: list[tuple[int, str]] = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if (not path_rel.startswith(PONG_FEATURE_PREFIX) and
-                path_rel not in PONG_REFERENCE_ALLOWED_PATHS and
-                PONG_REFERENCE_RE.search(line)):
-            violations.append((number, "Pong reference outside feature module"))
-        if (not path_rel.startswith(TERMINAL_FEATURE_PREFIX) and
-                path_rel not in TERMINAL_REFERENCE_ALLOWED_PATHS and
-                TERMINAL_REFERENCE_RE.search(line)):
-            violations.append((number, "Terminal reference outside feature module"))
-        if (path_rel not in AUTOSTART_TARGET_ID_ALLOWED_PATHS and
-                AUTOSTART_TARGET_ID_RE.search(line)):
-            violations.append((number, "autostart target IDs must be declared only by core and app registry"))
-    return violations
-
-
-def pong_include_violation(path: Path, inc: str) -> str | None:
-    path_rel = rel(path)
-    target = resolve_local_include(path, inc)
-
-    if path_rel.startswith("apps/pong/pong_controller.") and Path(inc).name == "pong_app.h":
-        return "Pong controller must not include the app entry-point header"
-    if target and target.startswith(PONG_FEATURE_PREFIX):
-        if path_rel.startswith(PONG_FEATURE_PREFIX):
-            return None
-        if path_rel == "apps/app_registry.c" and target in {
-            "apps/pong/pong_app.h",
-            "apps/pong/pong_config.h",
-        }:
-            return None
-        return "shared layers must not include Pong feature headers"
-    return None
-
-
-def terminal_include_violation(path: Path, inc: str) -> str | None:
-    path_rel = rel(path)
-    target = resolve_local_include(path, inc)
-
-    if path_rel.startswith("apps/terminal/terminal_controller.") and Path(inc).name == "terminal_app.h":
-        return "Terminal controller must not include the app entry-point header"
-    if target and target.startswith(TERMINAL_FEATURE_PREFIX):
-        if path_rel.startswith(TERMINAL_FEATURE_PREFIX):
-            return None
-        if path_rel == "apps/app_registry.c" and target == "apps/terminal/terminal_app.h":
-            return None
-        return "shared layers must not include Terminal feature headers"
-    if path_rel.startswith(TERMINAL_FEATURE_PREFIX) and inc.startswith("../../") and inc not in TERMINAL_ALLOWED_SHARED_INCLUDES:
-        return "Terminal feature may include only declared shared contracts"
-    return None
-
-
-def face_include_violation(path: Path, inc: str) -> str | None:
-    path_rel = rel(path)
-    target = resolve_local_include(path, inc)
-
-    if path_rel.startswith("apps/face_detect/face_detect_controller.") and Path(inc).name == "face_detect_app.h":
-        return "Face Detect controller must not include the app entry-point header"
-    if target and target.startswith(FACE_FEATURE_PREFIX):
-        if path_rel.startswith(FACE_FEATURE_PREFIX):
-            return None
-        if path_rel == "apps/app_registry.c" and target == "apps/face_detect/face_detect_app.h":
-            return None
-        return "shared layers must not include Face Detect feature headers"
-    if path_rel.startswith(FACE_FEATURE_PREFIX) and inc.startswith("../../") and inc not in FACE_ALLOWED_SHARED_INCLUDES:
-        return "Face Detect feature may include only declared shared contracts"
-    return None
-
-
-def apriltag_include_violation(path: Path, inc: str) -> str | None:
-    path_rel = rel(path)
-    target = resolve_local_include(path, inc)
-
-    if path_rel.startswith("apps/apriltag/apriltag_controller.") and Path(inc).name == "apriltag_app.h":
-        return "AprilTag controller must not include the app entry-point header"
-    if target and target.startswith(APRILTAG_FEATURE_PREFIX):
-        if path_rel.startswith(APRILTAG_FEATURE_PREFIX):
-            return None
-        if path_rel == "apps/app_registry.c" and target == "apps/apriltag/apriltag_app.h":
-            return None
-        return "shared layers must not include AprilTag feature headers"
-    if path_rel.startswith(APRILTAG_FEATURE_PREFIX) and inc.startswith("../../") and inc not in APRILTAG_ALLOWED_SHARED_INCLUDES:
-        return "AprilTag feature may include only declared shared contracts"
-    return None
-
-
-def settings_menu_include_violation(path: Path, inc: str) -> str | None:
-    path_rel = rel(path)
-    target = resolve_local_include(path, inc)
-
-    if target == "ui/settings_menu_view.h" and path_rel not in {
+def settings_menu_violation(path: str, target: str | None) -> str | None:
+    if target == "ui/settings_menu_view.h" and path not in {
             "controllers/settings_menu_controller.c", "ui/settings_menu_view.c"}:
-        return "only the shared settings-menu controller may include its private view"
-    if path_rel not in SETTINGS_MENU_SHARED_PATHS or not target:
+        return "settings-menu view is private to its shared controller"
+    if path not in SETTINGS_MENU_SHARED or not target:
         return None
     if target.startswith(("apps/", "services/", "storage/", "runtime/")) or "camera" in target:
-        return "shared settings-menu must stay independent of apps, camera, services, storage, and runtime"
+        return "shared settings-menu must remain feature and service independent"
     return None
 
 
-def pong_layout_failures() -> list[str]:
-    failures: list[str] = []
-    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-
-    for legacy_path in sorted(PONG_LEGACY_PATHS):
-        if (ROOT / legacy_path).exists():
-            failures.append(f"{legacy_path}: legacy Pong path must not exist")
-        if legacy_path in build_manifest:
-            failures.append(f"tools/build_firmware.py: legacy Pong source path: {legacy_path}")
-    for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        if not path_rel.startswith(PONG_FEATURE_PREFIX) and PONG_SPECIFIC_FILE_RE.match(path.name):
-            failures.append(f"{path_rel}: Pong-specific file must live in {PONG_FEATURE_PREFIX}")
-    return failures
-
-
-def terminal_layout_failures() -> list[str]:
-    failures: list[str] = []
-    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-
-    for legacy_path in sorted(TERMINAL_LEGACY_PATHS):
-        if (ROOT / legacy_path).exists():
-            failures.append(f"{legacy_path}: legacy Terminal path must not exist")
-        if legacy_path in build_manifest:
-            failures.append(f"tools/build_firmware.py: legacy Terminal source path: {legacy_path}")
-    for name in sorted(TERMINAL_MODULE_FILES):
-        path = SRC / TERMINAL_FEATURE_PREFIX / name
-        manifest_path = f"firmware/src/{TERMINAL_FEATURE_PREFIX}{name}"
-        if not path.is_file():
-            failures.append(f"{path.relative_to(ROOT).as_posix()}: Terminal module file is missing")
-        if manifest_path not in build_manifest:
-            failures.append(f"tools/build_firmware.py: Terminal module is not disabled as a unit: {manifest_path}")
-    for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        if not path_rel.startswith(TERMINAL_FEATURE_PREFIX) and TERMINAL_SPECIFIC_FILE_RE.match(path.name):
-            failures.append(f"{path_rel}: Terminal-specific file must live in {TERMINAL_FEATURE_PREFIX}")
-    return failures
-
-
-def face_layout_failures() -> list[str]:
-    failures: list[str] = []
-    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-
-    for legacy_path in sorted(FACE_LEGACY_PATHS):
-        if (ROOT / legacy_path).exists():
-            failures.append(f"{legacy_path}: legacy Face Detect path must not exist")
-        if legacy_path in build_manifest:
-            failures.append(f"tools/build_firmware.py: legacy Face Detect source path: {legacy_path}")
-    for name in sorted(FACE_MODULE_FILES):
-        path = SRC / FACE_FEATURE_PREFIX / name
-        manifest_path = f"firmware/src/{FACE_FEATURE_PREFIX}{name}"
-        if not path.is_file():
-            failures.append(f"{path.relative_to(ROOT).as_posix()}: Face Detect module file is missing")
-        if manifest_path not in build_manifest:
-            failures.append(f"tools/build_firmware.py: Face Detect module is not disabled as a unit: {manifest_path}")
-    for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        if not path_rel.startswith(FACE_FEATURE_PREFIX) and FACE_SPECIFIC_FILE_RE.match(path.name):
-            failures.append(f"{path_rel}: Face Detect-specific file must live in {FACE_FEATURE_PREFIX}")
-    return failures
-
-
-def apriltag_layout_failures() -> list[str]:
-    failures: list[str] = []
-    build_manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-
-    for name in sorted(APRILTAG_MODULE_FILES):
-        path = SRC / APRILTAG_FEATURE_PREFIX / name
-        manifest_path = f"firmware/src/{APRILTAG_FEATURE_PREFIX}{name}"
-        if not path.is_file():
-            failures.append(f"{path.relative_to(ROOT).as_posix()}: AprilTag module file is missing")
-        if manifest_path not in build_manifest:
-            failures.append(f"tools/build_firmware.py: AprilTag module is not disabled as a unit: {manifest_path}")
-    if 'firmware" / "third_party" / "apriltag"' not in build_manifest:
-        failures.append("tools/build_firmware.py: AprilTag third-party detector is not feature-gated")
-    for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        if not path_rel.startswith(APRILTAG_FEATURE_PREFIX) and APRILTAG_SPECIFIC_FILE_RE.match(path.name):
-            failures.append(f"{path_rel}: AprilTag-specific file must live in {APRILTAG_FEATURE_PREFIX}")
-    return failures
-
-
-def include_graph_failures() -> list[str]:
+def include_cycle_failures() -> list[str]:
     graph: dict[str, list[str]] = {}
     for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        graph[path_rel] = []
-        for _, inc in include_lines(path):
-            target = resolve_local_include(path, inc)
-            if target:
-                graph[path_rel].append(target)
-
+        graph[relative(path)] = [
+            target for _, include in includes(path)
+            if (target := resolve_include(path, include))
+        ]
     failures: list[str] = []
     visiting: set[str] = set()
     visited: set[str] = set()
     stack: list[str] = []
 
-    def dfs(node: str) -> None:
+    def visit(node: str) -> None:
         if node in visiting:
             start = stack.index(node)
             failures.append("include cycle: " + " -> ".join(stack[start:] + [node]))
@@ -642,70 +234,69 @@ def include_graph_failures() -> list[str]:
         visiting.add(node)
         stack.append(node)
         for child in graph.get(node, []):
-            dfs(child)
+            visit(child)
         stack.pop()
         visiting.remove(node)
         visited.add(node)
 
-    for node in sorted(graph):
-        dfs(node)
+    for node in graph:
+        visit(node)
+    return failures
+
+
+def layout_failures() -> list[str]:
+    failures: list[str] = []
+    manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
+    for path in sorted(LEGACY_PATHS | FORBIDDEN_FILES):
+        if (SRC / path).exists():
+            failures.append(f"{path}: legacy/forbidden path must not exist")
+    for name, (directory, public) in FEATURES.items():
+        module = SRC / "apps" / directory
+        if not module.is_dir():
+            failures.append(f"apps/{directory}: feature directory is missing")
+        if not (module / public).is_file():
+            failures.append(f"apps/{directory}/{public}: public app header is missing")
+        marker = f'"{name}": Path("firmware/src/apps/{directory}")'
+        if marker not in manifest:
+            failures.append(f"tools/build_firmware.py: {name} is not directory-gated")
+    for path in (SRC / "apps").glob("*.[ch]"):
+        if path.name not in {"app_registry.c"}:
+            failures.append(f"apps/{path.name}: flat app source is forbidden")
+    if 'if "qr-camera" not in disabled_apps:' not in manifest:
+        failures.append("tools/build_firmware.py: quirc is not gated by QR-CAMERA")
+    if 'if "apriltag" not in disabled_apps:' not in manifest:
+        failures.append("tools/build_firmware.py: AprilTag third party is not gated")
     return failures
 
 
 def main() -> int:
-    failures: list[str] = []
-    allowed = 0
-
-    for forbidden, reason in sorted(FORBIDDEN_FILES.items()):
-        if (SRC / forbidden).exists():
-            failures.append(f"{forbidden}: forbidden file exists: {reason}")
-
+    failures = layout_failures()
     for path in sorted(SRC.rglob("*.[ch]")):
-        path_rel = rel(path)
-        for line_no, inc in include_lines(path):
-            pong_violation = pong_include_violation(path, inc)
-            if pong_violation:
-                failures.append(f"{path_rel}:{line_no}: {pong_violation}: {inc}")
-            terminal_violation = terminal_include_violation(path, inc)
-            if terminal_violation:
-                failures.append(f"{path_rel}:{line_no}: {terminal_violation}: {inc}")
-            face_violation = face_include_violation(path, inc)
-            if face_violation:
-                failures.append(f"{path_rel}:{line_no}: {face_violation}: {inc}")
-            apriltag_violation = apriltag_include_violation(path, inc)
-            if apriltag_violation:
-                failures.append(f"{path_rel}:{line_no}: {apriltag_violation}: {inc}")
-            settings_menu_violation = settings_menu_include_violation(path, inc)
-            if settings_menu_violation:
-                failures.append(f"{path_rel}:{line_no}: {settings_menu_violation}: {inc}")
-            if path_rel.startswith("drivers/") and inc in SDK_HEADERS and (path_rel, inc) in SDK_DRIVER_ALLOWLIST:
-                allowed += 1
-            violation = classify_violation(path_rel, inc)
-            if violation is None:
-                continue
-            allow_key = next((item for item in ALLOWLIST if item[0] == path_rel and item[1] == inc), None)
-            if allow_key:
-                allowed += 1
-                continue
-            failures.append(f"{path_rel}:{line_no}: {violation}: {inc}")
-        for line_no, token in source_token_violations(path):
-            failures.append(f"{path_rel}:{line_no}: SDK token outside low-level layer: {token}")
-        for line_no, violation in feature_reference_violations(path):
-            failures.append(f"{path_rel}:{line_no}: {violation}")
-
-    failures.extend(pong_layout_failures())
-    failures.extend(terminal_layout_failures())
-    failures.extend(face_layout_failures())
-    failures.extend(apriltag_layout_failures())
-    failures.extend(include_graph_failures())
-
+        path_rel = relative(path)
+        for number, include in includes(path):
+            target = resolve_include(path, include)
+            for violation in (
+                layer_violation(path_rel, include, target),
+                feature_include_violation(path_rel, target),
+                settings_menu_violation(path_rel, target),
+            ):
+                if violation:
+                    failures.append(f"{path_rel}:{number}: {violation}: {include}")
+        if not path_rel.startswith(("board/", "hal/")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if line.lstrip().startswith("#include"):
+                    continue
+                if match := SDK_TOKEN_RE.search(line):
+                    failures.append(f"{path_rel}:{number}: SDK token outside board/hal: {match.group(0)}")
+                if PUBLIC_MUTABLE_EXTERN_RE.search(line):
+                    failures.append(f"{path_rel}:{number}: public mutable extern variable")
+    failures.extend(include_cycle_failures())
     if failures:
         print("[ARCH] boundary violations:")
         for failure in failures:
             print("  " + failure)
         return 1
-
-    print(f"[OK] architecture boundary guard passed ({allowed} allowlisted low-level exceptions)")
+    print("[OK] architecture boundary guard passed (10 declarative feature modules)")
     return 0
 
 

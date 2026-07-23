@@ -23,6 +23,6 @@ void firmware_startup(void)
     rgb_led_apply();
     boot_controller_startup();
     boot_controller_show_boot_screen();
-    topbar_set_sd_mounted(files_mount_if_needed());
+    topbar_set_sd_mounted(file_mount_if_needed());
     autostart_controller_start();
 }

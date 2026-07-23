@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-uint8_t files_mount_if_needed(void);
+uint8_t file_mount_if_needed(void);
 
 #endif

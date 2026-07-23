@@ -14,6 +14,7 @@ typedef struct
 } camera_preview_frame_t;
 
 uint16_t camera_service_frame_pixel(uint32_t x, uint32_t y);
+void camera_service_frame_info(uint16_t *width, uint16_t *height);
 uint8_t camera_service_preview_acquire(camera_preview_frame_t *frame);
 void camera_service_preview_release(camera_preview_frame_t *frame);
 uint8_t camera_service_frame_snapshot(uint32_t wait_ms, const uint8_t **data, uint32_t *bytes, uint16_t *width, uint16_t *height);

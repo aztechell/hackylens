@@ -188,8 +188,6 @@ camera_runtime_input_event_t camera_runtime_handle_input(const hk_input_snapshot
     {
         camera_light_repeat_reset();
         camera_input_cancel();
-        camera_stop();
-        camera_service_clear_mode();
         shell_show_menu();
         return CAMERA_RUNTIME_INPUT_EXIT;
     }

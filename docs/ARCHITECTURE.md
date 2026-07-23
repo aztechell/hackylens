@@ -8,7 +8,7 @@ HackyLens 0.1.0 is modular firmware built from separate C translation units unde
 
 `runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `runtime/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, and mounts storage. The neutral autostart controller then opens the persisted registry target or falls back to the menu; it never includes feature headers.
 
-`platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, writes the boot banner, and initializes optional UI state; it does not depend on runtime or low-level board/HAL headers.
+`platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, and writes the boot banner; feature view initialization belongs to each app's `enter` callback.
 
 ## Layer boundaries
 
@@ -27,7 +27,15 @@ The shared `settings_menu` controller is an instance-based UI state machine driv
 
 ## Feature modules
 
-`apps/pong/`, `apps/terminal/`, `apps/face_detect/`, and `apps/apriltag/` are self-contained app modules. Their app entry points, controllers, views, configuration, state/types, and menu icons live inside each feature directory. The app registry is the sole shared-layer connection to each module and includes only its public app header; the corresponding feature flag and build manifest select each module as a unit. Feature code may use core lifecycle, input, LCD/UI, logging, settings, and menu/back-navigation contracts, while drivers, HAL, runtime, menu, and shared UI remain in the layered architecture.
+All ten menu applications are self-contained modules: `apps/terminal/`, `apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`, `apps/files/`, `apps/buttons/`, `apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point, controller, view, icon, feature configuration, and feature-specific state/services. The only public header of a module is its `*_app.h`, and only `apps/app_registry.c` may include it.
+
+The build manifest maps each app ID to its whole directory. `--disable-app` therefore removes every source and private header of that feature. Shared camera sources remain while CAMERA, QR-CAMERA, FACE DETECT, or APRILTAG is enabled; `quirc` is staged only for QR-CAMERA. With no camera consumer, sensor/DVP/camera runtime sources are omitted while the general KPU HAL remains available.
+
+The registry dispatches primary and secondary screen ownership, lifecycle callbacks, background ticks, SD events, menu icons, and debug commands. Shared screen, SD, debug, boot, and system-tick controllers do not include feature headers or select features with conditionals.
+
+CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
+
+FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and SLEEP likewise own their controllers and views; SLEEP receives the input snapshot through the registry background lifecycle for auto-sleep.
 
 FACE DETECT owns its detector adapter, model-storage adapter, view, icon, debug command, and deferred KPU-unload lifecycle. It reuses the shared camera runtime, FAT32 implementation, and KPU/DVP HAL. Its model is loaded from `/hackylens.kmodels/detect.kmodel` on the SD card; it is not embedded in firmware flash.
 
@@ -37,6 +45,6 @@ Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log
 
 Settings record v3 retains the v2 settings prefix and fixed 80-byte opaque app-data block, then appends one stable autostart ID byte. The storage layer validates and migrates v1, v2, and v3 records; v1/v2 migration defaults autostart to OFF without changing prior CAMERA, external-link, or APRILTAG data. APRILTAG alone interprets the opaque app-data schema and 587-bit selected-ID map.
 
-## Architecture freeze
+## Architecture guard
 
-The current Layered Architecture is complete. `controllers` may continue to use `hal_time` as an embedded shortcut; `runtime` is the composition root and may connect lower layers. Future file moves are allowed only to fix a concrete bug, add a platform, or introduce a subsystem. Refactoring solely to raise a perceived architecture-cleanliness percentage is prohibited.
+`tools/check_arch.py` uses one declarative table for all ten feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, and a mismatch between feature directories and the build manifest.

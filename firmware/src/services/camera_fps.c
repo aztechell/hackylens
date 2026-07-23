@@ -1,4 +1,4 @@
-#include "camera_photo.h"
+#include "camera_frame.h"
 
 #include <stddef.h>
 
@@ -120,7 +120,7 @@ void camera_service_fps_on_frame(void)
         {
             uint16_t width = 0;
             uint16_t height = 0;
-            camera_service_photo_info(NULL, &width, &height);
+            camera_service_frame_info(&width, &height);
             printf("%s fps=%u.%u avg=%u.%u frames=%u size=%ux%u compose_us=%u compose_max=%u present_us=%u present_max=%u\r\n",
                    camera_log_prefix(),
                    (unsigned)(g_camera_fps_value_x10 / 10U),

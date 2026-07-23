@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "hk_events.h"
+
 typedef enum
 {
     SCREEN_MENU = 0,
@@ -52,8 +54,11 @@ typedef struct hk_app
     void (*exit)(void);
     void (*tick)(const hk_input_snapshot_t *input);
     void (*handle_input)(const hk_input_snapshot_t *input);
+    uint8_t (*owns_screen)(screen_t screen);
     void (*draw_icon)(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
-    void (*background_tick)(void);
+    void (*background_tick)(const hk_input_snapshot_t *input);
+    void (*handle_sd_event)(hk_sd_event_t event);
+    uint8_t blocks_sd_poll;
     uint8_t (*handle_debug_command)(const char *cmd);
     const char *debug_help;
 } hk_app_t;

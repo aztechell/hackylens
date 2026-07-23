@@ -20,7 +20,7 @@ face_model_storage_result_t face_detect_model_storage_load(uint8_t **buffer, uin
 
     if(buffer) *buffer = NULL;
     if(size) *size = 0;
-    if(!hk_sd_present() || !files_mount_if_needed() || !hk_fat_mounted())
+    if(!hk_sd_present() || !file_mount_if_needed() || !hk_fat_mounted())
         return FACE_MODEL_STORAGE_NO_SD;
     if(file_path_find(FACE_MODEL_DIR_PATH, &entry) != FILE_PATH_OK || !(entry.attr & FAT_ATTR_DIR))
         return FACE_MODEL_STORAGE_DIR;

@@ -54,7 +54,7 @@ uint8_t screenshot_save_current_screen(const screenshot_pixel_source_t *source, 
     uint32_t cluster_count;
     uint32_t file_size = screenshot_bmp_file_size();
 
-    if(!files_mount_if_needed())
+    if(!file_mount_if_needed())
     {
         g_screenshot_error = "MOUNT";
         return 0;

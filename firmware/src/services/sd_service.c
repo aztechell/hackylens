@@ -35,7 +35,7 @@ hk_sd_event_t sd_service_tick(void)
     }
 
     fat32_set_probe_silent(1);
-    mounted = files_mount_if_needed();
+    mounted = file_mount_if_needed();
     fat32_set_probe_silent(0);
     g_sd_service_poll_ticks = SD_POLL_UNMOUNTED_TICKS;
     if(mounted)

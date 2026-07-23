@@ -14,7 +14,11 @@ void face_detect_enter(const hk_input_snapshot_t *input) { face_detect_controlle
 void face_detect_exit(void) { face_detect_controller_exit(); }
 void face_detect_tick(const hk_input_snapshot_t *input) { face_detect_controller_tick(input); }
 void face_detect_handle_buttons(const hk_input_snapshot_t *input) { face_detect_controller_handle_buttons(input); }
-void face_detect_background_tick(void) { face_detect_detector_service_tick(); }
+void face_detect_background_tick(const hk_input_snapshot_t *input)
+{
+    (void)input;
+    face_detect_detector_service_tick();
+}
 
 uint8_t face_detect_handle_debug_command(const char *cmd)
 {
