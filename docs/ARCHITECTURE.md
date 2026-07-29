@@ -23,6 +23,15 @@ Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol an
 
 `tools/check_arch.py` guards include boundaries, forbidden compatibility headers, SDK-token placement, include cycles, and feature-module ownership.
 
+The shared AI platform is split across the normal layers. `core/ai_model_types.h`
+describes tensors, normalization, post-processing, and exact KModel contracts.
+`storage/ai_model_storage.*` owns aligned FAT32 loading plus the optional
+CRC-protected SD manifest. `services/ai_model_runtime.*` owns the single-KPU
+lease, descriptor/manifest/output validation, asynchronous run timing, and
+deferred stop/unload state machine. `hal/hal_kpu.*` remains limited to SDK and
+peripheral operations. None of these shared files knows about a camera, DVP
+capture policy, a feature app, or a particular post-processor.
+
 The shared `settings_menu` controller is an instance-based UI state machine driven by a constant item descriptor table and owner callbacks. Its passive view owns only LCD rendering. It has no camera, application, storage, persistence, or screen-navigation dependencies; owner controllers retain opening/closing lifecycle and all settings side effects. CAMERA, QR, APRILTAG, and the system SETTINGS app supply separate descriptor adapters. Cycle-on-OK and edit-on-OK rows share navigation, partial redraw, hold-repeat, commit lifecycle, and optional dynamic choice providers without sharing their data models.
 
 ## Feature modules
@@ -37,7 +46,7 @@ CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings
 
 FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and SLEEP likewise own their controllers and views; SLEEP receives the input snapshot through the registry background lifecycle for auto-sleep.
 
-FACE DETECT owns its detector adapter, model-storage adapter, view, icon, debug command, and deferred KPU-unload lifecycle. It reuses the shared camera runtime, FAT32 implementation, and KPU/DVP HAL. Its model is loaded from `/hackylens.kmodels/detect.kmodel` on the SD card; it is not embedded in firmware flash.
+FACE DETECT owns its YOLO detector adapter, DVP attachment, view, icon, and debug command. It is the first consumer of the shared AI runtime: the feature supplies a constant model descriptor and keeps all face-specific output decoding, while generic aligned storage, KPU ownership, output validation, timing, and deferred unload belong to the shared platform. Its model remains `/hackylens.kmodels/detect.kmodel` on the SD card and is not embedded in firmware flash.
 
 APRILTAG owns its TAG36H11 detector adapter, grayscale downsampler, settings/selection model and descriptor adapter, stabilized in-frame result overlay, icon, and `HKTAG`/`HKTAGINFO` commands. Its descriptor adapter uses the shared camera-independent `settings_menu`, while APRILTAG retains persistence and camera pause/resume policy. It reuses the shared 320x240 camera runtime and publishes native tag IDs through `vision_result_service` as BLOCK results. Core 0 downsamples a leased camera frame only when the single uncached 160x120 luma handoff is free and immediately releases the frame; frames seen while core 1 is busy are intentionally discarded instead of queued, preventing stale-result latency. A persistent worker on core 1 owns the speed-optimized CPU detector and atomically publishes completed result banks. `refine_edges` is a persisted runtime request applied by core 1 before the next detection rather than a detector restart. The app uses camera session overrides for its independent FPS and LED/RGB profile, leaving CAMERA and QR settings unchanged. Its `ALL/SELECTED` filter is applied before the shared result snapshot, so the UART/I2C wire format remains unchanged. Preview overlays are composed into the LCD shadow before the full-frame transfer, so rectangles are not temporarily erased by the following camera frame. The detector does not use a KPU model. The BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag` only when this feature is enabled.
 
@@ -47,4 +56,4 @@ Settings record v3 retains the v2 settings prefix and fixed 80-byte opaque app-d
 
 ## Architecture guard
 
-`tools/check_arch.py` uses one declarative table for all ten feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, and a mismatch between feature directories and the build manifest.
+`tools/check_arch.py` uses one declarative table for all ten feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.

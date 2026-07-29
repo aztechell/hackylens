@@ -32,7 +32,7 @@ static void hal_kpu_prepare(void)
 }
 
 static uint8_t hal_kpu_header_matches(const uint8_t *model, uint32_t model_size,
-                                      const hal_kpu_model_contract_t *contract)
+                                      const ai_model_kmodel_contract_t *contract)
 {
     const kpu_kmodel_header_t *header;
 
@@ -84,7 +84,7 @@ static void hal_kpu_done(void *userdata)
 }
 
 hal_kpu_load_result_t hal_kpu_model_load(const uint8_t *model, uint32_t model_size,
-                                         const hal_kpu_model_contract_t *contract,
+                                         const ai_model_kmodel_contract_t *contract,
                                          uint32_t *input_bytes)
 {
     if(input_bytes)

@@ -24,7 +24,7 @@ static const char *g_camera_fail_reason = "NO SENSOR";
 static uint16_t g_camera_mid;
 static uint16_t g_camera_pid;
 static uint8_t g_qr_camera_mode;
-static uint8_t g_face_detect_mode;
+static uint8_t g_camera_qvga_mode;
 
 const char *camera_log_prefix(void)
 {
@@ -57,9 +57,9 @@ uint8_t camera_session_qr_mode(void)
     return g_qr_camera_mode;
 }
 
-uint8_t camera_session_face_detect_mode(void)
+uint8_t camera_session_qvga_mode(void)
 {
-    return g_face_detect_mode;
+    return g_camera_qvga_mode;
 }
 
 uint16_t camera_session_width(void)
@@ -87,9 +87,9 @@ void camera_session_set_qr_mode(uint8_t qr_mode)
     g_qr_camera_mode = qr_mode ? 1 : 0;
 }
 
-void camera_session_set_face_detect_mode(uint8_t enabled)
+void camera_session_set_qvga_mode(uint8_t enabled)
 {
-    g_face_detect_mode = enabled ? 1 : 0;
+    g_camera_qvga_mode = enabled ? 1 : 0;
 }
 
 void camera_session_set_ready(uint8_t ready)
@@ -179,17 +179,12 @@ uint8_t camera_service_is_qr_mode(void)
 void camera_service_clear_mode(void)
 {
     g_qr_camera_mode = 0;
-    g_face_detect_mode = 0;
+    g_camera_qvga_mode = 0;
 }
 
-void camera_service_set_face_detect_mode(uint8_t enabled)
+void camera_service_set_qvga_mode(uint8_t enabled)
 {
-    camera_session_set_face_detect_mode(enabled);
-}
-
-uint8_t camera_service_is_face_detect_mode(void)
-{
-    return camera_session_face_detect_mode();
+    camera_session_set_qvga_mode(enabled);
 }
 
 uint8_t camera_service_capture_ready(void)

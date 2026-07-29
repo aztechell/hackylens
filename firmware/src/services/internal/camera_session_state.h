@@ -5,7 +5,7 @@
 
 uint8_t camera_session_ready(void);
 uint8_t camera_session_qr_mode(void);
-uint8_t camera_session_face_detect_mode(void);
+uint8_t camera_session_qvga_mode(void);
 uint16_t camera_session_width(void);
 uint16_t camera_session_height(void);
 uint8_t camera_session_preview_rotate(void);
@@ -17,7 +17,7 @@ uint8_t camera_session_initialized(void);
 uint8_t camera_session_ever_initialized(void);
 uint8_t camera_session_colorbar_enabled(void);
 void camera_session_set_qr_mode(uint8_t qr_mode);
-void camera_session_set_face_detect_mode(uint8_t enabled);
+void camera_session_set_qvga_mode(uint8_t enabled);
 void camera_session_set_ready(uint8_t ready);
 void camera_session_set_preview_rotate(uint8_t rotate);
 void camera_session_set_fail_reason(const char *reason);

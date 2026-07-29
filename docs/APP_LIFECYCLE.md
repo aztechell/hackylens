@@ -14,7 +14,14 @@ CAMERA and QR each own a settings child session and descriptor table. `owns_scre
 
 Every app lives in a self-contained `apps/<feature>/` directory; `apps/app_registry.c` includes only public app entry points. The registry dispatches secondary screens, background ticks with the current input snapshot, SD events, debug commands, and `HKHELP` tokens generically. FILES closes preview/GIF state through `exit` and owns SD insertion/removal handling. CAMERA, QR-CAMERA, FACE DETECT, and APRILTAG stop their own camera sessions in `exit`, so BACK and `HKMENU` share one cleanup path. SLEEP owns both explicit sleep/wake and menu auto-sleep through its background callback.
 
-FACE DETECT starts the shared camera session and loads `/hackylens.kmodels/detect.kmodel` from the SD card on entry. Its `exit` callback requests model unload exactly once. If KPU inference is still active, the module's `background_tick` completes the deferred unload after navigation has already returned to the menu; BACK handlers do not unload the model directly.
+FACE DETECT starts the shared camera session and asks its `ai_model_runtime_t`
+instance to load `/hackylens.kmodels/detect.kmodel` on entry. The runtime
+atomically acquires the single KPU owner slot, validates the descriptor and
+output tensors, and runs inference asynchronously. The app remains responsible
+for DVP re-arming and YOLO decoding. Its `exit` callback requests model unload
+exactly once. If inference is active, the module's `background_tick` services
+the generic deferred unload after navigation has returned to the menu; BACK
+handlers do not unload the model directly.
 
 APRILTAG starts a persistent core-1 worker before entering the shared camera in fixed 320x240 analysis mode. Its frame consumer downsamples only when the private luma handoff is free; frames arriving during detection are discarded so the worker never drains stale queued frames and always accepts the next newest preview. Completed native IDs are atomically published as BLOCK results. The previous stable overlay is composed into the next LCD frame and survives one isolated detection miss, avoiding frame-transfer flicker.
 

@@ -74,7 +74,7 @@ uint8_t camera_service_start(void)
         return camera_session_ready();
 
     requested = camera_session_qr_mode() ? CAMERA_SIZE_640X480 :
-        (camera_session_face_detect_mode() ? CAMERA_SIZE_320X240 : camera_service_size());
+        (camera_session_qvga_mode() ? CAMERA_SIZE_320X240 : camera_service_size());
 
     printf(camera_session_ever_initialized() ? "%s reinit\r\n" : "%s init\r\n", camera_log_prefix());
     printf("%s pins PCLK=47 XCLK=46 HREF=45 PWDN=44 VSYNC=43 RST=42 SCCB=40/41\r\n", camera_log_prefix());

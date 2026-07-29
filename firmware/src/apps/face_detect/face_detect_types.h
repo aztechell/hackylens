@@ -17,16 +17,6 @@ typedef enum
     FACE_DETECT_LOAD_KPU,
 } face_detect_load_result_t;
 
-typedef enum
-{
-    FACE_MODEL_STORAGE_OK = 0,
-    FACE_MODEL_STORAGE_NO_SD,
-    FACE_MODEL_STORAGE_DIR,
-    FACE_MODEL_STORAGE_FILE,
-    FACE_MODEL_STORAGE_ALLOC,
-    FACE_MODEL_STORAGE_READ,
-} face_model_storage_result_t;
-
 typedef struct
 {
     int16_t x;

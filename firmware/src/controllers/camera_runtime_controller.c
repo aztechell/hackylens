@@ -119,7 +119,7 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
 
     hk_screen_set(qr_mode ? SCREEN_QR_CAMERA :
                   (face_mode ? SCREEN_FACE_DETECT : (apriltag_mode ? SCREEN_APRILTAG : SCREEN_CAMERA)));
-    camera_service_set_face_detect_mode(face_mode || apriltag_mode);
+    camera_service_set_qvga_mode(face_mode || apriltag_mode);
     hk_back_exit_set_armed(0);
     camera_light_repeat_reset();
     camera_service_enter_begin(qr_mode, (button_state & BUTTON_OK) ? 1 : 0);

@@ -24,6 +24,7 @@ Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN030
 - Live OV2640 camera preview with configurable capture and display settings
 - QR scanning powered by [quirc](https://github.com/dlbeer/quirc)
 - KPU-based face detection
+- Shared K210 AI-model runtime with validated SD manifests and conversion tools
 - FAT32 SD-card support, photo capture, screenshots, and an image viewer
 - On-device terminal with bounded history and scrolling
 - Built-in file browser, button tester, Pong, settings, and sleep mode
@@ -130,8 +131,9 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 | `firmware/src/drivers`, `board`, `hal` | Hardware-facing code |
 | `firmware/src/runtime` | Startup and the main loop |
 | `tools` | Dependency bootstrap, build, checks, flashing, and diagnostics |
+| `models` | Locked K210 conversion workflow and model descriptor specs |
 
-More detail is available in [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md), [App lifecycle](docs/APP_LIFECYCLE.md), and [RAM/flash budget](docs/RAM_BUDGET.md).
+More detail is available in [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md), [AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and [RAM/flash budget](docs/RAM_BUDGET.md).
 
 ## License
 

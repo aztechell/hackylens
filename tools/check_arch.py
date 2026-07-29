@@ -102,6 +102,8 @@ FORBIDDEN_FILES = {
     "services/camera_settings.h", "services/camera_input_state.h",
     "services/qr_result_state.h", "storage/hk_fat32.h",
     "services/camera_photo.h",
+    "apps/face_detect/face_detect_model_storage.c",
+    "apps/face_detect/face_detect_model_storage.h",
     "storage/file_types.h", "storage/file_view_bridge.h",
     "storage/file_browser_state.h", "storage/fat32_state_private.h",
     "services/settings_types.h", "apps/app_entrypoints.h",
@@ -119,6 +121,16 @@ SETTINGS_MENU_SHARED = {
     "controllers/settings_menu_controller.h",
     "ui/settings_menu_view.c",
     "ui/settings_menu_view.h",
+}
+
+AI_MODEL_SHARED = {
+    "core/ai_model_types.h",
+    "storage/ai_model_storage.c",
+    "storage/ai_model_storage.h",
+    "services/ai_model_runtime.c",
+    "services/ai_model_runtime.h",
+    "hal/hal_kpu.c",
+    "hal/hal_kpu.h",
 }
 
 
@@ -212,6 +224,19 @@ def settings_menu_violation(path: str, target: str | None) -> str | None:
     return None
 
 
+def ai_model_violation(path: str, target: str | None) -> str | None:
+    if not target:
+        return None
+    if path.startswith("apps/") and target in {
+            "storage/ai_model_storage.h", "hal/hal_kpu.h"}:
+        return "feature apps must use the shared AI runtime, not its storage/HAL internals"
+    if path not in AI_MODEL_SHARED:
+        return None
+    if target.startswith(("apps/", "ui/", "controllers/", "runtime/")) or "camera" in target:
+        return "shared AI platform must remain feature and camera independent"
+    return None
+
+
 def include_cycle_failures() -> list[str]:
     graph: dict[str, list[str]] = {}
     for path in sorted(SRC.rglob("*.[ch]")):
@@ -266,6 +291,12 @@ def layout_failures() -> list[str]:
         failures.append("tools/build_firmware.py: quirc is not gated by QR-CAMERA")
     if 'if "apriltag" not in disabled_apps:' not in manifest:
         failures.append("tools/build_firmware.py: AprilTag third party is not gated")
+    for path in AI_MODEL_SHARED:
+        if not (SRC / path).is_file():
+            failures.append(f"{path}: shared AI platform file is missing")
+    lock_path = ROOT / "models" / "toolchain.lock.json"
+    if not lock_path.is_file() or '"sha256"' not in lock_path.read_text(encoding="utf-8"):
+        failures.append("models/toolchain.lock.json: pinned compiler checksum is missing")
     return failures
 
 
@@ -279,6 +310,7 @@ def main() -> int:
                 layer_violation(path_rel, include, target),
                 feature_include_violation(path_rel, target),
                 settings_menu_violation(path_rel, target),
+                ai_model_violation(path_rel, target),
             ):
                 if violation:
                     failures.append(f"{path_rel}:{number}: {violation}: {include}")

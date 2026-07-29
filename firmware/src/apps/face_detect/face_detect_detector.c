@@ -5,10 +5,8 @@
 #include <string.h>
 
 #include "../../hal/hal_dvp.h"
-#include "../../hal/hal_kpu.h"
-#include "../../hal/hal_time.h"
+#include "../../services/ai_model_runtime.h"
 #include "face_detect_config.h"
-#include "face_detect_model_storage.h"
 
 /* Exact tensor contract of kendryte-standalone-demo/face_detect/detect.kmodel. */
 #define FACE_W 320U
@@ -26,28 +24,11 @@
 
 typedef struct { float x, y, w, h, p; } face_candidate_t;
 
-typedef enum
-{
-    FACE_DETECT_STATE_UNLOADED = 0,
-    FACE_DETECT_STATE_LOADING,
-    FACE_DETECT_STATE_READY,
-    FACE_DETECT_STATE_RUNNING,
-    FACE_DETECT_STATE_UNLOAD_PENDING,
-    FACE_DETECT_STATE_FAULT,
-} face_detect_state_t;
-
 static const float g_anchors[10] = {1.889f, 2.5245f, 2.9465f, 3.94056f, 3.99987f,
                                     5.3658f, 5.155437f, 6.92275f, 6.718375f, 9.01025f};
-static uint8_t *g_model;
-static uint32_t g_model_size;
-static volatile uint8_t g_done;
-static volatile face_detect_state_t g_state = FACE_DETECT_STATE_UNLOADED;
-static uint32_t g_last_us;
+static ai_model_runtime_t g_runtime;
+static uint8_t g_runtime_initialized;
 static uint32_t g_candidates_count;
-static uint32_t g_input_dma_bytes;
-static uint32_t g_start_count;
-static uint64_t g_started_us;
-static uint64_t g_unload_requested_us;
 static face_detect_load_result_t g_result = FACE_DETECT_LOAD_FORMAT;
 /* DVP AI addresses are allocated by Canaan's iomem allocator in 256-byte
    blocks.  Preserve that hardware alignment for the static equivalent. */
@@ -55,15 +36,49 @@ static uint8_t g_input[FACE_INPUT_BYTES] __attribute__((aligned(256)));
 static face_candidate_t g_candidates[FACE_CANDIDATE_MAX];
 static face_detect_box_t g_boxes[FACE_DETECT_BOX_MAX];
 static uint8_t g_box_count;
-static const hal_kpu_model_contract_t g_model_contract = {
-    .version = 3U,
-    .flags = 1U,
-    .arch = 0U,
-    .layers_length = 24U,
-    .max_start_address = 0x4400U,
-    .main_mem_usage = 0xafc8U,
+static const ai_model_descriptor_t g_model_descriptor = {
+    .id = "face-detect",
+    .directory_path = "/hackylens.kmodels",
+    .model_path = "/hackylens.kmodels/detect.kmodel",
+    .manifest_path = NULL,
+    .labels_path = NULL,
+    .max_model_bytes = 1024U * 1024U,
+    .unload_timeout_us = FACE_DETECT_UNLOAD_TIMEOUT_US,
+    .kmodel = {
+        .version = 3U,
+        .flags = 1U,
+        .arch = 0U,
+        .layers_length = 24U,
+        .max_start_address = 0x4400U,
+        .main_mem_usage = 0xafc8U,
+        .output_count = 1U,
+        .input_bytes = FACE_INPUT_BYTES,
+    },
+    .input = {
+        .name = "image",
+        .bytes = FACE_INPUT_BYTES,
+        .shape = {1U, 3U, FACE_H, FACE_W},
+        .rank = 4U,
+        .element = AI_MODEL_ELEMENT_U8,
+        .layout = AI_MODEL_LAYOUT_CHW,
+    },
+    .outputs = {{
+        .name = "yolo",
+        .bytes = FACE_OUTPUT_BYTES,
+        .shape = {1U, 30U, FACE_GRID_H, FACE_GRID_W},
+        .rank = 4U,
+        .element = AI_MODEL_ELEMENT_F32,
+        .layout = AI_MODEL_LAYOUT_CHW,
+    }},
+    .normalization = {
+        .kind = AI_MODEL_NORMALIZATION_NONE,
+        .scale = {1.0f, 1.0f, 1.0f},
+        .bias = {0.0f, 0.0f, 0.0f},
+    },
+    .postprocess = AI_MODEL_POSTPROCESS_YOLO2,
+    .label_count = 1U,
     .output_count = 1U,
-    .input_bytes = FACE_INPUT_BYTES,
+    .manifest_required = 0U,
 };
 
 static uint8_t *face_input_uncached(void)
@@ -168,150 +183,90 @@ static void decode_output(const float *output, size_t bytes)
     }
 }
 
-static void inference_done(void *userdata)
-{
-    (void)userdata;
-    g_done = 1;
-    if(g_state == FACE_DETECT_STATE_RUNNING)
-        g_state = FACE_DETECT_STATE_READY;
-}
-
 static void finish_inference(void)
 {
     const uint8_t *output;
     size_t bytes;
-    if(!g_done) return;
-    g_done = 0;
-    g_last_us = (uint32_t)(hal_time_us() - g_started_us);
-    if(hal_kpu_get_output(0, &output, &bytes) == 0)
+    if(!ai_model_runtime_take_completion(&g_runtime))
+        return;
+    if(ai_model_runtime_get_output(&g_runtime, 0U, &output, &bytes) == 0)
         decode_output((const float *)output, bytes);
     /* Keep the DVP's RGB planes immutable while KPU uses them, then arm it
        for the next completed camera frame. */
     hal_dvp_output_ai(1);
 }
 
-static void reset_runtime_state(void)
+static void reset_detection_state(void)
 {
-    g_done = 0;
-    g_model = NULL;
-    g_model_size = 0;
-    g_last_us = 0;
     g_candidates_count = 0;
-    g_input_dma_bytes = 0;
-    g_start_count = 0;
-    g_started_us = 0;
-    g_unload_requested_us = 0;
     g_box_count = 0;
     memset(g_input, 0, sizeof(g_input));
     memset(g_candidates, 0, sizeof(g_candidates));
     memset(g_boxes, 0, sizeof(g_boxes));
-    g_state = FACE_DETECT_STATE_UNLOADED;
 }
 
-static uint8_t release_resources(void)
+static face_detect_load_result_t face_result(ai_model_result_t result)
 {
-    uint8_t *model;
-
-    if(!hal_kpu_model_unload())
-        return 0;
-    model = g_model;
-    if(model)
-        face_detect_model_storage_free(model);
-    reset_runtime_state();
-    return 1;
+    switch(result)
+    {
+        case AI_MODEL_RESULT_OK: return FACE_DETECT_LOAD_OK;
+        case AI_MODEL_RESULT_NO_SD: return FACE_DETECT_LOAD_NO_SD;
+        case AI_MODEL_RESULT_DIRECTORY: return FACE_DETECT_LOAD_DIR;
+        case AI_MODEL_RESULT_FILE: return FACE_DETECT_LOAD_FILE;
+        case AI_MODEL_RESULT_ALLOC: return FACE_DETECT_LOAD_ALLOC;
+        case AI_MODEL_RESULT_SIZE:
+        case AI_MODEL_RESULT_READ: return FACE_DETECT_LOAD_READ;
+        case AI_MODEL_RESULT_MANIFEST:
+        case AI_MODEL_RESULT_DESCRIPTOR:
+        case AI_MODEL_RESULT_FORMAT:
+        case AI_MODEL_RESULT_OUTPUT: return FACE_DETECT_LOAD_FORMAT;
+        default: return FACE_DETECT_LOAD_KPU;
+    }
 }
 
 face_detect_load_result_t face_detect_detector_load(void)
 {
-    face_model_storage_result_t storage;
-    hal_kpu_load_result_t load_result;
+    ai_model_result_t result;
 
-    face_detect_detector_service_tick();
-    if(g_state != FACE_DETECT_STATE_UNLOADED || hal_kpu_is_busy() || hal_kpu_is_loaded())
+    if(!g_runtime_initialized)
     {
-        g_result = FACE_DETECT_LOAD_KPU;
-        return g_result;
+        ai_model_runtime_init(&g_runtime);
+        g_runtime_initialized = 1U;
     }
-    if(!release_resources())
-    {
-        g_state = FACE_DETECT_STATE_FAULT;
-        g_result = FACE_DETECT_LOAD_KPU;
+    ai_model_runtime_tick(&g_runtime);
+    reset_detection_state();
+    result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
+    g_result = face_result(result);
+    if(result != AI_MODEL_RESULT_OK)
         return g_result;
-    }
-    g_state = FACE_DETECT_STATE_LOADING;
-    storage = face_detect_model_storage_load(&g_model, &g_model_size);
-    if(storage != FACE_MODEL_STORAGE_OK)
-    {
-        face_detect_load_result_t result =
-            storage == FACE_MODEL_STORAGE_NO_SD ? FACE_DETECT_LOAD_NO_SD :
-            storage == FACE_MODEL_STORAGE_DIR ? FACE_DETECT_LOAD_DIR :
-            storage == FACE_MODEL_STORAGE_FILE ? FACE_DETECT_LOAD_FILE :
-            storage == FACE_MODEL_STORAGE_ALLOC ? FACE_DETECT_LOAD_ALLOC : FACE_DETECT_LOAD_READ;
-        release_resources();
-        g_result = result;
-        return g_result;
-    }
-    load_result = hal_kpu_model_load(g_model, g_model_size, &g_model_contract, &g_input_dma_bytes);
-    if(load_result != HAL_KPU_LOAD_OK)
-    {
-        face_detect_load_result_t result =
-            load_result == HAL_KPU_LOAD_FORMAT ? FACE_DETECT_LOAD_FORMAT : FACE_DETECT_LOAD_KPU;
-        release_resources();
-        g_result = result;
-        return g_result;
-    }
-    g_state = FACE_DETECT_STATE_READY;
-    g_result = FACE_DETECT_LOAD_OK;
     printf("[FACE] KPU-V3 model=%08X align=%u bytes=%u input=%u, 320x240 YOLO\r\n",
-           (unsigned)(uintptr_t)g_model, (unsigned)((uintptr_t)g_model & 127U),
-           (unsigned)g_model_size, (unsigned)g_input_dma_bytes);
+           (unsigned)(uintptr_t)g_runtime.model,
+           (unsigned)((uintptr_t)g_runtime.model & 255U),
+           (unsigned)g_runtime.model_size, (unsigned)g_runtime.input_dma_bytes);
     return g_result;
 }
 
 void face_detect_detector_unload(void)
 {
     hal_dvp_output_ai(0);
-    if(g_state == FACE_DETECT_STATE_RUNNING)
-    {
-        g_state = FACE_DETECT_STATE_UNLOAD_PENDING;
-        g_unload_requested_us = hal_time_us();
-        return;
-    }
-    if(g_state == FACE_DETECT_STATE_READY || g_state == FACE_DETECT_STATE_LOADING)
-        release_resources();
+    ai_model_runtime_request_unload(&g_runtime);
 }
 
 void face_detect_detector_service_tick(void)
 {
-    hal_kpu_stop_result_t stop_result;
-
-    if(g_state != FACE_DETECT_STATE_UNLOAD_PENDING)
-        return;
-    if(!hal_kpu_is_busy())
+    ai_model_state_t before = g_runtime.state;
+    ai_model_runtime_tick(&g_runtime);
+    if(before == AI_MODEL_STATE_UNLOAD_PENDING &&
+       g_runtime.state == AI_MODEL_STATE_FAULT)
     {
-        release_resources();
-        return;
+        g_result = FACE_DETECT_LOAD_KPU;
+        printf("[FACE] KPU stop failed, reboot required\r\n");
     }
-    if(hal_time_us() - g_unload_requested_us < FACE_DETECT_UNLOAD_TIMEOUT_US)
-        return;
-
-    printf("[FACE] unload timeout, stopping KPU\r\n");
-    stop_result = hal_kpu_stop_and_reset();
-    if(stop_result == HAL_KPU_STOP_OK || stop_result == HAL_KPU_STOP_NOT_RUNNING)
-    {
-        release_resources();
-        return;
-    }
-    g_state = FACE_DETECT_STATE_FAULT;
-    g_result = FACE_DETECT_LOAD_KPU;
-    printf("[FACE] KPU stop failed, reboot required\r\n");
 }
 
 uint8_t face_detect_detector_ready(void)
 {
-    return g_result == FACE_DETECT_LOAD_OK &&
-           (g_state == FACE_DETECT_STATE_READY || g_state == FACE_DETECT_STATE_RUNNING) &&
-           hal_kpu_is_loaded();
+    return g_result == FACE_DETECT_LOAD_OK && ai_model_runtime_loaded(&g_runtime);
 }
 
 void face_detect_detector_attach_camera(void)
@@ -329,21 +284,20 @@ void face_detect_detector_process_frame(void)
 {
     uint8_t *input = face_input_uncached();
     uint8_t inference_finished;
-    if(!face_detect_detector_ready()) return;
-    inference_finished = g_done;
+    if(!face_detect_detector_ready())
+        return;
+    inference_finished = g_runtime.completion_pending;
     finish_inference();
     /* The just-finished UI frame was captured with AI output disabled; wait
        for the following frame after re-arming DVP above. */
-    if(inference_finished || hal_kpu_is_busy()) return;
-    g_started_us = hal_time_us();
+    if(inference_finished || ai_model_runtime_busy(&g_runtime))
+        return;
     hal_dvp_output_ai(0);
-    if(g_start_count++ == 0U)
+    if(g_runtime.run_count == 0U)
         printf("[FACE] kpu start input=%08X bytes=%u\r\n",
-               (unsigned)(uintptr_t)input, (unsigned)g_input_dma_bytes);
-    g_state = FACE_DETECT_STATE_RUNNING;
-    if(hal_kpu_run(input, inference_done, NULL) != 0)
+               (unsigned)(uintptr_t)input, (unsigned)g_runtime.input_dma_bytes);
+    if(!ai_model_runtime_run(&g_runtime, input))
     {
-        g_state = FACE_DETECT_STATE_READY;
         hal_dvp_output_ai(1);
         printf("[FACE] kpu start failed\r\n");
     }
@@ -363,8 +317,9 @@ const char *face_detect_detector_error_label(face_detect_load_result_t result)
 
 void face_detect_detector_format_info(char *line, size_t line_size)
 {
-    static const char *states[] = {"UNLOADED", "LOADING", "READY", "RUNNING", "UNLOAD_PENDING", "FAULT"};
     snprintf(line, line_size, "HKFACEINFO state=%s error=%s size=%u KPU-V3 320x240 grid=20x15x30 us=%u candidates=%u boxes=%u\r\n",
-             states[g_state], face_detect_detector_error_label(g_result), (unsigned)g_model_size,
-             (unsigned)g_last_us, (unsigned)g_candidates_count, (unsigned)g_box_count);
+             ai_model_runtime_state_label(g_runtime.state),
+             face_detect_detector_error_label(g_result), (unsigned)g_runtime.model_size,
+             (unsigned)g_runtime.last_inference_us, (unsigned)g_candidates_count,
+             (unsigned)g_box_count);
 }
