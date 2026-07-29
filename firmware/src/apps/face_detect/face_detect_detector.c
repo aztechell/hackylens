@@ -13,6 +13,7 @@
 #define FACE_H 240U
 #define FACE_PIXELS (FACE_W * FACE_H)
 #define FACE_INPUT_BYTES (FACE_PIXELS * 3U)
+#define FACE_INPUT_GUARD_BYTES FACE_W
 #define FACE_GRID_W 20U
 #define FACE_GRID_H 15U
 #define FACE_GRID_CELLS (FACE_GRID_W * FACE_GRID_H)
@@ -32,7 +33,11 @@ static uint32_t g_candidates_count;
 static face_detect_load_result_t g_result = FACE_DETECT_LOAD_FORMAT;
 /* DVP AI addresses are allocated by Canaan's iomem allocator in 256-byte
    blocks.  Preserve that hardware alignment for the static equivalent. */
-static uint8_t g_input[FACE_INPUT_BYTES] __attribute__((aligned(256)));
+/* The K210 DVP emits one final width-byte AI scanline after the configured
+   RGB planes. Keep that hardware line inside the owned buffer so adjacent
+   detector state in .bss cannot be overwritten. */
+static uint8_t g_input[FACE_INPUT_BYTES + FACE_INPUT_GUARD_BYTES]
+    __attribute__((aligned(256)));
 static face_candidate_t g_candidates[FACE_CANDIDATE_MAX];
 static face_detect_box_t g_boxes[FACE_DETECT_BOX_MAX];
 static uint8_t g_box_count;
