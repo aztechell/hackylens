@@ -92,6 +92,7 @@ There are three ways to install firmware:
 - [HLWF Desktop](https://github.com/aztechell/HLWF-desktop) — an offline Windows x64 flasher with package validation, progress reporting, and recovery support.
 - [HLWF](https://github.com/aztechell/HLWF) — a dependency-free browser uploader built on Web Serial.
 - `tools/hkflash.py` — the repository's Python flashing and debug tool, intended for development workflows.
+- `isp_stub/isp_prog_huskylens.bin` — the bundled display-aware K210 ISP stub used by `hkflash.py` by default.
 
 List detected serial adapters:
 

@@ -21,6 +21,8 @@ FLASH_ADDRESS = 0x000000
 STUB_ADDRESS = 0x80000000
 ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
+BUNDLED_HUSKYLENS_STUB = ROOT / "isp_stub" / "isp_prog_huskylens.bin"
+WORKSPACE_HUSKYLENS_STUB = WORKSPACE / "ISP_stub" / "isp_prog_huskylens.bin"
 LEGACY_DEPS = WORKSPACE / "hackylens-legacy" / "_deps"
 DEFAULT_STUB = ROOT / "_deps" / "isp_prog.bin"
 DEFAULT_HUSKYLENS_STUB = ROOT / "_deps" / "isp_prog_huskylens.bin"
@@ -770,13 +772,16 @@ def add_reset_args(parser: argparse.ArgumentParser) -> None:
 
 
 def add_flash_args(parser: argparse.ArgumentParser) -> None:
-    for candidate in (DEFAULT_HUSKYLENS_STUB, DEFAULT_STUB, LEGACY_HUSKYLENS_STUB, LEGACY_STUB):
+    for candidate in (BUNDLED_HUSKYLENS_STUB, WORKSPACE_HUSKYLENS_STUB,
+                      DEFAULT_HUSKYLENS_STUB,
+                      DEFAULT_STUB, LEGACY_HUSKYLENS_STUB, LEGACY_STUB):
         if candidate.is_file():
             default_stub = candidate
             break
     else:
         default_stub = DEFAULT_STUB
-    parser.add_argument("--isp-stub", default=str(default_stub), help="Path to extracted K210 ISP SRAM stub")
+    parser.add_argument("--isp-stub", default=str(default_stub),
+                        help="Path to the K210 ISP SRAM stub (bundled display stub by default)")
     parser.add_argument("--boot-baud", type=int, default=DEFAULT_BOOT_BAUD, help="BootROM UART baudrate")
     parser.add_argument("--flash-baud", type=int, default=DEFAULT_FLASH_BAUD, help="ISP flash UART baudrate")
     parser.add_argument("--flash-type", type=int, default=1, choices=[0, 1], help="0=in-chip SPI3, 1=on-board SPI0")
