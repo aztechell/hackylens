@@ -73,7 +73,8 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     if(!camera_service_preview_acquire(&service_frame))
         return 0;
     if(consumer)
-        consumer(service_frame.pixels, service_frame.width, service_frame.height, consumer_context);
+        consumer(service_frame.pixels, service_frame.width, service_frame.height,
+                 service_frame.sequence, consumer_context);
     view_frame.pixels = service_frame.pixels;
     view_frame.width = service_frame.width;
     view_frame.height = service_frame.height;
@@ -91,7 +92,8 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     }
     compose_finished_us = hal_time_us();
     if(overlay)
-        overlay(&present, service_frame.width, service_frame.height, overlay_context);
+        overlay(&present, service_frame.width, service_frame.height,
+                service_frame.sequence, overlay_context);
     camera_service_preview_release(&service_frame);
     if(!camera_view_present(&present))
         return 0;
@@ -112,14 +114,19 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
     uint8_t qr_mode = mode == CAMERA_RUNTIME_QR ? 1 : 0;
     uint8_t face_mode = mode == CAMERA_RUNTIME_FACE_DETECT ? 1 : 0;
     uint8_t apriltag_mode = mode == CAMERA_RUNTIME_APRILTAG ? 1 : 0;
+    uint8_t object_mode = mode == CAMERA_RUNTIME_OBJECT_DETECT ? 1 : 0;
     const char *init_title = qr_mode ? "QR INIT" :
-        (face_mode ? "FACE INIT" : (apriltag_mode ? "TAG INIT" : "CAMERA INIT"));
+        (face_mode ? "FACE INIT" : (apriltag_mode ? "TAG INIT" :
+         (object_mode ? "OBJECT INIT" : "CAMERA INIT")));
     const char *fail_title = qr_mode ? "QR FAIL" :
-        (face_mode ? "FACE FAIL" : (apriltag_mode ? "TAG FAIL" : "CAMERA FAIL"));
+        (face_mode ? "FACE FAIL" : (apriltag_mode ? "TAG FAIL" :
+         (object_mode ? "OBJECT FAIL" : "CAMERA FAIL")));
 
     hk_screen_set(qr_mode ? SCREEN_QR_CAMERA :
-                  (face_mode ? SCREEN_FACE_DETECT : (apriltag_mode ? SCREEN_APRILTAG : SCREEN_CAMERA)));
-    camera_service_set_qvga_mode(face_mode || apriltag_mode);
+                  (face_mode ? SCREEN_FACE_DETECT :
+                   (apriltag_mode ? SCREEN_APRILTAG :
+                    (object_mode ? SCREEN_OBJECT_DETECT : SCREEN_CAMERA))));
+    camera_service_set_qvga_mode(face_mode || apriltag_mode || object_mode);
     hk_back_exit_set_armed(0);
     camera_light_repeat_reset();
     camera_service_enter_begin(qr_mode, (button_state & BUTTON_OK) ? 1 : 0);

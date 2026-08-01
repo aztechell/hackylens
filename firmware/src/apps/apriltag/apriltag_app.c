@@ -19,6 +19,11 @@ void apriltag_enter(const hk_input_snapshot_t *input) { apriltag_controller_ente
 void apriltag_exit(void) { apriltag_controller_exit(); }
 void apriltag_tick(const hk_input_snapshot_t *input) { apriltag_controller_tick(input); }
 void apriltag_handle_buttons(const hk_input_snapshot_t *input) { apriltag_controller_handle_buttons(input); }
+void apriltag_background_tick(const hk_input_snapshot_t *input)
+{
+    (void)input;
+    apriltag_detector_service_tick();
+}
 
 uint8_t apriltag_handle_debug_command(const char *cmd)
 {

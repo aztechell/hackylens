@@ -624,14 +624,19 @@ def cmd_screenshot(args: argparse.Namespace) -> int:
 def cmd_uart_cmd(args: argparse.Namespace) -> int:
     serial = require_serial()
     port = resolve_port(args, serial)
+    commands = [line.strip() for line in args.command.splitlines() if line.strip()]
 
     with open_runtime_serial(serial, port, args.baud, timeout=0.1, dtr=args.runtime_dtr, rts=args.runtime_rts) as ser:
         if args.send_delay > 0:
             time.sleep(args.send_delay)
         clear_serial_buffers(ser)
-        print(f"[CMD] {args.command} on {port} @ {args.baud}")
-        ser.write((args.command.strip() + "\n").encode("ascii"))
-        ser.flush()
+        print(f"[CMD] {len(commands)} command(s) on {port} @ {args.baud}")
+        for index, command in enumerate(commands):
+            print(f"[CMD] > {command}")
+            ser.write((command + "\n").encode("ascii"))
+            ser.flush()
+            if index + 1 < len(commands) and args.line_delay > 0:
+                time.sleep(args.line_delay)
 
         deadline = time.monotonic() + args.duration
         while time.monotonic() < deadline:
@@ -826,6 +831,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmd.add_argument("--baud", type=int, default=DEFAULT_BOOT_BAUD, help="Firmware debug UART baudrate")
     p_cmd.add_argument("--duration", type=float, default=2.0, help="How long to print response lines")
     p_cmd.add_argument("--send-delay", type=float, default=0.0, help="Delay after opening UART before sending the command")
+    p_cmd.add_argument("--line-delay", type=float, default=0.0,
+                       help="Delay between newline-separated commands")
     p_cmd.add_argument("--runtime-dtr", action="store_true", help="Keep DTR high while opening the runtime UART")
     p_cmd.add_argument("--runtime-rts", action="store_true", help="Keep RTS high while opening the runtime UART")
     p_cmd.set_defaults(func=cmd_uart_cmd)

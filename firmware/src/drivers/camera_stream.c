@@ -34,6 +34,9 @@ static volatile uint32_t g_captured_count;
 static volatile uint32_t g_ready_drop_count;
 static volatile uint32_t g_busy_drop_count;
 static volatile uint32_t g_last_status;
+static camera_stream_convert_start_hook_t g_convert_start_hook;
+static camera_stream_convert_finish_hook_t g_convert_finish_hook;
+static void *g_convert_hook_context;
 
 static uint16_t *camera_stream_slot_uncached(uint8_t index)
 {
@@ -66,16 +69,21 @@ static void camera_stream_on_event(hal_dvp_event_t event, uint32_t status, void 
 
     if(event == HAL_DVP_EVENT_FRAME_FINISH)
     {
+        uint32_t sequence = 0U;
+
         slot = g_capture_slot;
         g_irq_finish_count++;
         if(slot >= 0 && g_slots[(uint8_t)slot].state == CAMERA_SLOT_CAPTURING)
         {
             __sync_synchronize();
-            g_slots[(uint8_t)slot].sequence = ++g_next_sequence;
+            sequence = ++g_next_sequence;
+            g_slots[(uint8_t)slot].sequence = sequence;
             g_slots[(uint8_t)slot].state = CAMERA_SLOT_READY;
             g_capture_slot = -1;
             g_captured_count++;
         }
+        if(sequence && g_convert_finish_hook)
+            g_convert_finish_hook(sequence, g_convert_hook_context);
         return;
     }
 
@@ -100,6 +108,8 @@ static void camera_stream_on_event(hal_dvp_event_t event, uint32_t status, void 
     g_capture_slot = slot;
     __sync_synchronize();
     hal_dvp_set_display_addr((uint32_t)(uintptr_t)camera_stream_slot_uncached((uint8_t)slot));
+    if(g_convert_start_hook)
+        g_convert_start_hook(g_convert_hook_context);
     hal_dvp_start_convert();
     g_convert_count++;
 }
@@ -307,4 +317,34 @@ void camera_stream_status(camera_stream_status_t *status)
     status->last_status = g_last_status;
     status->last_sequence = g_next_sequence;
     hal_dvp_irq_unmask();
+}
+
+void camera_stream_set_convert_hooks(
+    camera_stream_convert_start_hook_t start,
+    camera_stream_convert_finish_hook_t finish,
+    void *context)
+{
+    if(g_running)
+        hal_dvp_irq_mask();
+    g_convert_start_hook = start;
+    g_convert_finish_hook = finish;
+    g_convert_hook_context = context;
+    __sync_synchronize();
+    if(g_running)
+        hal_dvp_irq_unmask();
+}
+
+void camera_stream_clear_convert_hooks(void *context)
+{
+    if(g_running)
+        hal_dvp_irq_mask();
+    if(!context || context == g_convert_hook_context)
+    {
+        g_convert_start_hook = NULL;
+        g_convert_finish_hook = NULL;
+        g_convert_hook_context = NULL;
+        __sync_synchronize();
+    }
+    if(g_running)
+        hal_dvp_irq_unmask();
 }

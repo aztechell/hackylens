@@ -26,6 +26,8 @@ const char *screen_label(screen_t screen)
         return "FACE-DETECT";
     if(screen == SCREEN_APRILTAG)
         return "APRILTAG";
+    if(screen == SCREEN_OBJECT_DETECT)
+        return "OBJECT-DETECT";
     if(screen == SCREEN_CAMERA_SETTINGS)
         return "CAM-SETTINGS";
     if(screen == SCREEN_FILES)

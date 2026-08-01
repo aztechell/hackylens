@@ -70,7 +70,8 @@ Capability bits 0–3 mean UART, I2C, BLOCK, and ARROW.
 
 `RESULTS` starts with `frame_id:u32`, `source:u8`, `count:u8`, `width:u16`, and
 `height:u16`. Source `0` is no active result, `1` is face detection, `2` is QR,
-and `255` is reserved for user algorithms.
+`3` is AprilTag, `4` is VOC20 object detection, and `255` is reserved for user
+algorithms.
 
 Each result is a fixed 16-byte item:
 
@@ -89,4 +90,6 @@ Each result is a fixed 16-byte item:
 For a BLOCK, `(x0,y0)` and `(x1,y1)` are the top-left and bottom-right corners.
 For an ARROW they are the start and end points. Coordinates use the `width` by
 `height` source canvas returned in the same message. FACE DETECT currently
-publishes up to eight BLOCK items and clears them on app exit.
+publishes up to eight BLOCK items and clears them on app exit. APRILTAG uses
+the native tag ID. OBJECT DETECT uses the VOC20 class ID `0..19` and reports
+confidence on the existing `0..1000` scale; the item layout is unchanged.

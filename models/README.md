@@ -1,35 +1,46 @@
 # HackyLens AI model lab
 
-This directory defines the reproducible boundary between a source neural network
-and firmware that can execute it on the K210.
+This directory contains machine-readable model contracts. The SD-ready assets
+live in `sdcard/hackylens.kmodels/`; generated build artifacts stay under
+ignored `dist/`.
 
-`tools/ai_model.py` has four workflows:
+`tools/ai_model.py` supports five main workflows:
 
-- `inspect` identifies native KModel v3, 32-bit word-swapped images extracted
-  from the original HUSKYLENS package, nncase containers, and the original
-  `object_detect.bin` data store.
-- `convert` invokes the pinned legacy `ncc` compiler with an explicit
-  calibration directory and then packages the result.
-- `package` validates tensor sizes and emits an SD-ready `model.kmodel`,
-  `manifest.hkai`, human-readable `manifest.json`, and optional `labels.txt`.
-- `verify` checks manifest CRC, model CRC, KModel contract, output sizes, and
-  label count without requiring the device.
+- `inspect` identifies native KModel v3, word-swapped images, nncase
+  containers, and the original HUSKYLENS legacy KPU object model;
+- `fetch` downloads a spec-pinned HTTPS asset, verifies byte size and SHA-256,
+  and packages it;
+- `package` validates a local native KModel v3 against a spec;
+- `verify` checks the binary and JSON manifests, model CRC/SHA, outputs, and
+  labels;
+- `convert` invokes the pinned legacy compiler and packages its result.
 
-The binary `manifest.hkai` is exactly 256 bytes and is parsed by
-`ai_model_storage`. It records the model ID and CRC, KModel v3 header contract,
-input shape/type/layout/normalization, output byte sizes, post-processing type,
-and label metadata. Feature apps still own preprocessing and post-processing;
-the shared runtime owns only model validation, KPU execution, and lifecycle.
-The declared input byte count may exceed the logical tensor payload because
-K210 first-layer DMA uses channel/row padding; the inspector reports that exact
-hardware byte count.
+The binary `manifest.hkai` is exactly 256 bytes. It records the model ID and
+CRC, KModel v3 contract, input metadata, output byte sizes, post-processing
+type, and label count. `manifest.json` retains richer audit metadata including
+SHA-256, upstream provenance, output shapes, and post-processing parameters.
+Feature apps own preprocessing/decoding; the shared runtime owns validation,
+KPU execution, and lifecycle.
+
+## Reproduce the VOC20 package
+
+```powershell
+python tools\ai_model.py fetch `
+  --spec models\object_detect_voc20.json `
+  --out-dir sdcard\hackylens.kmodels\object20
+
+python tools\ai_model.py verify sdcard\hackylens.kmodels\object20 `
+  --spec models\object_detect_voc20.json
+```
+
+The spec pins the official Kendryte nncase rc5 example by URL, commit, size,
+and SHA-256. It also records the `10x7` grid, five anchors, VOC20 label order,
+and default thresholds used by firmware.
 
 ## Conversion
 
-The locked compiler is Kendryte nncase `v0.1.0-rc5`. Run its Linux build in a
-container or WSL; do not silently substitute a modern K230 compiler. The
-workflow deliberately requests the legacy `k210model` output rather than a
-newer nncase container.
+The locked compiler is Kendryte nncase `v0.1.0-rc5`. Its downloadable binary is
+Linux x86-64, so run bootstrap/conversion in Linux or WSL:
 
 ```text
 python tools/ai_model.py bootstrap
@@ -42,21 +53,18 @@ python tools/ai_model.py convert \
   --out-dir out/detector
 ```
 
-ONNX and Caffe are accepted as explicit legacy `ncc` frontends, but actual
-operator compatibility must be verified for each network. A successful
-conversion does not replace device measurements of KPU RAM, latency, accuracy,
-and output semantics.
+The wrapper uses the real flat rc5 CLI and requests legacy `k210model` output.
+Rc5 directly supports TFLite and Caffe, not ONNX. Modern nncase versions emit
+KModel v4 and are not interchangeable with the current firmware runtime.
 
-## Original package findings
+## Recovered original assets
 
-`unpacked/mobilenetv1_1.0.kmodel` is a 32-bit word-swapped KModel v3
-classifier: 34 layers, one 4,000-byte output, therefore 1,000 float scores. It
-does not produce bounding boxes. Normalize a research copy with:
+`unpacked/object_detect.bin` is a custom 16-layer legacy KPU task container,
+not a generic data store and not a native KModel v3. Its exact known profile is
+320x240 planar input and a quantized `125x7x10` VOC20 output. It requires the
+original private loader/dequantizer or a separately verified conversion.
 
-```text
-python tools/ai_model.py inspect unpacked/mobilenetv1_1.0.kmodel \
-  --normalize-out build/mobilenetv1.native.kmodel
-```
+`unpacked/mobilenetv1_1.0.kmodel` is a 224x224 classifier with 1,000 float
+scores; it cannot supply object bounding boxes.
 
-`unpacked/object_detect.bin` starts with the original data-store magic
-`12 34 56 78`; it is not a KModel and cannot be passed to the KPU runtime.
+See `docs/AI_MODELS.md` for the complete runtime, SD, and provenance contract.

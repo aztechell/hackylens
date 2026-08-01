@@ -102,10 +102,7 @@ static void debug_uart_send_camera_frame(void)
         debug_uart_send_bytes(src + offset, take);
         offset += take;
     }
-    camera_service_frame_snapshot_done(hk_screen_get() == SCREEN_CAMERA ||
-                                       hk_screen_get() == SCREEN_QR_CAMERA ||
-                                       hk_screen_get() == SCREEN_FACE_DETECT ||
-                                       hk_screen_get() == SCREEN_APRILTAG);
+    camera_service_frame_snapshot_done(camera_service_capture_ready());
 
     snprintf(footer, sizeof(footer), "\nHKFRAME END %08X\n", (unsigned)crc);
     debug_uart_send_text(footer);

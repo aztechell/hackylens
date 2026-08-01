@@ -27,5 +27,7 @@ ai_model_storage_result_t ai_model_storage_load(const char *directory_path,
 void ai_model_storage_free(uint8_t *buffer);
 ai_model_storage_result_t ai_model_storage_load_manifest(const char *manifest_path,
                                                          ai_model_manifest_t *manifest);
+ai_model_storage_result_t ai_model_storage_validate_labels(
+    const char *labels_path, uint16_t expected_count);
 
 #endif

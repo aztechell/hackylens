@@ -13,6 +13,7 @@
 #define AI_MANIFEST_BYTES 256U
 #define AI_MANIFEST_VERSION 1U
 #define AI_MANIFEST_CRC_OFFSET 12U
+#define AI_LABELS_MAX_BYTES 16384U
 
 static uint8_t mounted(void)
 {
@@ -131,4 +132,56 @@ ai_model_storage_result_t ai_model_storage_load_manifest(const char *manifest_pa
     copy_field(manifest->model_file, sizeof(manifest->model_file), raw + 116U, 64U);
     copy_field(manifest->labels_file, sizeof(manifest->labels_file), raw + 180U, 64U);
     return AI_MODEL_STORAGE_OK;
+}
+
+ai_model_storage_result_t ai_model_storage_validate_labels(
+    const char *labels_path, uint16_t expected_count)
+{
+    fat_file_entry_t entry;
+    uint8_t buffer[128];
+    uint32_t offset = 0U;
+    uint16_t count = 0U;
+    uint8_t have_text = 0U;
+
+    if(!labels_path || !labels_path[0] || !expected_count)
+        return AI_MODEL_STORAGE_MANIFEST;
+    if(!mounted())
+        return AI_MODEL_STORAGE_NO_SD;
+    if(file_path_find(labels_path, &entry) != FILE_PATH_OK ||
+       (entry.attr & FAT_ATTR_DIR))
+        return AI_MODEL_STORAGE_FILE;
+    if(!entry.size || entry.size > AI_LABELS_MAX_BYTES)
+        return AI_MODEL_STORAGE_MANIFEST;
+
+    while(offset < entry.size)
+    {
+        uint32_t remaining = entry.size - offset;
+        uint32_t chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
+
+        if(!fat_file_read_at(&entry, offset, buffer, chunk))
+            return AI_MODEL_STORAGE_READ;
+        for(uint32_t index = 0U; index < chunk; index++)
+        {
+            uint8_t value = buffer[index];
+
+            if(value == '\n')
+            {
+                if(!have_text || count == UINT16_MAX)
+                    return AI_MODEL_STORAGE_MANIFEST;
+                count++;
+                have_text = 0U;
+            }
+            else if(value != '\r')
+            {
+                if(value < 0x20U)
+                    return AI_MODEL_STORAGE_MANIFEST;
+                have_text = 1U;
+            }
+        }
+        offset += chunk;
+    }
+    if(have_text)
+        count++;
+    return count == expected_count ?
+           AI_MODEL_STORAGE_OK : AI_MODEL_STORAGE_MANIFEST;
 }

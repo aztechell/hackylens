@@ -8,6 +8,7 @@
 
 uint8_t apriltag_detector_init(void);
 void apriltag_detector_deinit(void);
+void apriltag_detector_service_tick(void);
 uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width, uint16_t height);
 void apriltag_detector_set_refine_edges(uint8_t enabled);
 const apriltag_result_t *apriltag_detector_results(uint8_t *count);

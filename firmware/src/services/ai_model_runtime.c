@@ -70,6 +70,8 @@ static uint8_t manifest_matches(const ai_model_descriptor_t *descriptor,
 {
     if(strcmp(descriptor->id, manifest->id) != 0 ||
        manifest->model_size != model_size || manifest->model_crc32 != model_crc32 ||
+       (descriptor->expected_model_crc32 &&
+        descriptor->expected_model_crc32 != model_crc32) ||
        !contract_equal(&descriptor->kmodel, &manifest->kmodel) ||
        manifest->input_rank != descriptor->input.rank ||
        manifest->input_element != descriptor->input.element ||
@@ -202,6 +204,9 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
                                     &runtime->model_crc32);
     if(storage != AI_MODEL_STORAGE_OK)
         return fail_load(runtime, storage_result(storage));
+    if(descriptor->expected_model_crc32 &&
+       runtime->model_crc32 != descriptor->expected_model_crc32)
+        return fail_load(runtime, AI_MODEL_RESULT_FORMAT);
 
     if(descriptor->manifest_path && descriptor->manifest_path[0])
     {
@@ -214,6 +219,13 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
         else if(!manifest_matches(descriptor, &manifest, runtime->model_size,
                                   runtime->model_crc32))
             return fail_load(runtime, AI_MODEL_RESULT_MANIFEST);
+    }
+    if(descriptor->labels_path && descriptor->labels_path[0])
+    {
+        storage = ai_model_storage_validate_labels(descriptor->labels_path,
+                                                   descriptor->label_count);
+        if(storage != AI_MODEL_STORAGE_OK)
+            return fail_load(runtime, storage_result(storage));
     }
 
     load_result = hal_kpu_model_load(runtime->model, runtime->model_size,

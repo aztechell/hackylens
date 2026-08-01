@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.1.0" src="https://img.shields.io/badge/firmware-v0.1.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.2.0" src="https://img.shields.io/badge/firmware-v0.2.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
@@ -24,6 +24,7 @@ Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN030
 - Live OV2640 camera preview with configurable capture and display settings
 - QR scanning powered by [quirc](https://github.com/dlbeer/quirc)
 - KPU-based face detection
+- KPU Tiny-YOLOv2 object detection with 20 Pascal VOC classes
 - Shared K210 AI-model runtime with validated SD manifests and conversion tools
 - FAT32 SD-card support, photo capture, screenshots, and an image viewer
 - On-device terminal with bounded history and scrolling
@@ -42,7 +43,14 @@ These 320 x 240 images were captured directly from a running HUSKYLENS over the 
 
 ## Included apps
 
-`TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `SLEEP`
+`TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `SLEEP`
+
+## SD models
+
+The tracked `sdcard/` directory mirrors the card root. Copy its contents onto
+a FAT32 card so `hackylens.kmodels` is at the root. It includes the FACE model
+and the verified VOC20 OBJECT package. See [AI models](docs/AI_MODELS.md) for
+the exact model contract and reproducible fetch/package command.
 
 ## Build
 
@@ -78,6 +86,10 @@ python tools\build_firmware.py full
 ```
 
 The firmware image is written to `build\hackylens.bin`. Packaged image metadata is written to `dist\`.
+
+Tagged releases are automated by `.github/workflows/release.yml`. A pushed
+`vX.Y.Z` tag must match `VERSION`; CI builds the full firmware and publishes a
+versioned binary, SD-card model bundle, metadata, and SHA-256 checksums.
 
 Apps can be excluded by repeating `--disable-app`:
 
@@ -133,6 +145,7 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 | `firmware/src/runtime` | Startup and the main loop |
 | `tools` | Dependency bootstrap, build, checks, flashing, and diagnostics |
 | `models` | Locked K210 conversion workflow and model descriptor specs |
+| `sdcard` | Files laid out exactly as they should appear on the FAT32 card |
 
 More detail is available in [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md), [AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and [RAM/flash budget](docs/RAM_BUDGET.md).
 

@@ -94,20 +94,24 @@ static void apriltag_display_refresh(void)
 static void apriltag_consume_frame(const volatile uint16_t *pixels,
                                    uint16_t width,
                                    uint16_t height,
+                                   uint32_t sequence,
                                    void *context)
 {
     (void)context;
+    (void)sequence;
     (void)apriltag_detector_submit(pixels, width, height);
 }
 
 static void apriltag_compose_overlay(camera_view_present_t *present,
                                      uint16_t width,
                                      uint16_t height,
+                                     uint32_t sequence,
                                      void *context)
 {
     uint8_t selected[APRILTAG_RESULT_MAX] = {0};
 
     (void)context;
+    (void)sequence;
     apriltag_display_refresh();
     apriltag_update_target(width, height);
     for(uint8_t i = 0U; i < g_display_count; i++)

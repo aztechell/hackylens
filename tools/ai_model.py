@@ -28,6 +28,7 @@ ELEMENT_IDS = {"u8": 0, "i8": 1, "f32": 2}
 LAYOUT_IDS = {"chw": 0, "hwc": 1, "flat": 2}
 NORMALIZATION_IDS = {"none": 0, "zero_to_one": 1, "negative_one_to_one": 2, "affine": 3}
 POSTPROCESS_IDS = {"raw": 0, "classification": 1, "yolo2": 2, "embedding": 3}
+HUSKY_OBJECT_SHA256 = "c6b34d98aafa94f6a5fa7c3429b0e6cf384e5f5d4769793da12d7e0267e86e26"
 
 
 class ModelError(ValueError):
@@ -149,11 +150,43 @@ def inspect_bytes(data: bytes) -> dict[str, Any]:
             "identifier_hex": data[:4].hex(),
         }
     if data[:4] == bytes.fromhex("12345678"):
-        return {
-            "format": "husky-object-data",
-            "byte_order": "big",
-            "note": "not a KModel; this is an original-firmware data store",
+        native = _word_swap32(data)
+        if len(native) < 64:
+            return {"format": "unknown", "byte_order": "unknown"}
+        magic, layers, table_offset, eight_bit_mode = struct.unpack_from("<4I", native)
+        output_scale, output_bias = struct.unpack_from("<2f", native, 16)
+        if magic != 0x12345678 or not layers or table_offset < 24 or \
+           table_offset + layers * 24 > len(native):
+            return {"format": "unknown", "byte_order": "unknown"}
+        result: dict[str, Any] = {
+            "format": "husky-legacy-kpu",
+            "byte_order": "word-swapped",
+            "magic": "12345678",
+            "layers_length": layers,
+            "descriptor_table_offset": table_offset,
+            "eight_bit_mode": eight_bit_mode,
+            "output_scale": output_scale,
+            "output_bias": output_bias,
+            "note": "legacy KPU task container; not a native KModel v3",
         }
+        if hashlib.sha256(data).hexdigest() == HUSKY_OBJECT_SHA256:
+            result.update({
+                "profile": "huskylens-object-detect-voc20",
+                "input_bytes": 230400,
+                "input_shape": [1, 3, 240, 320],
+                "outputs": [{
+                    "index": 0,
+                    "bytes": 8750,
+                    "shape": [1, 125, 7, 10],
+                    "element": "u8",
+                }],
+                "classes": 20,
+                "anchors": [
+                    1.889, 2.5245, 2.9465, 3.94056, 3.99987,
+                    5.3658, 5.155437, 6.92275, 6.718375, 9.01025,
+                ],
+            })
+        return result
     return {"format": "unknown", "byte_order": "unknown"}
 
 
@@ -255,6 +288,30 @@ def _validate_spec(spec: dict[str, Any], model_info: dict[str, Any]) -> dict[str
     if len(labels) > 65535:
         raise ModelError("too many labels")
     postprocess = str(spec.get("postprocess", "raw")).lower()
+    postprocess_config = spec.get("postprocess_config")
+    if postprocess_config is not None and not isinstance(postprocess_config, dict):
+        raise ModelError("postprocess_config must be an object")
+    if postprocess == "yolo2" and postprocess_config is not None:
+        grid = postprocess_config.get("grid")
+        anchors = postprocess_config.get("anchors")
+        output_shape = outputs[0].get("shape", [])
+        if not isinstance(grid, list) or len(grid) != 2 or any(
+                not isinstance(value, int) or value <= 0 for value in grid):
+            raise ModelError("YOLO2 grid must contain two positive integers")
+        if len(output_shape) != 4 or output_shape[2:] != [grid[1], grid[0]]:
+            raise ModelError("YOLO2 grid does not match the first output shape")
+        channels = output_shape[1]
+        values_per_anchor = len(labels) + 5
+        if not labels or channels % values_per_anchor:
+            raise ModelError("YOLO2 channels do not match label count")
+        anchor_count = channels // values_per_anchor
+        if not isinstance(anchors, list) or len(anchors) != anchor_count * 2 or any(
+                not isinstance(value, (int, float)) or value <= 0 for value in anchors):
+            raise ModelError("YOLO2 anchors do not match output channels")
+        for field in ("default_confidence", "default_nms"):
+            value = postprocess_config.get(field)
+            if not isinstance(value, (int, float)) or not 0.0 <= value <= 1.0:
+                raise ModelError(f"YOLO2 {field} must be between zero and one")
     normalization = str(input_tensor.get("normalization", "none")).lower()
     return {
         "id": model_id,
@@ -264,6 +321,7 @@ def _validate_spec(spec: dict[str, Any], model_info: dict[str, Any]) -> dict[str
         "output_bytes": output_bytes,
         "labels": labels,
         "postprocess": postprocess,
+        "postprocess_config": postprocess_config,
         "postprocess_id": _enum(POSTPROCESS_IDS, postprocess, "postprocess"),
         "normalization": normalization,
         "normalization_id": _enum(NORMALIZATION_IDS, normalization, "normalization"),
@@ -318,6 +376,18 @@ def _write_manifest(
 def package_model(spec_path: Path, model_path: Path, output_dir: Path, normalize: bool) -> Path:
     spec = _load_spec(spec_path)
     model_data = model_path.read_bytes()
+    upstream = spec.get("upstream")
+    if upstream is not None:
+        if not isinstance(upstream, dict):
+            raise ModelError("spec upstream must be an object")
+        expected_sha256 = str(upstream.get("sha256", "")).lower()
+        expected_bytes = upstream.get("bytes")
+        if expected_bytes is not None and len(model_data) != expected_bytes:
+            raise ModelError(
+                f"model size does not match pinned upstream ({expected_bytes})"
+            )
+        if expected_sha256 and hashlib.sha256(model_data).hexdigest() != expected_sha256:
+            raise ModelError("model SHA-256 does not match pinned upstream")
     model_info = inspect_bytes(model_data)
     if model_info.get("byte_order") == "word-swapped":
         if not normalize:
@@ -337,6 +407,10 @@ def package_model(spec_path: Path, model_path: Path, output_dir: Path, normalize
         (output_dir / labels_name).write_text(
             "".join(f"{label}\n" for label in validated["labels"]), encoding="utf-8", newline="\n"
         )
+    labels_sha256 = (
+        hashlib.sha256((output_dir / labels_name).read_bytes()).hexdigest()
+        if labels_name else None
+    )
     manifest = _write_manifest(validated, model_info, model_name, labels_name, model_data)
     (output_dir / "manifest.hkai").write_bytes(manifest)
     summary = {
@@ -347,11 +421,14 @@ def package_model(spec_path: Path, model_path: Path, output_dir: Path, normalize
         "model_crc32": f"{binascii.crc32(model_data) & 0xFFFFFFFF:08x}",
         "model_sha256": hashlib.sha256(model_data).hexdigest(),
         "labels_file": labels_name or None,
+        "labels_sha256": labels_sha256,
         "label_count": len(validated["labels"]),
         "input": validated["input"],
         "outputs": validated["outputs"],
         "normalization": validated["normalization"],
         "postprocess": validated["postprocess"],
+        "postprocess_config": validated["postprocess_config"],
+        "upstream": upstream,
         "kmodel": {key: model_info[key] for key in (
             "version", "flags", "arch", "layers_length", "max_start_address",
             "main_mem_usage", "output_count"
@@ -361,6 +438,40 @@ def package_model(spec_path: Path, model_path: Path, output_dir: Path, normalize
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
     )
     return output_dir
+
+
+def fetch_and_package(spec_path: Path, output_dir: Path) -> Path:
+    spec = _load_spec(spec_path)
+    upstream = spec.get("upstream")
+    if not isinstance(upstream, dict):
+        raise ModelError("spec upstream must be an object")
+    url = str(upstream.get("url", ""))
+    expected_sha256 = str(upstream.get("sha256", "")).lower()
+    expected_bytes = upstream.get("bytes")
+    if not url.startswith("https://"):
+        raise ModelError("upstream URL must use HTTPS")
+    if len(expected_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in expected_sha256):
+        raise ModelError("upstream SHA-256 must contain 64 lowercase hex digits")
+    if not isinstance(expected_bytes, int) or expected_bytes <= 0:
+        raise ModelError("upstream byte size must be a positive integer")
+
+    with tempfile.TemporaryDirectory(prefix="hackylens-model-") as temp:
+        downloaded = Path(temp) / "download.kmodel"
+        print(f"+ download {url}")
+        urllib.request.urlretrieve(url, downloaded)
+        data = downloaded.read_bytes()
+        if len(data) != expected_bytes:
+            raise ModelError(
+                f"upstream size mismatch: expected {expected_bytes}, got {len(data)}"
+            )
+        actual_sha256 = hashlib.sha256(data).hexdigest()
+        if actual_sha256 != expected_sha256:
+            raise ModelError(
+                f"upstream SHA-256 mismatch: expected {expected_sha256}, "
+                f"got {actual_sha256}"
+            )
+        return package_model(spec_path, downloaded, output_dir, False)
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:
@@ -398,7 +509,7 @@ def _read_manifest(path: Path) -> dict[str, Any]:
     }
 
 
-def verify_package(package_dir: Path) -> dict[str, Any]:
+def verify_package(package_dir: Path, spec_path: Path | None = None) -> dict[str, Any]:
     manifest = _read_manifest(package_dir / "manifest.hkai")
     model_path = package_dir / manifest["model_file"]
     model_data = model_path.read_bytes()
@@ -421,9 +532,50 @@ def verify_package(package_dir: Path) -> dict[str, Any]:
         if info["outputs"][index]["bytes"] != manifest["output_bytes"][index]:
             raise ModelError(f"output {index} size does not match manifest")
     if manifest["labels_file"]:
-        labels = (package_dir / manifest["labels_file"]).read_text(encoding="utf-8").splitlines()
+        labels_path = package_dir / manifest["labels_file"]
+        labels = labels_path.read_text(encoding="utf-8").splitlines()
         if len(labels) != manifest["label_count"]:
             raise ModelError("label count does not match manifest")
+    summary_path = package_dir / "manifest.json"
+    summary = None
+    if summary_path.is_file():
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        if summary.get("id") != manifest["id"]:
+            raise ModelError("JSON manifest model ID does not match binary manifest")
+        if summary.get("model_sha256") != hashlib.sha256(model_data).hexdigest():
+            raise ModelError("model SHA-256 does not match JSON manifest")
+        if manifest["labels_file"] and summary.get("labels_sha256") != hashlib.sha256(
+                labels_path.read_bytes()).hexdigest():
+            raise ModelError("labels SHA-256 does not match JSON manifest")
+    if spec_path is not None:
+        if summary is None:
+            raise ModelError("spec verification requires manifest.json")
+        spec = _load_spec(spec_path)
+        validated = _validate_spec(spec, info)
+        expected_shape = tuple(
+            validated["input"]["shape"] +
+            [0] * (4 - len(validated["input"]["shape"]))
+        )
+        if manifest["id"] != validated["id"] or \
+           manifest["input_shape"] != expected_shape or \
+           manifest["input_rank"] != len(validated["input"]["shape"]) or \
+           manifest["input_element"] != validated["input_element_id"] or \
+           manifest["input_layout"] != validated["input_layout_id"] or \
+           manifest["normalization"] != validated["normalization_id"] or \
+           manifest["postprocess"] != validated["postprocess_id"] or \
+           manifest["label_count"] != len(validated["labels"]):
+            raise ModelError("binary manifest does not match model spec")
+        if manifest["labels_file"] and labels != validated["labels"]:
+            raise ModelError("label order/content does not match model spec")
+        if summary.get("input") != validated["input"] or \
+           summary.get("outputs") != validated["outputs"] or \
+           summary.get("postprocess_config") != validated["postprocess_config"]:
+            raise ModelError("JSON tensor/postprocess metadata does not match model spec")
+        upstream = spec.get("upstream")
+        if isinstance(upstream, dict):
+            expected_sha256 = str(upstream.get("sha256", "")).lower()
+            if expected_sha256 and hashlib.sha256(model_data).hexdigest() != expected_sha256:
+                raise ModelError("package model does not match spec-pinned SHA-256")
     return {
         "id": manifest["id"],
         "model": str(model_path),
@@ -441,29 +593,23 @@ def convert_model(
     source_format: str,
     calibration: Path,
     output_model: Path,
+    channelwise_output: bool,
     extra_args: list[str],
 ) -> None:
     command = [
         str(ncc),
-        "compile",
-        str(source),
-        str(output_model),
         "-i",
         source_format,
         "-o",
         "k210model",
-        "-t",
-        "k210",
         "--dataset",
         str(calibration),
         "--inference-type",
         "uint8",
-        "--calibrate-method",
-        "l2",
-        "--max-allocator-solve-secs",
-        "60",
-        *extra_args,
     ]
+    if channelwise_output:
+        command.append("--channelwise-output")
+    command.extend([*extra_args, str(source), str(output_model)])
     print("+ " + " ".join(command))
     subprocess.run(command, check=True)
 
@@ -482,8 +628,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     package_parser.add_argument("--out-dir", required=True, type=Path)
     package_parser.add_argument("--normalize-word-swapped", action="store_true")
 
+    fetch_parser = sub.add_parser(
+        "fetch", help="download a spec-pinned upstream model and create its SD package"
+    )
+    fetch_parser.add_argument("--spec", required=True, type=Path)
+    fetch_parser.add_argument("--out-dir", required=True, type=Path)
+
     verify_parser = sub.add_parser("verify", help="verify an SD-ready model package")
     verify_parser.add_argument("package_dir", type=Path)
+    verify_parser.add_argument("--spec", type=Path)
 
     bootstrap_parser = sub.add_parser("bootstrap", help="download and verify pinned legacy ncc")
     bootstrap_parser.add_argument(
@@ -499,7 +652,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=ROOT / "_deps" / "nncase-v0.1.0-rc5" / "ncc",
     )
     convert_parser.add_argument("--source", required=True, type=Path)
-    convert_parser.add_argument("--format", required=True, choices=("tflite", "onnx", "caffe"))
+    convert_parser.add_argument("--format", required=True, choices=("tflite", "caffe"))
     convert_parser.add_argument("--calibration", required=True, type=Path)
     convert_parser.add_argument("--spec", required=True, type=Path)
     convert_parser.add_argument("--out-dir", required=True, type=Path)
@@ -527,22 +680,34 @@ def main(argv: list[str] | None = None) -> int:
             output = package_model(
                 args.spec, args.model, args.out_dir, args.normalize_word_swapped
             )
-            print(json.dumps(verify_package(output), indent=2, sort_keys=True))
+            print(json.dumps(verify_package(output, args.spec), indent=2, sort_keys=True))
+        elif args.command == "fetch":
+            output = fetch_and_package(args.spec, args.out_dir)
+            print(json.dumps(verify_package(output, args.spec), indent=2, sort_keys=True))
         elif args.command == "verify":
-            print(json.dumps(verify_package(args.package_dir), indent=2, sort_keys=True))
+            print(json.dumps(
+                verify_package(args.package_dir, args.spec),
+                indent=2, sort_keys=True
+            ))
         elif args.command == "bootstrap":
             print(bootstrap_toolchain(args.out_dir))
         elif args.command == "convert":
             args.out_dir.mkdir(parents=True, exist_ok=True)
+            spec = _load_spec(args.spec)
             with tempfile.TemporaryDirectory(prefix="hackylens-convert-") as temp:
                 converted = Path(temp) / "converted.kmodel"
                 convert_model(
                     args.ncc, args.source, args.format, args.calibration,
-                    converted, args.ncc_args
+                    converted, str(spec.get("postprocess", "")).lower() == "yolo2",
+                    args.ncc_args
                 )
                 package_model(args.spec, converted, args.out_dir, False)
-            print(json.dumps(verify_package(args.out_dir), indent=2, sort_keys=True))
-    except (OSError, ModelError, subprocess.CalledProcessError) as exc:
+            print(json.dumps(
+                verify_package(args.out_dir, args.spec),
+                indent=2, sort_keys=True
+            ))
+    except (OSError, ModelError, json.JSONDecodeError,
+            subprocess.CalledProcessError) as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
     return 0

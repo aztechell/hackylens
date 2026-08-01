@@ -9,9 +9,9 @@ is the shared producer/consumer boundary for fixed BLOCK/ARROW results. Physical
 pin and peripheral operations stay in board/HAL. See
 `docs/EXTERNAL_LINK_PROTOCOL.md` for the public wire contract.
 
-Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
+Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, OBJECT DETECT, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
-Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. Every `--disable-app <name>` omits the corresponding complete `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling APRILTAG omits its vendored detector core and TAG36H11 table. Shared camera sources are retained only while at least one camera consumer is enabled.
+Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. Every `--disable-app <name>` omits the corresponding complete `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling APRILTAG omits its vendored detector core, TAG36H11 table, and core-1 executor. Shared camera sources are retained only while at least one camera consumer is enabled; the shared planar AI input requires FACE or OBJECT.
 
 Key public interfaces:
 
@@ -21,7 +21,7 @@ Key public interfaces:
   feature APIs. See `docs/AI_MODELS.md` for the SD manifest and conversion lab.
 - `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for app metadata, stable autostart IDs, lookup, and screen model. Registry enumeration is the only source of enabled autostart choices; SETTINGS and SLEEP have no autostart ID.
 - `apps/camera/camera_app.h`, `apps/qr_camera/qr_camera_app.h`, `apps/files/files_app.h`, `apps/buttons/buttons_app.h`, `apps/settings/settings_app.h`, and `apps/sleep/sleep_app.h` are the sole public contracts for the newly isolated modules. Their private controllers, adapters, decoders, views, and configuration are not shared APIs.
-- `controllers/settings_menu_controller.h` for reusable instance-based settings menus. Owners supply item descriptors and callbacks; the component owns navigation, edit/cycle interaction, static or dynamic choices, partial redraw, repeat, and commit notification but never persistence or application lifecycle. CAMERA, QR, APRILTAG, and system SETTINGS are current consumers.
+- `controllers/settings_menu_controller.h` for reusable instance-based settings menus. Owners supply item descriptors and callbacks; the component owns navigation, edit/cycle interaction, static or dynamic choices, partial redraw, repeat, and commit notification but never persistence or application lifecycle. CAMERA, QR, APRILTAG, OBJECT DETECT, and system SETTINGS are current consumers.
 - `core/pixel_source.h` for a neutral pixel-reader contract.
 - `runtime/hk_main.h` and `runtime/firmware_startup.h` for the platform loop and startup composition.
 - `services/settings_persistence.h` and `services/settings_lights.h` for settings load and application.
@@ -30,8 +30,10 @@ Key public interfaces:
 - `drivers/camera_stream.h` for the IRQ-driven two-slot camera stream and its explicit frame-lease contract; SDK interrupt details remain private to `hal/hal_dvp.c`.
 - `apps/face_detect/face_detect_app.h` is the sole public FACE DETECT interface; its private YOLO decoder, controller, DVP adapter, view, configuration, and types remain inside the module. The KPU model is read from `/hackylens.kmodels/detect.kmodel` through the shared AI runtime.
 - `apps/apriltag/apriltag_app.h` is the sole public APRILTAG interface. The module detects TAG36H11 markers on a core-1 worker, reports native IDs `0..586`, and owns its hold-OK settings lifecycle and descriptor adapter, central selection crosshair, persistent selected-ID bitmap, and `ALL/SELECTED` publication filter. Unselected blocks are green and selected IDs are yellow; the numeric ID stays inside each block.
-- `services/camera_session_preferences.h` supplies optional per-session FPS and LED/RGB overrides. APRILTAG uses it for independent values; CAMERA and QR continue to read their normal persisted profile after the override is cleared.
-- Settings storage v3 keeps the fixed opaque 80-byte app block and appends one autostart ID byte. The loader accepts v1/v2, defaults their autostart to OFF, and preserves CAMERA, external-link, and APRILTAG data.
+- `apps/object_detect/object_detect_app.h` is the sole public OBJECT DETECT interface. The module owns VOC20 decoding, class labels, overlays, settings, persistence, and diagnostics. Its SD package is `/hackylens.kmodels/object20/`.
+- `services/camera_ai_input.h` owns the single aligned planar DVP/KPU input and exact frame-boundary handoff shared by FACE and OBJECT. `services/core1_executor.h` owns APRILTAG's reusable core-1 job slot.
+- `services/camera_session_preferences.h` supplies optional per-session FPS and LED/RGB overrides. APRILTAG and OBJECT use independent values; CAMERA and QR continue to read their normal persisted profile after the override is cleared.
+- Settings storage v4 keeps APRILTAG's original 80-byte app block, appends eight OBJECT bytes, and retains the autostart ID. The loader accepts v1/v2/v3 and preserves all previous settings.
 - `drivers/hk_lcd.h` for the synchronous full-frame RGB565-BE surface lease; UI composes into the existing LCD shadow before a single driver-owned SPI present.
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
 - `storage/file_mount.h` and `storage/file_dir_scan.h` for neutral FAT mount and directory queries. Browser lists and image viewing are private FILES APIs.

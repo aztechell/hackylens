@@ -17,10 +17,14 @@
 #define APRILTAG_DATA_GREEN 4U
 #define APRILTAG_DATA_BLUE 5U
 #define APRILTAG_DATA_SELECTED 6U
+#define APRILTAG_DATA_BYTES (APRILTAG_DATA_SELECTED + APRILTAG_SELECTED_BYTES)
 
 #define APRILTAG_FLAG_REFINE 0x01U
 #define APRILTAG_FLAG_SELECTED_OUTPUT 0x02U
 #define APRILTAG_FLAG_FPS 0x04U
+
+_Static_assert(APRILTAG_DATA_BYTES <= SETTINGS_APP_DATA_V2_SIZE,
+               "APRILTAG settings overlap another app-data partition");
 
 static apriltag_preferences_t g_preferences;
 static uint8_t g_selected[APRILTAG_SELECTED_BYTES];
@@ -46,8 +50,10 @@ static void apriltag_settings_defaults(void)
 
 static void apriltag_settings_save(void)
 {
-    uint8_t data[SETTINGS_APP_DATA_SIZE] = {0};
+    uint8_t data[SETTINGS_APP_DATA_SIZE];
 
+    settings_app_data_read(data);
+    memset(data, 0, APRILTAG_DATA_BYTES);
     data[APRILTAG_DATA_SCHEMA] = APRILTAG_SETTINGS_SCHEMA;
     data[APRILTAG_DATA_FLAGS] =
         (g_preferences.refine_edges ? APRILTAG_FLAG_REFINE : 0U) |

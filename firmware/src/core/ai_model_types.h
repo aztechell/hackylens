@@ -73,6 +73,7 @@ typedef struct
     const char *manifest_path;
     const char *labels_path;
     uint32_t max_model_bytes;
+    uint32_t expected_model_crc32;
     uint32_t unload_timeout_us;
     ai_model_kmodel_contract_t kmodel;
     ai_model_tensor_t input;

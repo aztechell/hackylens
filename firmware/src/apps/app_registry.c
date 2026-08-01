@@ -21,6 +21,9 @@
 #if HK_ENABLE_APP_APRILTAG
 #include "apriltag/apriltag_app.h"
 #endif
+#if HK_ENABLE_APP_OBJECT_DETECT
+#include "object_detect/object_detect_app.h"
+#endif
 #if HK_ENABLE_APP_FILES
 #include "files/files_app.h"
 #endif
@@ -50,6 +53,7 @@ const hk_app_t g_menu_items[] = {
      .enter = camera_enter, .exit = camera_exit, .tick = camera_tick,
      .handle_input = camera_handle_buttons, .owns_screen = camera_owns_screen,
      .draw_icon = camera_draw_icon, .blocks_sd_poll = 1U,
+     .tick_interval_ms = 1U,
      .handle_debug_command = camera_handle_debug_command,
      .debug_help = g_camera_debug_help},
 #endif
@@ -59,6 +63,7 @@ const hk_app_t g_menu_items[] = {
      .enter = qr_camera_enter, .exit = qr_camera_exit, .tick = qr_camera_tick,
      .handle_input = qr_camera_handle_buttons, .owns_screen = qr_camera_owns_screen,
      .draw_icon = qr_camera_draw_icon, .blocks_sd_poll = 1U,
+     .tick_interval_ms = 1U,
      .handle_debug_command = qr_camera_handle_debug_command,
      .debug_help = g_qr_camera_debug_help},
 #endif
@@ -68,6 +73,7 @@ const hk_app_t g_menu_items[] = {
      .enter = face_detect_enter, .exit = face_detect_exit, .tick = face_detect_tick,
      .handle_input = face_detect_handle_buttons, .draw_icon = face_detect_draw_icon,
      .background_tick = face_detect_background_tick, .blocks_sd_poll = 1U,
+     .tick_interval_ms = 1U,
      .handle_debug_command = face_detect_handle_debug_command,
      .debug_help = g_face_detect_debug_help},
 #endif
@@ -76,8 +82,23 @@ const hk_app_t g_menu_items[] = {
      .autostart_id = HK_AUTOSTART_APRILTAG,
      .enter = apriltag_enter, .exit = apriltag_exit, .tick = apriltag_tick,
      .handle_input = apriltag_handle_buttons, .draw_icon = apriltag_draw_icon,
+     .background_tick = apriltag_background_tick,
+     .tick_interval_ms = 1U,
      .handle_debug_command = apriltag_handle_debug_command,
      .debug_help = g_apriltag_debug_help},
+#endif
+#if HK_ENABLE_APP_OBJECT_DETECT
+    {.id = "object_detect", .title = "OBJECT DETECT",
+     .screen = SCREEN_OBJECT_DETECT,
+     .autostart_id = HK_AUTOSTART_OBJECT_DETECT,
+     .enter = object_detect_enter, .exit = object_detect_exit,
+     .tick = object_detect_tick,
+     .handle_input = object_detect_handle_buttons,
+     .draw_icon = object_detect_draw_icon,
+     .background_tick = object_detect_background_tick,
+     .blocks_sd_poll = 1U, .tick_interval_ms = 1U,
+     .handle_debug_command = object_detect_handle_debug_command,
+     .debug_help = g_object_detect_debug_help},
 #endif
 #if HK_ENABLE_APP_FILES
     {.id = "files", .title = "FILES", .screen = SCREEN_FILES,

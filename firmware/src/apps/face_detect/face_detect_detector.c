@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../hal/hal_dvp.h"
 #include "../../services/ai_model_runtime.h"
+#include "../../services/camera_ai_input.h"
 #include "face_detect_config.h"
 
 /* Exact tensor contract of kendryte-standalone-demo/face_detect/detect.kmodel. */
@@ -13,7 +13,6 @@
 #define FACE_H 240U
 #define FACE_PIXELS (FACE_W * FACE_H)
 #define FACE_INPUT_BYTES (FACE_PIXELS * 3U)
-#define FACE_INPUT_GUARD_BYTES FACE_W
 #define FACE_GRID_W 20U
 #define FACE_GRID_H 15U
 #define FACE_GRID_CELLS (FACE_GRID_W * FACE_GRID_H)
@@ -31,13 +30,6 @@ static ai_model_runtime_t g_runtime;
 static uint8_t g_runtime_initialized;
 static uint32_t g_candidates_count;
 static face_detect_load_result_t g_result = FACE_DETECT_LOAD_FORMAT;
-/* DVP AI addresses are allocated by Canaan's iomem allocator in 256-byte
-   blocks.  Preserve that hardware alignment for the static equivalent. */
-/* The K210 DVP emits one final width-byte AI scanline after the configured
-   RGB planes. Keep that hardware line inside the owned buffer so adjacent
-   detector state in .bss cannot be overwritten. */
-static uint8_t g_input[FACE_INPUT_BYTES + FACE_INPUT_GUARD_BYTES]
-    __attribute__((aligned(256)));
 static face_candidate_t g_candidates[FACE_CANDIDATE_MAX];
 static face_detect_box_t g_boxes[FACE_DETECT_BOX_MAX];
 static uint8_t g_box_count;
@@ -85,14 +77,6 @@ static const ai_model_descriptor_t g_model_descriptor = {
     .output_count = 1U,
     .manifest_required = 0U,
 };
-
-static uint8_t *face_input_uncached(void)
-{
-    uintptr_t address = (uintptr_t)g_input;
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (uint8_t *)address;
-}
 
 static float sigmoidf_fast(float value) { return 1.0f / (1.0f + expf(-value)); }
 
@@ -196,16 +180,17 @@ static void finish_inference(void)
         return;
     if(ai_model_runtime_get_output(&g_runtime, 0U, &output, &bytes) == 0)
         decode_output((const float *)output, bytes);
+    else
+        g_result = FACE_DETECT_LOAD_KPU;
     /* Keep the DVP's RGB planes immutable while KPU uses them, then arm it
        for the next completed camera frame. */
-    hal_dvp_output_ai(1);
+    camera_ai_input_arm(&g_runtime);
 }
 
 static void reset_detection_state(void)
 {
     g_candidates_count = 0;
     g_box_count = 0;
-    memset(g_input, 0, sizeof(g_input));
     memset(g_candidates, 0, sizeof(g_candidates));
     memset(g_boxes, 0, sizeof(g_boxes));
 }
@@ -225,6 +210,7 @@ static face_detect_load_result_t face_result(ai_model_result_t result)
         case AI_MODEL_RESULT_DESCRIPTOR:
         case AI_MODEL_RESULT_FORMAT:
         case AI_MODEL_RESULT_OUTPUT: return FACE_DETECT_LOAD_FORMAT;
+        case AI_MODEL_RESULT_BUSY: return FACE_DETECT_LOAD_BUSY;
         default: return FACE_DETECT_LOAD_KPU;
     }
 }
@@ -239,11 +225,25 @@ face_detect_load_result_t face_detect_detector_load(void)
         g_runtime_initialized = 1U;
     }
     ai_model_runtime_tick(&g_runtime);
+    if(g_runtime.state != AI_MODEL_STATE_UNLOADED)
+    {
+        g_result = g_runtime.state == AI_MODEL_STATE_FAULT ?
+                   FACE_DETECT_LOAD_KPU : FACE_DETECT_LOAD_BUSY;
+        return g_result;
+    }
     reset_detection_state();
+    if(!camera_ai_input_acquire(&g_runtime, FACE_W, FACE_H, FACE_INPUT_BYTES))
+    {
+        g_result = FACE_DETECT_LOAD_BUSY;
+        return g_result;
+    }
     result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
     g_result = face_result(result);
     if(result != AI_MODEL_RESULT_OK)
+    {
+        camera_ai_input_release(&g_runtime);
         return g_result;
+    }
     printf("[FACE] KPU-V3 model=%08X align=%u bytes=%u input=%u, 320x240 YOLO\r\n",
            (unsigned)(uintptr_t)g_runtime.model,
            (unsigned)((uintptr_t)g_runtime.model & 255U),
@@ -253,7 +253,7 @@ face_detect_load_result_t face_detect_detector_load(void)
 
 void face_detect_detector_unload(void)
 {
-    hal_dvp_output_ai(0);
+    camera_ai_input_cancel(&g_runtime);
     ai_model_runtime_request_unload(&g_runtime);
 }
 
@@ -261,6 +261,8 @@ void face_detect_detector_service_tick(void)
 {
     ai_model_state_t before = g_runtime.state;
     ai_model_runtime_tick(&g_runtime);
+    if(g_runtime.state == AI_MODEL_STATE_UNLOADED)
+        camera_ai_input_release(&g_runtime);
     if(before == AI_MODEL_STATE_UNLOAD_PENDING &&
        g_runtime.state == AI_MODEL_STATE_FAULT)
     {
@@ -274,21 +276,21 @@ uint8_t face_detect_detector_ready(void)
     return g_result == FACE_DETECT_LOAD_OK && ai_model_runtime_loaded(&g_runtime);
 }
 
+face_detect_load_result_t face_detect_detector_result(void)
+{
+    return g_result;
+}
+
 void face_detect_detector_attach_camera(void)
 {
-    uint8_t *input = face_input_uncached();
-
-    /* This is the exact path from Canaan's face_detect demo: DVP writes its
-       native planar R8/G8/B8 frame directly into the KPU input buffer. */
-    hal_dvp_set_ai_rgb888((uint32_t)(uintptr_t)input,
-                          (uint32_t)(uintptr_t)(input + FACE_PIXELS),
-                          (uint32_t)(uintptr_t)(input + FACE_PIXELS * 2U));
+    (void)camera_ai_input_attach(&g_runtime);
 }
 
 void face_detect_detector_process_frame(void)
 {
-    uint8_t *input = face_input_uncached();
+    uint8_t *input = camera_ai_input_data(&g_runtime);
     uint8_t inference_finished;
+    uint32_t sequence;
     if(!face_detect_detector_ready())
         return;
     inference_finished = g_runtime.completion_pending;
@@ -297,13 +299,16 @@ void face_detect_detector_process_frame(void)
        for the following frame after re-arming DVP above. */
     if(inference_finished || ai_model_runtime_busy(&g_runtime))
         return;
-    hal_dvp_output_ai(0);
+    if(!camera_ai_input_take(&g_runtime, &sequence))
+        return;
+    (void)sequence;
     if(g_runtime.run_count == 0U)
         printf("[FACE] kpu start input=%08X bytes=%u\r\n",
                (unsigned)(uintptr_t)input, (unsigned)g_runtime.input_dma_bytes);
     if(!ai_model_runtime_run(&g_runtime, input))
     {
-        hal_dvp_output_ai(1);
+        camera_ai_input_arm(&g_runtime);
+        g_result = FACE_DETECT_LOAD_KPU;
         printf("[FACE] kpu start failed\r\n");
     }
 }
@@ -316,8 +321,11 @@ const face_detect_box_t *face_detect_detector_boxes(uint8_t *count)
 
 const char *face_detect_detector_error_label(face_detect_load_result_t result)
 {
-    static const char *labels[] = {"NONE", "NO SD", "MODEL DIR", "MODEL FILE", "MODEL READ", "MODEL ALLOC", "MODEL FORMAT", "MODEL LOAD"};
-    return result <= FACE_DETECT_LOAD_KPU ? labels[result] : "MODEL LOAD";
+    static const char *labels[] = {
+        "NONE", "NO SD", "MODEL DIR", "MODEL FILE", "MODEL READ",
+        "MODEL ALLOC", "MODEL FORMAT", "MODEL LOAD", "AI BUSY"
+    };
+    return result <= FACE_DETECT_LOAD_BUSY ? labels[result] : "MODEL LOAD";
 }
 
 void face_detect_detector_format_info(char *line, size_t line_size)

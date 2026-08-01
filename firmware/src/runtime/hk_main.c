@@ -27,6 +27,7 @@ int hk_main(void)
     {
         const hk_app_t *app;
         hk_input_snapshot_t input;
+        uint8_t tick_interval_ms;
 
         if(s_hooks.debug_tick)
             s_hooks.debug_tick();
@@ -43,8 +44,10 @@ int hk_main(void)
             app->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
-        hal_sleep_ms((hk_screen_get() == SCREEN_CAMERA || hk_screen_get() == SCREEN_QR_CAMERA ||
-                      hk_screen_get() == SCREEN_FACE_DETECT || hk_screen_get() == SCREEN_APRILTAG) ? 1 : 20);
+        app = hk_app_for_screen(hk_screen_get());
+        tick_interval_ms = app && app->screen == hk_screen_get() && app->tick_interval_ms ?
+                           app->tick_interval_ms : 20U;
+        hal_sleep_ms(tick_interval_ms);
     }
 
     return 0;

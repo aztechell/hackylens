@@ -37,7 +37,7 @@ typedef struct
     uint32_t crc32;
 } settings_record_t;
 
-_Static_assert(sizeof(settings_payload_t) == 97U, "settings v3 payload layout changed");
-_Static_assert(sizeof(settings_record_t) == 116U, "settings v3 record layout changed");
+_Static_assert(sizeof(settings_payload_t) == 105U, "settings v4 payload layout changed");
+_Static_assert(sizeof(settings_record_t) == 124U, "settings v4 record layout changed");
 
 #endif

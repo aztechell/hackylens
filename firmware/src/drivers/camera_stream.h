@@ -35,6 +35,10 @@ typedef struct
     uint32_t last_sequence;
 } camera_stream_status_t;
 
+typedef void (*camera_stream_convert_start_hook_t)(void *context);
+typedef void (*camera_stream_convert_finish_hook_t)(uint32_t sequence,
+                                                    void *context);
+
 uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst);
 void camera_stream_stop(void);
 void camera_stream_pause(void);
@@ -44,5 +48,10 @@ void camera_stream_release(uint32_t lease_id);
 uint8_t camera_stream_have_frame(void);
 uint32_t camera_stream_frame_bytes(void);
 void camera_stream_status(camera_stream_status_t *status);
+void camera_stream_set_convert_hooks(
+    camera_stream_convert_start_hook_t start,
+    camera_stream_convert_finish_hook_t finish,
+    void *context);
+void camera_stream_clear_convert_hooks(void *context);
 
 #endif

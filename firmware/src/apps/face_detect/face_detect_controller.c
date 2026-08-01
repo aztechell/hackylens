@@ -14,21 +14,43 @@
 #include "face_detect_view.h"
 
 static uint8_t g_error;
+static uint8_t g_loading;
 
-void face_detect_controller_enter(const hk_input_snapshot_t *input)
+static void face_detect_start(const hk_input_snapshot_t *input)
 {
     face_detect_load_result_t result = face_detect_detector_load();
+
+    if(result == FACE_DETECT_LOAD_BUSY)
+    {
+        if(!g_loading)
+            camera_status_view_draw("FACE WAIT", "AI BUSY");
+        g_loading = 1U;
+        g_error = 0U;
+        return;
+    }
+    g_loading = 0U;
     g_error = result != FACE_DETECT_LOAD_OK;
     if(g_error)
     {
         vision_result_clear(VISION_SOURCE_FACE);
         hk_screen_set(SCREEN_FACE_DETECT);
-        camera_status_view_draw("FACE ERROR", face_detect_detector_error_label(result));
-        printf("[FACE] load %s\r\n", face_detect_detector_error_label(result));
+        camera_status_view_draw("FACE ERROR",
+                                face_detect_detector_error_label(result));
+        printf("[FACE] load %s\r\n",
+               face_detect_detector_error_label(result));
         return;
     }
     camera_runtime_enter(CAMERA_RUNTIME_FACE_DETECT, input);
     face_detect_detector_attach_camera();
+}
+
+void face_detect_controller_enter(const hk_input_snapshot_t *input)
+{
+    g_error = 0U;
+    g_loading = 0U;
+    hk_screen_set(SCREEN_FACE_DETECT);
+    camera_status_view_draw("FACE LOAD", "DETECT MODEL");
+    face_detect_start(input);
 }
 
 void face_detect_controller_exit(void)
@@ -37,6 +59,7 @@ void face_detect_controller_exit(void)
     camera_stop();
     camera_service_clear_mode();
     face_detect_detector_unload();
+    g_loading = 0U;
 }
 
 void face_detect_controller_tick(const hk_input_snapshot_t *input)
@@ -47,9 +70,26 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
     uint8_t count;
     vision_result_item_t items[FACE_DETECT_BOX_MAX];
 
+    if(g_loading)
+    {
+        face_detect_start(input);
+        return;
+    }
     if(g_error || !camera_runtime_tick(input))
         return;
     face_detect_detector_process_frame();
+    if(!face_detect_detector_ready())
+    {
+        g_error = 1U;
+        vision_result_clear(VISION_SOURCE_FACE);
+        camera_stop();
+        camera_service_clear_mode();
+        face_detect_detector_unload();
+        camera_status_view_draw(
+            "FACE ERROR",
+            face_detect_detector_error_label(face_detect_detector_result()));
+        return;
+    }
     boxes = face_detect_detector_boxes(&count);
     camera_service_frame_info(&width, &height);
     for(uint8_t i = 0U; i < count; i++)
@@ -70,7 +110,7 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
 
 void face_detect_controller_handle_buttons(const hk_input_snapshot_t *input)
 {
-    if(g_error)
+    if(g_error || g_loading)
     {
         if(input && (input->pressed & BUTTON_BACK))
             shell_show_menu();

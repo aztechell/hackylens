@@ -26,6 +26,8 @@ ISP_STUB = DEPS / "isp_prog.bin"
 
 SDK_REPO = "https://github.com/kendryte/kendryte-standalone-sdk"
 KFLASH_REPO = "https://github.com/sipeed/kflash.py"
+SDK_REVISION = "02576ba67e8797444f3ee3f34c625b5ed048e707"
+KFLASH_REVISION = "550828c768b16ef329695d3f5eace3f6bcf14af2"
 TOOLCHAIN_URL = (
     "https://github.com/kendryte/kendryte-gnu-toolchain/releases/download/"
     "v8.2.0-20190409/kendryte-toolchain-win-i386-8.2.0-20190409.tar.xz"
@@ -38,18 +40,19 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
     subprocess.run(cmd, cwd=cwd, check=True)
 
 
-def ensure_git_checkout(path: Path, repo: str) -> None:
+def ensure_git_checkout(path: Path, repo: str, revision: str) -> None:
     if (path / ".git").is_dir():
         print(f"[OK] checkout exists: {path}")
-        return
-    if path.exists() and any(path.iterdir()):
+    elif path.exists() and any(path.iterdir()):
         print(f"[OK] directory exists: {path}")
         return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    git = shutil.which("git")
-    if not git:
-        raise RuntimeError("git is required to clone dependencies")
-    run([git, "clone", repo, str(path)])
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        git = shutil.which("git")
+        if not git:
+            raise RuntimeError("git is required to clone dependencies")
+        run([git, "clone", repo, str(path)])
+    run(["git", "-C", str(path), "checkout", "--detach", revision])
 
 
 def download_file(url: str, out: Path) -> None:
@@ -144,8 +147,8 @@ def main(argv: list[str] | None = None) -> int:
 
     DEPS.mkdir(parents=True, exist_ok=True)
     if not args.skip_download:
-        ensure_git_checkout(SDK_DIR, SDK_REPO)
-        ensure_git_checkout(KFLASH_REF_DIR, KFLASH_REPO)
+        ensure_git_checkout(SDK_DIR, SDK_REPO, SDK_REVISION)
+        ensure_git_checkout(KFLASH_REF_DIR, KFLASH_REPO, KFLASH_REVISION)
 
     if not SDK_DIR.is_dir():
         raise SystemExit(f"missing SDK checkout: {SDK_DIR}")

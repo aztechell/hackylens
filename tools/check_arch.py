@@ -30,6 +30,7 @@ FEATURES = {
     "qr-camera": ("qr_camera", "qr_camera_app.h"),
     "face-detect": ("face_detect", "face_detect_app.h"),
     "apriltag": ("apriltag", "apriltag_app.h"),
+    "object-detect": ("object_detect", "object_detect_app.h"),
     "files": ("files", "files_app.h"),
     "buttons": ("buttons", "buttons_app.h"),
     "pong": ("pong", "pong_app.h"),
@@ -328,7 +329,7 @@ def main() -> int:
         for failure in failures:
             print("  " + failure)
         return 1
-    print("[OK] architecture boundary guard passed (10 declarative feature modules)")
+    print(f"[OK] architecture boundary guard passed ({len(FEATURES)} declarative feature modules)")
     return 0
 
 

@@ -21,6 +21,7 @@ typedef enum
     SCREEN_APP_SLOT_3,
     SCREEN_SETTINGS,
     SCREEN_SLEEP,
+    SCREEN_OBJECT_DETECT,
 } screen_t;
 
 typedef enum
@@ -34,6 +35,7 @@ typedef enum
     HK_AUTOSTART_FILES,
     HK_AUTOSTART_BUTTONS,
     HK_AUTOSTART_PONG,
+    HK_AUTOSTART_OBJECT_DETECT,
     HK_AUTOSTART_COUNT,
 } hk_autostart_id_t;
 
@@ -59,6 +61,7 @@ typedef struct hk_app
     void (*background_tick)(const hk_input_snapshot_t *input);
     void (*handle_sd_event)(hk_sd_event_t event);
     uint8_t blocks_sd_poll;
+    uint8_t tick_interval_ms;
     uint8_t (*handle_debug_command)(const char *cmd);
     const char *debug_help;
 } hk_app_t;

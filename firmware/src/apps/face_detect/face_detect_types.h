@@ -15,6 +15,7 @@ typedef enum
     FACE_DETECT_LOAD_ALLOC,
     FACE_DETECT_LOAD_FORMAT,
     FACE_DETECT_LOAD_KPU,
+    FACE_DETECT_LOAD_BUSY,
 } face_detect_load_result_t;
 
 typedef struct

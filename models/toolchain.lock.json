@@ -12,6 +12,9 @@
     "chip": "k210",
     "container": "kmodel-v3",
     "inference_type": "uint8",
-    "calibrate_method": "l2"
+    "frontends": [
+      "tflite",
+      "caffe"
+    ]
   }
 }

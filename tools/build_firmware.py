@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build HackyLens 0.1.0 full firmware through Kendryte standalone SDK."""
+"""Build HackyLens firmware through Kendryte standalone SDK."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ APP_MODULES = {
     "qr-camera": "HK_ENABLE_APP_QR_CAMERA",
     "face-detect": "HK_ENABLE_APP_FACE_DETECT",
     "apriltag": "HK_ENABLE_APP_APRILTAG",
+    "object-detect": "HK_ENABLE_APP_OBJECT_DETECT",
     "files": "HK_ENABLE_APP_FILES",
     "buttons": "HK_ENABLE_APP_BUTTONS",
     "pong": "HK_ENABLE_APP_PONG",
@@ -36,6 +37,7 @@ APP_SOURCE_DIRS = {
     "qr-camera": Path("firmware/src/apps/qr_camera"),
     "face-detect": Path("firmware/src/apps/face_detect"),
     "apriltag": Path("firmware/src/apps/apriltag"),
+    "object-detect": Path("firmware/src/apps/object_detect"),
     "files": Path("firmware/src/apps/files"),
     "buttons": Path("firmware/src/apps/buttons"),
     "pong": Path("firmware/src/apps/pong"),
@@ -61,6 +63,16 @@ for camera_path in (ROOT / "firmware" / "src" / "services" / "internal").glob("c
     CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
 for camera_path in (ROOT / "firmware" / "src" / "ui").glob("camera_*"):
     CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
+
+CAMERA_AI_INPUT_SOURCE_MODULES = {
+    Path("firmware/src/services/camera_ai_input.c"),
+    Path("firmware/src/services/camera_ai_input.h"),
+}
+
+CORE1_EXECUTOR_SOURCE_MODULES = {
+    Path("firmware/src/services/core1_executor.c"),
+    Path("firmware/src/services/core1_executor.h"),
+}
 
 TARGETS = {
     "full": {
@@ -132,7 +144,11 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
     camera_feature_enabled = ("camera" not in disabled_apps or
                               "qr-camera" not in disabled_apps or
                               "face-detect" not in disabled_apps or
-                              "apriltag" not in disabled_apps)
+                              "apriltag" not in disabled_apps or
+                              "object-detect" not in disabled_apps)
+    camera_ai_input_enabled = ("face-detect" not in disabled_apps or
+                               "object-detect" not in disabled_apps)
+    core1_executor_enabled = "apriltag" not in disabled_apps
 
     for path in (ROOT / "firmware" / "src").rglob("*"):
         if not path.is_file():
@@ -142,6 +158,12 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
             continue
         if any(rel.is_relative_to(disabled_dir) for disabled_dir in disabled_dirs):
             print(f"[SKIP] disabled app source {rel}")
+            continue
+        if not camera_ai_input_enabled and rel in CAMERA_AI_INPUT_SOURCE_MODULES:
+            print(f"[SKIP] unused camera AI input source {rel}")
+            continue
+        if not core1_executor_enabled and rel in CORE1_EXECUTOR_SOURCE_MODULES:
+            print(f"[SKIP] unused core-1 executor source {rel}")
             continue
         if not camera_feature_enabled and rel in CAMERA_FEATURE_SOURCE_MODULES:
             print(f"[SKIP] unused camera source {rel}")
@@ -160,7 +182,7 @@ def write_config(stage: Path, disabled_apps: set[str]) -> None:
     for app, flag in APP_MODULES.items():
         lines.append(f"#define {flag} {0 if app in disabled_apps else 1}")
     lines.extend([
-        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_APRILTAG)",
+        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_APRILTAG || HK_ENABLE_APP_OBJECT_DETECT)",
         "#define HK_ENABLE_QR_FEATURE HK_ENABLE_APP_QR_CAMERA",
         '#include "hk_config_default.h"',
         "#endif",

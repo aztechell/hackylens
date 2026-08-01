@@ -1,71 +1,153 @@
 # AI models
 
-HackyLens separates reusable model mechanics from feature behavior.
+HackyLens separates reusable K210 model mechanics from feature behavior.
 
-## Firmware contract
+## Firmware boundary
 
-`core/ai_model_types.h` describes a model without binding it to a detector:
+`core/ai_model_types.h` describes:
 
-- KModel header and first-layer input contract;
-- input shape, element type, layout, normalization, and padded DMA byte count;
-- up to four output tensors;
-- labels and post-processing category (`raw`, `classification`, `yolo2`, or
-  `embedding`);
-- SD paths and unload timeout.
+- the exact KModel v3 header and first-layer DMA contract;
+- input and output tensor shape, element type, layout, and normalization;
+- an optional expected model CRC32;
+- labels and the post-processing category;
+- SD paths, size limits, and unload timeout.
 
-`storage/ai_model_storage.*` mounts FAT32, validates the optional 256-byte
-`manifest.hkai`, allocates a 256-byte-aligned model buffer, reads the model,
-and calculates CRC32. It does not call the KPU.
+`storage/ai_model_storage.*` mounts FAT32, reads a model into a
+256-byte-aligned allocation, calculates CRC32, and parses the optional
+256-byte `manifest.hkai`. `services/ai_model_runtime.*` owns the single KPU
+lease, validates the descriptor, manifest, model identity, and output sizes,
+runs asynchronous inference, and completes deferred unload. The shared layer
+does not know about cameras, labels, boxes, or a particular detector.
 
-`services/ai_model_runtime.*` is an instance API with one global KPU owner, as
-required by K210 hardware. It validates the descriptor and sidecar, loads the
-model through `hal_kpu`, checks every output size, runs asynchronous inference,
-reports timing, and completes deferred unload or forced stop. It does not know
-about cameras, DVP, labels, bounding boxes, or a particular app.
+FACE and OBJECT share `services/camera_ai_input.*`. It arms the planar DVP
+output only at a camera frame boundary, freezes it on that frame's finish, and
+keeps the input immutable until KPU completion. OBJECT decodes the completed
+float output on core 0: the K210 cores have non-coherent caches, so passing the
+SDK's CPU-dequantized tensor to core 1 would require an unnecessary extra
+coherency protocol.
 
-FACE DETECT is the first migrated consumer. Its SD path and user behavior are
-unchanged; only the generic load/run/unload state machine moved out of the
-feature.
+## Included consumers
 
-## SD package
+FACE DETECT continues to load:
 
-`tools/ai_model.py package` emits:
+```text
+/hackylens.kmodels/detect.kmodel
+```
 
-- `model.kmodel`;
-- `manifest.hkai`, the compact record consumed by firmware;
-- `manifest.json`, a human-readable audit record with SHA-256;
-- `labels.txt` when the spec defines labels.
+OBJECT DETECT requires:
 
-Both the package tool and firmware verify the model CRC and exact KModel
-contract. A model with the same filename but different tensors is rejected
-before inference.
+```text
+/hackylens.kmodels/object20/model.kmodel
+/hackylens.kmodels/object20/manifest.hkai
+/hackylens.kmodels/object20/labels.txt
+```
 
-## Original HUSKYLENS assets
+Its pinned model is the official Kendryte nncase `20classes_yolo` example at
+commit `f92c085ec6355ae04258df5b76ec7570f784129d`:
 
-The inspector establishes the following facts:
+```text
+model bytes     1,352,588
+SHA-256         33219de6ffa0b24b8c41a82d09888070c72be68356ca457f3b722d25fdff95ab
+CRC32           107d903c
+input           U8 CHW  [1, 3, 240, 320]
+output          F32 CHW [1, 125, 7, 10]
+classes         Pascal VOC20
+anchors         1.08,1.19  3.42,4.41  6.63,11.38  9.42,5.11  16.62,10.52
+defaults        confidence 0.50, class-aware NMS 0.20
+```
 
-| File | Result |
-|---|---|
-| `mobilenetv1_1.0.kmodel` | 32-bit word-swapped KModel v3; 34 layers; padded `1x3x224x224` input of 172,032 bytes; one 4,000-byte output (1,000 floats). This is a classifier, not a bounding-box detector. |
-| `object_detect.bin` | Original data-store format with `0x12345678` magic; not a KModel. |
-| `detect.kmodel`, `key_point.kmodel`, `feature.kmodel` | Original package representations are not native SD-loadable KModel v3 images; FACE DETECT continues to use the known standalone-demo-compatible `detect.kmodel`. |
+The repository containing the example is Apache-2.0 licensed. Its example
+directory does not provide a separate provenance statement for the pretrained
+weights, which is recorded explicitly rather than silently assigning one.
 
-The original MobileNet can be normalized and packaged for research with
-`models/huskylens_mobilenetv1_1000.json`, but it is not the planned 20-class
-object detector.
+## SD staging
 
-## Conversion boundary
+The tracked `sdcard/` directory mirrors the card root. Copy its contents to a
+FAT32 card without adding another directory level:
 
-The repository locks legacy Kendryte nncase `v0.1.0-rc5` by URL, byte size, and
-SHA-256. `tools/ai_model.py bootstrap` verifies the archive before extraction.
-`convert` always supplies the target, calibration dataset, uint8 inference,
-L2 calibration, and legacy `k210model` output explicitly. The resulting file
-must pass the same package validation as an externally supplied model.
+```text
+sdcard/
+└── hackylens.kmodels/
+    ├── detect.kmodel
+    └── object20/
+        ├── model.kmodel
+        ├── manifest.hkai
+        ├── manifest.json
+        └── labels.txt
+```
 
-Conversion success is only the first gate. Each candidate still requires:
+The object package can be reproduced from its pinned URL, byte size, and
+SHA-256:
 
-1. source-framework versus converted-output comparison;
-2. supported-operator and allocator review;
-3. KPU/main-memory measurement;
-4. on-device inference time and camera-to-overlay latency;
-5. task accuracy measurement with fixed test data.
+```powershell
+python tools\ai_model.py fetch `
+  --spec models\object_detect_voc20.json `
+  --out-dir sdcard\hackylens.kmodels\object20
+
+python tools\ai_model.py verify sdcard\hackylens.kmodels\object20 `
+  --spec models\object_detect_voc20.json
+```
+
+`manifest.hkai` is the compact record consumed by firmware. `manifest.json`
+keeps the full audit data, including SHA-256, anchors, defaults, and upstream
+commit. OBJECT also pins the expected CRC32 in its descriptor, so another
+same-shaped model cannot accidentally use the fixed VOC20 decoder.
+
+## Model lab
+
+`tools/ai_model.py` provides:
+
+- `inspect` for native KModel v3 and recovered original model formats;
+- `fetch` for a spec-pinned upstream model plus SD packaging;
+- `package` for a locally supplied native KModel v3;
+- `verify` for binary/JSON manifest, CRC, SHA, output, and label checks;
+- `bootstrap` and `convert` for the pinned legacy compiler.
+
+The locked compiler is Kendryte nncase `v0.1.0-rc5`, which emits the KModel v3
+container supported by the current K210 runtime. Its real CLI is flat:
+
+```text
+ncc -i tflite -o k210model --dataset calibration-images \
+    --inference-type uint8 --channelwise-output input.tflite output.kmodel
+```
+
+The wrapper supplies `--channelwise-output` automatically for a YOLO2 spec:
+
+```text
+python tools/ai_model.py convert \
+  --source detector.tflite \
+  --format tflite \
+  --calibration calibration-images \
+  --spec models/spec.example.json \
+  --out-dir out/detector
+```
+
+Rc5 directly supports TFLite and Caffe frontends. It does not accept ONNX,
+modern `compile` subcommands, `-t k210`, or modern allocator/calibration
+switches. ONNX needs a separately validated ONNX-to-TFLite step. Moving to
+nncase 0.2+ would produce KModel v4 and requires a different device runtime.
+
+Conversion success is only the first gate. Every new model still needs
+framework-versus-KModel comparison, operator review, KPU/main-memory
+measurement, device latency, and accuracy tests.
+
+## Original firmware findings
+
+`unpacked/object_detect.bin` is not a data store. It is the original
+HUSKYLENS custom, 32-bit word-swapped legacy KPU task container:
+
+```text
+SHA-256         c6b34d98aafa94f6a5fa7c3429b0e6cf384e5f5d4769793da12d7e0267e86e26
+input           U8 CHW [1, 3, 240, 320]
+output          U8 CHW [1, 125, 7, 10]
+layers          16
+```
+
+It uses a private loader and output dequantization path and cannot be passed
+to the current native KModel v3 runtime without a legacy backend or verified
+conversion. `tools/ai_model.py inspect` reports its known contract only when
+the exact SHA-256 matches.
+
+`unpacked/mobilenetv1_1.0.kmodel` is instead a 224x224 classifier with one
+1,000-float output. It does not produce bounding boxes and is not the
+20-class OBJECT DETECT model.

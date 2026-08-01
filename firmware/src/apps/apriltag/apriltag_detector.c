@@ -6,8 +6,8 @@
 #include "apriltag.h"
 #include "tag36h11.h"
 
-#include "../../hal/hal_core.h"
 #include "../../hal/hal_time.h"
+#include "../../services/core1_executor.h"
 #include "apriltag_config.h"
 
 typedef enum
@@ -32,10 +32,19 @@ static apriltag_family_t *g_family;
 static uint8_t g_luma[APRILTAG_INPUT_W * APRILTAG_INPUT_H] __attribute__((aligned(64)));
 static apriltag_result_bank_t g_result_banks[2] __attribute__((aligned(64)));
 
-static volatile uint8_t g_core_registered;
-static volatile uint8_t g_worker_online;
-static volatile uint8_t g_desired_active;
+typedef enum
+{
+    APRILTAG_JOB_NONE = 0,
+    APRILTAG_JOB_CREATE,
+    APRILTAG_JOB_DETECT,
+    APRILTAG_JOB_DESTROY,
+} apriltag_job_t;
+
+static volatile uint8_t g_active;
+static volatile uint8_t g_cleanup_pending;
 static volatile uint8_t g_worker_state;
+static volatile uint8_t g_job_kind;
+static volatile uint32_t g_job_ticket;
 static volatile uint32_t g_session_epoch;
 static volatile uint32_t g_request_sequence;
 static volatile uint32_t g_complete_sequence;
@@ -209,113 +218,134 @@ static void detector_run(uint32_t request_sequence, uint32_t request_epoch,
     }
 
     __sync_synchronize();
-    if(g_desired_active && request_epoch == g_session_epoch)
+    if(g_active && request_epoch == g_session_epoch)
         g_published_sequence = publish_sequence;
     g_complete_sequence = request_sequence;
 }
 
-static int apriltag_core1_worker(void *context)
+static void apriltag_worker_job(void *context)
 {
+    apriltag_job_t job = (apriltag_job_t)g_job_kind;
+
     (void)context;
-    g_worker_online = 1;
-    g_worker_state = APRILTAG_WORKER_OFF;
-    __sync_synchronize();
-
-    while(1)
+    if(job == APRILTAG_JOB_CREATE)
     {
-        if(g_desired_active && !g_detector)
+        g_worker_state = APRILTAG_WORKER_STARTING;
+        if(!detector_create())
         {
-            g_worker_state = APRILTAG_WORKER_STARTING;
-            if(!detector_create())
-            {
-                detector_destroy();
-                g_worker_state = APRILTAG_WORKER_ERROR;
-            }
-            else
-                g_worker_state = APRILTAG_WORKER_READY;
-            __sync_synchronize();
-            continue;
-        }
-
-        if(!g_desired_active && g_detector)
-        {
-            g_worker_state = APRILTAG_WORKER_STOPPING;
             detector_destroy();
-            g_complete_sequence = g_request_sequence;
-            g_worker_state = APRILTAG_WORKER_OFF;
-            __sync_synchronize();
-            continue;
+            g_worker_state = APRILTAG_WORKER_ERROR;
         }
+        else
+            g_worker_state = APRILTAG_WORKER_READY;
+    }
+    else if(job == APRILTAG_JOB_DETECT)
+    {
+        uint32_t request_sequence = g_request_sequence;
+        uint32_t request_epoch = g_request_epoch;
+        uint16_t width = g_request_width;
+        uint16_t height = g_request_height;
 
-        if(!g_desired_active && g_worker_state == APRILTAG_WORKER_ERROR)
+        if(g_detector)
         {
-            g_worker_state = APRILTAG_WORKER_OFF;
-            __sync_synchronize();
-            continue;
-        }
-
-        if(g_detector && g_desired_active && g_request_sequence != g_complete_sequence)
-        {
-            uint32_t request_sequence = g_request_sequence;
-            uint32_t request_epoch = g_request_epoch;
-            uint16_t width = g_request_width;
-            uint16_t height = g_request_height;
-
-            __sync_synchronize();
             g_worker_state = APRILTAG_WORKER_BUSY;
             g_detector->refine_edges = g_refine_edges_requested ? true : false;
             detector_run(request_sequence, request_epoch, width, height);
-            g_worker_state = APRILTAG_WORKER_READY;
-            __sync_synchronize();
-            continue;
+            g_worker_state = g_active ? APRILTAG_WORKER_READY : APRILTAG_WORKER_STOPPING;
         }
+    }
+    else if(job == APRILTAG_JOB_DESTROY)
+    {
+        g_worker_state = APRILTAG_WORKER_STOPPING;
+        detector_destroy();
+        g_complete_sequence = g_request_sequence;
+        g_worker_state = APRILTAG_WORKER_OFF;
+    }
+    __sync_synchronize();
+}
 
-        hal_sleep_ms(APRILTAG_WORKER_IDLE_MS);
+void apriltag_detector_service_tick(void)
+{
+    uint32_t ticket = g_job_ticket;
+
+    if(ticket && core1_executor_complete(ticket))
+    {
+        g_job_ticket = 0U;
+        g_job_kind = APRILTAG_JOB_NONE;
+        __sync_synchronize();
     }
 
-    return 0;
+    if(!g_active && g_cleanup_pending && !g_job_ticket)
+    {
+        if(g_detector)
+        {
+            g_job_kind = APRILTAG_JOB_DESTROY;
+            __sync_synchronize();
+            g_job_ticket = core1_executor_submit(apriltag_worker_job, NULL);
+            if(!g_job_ticket)
+                g_job_kind = APRILTAG_JOB_NONE;
+        }
+        else
+        {
+            g_cleanup_pending = 0U;
+            g_worker_state = APRILTAG_WORKER_OFF;
+        }
+    }
 }
 
 uint8_t apriltag_detector_init(void)
 {
-    uint64_t deadline;
+    uint64_t deadline = hal_time_us() + APRILTAG_START_TIMEOUT_US;
 
-    if(!g_core_registered)
+    if(!core1_executor_init())
     {
-        g_worker_state = APRILTAG_WORKER_STARTING;
-        if(hal_core1_start(apriltag_core1_worker, NULL) != 0)
-        {
-            g_worker_state = APRILTAG_WORKER_ERROR;
-            return 0;
-        }
-        g_core_registered = 1;
+        g_worker_state = APRILTAG_WORKER_ERROR;
+        return 0U;
     }
-
+    while((g_cleanup_pending || !core1_executor_idle()) &&
+          hal_time_us() < deadline)
+    {
+        apriltag_detector_service_tick();
+        hal_sleep_ms(1U);
+    }
+    if(g_cleanup_pending || !core1_executor_idle())
+    {
+        g_worker_state = APRILTAG_WORKER_ERROR;
+        return 0U;
+    }
     g_session_epoch++;
     if(g_session_epoch == 0U)
         g_session_epoch++;
-    g_desired_active = 1;
+    g_active = 1U;
+    g_cleanup_pending = 0U;
+    g_worker_state = APRILTAG_WORKER_STARTING;
+    g_job_kind = APRILTAG_JOB_CREATE;
     __sync_synchronize();
-
-    deadline = hal_time_us() + APRILTAG_START_TIMEOUT_US;
-    while(hal_time_us() < deadline)
+    g_job_ticket = core1_executor_submit(apriltag_worker_job, NULL);
+    if(!g_job_ticket ||
+       !core1_executor_wait(g_job_ticket, APRILTAG_START_TIMEOUT_US))
     {
-        uint8_t state = g_worker_state;
-
-        if(g_worker_online && (state == APRILTAG_WORKER_READY || state == APRILTAG_WORKER_BUSY))
-        {
-            printf("[APRILTAG] core1 TAG36H11 %ux%u decimate=2 refine=%u hamming<=%d\r\n",
-                   APRILTAG_INPUT_W, APRILTAG_INPUT_H, g_refine_edges_requested,
-                   APRILTAG_MAX_HAMMING);
-            return 1;
-        }
-        if(state == APRILTAG_WORKER_ERROR)
-            return 0;
-        hal_sleep_ms(1);
+        g_active = 0U;
+        /*
+         * A timed-out CREATE can still complete after this core returns. Keep
+         * cleanup armed even when the worker has not published g_detector yet.
+         */
+        g_cleanup_pending = g_job_ticket ? 1U : (g_detector ? 1U : 0U);
+        g_worker_state = APRILTAG_WORKER_ERROR;
+        return 0U;
+    }
+    apriltag_detector_service_tick();
+    if(g_worker_state != APRILTAG_WORKER_READY)
+    {
+        g_active = 0U;
+        g_cleanup_pending = g_detector ? 1U : 0U;
+        return 0U;
     }
 
-    g_desired_active = 0;
-    return 0;
+    printf("[APRILTAG] core1 TAG36H11 %ux%u decimate=2 refine=%u hamming<=%d\r\n",
+           APRILTAG_INPUT_W, APRILTAG_INPUT_H, g_refine_edges_requested,
+           APRILTAG_MAX_HAMMING);
+    return 1U;
 }
 
 void apriltag_detector_deinit(void)
@@ -323,8 +353,10 @@ void apriltag_detector_deinit(void)
     g_session_epoch++;
     if(g_session_epoch == 0U)
         g_session_epoch++;
-    g_desired_active = 0;
+    g_active = 0U;
+    g_cleanup_pending = g_detector ? 1U : 0U;
     __sync_synchronize();
+    apriltag_detector_service_tick();
 }
 
 uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width, uint16_t height)
@@ -332,10 +364,11 @@ uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width
     uint8_t *luma;
     uint32_t request_sequence;
 
-    if(!pixels || !width || !height || !g_desired_active)
+    apriltag_detector_service_tick();
+    if(!pixels || !width || !height || !g_active)
         return 0;
     if(g_worker_state != APRILTAG_WORKER_READY ||
-       g_request_sequence != g_complete_sequence)
+       g_request_sequence != g_complete_sequence || g_job_ticket)
     {
         g_busy_drop_count++;
         return 0;
@@ -358,8 +391,17 @@ uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width
     g_request_width = width;
     g_request_height = height;
     g_request_epoch = g_session_epoch;
+    g_job_kind = APRILTAG_JOB_DETECT;
     __sync_synchronize();
     g_request_sequence = request_sequence;
+    g_job_ticket = core1_executor_submit(apriltag_worker_job, NULL);
+    if(!g_job_ticket)
+    {
+        g_job_kind = APRILTAG_JOB_NONE;
+        g_request_sequence = g_complete_sequence;
+        g_busy_drop_count++;
+        return 0U;
+    }
     g_submit_count++;
     return 1;
 }
@@ -377,7 +419,7 @@ const apriltag_result_t *apriltag_detector_results(uint8_t *count)
 
     __sync_synchronize();
     bank = shared_result_bank((uint8_t)published_sequence);
-    if(!g_desired_active || published_sequence == 0U || bank->epoch != g_session_epoch)
+    if(!g_active || published_sequence == 0U || bank->epoch != g_session_epoch)
     {
         if(count)
             *count = 0;

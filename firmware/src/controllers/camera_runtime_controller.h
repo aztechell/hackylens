@@ -10,6 +10,7 @@ typedef enum
     CAMERA_RUNTIME_QR,
     CAMERA_RUNTIME_FACE_DETECT,
     CAMERA_RUNTIME_APRILTAG,
+    CAMERA_RUNTIME_OBJECT_DETECT,
 } camera_runtime_mode_t;
 
 typedef enum
@@ -24,10 +25,12 @@ uint8_t camera_runtime_tick(const hk_input_snapshot_t *input);
 typedef void (*camera_runtime_frame_consumer_t)(const volatile uint16_t *pixels,
                                                 uint16_t width,
                                                 uint16_t height,
+                                                uint32_t sequence,
                                                 void *context);
 typedef void (*camera_runtime_frame_overlay_t)(camera_view_present_t *present,
                                                uint16_t width,
                                                uint16_t height,
+                                               uint32_t sequence,
                                                void *context);
 uint8_t camera_runtime_tick_with_consumer(const hk_input_snapshot_t *input,
                                           camera_runtime_frame_consumer_t consumer,
