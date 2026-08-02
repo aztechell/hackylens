@@ -22,6 +22,20 @@ SHA-256, upstream provenance, output shapes, and post-processing parameters.
 Feature apps own preprocessing/decoding; the shared runtime owns validation,
 KPU execution, and lifecycle.
 
+## Included FACE model
+
+`sdcard/hackylens.kmodels/detect.kmodel` is pinned to Kendryte's standalone
+`face_detect` example at commit
+`e89c35465fadb5524c892d2a1c7a76dc76e219ed`. The expected file is 388,776
+bytes with SHA-256
+`916e679defa91ad76f9feed18b6b37d26328ec9a2c0c8ab0d1ca5983e105b7c0`.
+Its exact URL and the limits of the available upstream provenance are recorded
+in `sdcard/hackylens.kmodels/detect.UPSTREAM.txt`.
+
+The similarly named 386,608-byte asset extracted from the original HUSKYLENS
+firmware is a different/private flash container and must not be copied into the
+SD staging directory.
+
 ## Reproduce the VOC20 package
 
 ```powershell
