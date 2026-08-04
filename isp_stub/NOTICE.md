@@ -3,10 +3,10 @@
 `isp_prog_huskylens.bin` is bundled from
 [`aztechell/huskylens-isp-stub`](https://github.com/aztechell/huskylens-isp-stub).
 
-- Release: `v1.0`
-- Source commit: `ce2327a69ab1a79e5ba49935699cdfed00cf9f24`
-- Size: 17,600 bytes
-- SHA-256: `db3ba7debd7a9a0246b65853d774fc6a568507e148772e2cdffa0d3c55ca5623`
+- Release: `v1.1`
+- Source commit: `2b86fb85de22467c52286735db8ad656e7f7b8a1`
+- Size: 17,856 bytes
+- SHA-256: `da6305613ff9179afd439be1227ec877d583cde351afed604c7e053052f57cd7`
 - License: Apache-2.0, reproduced in `LICENSE`
 
 The protocol, SLIP implementation, and flash driver derive from
