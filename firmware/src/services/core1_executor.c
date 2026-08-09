@@ -8,36 +8,75 @@
 #define CORE1_EXECUTOR_START_TIMEOUT_US 250000ULL
 #define CORE1_EXECUTOR_IDLE_MS 1U
 
-static volatile uint8_t g_started;
-static volatile uint8_t g_online;
-static volatile uint8_t g_start_failed;
-static volatile uint32_t g_request_ticket;
-static volatile uint32_t g_complete_ticket;
-static core1_executor_job_fn volatile g_job;
-static void *volatile g_context;
+/* K210's two CPU cores are not cache coherent.  Both cores must access the
+ * mailbox through the SRAM uncached alias (0x4...), never through its normal
+ * cached address (0x8...). */
+typedef struct
+{
+    volatile uint32_t started;
+    volatile uint32_t online;
+    volatile uint32_t start_failed;
+    volatile uint32_t request_ticket;
+    volatile uint32_t complete_ticket;
+    core1_executor_job_fn volatile job;
+    void *volatile context;
+} core1_executor_control_t;
+
+static core1_executor_control_t g_control_storage __attribute__((aligned(64)));
+static uint8_t g_control_initialized;
+
+static core1_executor_control_t *core1_executor_control(void)
+{
+    uintptr_t address = (uintptr_t)&g_control_storage;
+
+    if(address >= 0x80000000UL && address < 0x80600000UL)
+        address -= 0x40000000UL;
+    return (core1_executor_control_t *)address;
+}
+
+static core1_executor_control_t *core1_executor_control_init(void)
+{
+    core1_executor_control_t *control = core1_executor_control();
+
+    if(!g_control_initialized)
+    {
+        control->started = 0U;
+        control->online = 0U;
+        control->start_failed = 0U;
+        control->request_ticket = 0U;
+        control->complete_ticket = 0U;
+        control->job = NULL;
+        control->context = NULL;
+        __sync_synchronize();
+        g_control_initialized = 1U;
+    }
+    return control;
+}
 
 static int core1_executor_loop(void *context)
 {
+    core1_executor_control_t *control = core1_executor_control();
+
     (void)context;
-    g_online = 1U;
+    control->online = 1U;
     __sync_synchronize();
 
     while(1)
     {
-        uint32_t ticket = g_request_ticket;
+        uint32_t ticket = control->request_ticket;
 
-        if(ticket != g_complete_ticket)
+        if(ticket != control->complete_ticket)
         {
             core1_executor_job_fn job;
             void *job_context;
 
             __sync_synchronize();
-            job = g_job;
-            job_context = g_context;
+            job = control->job;
+            job_context = control->context;
             if(job)
                 job(job_context);
             __sync_synchronize();
-            g_complete_ticket = ticket;
+            control->complete_ticket = ticket;
             continue;
         }
         hal_sleep_ms(CORE1_EXECUTOR_IDLE_MS);
@@ -48,58 +87,64 @@ static int core1_executor_loop(void *context)
 
 uint8_t core1_executor_init(void)
 {
+    core1_executor_control_t *control = core1_executor_control_init();
     uint64_t deadline;
 
-    if(g_online)
+    if(control->online)
         return 1U;
-    if(g_start_failed)
+    if(control->start_failed)
         return 0U;
-    if(!g_started)
+    if(!control->started)
     {
-        g_started = 1U;
+        control->started = 1U;
+        __sync_synchronize();
         if(hal_core1_start(core1_executor_loop, NULL) != 0)
         {
-            g_start_failed = 1U;
+            control->start_failed = 1U;
             return 0U;
         }
     }
 
     deadline = hal_time_us() + CORE1_EXECUTOR_START_TIMEOUT_US;
-    while(!g_online && hal_time_us() < deadline)
+    while(!control->online && hal_time_us() < deadline)
         hal_sleep_ms(1U);
-    if(!g_online)
-        g_start_failed = 1U;
-    return g_online;
+    if(!control->online)
+        control->start_failed = 1U;
+    return control->online != 0U;
 }
 
 uint8_t core1_executor_idle(void)
 {
-    return g_online && g_request_ticket == g_complete_ticket;
+    core1_executor_control_t *control = core1_executor_control_init();
+
+    return control->online && control->request_ticket == control->complete_ticket;
 }
 
 uint32_t core1_executor_submit(core1_executor_job_fn job, void *context)
 {
+    core1_executor_control_t *control = core1_executor_control_init();
     uint32_t ticket;
 
     if(!job || !core1_executor_init() || !core1_executor_idle())
         return 0U;
-    ticket = g_request_ticket + 1U;
+    ticket = control->request_ticket + 1U;
     if(ticket == 0U)
         ticket = 1U;
-    g_job = job;
-    g_context = context;
+    control->job = job;
+    control->context = context;
     __sync_synchronize();
-    g_request_ticket = ticket;
+    control->request_ticket = ticket;
     return ticket;
 }
 
 uint8_t core1_executor_complete(uint32_t ticket)
 {
+    core1_executor_control_t *control = core1_executor_control_init();
     uint32_t completed;
 
     if(!ticket)
         return 0U;
-    completed = g_complete_ticket;
+    completed = control->complete_ticket;
     __sync_synchronize();
     /*
      * A client may observe its completion after another feature has already

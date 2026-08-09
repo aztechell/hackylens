@@ -14,12 +14,23 @@
 #include "../services/screenshot_source.h"
 #include "../services/debug_screenshot_stream.h"
 #include "../services/external_link_service.h"
+#if HK_ENABLE_APP_MICROPYTHON
+#include "../services/hmpy_codec.h"
+#include "../services/hmpy_session.h"
+#endif
 
 static char g_debug_cmd[DEBUG_CMD_MAX];
 static uint8_t g_debug_cmd_len;
 
 void debug_uart_handle_command(const char *cmd)
 {
+#if HK_ENABLE_APP_MICROPYTHON
+    if(str_eq_ci(cmd, HMPY_LINE_HANDSHAKE))
+    {
+        hmpy_session_begin();
+        return;
+    }
+#endif
     if(external_link_service_handle_debug_command(cmd))
         return;
     if(str_eq_ci(cmd, "HKSHOT") || str_eq_ci(cmd, "SHOT") || str_eq_ci(cmd, "SCREENSHOT"))
@@ -69,6 +80,14 @@ void debug_uart_tick(void)
 {
     uint8_t raw;
 
+#if HK_ENABLE_APP_MICROPYTHON
+    if(hmpy_session_active())
+    {
+        hmpy_session_tick();
+        return;
+    }
+#endif
+
     while(debug_console_read(&raw, 1) == 1)
     {
         char c = (char)raw;
@@ -80,6 +99,13 @@ void debug_uart_tick(void)
                 g_debug_cmd[g_debug_cmd_len] = '\0';
                 debug_uart_handle_command(g_debug_cmd);
                 g_debug_cmd_len = 0;
+#if HK_ENABLE_APP_MICROPYTHON
+                if(hmpy_session_active())
+                {
+                    hmpy_session_tick();
+                    return;
+                }
+#endif
             }
             continue;
         }

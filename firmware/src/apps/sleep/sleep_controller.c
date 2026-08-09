@@ -5,7 +5,6 @@
 #include "../../core/hk_app.h"
 
 #include "../../core/hk_back_exit.h"
-#include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
 #include "../../services/settings_lights.h"
 #include "../../services/settings_service.h"
@@ -22,19 +21,10 @@ void sleep_controller_enter(const hk_input_snapshot_t *input)
     printf("[SLEEP] enter\r\n");
 }
 
-static void sleep_wake(void)
-{
-    screen_brightness_apply();
-    illum_led_apply();
-    rgb_led_apply();
-    printf("[SLEEP] wake\r\n");
-    shell_show_menu();
-}
-
 void sleep_controller_handle_buttons(const hk_input_snapshot_t *input)
 {
     if(input->pressed)
-        sleep_wake();
+        hk_screen_request_wake();
 }
 
 void auto_sleep_controller_tick(const hk_input_snapshot_t *input)

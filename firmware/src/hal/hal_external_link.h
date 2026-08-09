@@ -20,6 +20,12 @@ typedef struct
 void hal_external_uart_init(uint32_t baud);
 size_t hal_external_uart_receive(uint8_t *data, size_t len);
 void hal_external_uart_send(const uint8_t *data, size_t len);
+/* Queue only bytes that fit in the UART TX FIFO right now.  This function
+ * never waits for FIFO space and is therefore safe to call from core-0
+ * service ticks that must keep STOP/watchdog polling responsive. */
+size_t hal_external_uart_send_ready(const uint8_t *data, size_t len);
+/* True only after both the TX FIFO and the shift register are empty. */
+uint8_t hal_external_uart_tx_idle(void);
 void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *callbacks);
 void hal_external_i2c_stop(void);
 

@@ -6,6 +6,10 @@
 #include <spi.h>
 #include <sysctl.h>
 
+#include "hal_time.h"
+
+#define HAL_SPI_FIFO_TIMEOUT_US 500000ULL
+
 static volatile spi_t *hal_spi_regs(uint8_t device)
 {
     switch(device)
@@ -14,6 +18,8 @@ static volatile spi_t *hal_spi_regs(uint8_t device)
         return (volatile spi_t *)SPI0_BASE_ADDR;
     case 1:
         return (volatile spi_t *)SPI1_BASE_ADDR;
+    case 3:
+        return (volatile spi_t *)SPI3_BASE_ADDR;
     default:
         return NULL;
     }
@@ -43,6 +49,49 @@ void hal_spi_standard_init(uint8_t device, uint32_t hz)
 void hal_spi_standard_send(uint8_t device, uint8_t chip_select, const uint8_t *cmd, size_t cmd_len, const uint8_t *data, size_t data_len)
 {
     spi_send_data_standard((spi_device_num_t)device, (spi_chip_select_t)chip_select, cmd, cmd_len, data, data_len);
+}
+
+void hal_spi_standard_send_segments(uint8_t device, uint8_t chip_select,
+                                    const uint8_t *first, size_t first_len,
+                                    const uint8_t *second, size_t second_len)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+    uint32_t tmod_offset;
+    size_t first_pos = 0U;
+    size_t second_pos = 0U;
+
+    if(!spi || chip_select >= 4U ||
+       (first_len && !first) || (second_len && !second) ||
+       (!first_len && !second_len))
+        return;
+
+    tmod_offset = device == 3U ? 10U : 8U;
+    spi->ssienr = 0U;
+    spi->ctrlr0 = (spi->ctrlr0 & ~(3U << tmod_offset)) |
+                  ((uint32_t)SPI_TMOD_TRANS << tmod_offset);
+    spi->ser = 1U << chip_select;
+    spi->ssienr = 1U;
+
+    while(first_pos < first_len || second_pos < second_len)
+    {
+        size_t room = 32U - spi->txflr;
+
+        while(room && first_pos < first_len)
+        {
+            spi->dr[0] = first[first_pos++];
+            room--;
+        }
+        while(room && second_pos < second_len)
+        {
+            spi->dr[0] = second[second_pos++];
+            room--;
+        }
+    }
+
+    while((spi->sr & 0x05U) != 0x04U)
+        ;
+    spi->ser = 0U;
+    spi->ssienr = 0U;
 }
 
 void hal_spi_standard_receive(uint8_t device, uint8_t chip_select, const uint8_t *cmd, size_t cmd_len, uint8_t *data, size_t data_len)
@@ -83,12 +132,18 @@ void hal_spi_fifo_set_frame_bits(uint8_t device, uint32_t bits)
     spi->ctrlr0 = ((bits - 1U) << 16) | (spi->ctrlr0 & 0x1FU);
 }
 
-void hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select, const uint8_t *data, size_t len)
+uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
+                                      const uint8_t *data, size_t len,
+                                      uint64_t deadline_us)
 {
     volatile spi_t *spi = hal_spi_regs(device);
     size_t i = 0;
-    if(!spi || len == 0)
-        return;
+    if(!spi || chip_select >= 4U || (len && !data))
+        return 0U;
+    if(len == 0U)
+        return 1U;
+    if(hal_time_us() >= deadline_us)
+        return 0U;
 
     hal_spi_fifo_set_tmod_tx(device);
     spi->ssienr = 1;
@@ -97,6 +152,10 @@ void hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select, const uint8_t 
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
+        if(hal_time_us() >= deadline_us)
+            goto timeout;
+        if(!fifo_len)
+            continue;
         if(fifo_len > len - i)
             fifo_len = len - i;
         while(fifo_len--)
@@ -104,9 +163,32 @@ void hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select, const uint8_t 
     }
 
     while((spi->sr & 0x05U) != 0x04U)
-        ;
+    {
+        if(hal_time_us() >= deadline_us)
+            goto timeout;
+    }
+    if(hal_time_us() > deadline_us)
+        goto timeout;
     spi->ser = 0;
     spi->ssienr = 0;
+    return 1U;
+
+timeout:
+    spi->ser = 0U;
+    spi->ssienr = 0U;
+    return 0U;
+}
+
+uint8_t hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select,
+                                const uint8_t *data, size_t len)
+{
+    uint64_t now = hal_time_us();
+    uint64_t deadline = UINT64_MAX - now < HAL_SPI_FIFO_TIMEOUT_US
+                            ? UINT64_MAX
+                            : now + HAL_SPI_FIFO_TIMEOUT_US;
+
+    return hal_spi_fifo_send_bytes_until(device, chip_select, data, len,
+                                         deadline);
 }
 
 uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out)

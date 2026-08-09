@@ -29,6 +29,11 @@ Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN030
 - FAT32 SD-card support, photo capture, screenshots, and an image viewer
 - On-device terminal with bounded history and scrolling
 - Built-in file browser, button tester, Pong, settings, and sleep mode
+- Embedded upstream MicroPython on K210 core 1 with bounded heap, execution
+  deadline, native-iterator-aware STOP/BACK, WDT1 recovery, stdout events, and
+  deterministic cooperative cleanup
+- Atomic littlefs script storage in validated 16 MiB internal flash, with CRC,
+  startup selection, a framed serial protocol, Python CLI, and Web Serial IDE
 - Compile-time app registry: omit individual apps from custom builds
 - UART tooling for flashing, logs, commands, LCD screenshots, and raw camera frames
 - Layered C codebase with an automated architecture-boundary check
@@ -43,7 +48,8 @@ These 320 x 240 images were captured directly from a running HUSKYLENS over the 
 
 ## Included apps
 
-`TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `SLEEP`
+`TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`,
+`MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `SLEEP`
 
 ## SD models
 
@@ -62,7 +68,8 @@ The bootstrap script currently provisions the Windows Kendryte toolchain. Run th
 - Python 3
 - CMake
 - Ninja
-- A MinGW-compatible build environment
+- A MinGW-compatible build environment with host GCC and GNU make
+- Git for Windows (its Bash/coreutils are used by the upstream MicroPython generator)
 
 Install the Python serial dependency:
 
@@ -70,7 +77,8 @@ Install the Python serial dependency:
 python -m pip install pyserial
 ```
 
-Download the Kendryte SDK, toolchain, and flashing support files, then load the generated environment:
+Download the pinned Kendryte SDK/toolchain, MicroPython, littlefs, and flashing
+support files, then load the generated environment:
 
 ```powershell
 python tools\bootstrap_deps.py
@@ -96,6 +104,86 @@ Apps can be excluded by repeating `--disable-app`:
 ```powershell
 python tools\build_firmware.py full --disable-app pong --disable-app terminal
 ```
+
+### HackyLens Code web IDE
+
+The IDE now lives in the separate sibling repository `hackylens-code` (normally
+checked out at `..\hackylens-code`). It contains the complete buildable source
+tree derived from MIT-licensed Pybricks Code at pinned commit
+`ea9af98d1fd0a842ed76d3a7f83767f363bc1b17`, plus the HackyLens Web Serial
+transport, UI and tests:
+
+```powershell
+Set-Location ..\hackylens-code
+node .yarn\releases\yarn-3.3.0.cjs install --immutable
+node .yarn\releases\yarn-3.3.0.cjs typecheck
+node .yarn\releases\yarn-3.3.0.cjs test
+node .yarn\releases\yarn-3.3.0.cjs build
+node .yarn\releases\yarn-3.3.0.cjs start
+```
+
+Open `http://127.0.0.1:4173/` in desktop Chrome or Edge. Web Serial requires a
+secure context; localhost is accepted, while deployed builds require HTTPS.
+The production site is written to that repository's `build` directory and is
+released independently from the firmware/SD-card package.
+
+## MicroPython workflow
+
+The internal `userfs` partition is enabled only when JEDEC discovery confirms
+exactly 16 MiB of flash. Unsupported 8 MiB revisions keep normal firmware
+features but expose no script filesystem. Formatting is never automatic.
+
+The IDE covers edit, atomic upload, list/read/delete, startup selection,
+run/stop/status, and live stdout/stderr. The same HMPY v1 workflow is available
+from the reference CLI:
+
+```powershell
+python tools\hkpy.py ports
+python tools\hkpy.py --port COM10 hello
+python tools\hkpy.py --port COM10 upload .\main.py --startup --run
+python tools\hkpy.py --port COM10 monitor
+python tools\hkpy.py --port COM10 stop
+```
+
+The repeatable hardware runner is read-only by default. It records
+HELLO/STATUS and one maximum 1024-byte PING before the separate filesystem gate,
+so a corrupt partition does not hide healthy transport evidence. Reversible
+storage, runtime, native-iterator STOP, and lease-reconnect checks are separate
+opt-ins; FORMAT still requires its exact destructive token:
+
+```powershell
+python tools\hmpy_acceptance.py --port COM10
+python tools\hmpy_acceptance.py --port COM10 --workflow --lease-reconnect
+python tools\hmpy_acceptance.py --port COM10 --format-userfs --confirm-format "ERASE USERFS"
+```
+
+Fixture names are collision-checked and cleanup restores the baseline file list
+and startup selection. The runner never formats an unformatted userfs unless
+both FORMAT options are present.
+
+The v0.2.0 CLI/HMPY workflow has passed on a physical SEN0305 after an explicitly
+authorized USERFS format: atomic file operations, startup execution, cooperative
+STOP (123 ms), native `sum`/`min` STOP (121 ms), executor reuse, lease reconnect,
+and exact cleanup. Multi-device confirmation, long-duration NOR
+endurance/power-loss, physical BACK, live browser Web Serial
+edit/upload/run/log/stop/reconnect, WDT1 fault-injection, and 1000-cycle stress
+remain separate qualification gates.
+
+The default run deadline is 30 seconds and the maximum requested deadline is
+300 seconds. API v1 exposes buttons, time/sleep, display, LED/RGB, and the
+external UART/I2C connector. See [MicroPython API](docs/MICROPYTHON_API.md),
+[HMPY protocol](docs/HMPY_PROTOCOL.md), and the
+[architecture/research report](docs/MICROPYTHON_RESEARCH.md).
+
+STOP is checked in bytecode and native iterator loops. If a native C call still
+does not return after the STOP/deadline grace period, a one-shot WDT1 reset is
+used; MicroPython autostart is held for that recovery boot to prevent loops.
+HELLO exposes a backward-compatible `WDT1_RECOVERY` boot flag so clients can
+report and acceptance-test that safe-boot path explicitly.
+The reproducible, deliberately test-build-only procedure is documented in
+[WDT1 hardware acceptance](docs/WDT_HARDWARE_ACCEPTANCE.md); production builds
+do not expose a Python fault-injection API. The physical `-wdtfi` reset/recovery
+gate has not yet been run.
 
 ## Flash and debug
 
@@ -139,13 +227,16 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 | `firmware/src/apps` | App entry points and self-contained feature modules |
 | `firmware/src/controllers` | User flows and screen coordination |
 | `firmware/src/services` | Camera, QR, settings, debug, and screenshot services |
-| `firmware/src/storage` | FAT32, files, images, photos, and persistent data |
+| `firmware/src/storage` | Internal flash/littlefs, FAT32, files, images, photos, and persistent data |
 | `firmware/src/ui` | Screen rendering |
 | `firmware/src/drivers`, `board`, `hal` | Hardware-facing code |
 | `firmware/src/runtime` | Startup and the main loop |
 | `tools` | Dependency bootstrap, build, checks, flashing, and diagnostics |
 | `models` | Locked K210 conversion workflow and model descriptor specs |
 | `sdcard` | Files laid out exactly as they should appear on the FAT32 card |
+
+HackyLens Code is intentionally maintained in the separate sibling
+`hackylens-code` repository.
 
 More detail is available in [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md), [AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and [RAM/flash budget](docs/RAM_BUDGET.md).
 

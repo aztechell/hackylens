@@ -46,6 +46,23 @@ def find_exe(names: tuple[str, ...]) -> Path | None:
     return None
 
 
+def find_host_gcc() -> Path | None:
+    configured = os.environ.get("CC")
+    candidates = ([configured] if configured else []) + ["gcc.exe", "gcc"]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if not path.is_file():
+            resolved = shutil.which(candidate)
+            if not resolved:
+                continue
+            path = Path(resolved)
+        if path.name.lower() in {"gcc", "gcc.exe"}:
+            return path.resolve()
+    return None
+
+
 def find_sdk() -> Path | None:
     candidates: list[Path] = []
     if os.environ.get("KENDRYTE_SDK_DIR"):
@@ -56,6 +73,17 @@ def find_sdk() -> Path | None:
     ])
     for path in candidates:
         if (path / "CMakeLists.txt").is_file() and (path / "lib").is_dir():
+            return path.resolve()
+    return None
+
+
+def find_dependency(env_name: str, directory: str, marker: Path) -> Path | None:
+    candidates: list[Path] = []
+    if os.environ.get(env_name):
+        candidates.append(Path(os.environ[env_name]))
+    candidates.extend([LOCAL_DEPS / directory, LEGACY_DEPS / directory])
+    for path in candidates:
+        if (path / marker).is_file():
             return path.resolve()
     return None
 
@@ -81,6 +109,17 @@ def main() -> int:
     if ninja:
         print("       " + run_version([str(ninja), "--version"]))
 
+    make = find_exe(("mingw32-make.exe", "mingw32-make", "make.exe", "make"))
+    ok &= status(make is not None, "GNU make", str(make) if make else "not found")
+    if make:
+        print("       " + run_version([str(make), "--version"]))
+
+    host_gcc = find_host_gcc()
+    ok &= status(host_gcc is not None, "host GCC (C harness tests)",
+                 str(host_gcc) if host_gcc else "not found on PATH/CC")
+    if host_gcc:
+        print("       " + run_version([str(host_gcc), "--version"]))
+
     gcc = find_exe(("riscv64-unknown-elf-gcc.exe", "riscv64-unknown-elf-gcc"))
     ok &= status(gcc is not None, "riscv64-unknown-elf-gcc", str(gcc) if gcc else "not found")
     if gcc:
@@ -93,6 +132,16 @@ def main() -> int:
 
     sdk = find_sdk()
     ok &= status(sdk is not None, "KENDRYTE_SDK_DIR", str(sdk) if sdk else "not found")
+
+    micropython = find_dependency(
+        "HACKYLENS_MICROPYTHON_DIR", "micropython", Path("ports/embed/embed.mk"))
+    ok &= status(micropython is not None, "MicroPython embed",
+                 str(micropython) if micropython else "not found")
+
+    littlefs = find_dependency(
+        "HACKYLENS_LITTLEFS_DIR", "littlefs", Path("lfs.c"))
+    ok &= status(littlefs is not None, "littlefs",
+                 str(littlefs) if littlefs else "not found")
 
     pyserial_ok = importlib.util.find_spec("serial") is not None
     ok &= status(pyserial_ok, "pyserial", "import serial" if pyserial_ok else "not installed")

@@ -6,6 +6,8 @@
 
 void buttons_sync(void);
 void buttons_poll(void);
+/* Immediate active-low hardware sample used during boot before debouncing. */
+uint32_t buttons_read_pressed_mask(void);
 uint32_t hk_input_state(void);
 uint32_t hk_input_pressed(void);
 uint32_t hk_input_changed(void);

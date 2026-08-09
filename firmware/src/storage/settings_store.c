@@ -8,7 +8,7 @@
 #include "../config/settings_config.h"
 
 #include "../core/hk_binary.h"
-#include "../drivers/boot_flash.h"
+#include "internal_flash.h"
 
 static uint8_t g_settings_storage_ok;
 static uint8_t g_settings_storage_slot = 0xFF;
@@ -122,9 +122,10 @@ _Static_assert(sizeof(settings_record_v2_t) == 112U, "settings v2 record layout 
 _Static_assert(sizeof(settings_payload_v3_t) == 97U, "settings v3 payload layout changed");
 _Static_assert(sizeof(settings_record_v3_t) == 116U, "settings v3 record layout changed");
 
-static uint32_t flash_slot_addr(uint8_t slot)
+static internal_flash_partition_id_t flash_slot_partition(uint8_t slot)
 {
-    return slot ? SETTINGS_FLASH_SLOT1 : SETTINGS_FLASH_SLOT0;
+    return slot ? INTERNAL_FLASH_PARTITION_SETTINGS_1 :
+                  INTERNAL_FLASH_PARTITION_SETTINGS_0;
 }
 
 static uint32_t settings_record_crc(const settings_record_t *record)
@@ -255,7 +256,8 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
 void settings_store_init(settings_store_load_t *result)
 {
     settings_slot_t slots[2];
-    uint8_t jedec[3] = {0};
+    internal_flash_info_t flash_info;
+    internal_flash_result_t flash_result;
     uint8_t valid0;
     uint8_t valid1;
     uint8_t selected = 0xFF;
@@ -263,19 +265,36 @@ void settings_store_init(settings_store_load_t *result)
     if(result)
         memset(result, 0, sizeof(*result));
 
-    boot_flash_init(10000000U);
-    boot_flash_read_id(jedec);
-    printf("[SETTINGS] flash jedec=%02X%02X%02X\r\n", jedec[0], jedec[1], jedec[2]);
+    g_settings_storage_ok = 0U;
+    g_settings_storage_slot = 0xFFU;
+    g_settings_sequence = 0U;
 
-    if(jedec[0] == 0x00 || jedec[0] == 0xFF || jedec[2] < SETTINGS_FLASH_MIN_CAPACITY_LOG2)
+    flash_result = internal_flash_init(10000000U);
+    internal_flash_get_info(&flash_info);
+    printf("[SETTINGS] flash jedec=%02X%02X%02X\r\n",
+           flash_info.jedec_id[0], flash_info.jedec_id[1],
+           flash_info.jedec_id[2]);
+
+    if(flash_result != INTERNAL_FLASH_OK)
     {
-        printf("[SETTINGS] persistence disabled\r\n");
-        g_settings_storage_ok = 0;
+        printf("[SETTINGS] persistence disabled (%s)\r\n",
+               internal_flash_result_name(flash_result));
         return;
     }
 
-    boot_flash_read(SETTINGS_FLASH_SLOT0, (uint8_t *)&slots[0], sizeof(settings_slot_t));
-    boot_flash_read(SETTINGS_FLASH_SLOT1, (uint8_t *)&slots[1], sizeof(settings_slot_t));
+    flash_result = internal_flash_read(INTERNAL_FLASH_PARTITION_SETTINGS_0,
+                                       0U, (uint8_t *)&slots[0],
+                                       sizeof(settings_slot_t));
+    if(flash_result == INTERNAL_FLASH_OK)
+        flash_result = internal_flash_read(INTERNAL_FLASH_PARTITION_SETTINGS_1,
+                                           0U, (uint8_t *)&slots[1],
+                                           sizeof(settings_slot_t));
+    if(flash_result != INTERNAL_FLASH_OK)
+    {
+        printf("[SETTINGS] persistence disabled (%s)\r\n",
+               internal_flash_result_name(flash_result));
+        return;
+    }
     valid0 = settings_slot_valid(&slots[0]);
     valid1 = settings_slot_valid(&slots[1]);
 
@@ -314,6 +333,8 @@ uint8_t settings_store_save(const settings_payload_t *payload)
 {
     settings_record_t record;
     settings_record_t verify;
+    internal_flash_partition_id_t partition;
+    internal_flash_result_t flash_result;
     uint8_t target;
 
     if(!g_settings_storage_ok || !payload)
@@ -330,10 +351,24 @@ uint8_t settings_store_save(const settings_payload_t *payload)
     target = g_settings_storage_slot == 0 ? 1 : 0;
     if(g_settings_storage_slot == 0xFF)
         target = 0;
+    partition = flash_slot_partition(target);
 
-    boot_flash_sector_erase(flash_slot_addr(target));
-    boot_flash_page_program(flash_slot_addr(target), (const uint8_t *)&record, sizeof(record));
-    boot_flash_read(flash_slot_addr(target), (uint8_t *)&verify, sizeof(verify));
+    flash_result = internal_flash_erase(partition, 0U,
+                                        SETTINGS_FLASH_SLOT_SIZE);
+    if(flash_result == INTERNAL_FLASH_OK)
+        flash_result = internal_flash_program(partition, 0U,
+                                              (const uint8_t *)&record,
+                                              sizeof(record));
+    if(flash_result == INTERNAL_FLASH_OK)
+        flash_result = internal_flash_read(partition, 0U,
+                                           (uint8_t *)&verify,
+                                           sizeof(verify));
+    if(flash_result != INTERNAL_FLASH_OK)
+    {
+        printf("[SETTINGS] save failed slot=%u error=%s\r\n", target,
+               internal_flash_result_name(flash_result));
+        return 0;
+    }
 
     if(settings_record_valid(&verify) && verify.sequence == record.sequence)
     {

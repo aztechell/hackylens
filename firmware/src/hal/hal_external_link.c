@@ -1,11 +1,24 @@
 #include "hal_external_link.h"
 
+#if defined(HAL_EXTERNAL_LINK_TESTING)
+#include "hal_external_link_test_platform.h"
+#else
 #include <i2c.h>
 #include <platform.h>
 #include <plic.h>
 #include <uart.h>
 
 #include "../board/board_hackylens.h"
+#endif
+
+/* K210 general-purpose UART1/2/3 expose an 8-byte TX FIFO. */
+#define HAL_EXTERNAL_UART_FIFO_DEPTH 8U
+#define HAL_EXTERNAL_UART_LSR_TEMT (1U << 6)
+#if defined(HAL_EXTERNAL_LINK_TESTING)
+#define HAL_EXTERNAL_UART_ADAPTER (uart[UART_DEVICE_1])
+#else
+#define HAL_EXTERNAL_UART_ADAPTER ((volatile uart_t *)UART1_BASE_ADDR)
+#endif
 
 static const hal_external_i2c_callbacks_t *g_i2c_callbacks;
 static uint8_t g_i2c_active;
@@ -72,6 +85,33 @@ void hal_external_uart_send(const uint8_t *data, size_t len)
 {
     if(data && len)
         uart_send_data(UART_DEVICE_1, (const char *)data, len);
+}
+
+size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)
+{
+    volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
+    uint32_t level;
+    size_t capacity;
+
+    if(!data || !len)
+        return 0U;
+    level = adapter->TFL;
+    if(level >= HAL_EXTERNAL_UART_FIFO_DEPTH)
+        return 0U;
+    capacity = HAL_EXTERNAL_UART_FIFO_DEPTH - level;
+    if(capacity > len)
+        capacity = len;
+    for(size_t i = 0U; i < capacity; i++)
+        adapter->THR = data[i];
+    return capacity;
+}
+
+uint8_t hal_external_uart_tx_idle(void)
+{
+    volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
+
+    return adapter->TFL == 0U &&
+           (adapter->LSR & HAL_EXTERNAL_UART_LSR_TEMT) != 0U;
 }
 
 void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *callbacks)

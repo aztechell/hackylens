@@ -31,6 +31,7 @@ static uint32_t g_tx_frames;
 static uint32_t g_bad_frames;
 static uint32_t g_rx_bytes;
 static uint32_t g_uart_baud = 115200U;
+static uint8_t g_suspended;
 
 static void write_u16(uint8_t *data, uint16_t value)
 {
@@ -189,6 +190,7 @@ void external_link_service_init(external_link_transport_t transport)
     g_i2c_tx_length = 0U;
     g_i2c_tx_index = 0U;
     g_uart_baud = settings_external_link_uart_baud();
+    g_suspended = 0U;
     hk_link_stream_reset(&g_uart_parser);
     external_link_service_set_transport(transport);
 }
@@ -202,6 +204,8 @@ void external_link_service_set_transport(external_link_transport_t transport)
     g_i2c_stop_seen = 0U;
     g_i2c_tx_length = 0U;
     g_i2c_tx_index = 0U;
+    if(g_suspended)
+        return;
     if(g_transport == EXTERNAL_LINK_I2C)
         hal_external_i2c_init(EXTERNAL_LINK_I2C_ADDRESS, &g_i2c_callbacks);
     else
@@ -223,7 +227,7 @@ void external_link_service_set_uart_baud(uint32_t baud)
         baud = 115200U;
     g_uart_baud = baud;
     hk_link_stream_reset(&g_uart_parser);
-    if(g_transport == EXTERNAL_LINK_UART)
+    if(g_transport == EXTERNAL_LINK_UART && !g_suspended)
         hal_external_uart_init(g_uart_baud);
 }
 
@@ -232,8 +236,35 @@ uint32_t external_link_service_uart_baud(void)
     return g_uart_baud;
 }
 
+void external_link_service_suspend(void)
+{
+    if(g_suspended)
+        return;
+    if(g_transport == EXTERNAL_LINK_I2C)
+        hal_external_i2c_stop();
+    g_suspended = 1U;
+}
+
+void external_link_service_resume(void)
+{
+    external_link_transport_t transport;
+
+    if(!g_suspended)
+        return;
+    transport = g_transport;
+    g_suspended = 0U;
+    external_link_service_set_transport(transport);
+}
+
+uint8_t external_link_service_suspended(void)
+{
+    return g_suspended;
+}
+
 void external_link_service_tick(void)
 {
+    if(g_suspended)
+        return;
     if(g_transport == EXTERNAL_LINK_UART)
     {
         uint8_t data[32];

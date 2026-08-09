@@ -36,6 +36,7 @@ FEATURES = {
     "pong": ("pong", "pong_app.h"),
     "settings": ("settings", "settings_app.h"),
     "sleep": ("sleep", "sleep_app.h"),
+    "micropython": ("micropython", "micropython_app.h"),
 }
 FEATURE_DIRS = {f"apps/{directory}/": (name, public)
                 for name, (directory, public) in FEATURES.items()}

@@ -5,7 +5,13 @@
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
 #include "../core/hk_menu.h"
+#include "../config/input_config.h"
+#include "../drivers/hk_input.h"
 #include "../services/settings_service.h"
+#include "hk_config.h"
+#if HK_ENABLE_APP_MICROPYTHON
+#include "../hal/hal_watchdog.h"
+#endif
 
 void autostart_controller_start(void)
 {
@@ -13,12 +19,28 @@ void autostart_controller_start(void)
     hk_autostart_id_t id = settings_autostart_id();
     const hk_app_t *app;
 
+    if(buttons_read_pressed_mask() & BUTTON_BACK)
+    {
+        printf("[BOOT] autostart suppressed by BACK\r\n");
+        shell_show_menu();
+        return;
+    }
+
     if(id == HK_AUTOSTART_OFF)
     {
         printf("[BOOT] autostart=OFF\r\n");
         shell_show_menu();
         return;
     }
+
+#if HK_ENABLE_APP_MICROPYTHON
+    if(id == HK_AUTOSTART_MICROPYTHON && hal_watchdog_reset_detected())
+    {
+        printf("[BOOT] MicroPython autostart suppressed after WDT1 reset\r\n");
+        shell_show_menu();
+        return;
+    }
+#endif
 
     app = hk_app_for_autostart_id(id);
     if(!app)

@@ -39,6 +39,9 @@
 #if HK_ENABLE_APP_SLEEP
 #include "sleep/sleep_app.h"
 #endif
+#if HK_ENABLE_APP_MICROPYTHON
+#include "micropython/micropython_app.h"
+#endif
 
 const hk_app_t g_menu_items[] = {
 #if HK_ENABLE_APP_TERMINAL
@@ -131,6 +134,18 @@ const hk_app_t g_menu_items[] = {
      .enter = sleep_enter, .handle_input = sleep_handle_buttons,
      .draw_icon = sleep_draw_icon, .background_tick = sleep_background_tick,
      .blocks_sd_poll = 1U},
+#endif
+#if HK_ENABLE_APP_MICROPYTHON
+    {.id = "micropython", .title = "MICRO-PYTHON",
+     .screen = HK_MICROPYTHON_SCREEN,
+     .autostart_id = HK_AUTOSTART_MICROPYTHON,
+     .enter = micropython_enter, .exit = micropython_exit,
+     .tick = micropython_tick, .handle_input = micropython_handle_buttons,
+     .draw_icon = micropython_draw_icon,
+     .background_tick = micropython_background_tick,
+     .tick_interval_ms = 5U,
+     .handle_debug_command = micropython_handle_debug_command,
+     .debug_help = g_micropython_debug_help},
 #endif
 };
 

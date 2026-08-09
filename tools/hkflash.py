@@ -12,14 +12,27 @@ import sys
 import time
 
 
+ROOT = Path(__file__).resolve().parents[1]
+TOOLS_DIR = Path(__file__).resolve().parent
+if str(TOOLS_DIR) not in sys.path:
+    sys.path.insert(0, str(TOOLS_DIR))
+
+from gen_flash_layout import load_validated, partition_by_name
+
+_FLASH_LAYOUT, _FLASH_PARTITIONS = load_validated(
+    ROOT / "firmware" / "config" / "flash_layout.json"
+)
+_FIRMWARE_PARTITION = partition_by_name(_FLASH_PARTITIONS, "firmware")
+
 DEFAULT_BOOT_BAUD = 115200
 DEFAULT_FLASH_BAUD = 2_000_000
 UPLOADER_VID_RE = "(1A86)|(0403)|(067B)|(10C4)"
 FLASH_CHUNK = 4096
 SRAM_CHUNK = 1024
-FLASH_ADDRESS = 0x000000
+FLASH_ADDRESS = _FIRMWARE_PARTITION["offset"]
+FIRMWARE_FLASH_LIMIT = FLASH_ADDRESS + _FIRMWARE_PARTITION["size"]
+FLASH_ERASE_SIZE = _FLASH_LAYOUT["erase_size"]
 STUB_ADDRESS = 0x80000000
-ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 BUNDLED_HUSKYLENS_STUB = ROOT / "isp_stub" / "isp_prog_huskylens.bin"
 WORKSPACE_HUSKYLENS_STUB = WORKSPACE / "ISP_stub" / "isp_prog_huskylens.bin"
@@ -396,6 +409,19 @@ def round_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) // alignment * alignment
 
 
+def firmware_erase_length(payload_size: int) -> int:
+    if payload_size <= 0:
+        raise ValueError("firmware payload is empty")
+    erase_len = round_up(payload_size, FLASH_ERASE_SIZE)
+    if FLASH_ADDRESS + erase_len > FIRMWARE_FLASH_LIMIT:
+        raise ValueError(
+            "firmware payload exceeds canonical partition: "
+            f"payload={payload_size} erase={erase_len} "
+            f"limit=0x{FIRMWARE_FLASH_LIMIT:06X}"
+        )
+    return erase_len
+
+
 def cmd_monitor(args: argparse.Namespace) -> int:
     serial = require_serial()
     port = resolve_port(args, serial)
@@ -441,7 +467,11 @@ def cmd_flash(args: argparse.Namespace) -> int:
 
     raw_image = image.read_bytes()
     flash_payload = make_k210_image_payload(raw_image, io_mode=args.io_mode)
-    erase_len = round_up(len(flash_payload), 4096)
+    try:
+        erase_len = firmware_erase_length(len(flash_payload))
+    except ValueError as exc:
+        print(f"[ERR] {exc}", file=sys.stderr)
+        return 1
 
     with serial.Serial(port, args.boot_baud, timeout=0.1) as ser:
         if args.manual:

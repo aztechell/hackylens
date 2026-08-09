@@ -2,6 +2,14 @@
 
 #include <string.h>
 
+#if defined(LCD_ST7789_TESTING)
+#ifndef HK_ENABLE_APP_MICROPYTHON
+#define HK_ENABLE_APP_MICROPYTHON 1
+#endif
+#else
+#include "hk_config.h"
+#endif
+
 #include "../board/board_pins.h"
 #include "../config/display_config.h"
 #include "../core/hk_string.h"
@@ -12,6 +20,10 @@
 #include "../hal/hal_time.h"
 
 static uint8_t g_line[LCD_W * 2];
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t g_lcd_tx_line[LCD_W * 2U];
+#define LCD_OVERLAY_REPAINT_TIMEOUT_US 500000ULL
+#endif
 static uint8_t g_lcd_shadow[LCD_W * LCD_H * 2U] __attribute__((aligned(4), section(".bss")));
 static uint16_t g_lcd_window_x0;
 static uint16_t g_lcd_window_y0;
@@ -23,6 +35,29 @@ static uint8_t g_glyph_pixels[HACKYLENS_FONT_W * HACKYLENS_FONT_H * 2];
 static uint8_t g_lcd_frame_leased;
 static uint32_t g_lcd_frame_lease_id;
 static uint32_t g_lcd_next_lease_id;
+
+static uint8_t lcd_set_window_physical(uint16_t x0, uint16_t y0,
+                                       uint16_t x1, uint16_t y1);
+
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t lcd_set_window_physical_until(
+    uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
+    uint64_t deadline_us);
+static lcd_overlay_present_result_t lcd_overlay_repaint(
+    const lcd_overlay_command_t *commands, size_t command_count,
+    const uint8_t *text, size_t text_length,
+    lcd_overlay_cancel_fn cancelled, void *cancel_context);
+static lcd_overlay_command_t
+    g_lcd_overlay_commands[LCD_OVERLAY_COMMAND_MAX];
+static uint8_t g_lcd_overlay_text[LCD_OVERLAY_TEXT_MAX];
+static size_t g_lcd_overlay_command_count;
+static size_t g_lcd_overlay_text_length;
+static uint32_t g_lcd_overlay_run_id;
+static uint8_t g_lcd_overlay_visible;
+/* True means the panel may contain only a prefix of a frame.  It is cleared
+ * only after a complete physical repaint, never merely by logical cleanup. */
+static uint8_t g_lcd_overlay_physical_dirty;
+#endif
 
 uint8_t *lcd_line_buffer(void)
 {
@@ -49,25 +84,61 @@ static void lcd_spi_set_frame_bits(uint32_t bits)
     hal_spi_fifo_set_frame_bits(LCD_SPI, bits);
 }
 
-static void lcd_spi_send_bytes(const uint8_t *data, size_t len)
+static uint8_t lcd_spi_send_bytes(const uint8_t *data, size_t len)
 {
     lcd_spi_set_tmod_tx();
-    hal_spi_fifo_send_bytes(LCD_SPI, LCD_CS, data, len);
+    return hal_spi_fifo_send_bytes(LCD_SPI, LCD_CS, data, len);
 }
 
-void lcd_cmd(uint8_t cmd)
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t lcd_spi_send_bytes_until(const uint8_t *data, size_t len,
+                                        uint64_t deadline_us)
+{
+    lcd_spi_set_tmod_tx();
+    return hal_spi_fifo_send_bytes_until(LCD_SPI, LCD_CS, data, len,
+                                         deadline_us);
+}
+#endif
+
+static uint8_t lcd_cmd(uint8_t cmd)
 {
     lcd_spi_set_frame_bits(8);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 0);
-    lcd_spi_send_bytes(&cmd, 1);
+    return lcd_spi_send_bytes(&cmd, 1);
 }
 
-void lcd_data(const uint8_t *data, size_t len)
+static uint8_t lcd_data(const uint8_t *data, size_t len)
 {
     lcd_spi_set_frame_bits(8);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1);
-    lcd_spi_send_bytes(data, len);
+    return lcd_spi_send_bytes(data, len);
 }
+
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t lcd_cmd_until(uint8_t cmd, uint64_t deadline_us)
+{
+    lcd_spi_set_frame_bits(8);
+    hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 0);
+    return lcd_spi_send_bytes_until(&cmd, 1U, deadline_us);
+}
+
+static uint8_t lcd_data_until(const uint8_t *data, size_t len,
+                              uint64_t deadline_us)
+{
+    lcd_spi_set_frame_bits(8);
+    hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1);
+    return lcd_spi_send_bytes_until(data, len, deadline_us);
+}
+
+static uint64_t lcd_overlay_deadline(void)
+{
+    uint64_t now = hal_time_us();
+
+    return UINT64_MAX - now < LCD_OVERLAY_REPAINT_TIMEOUT_US
+               ? UINT64_MAX
+               : now + LCD_OVERLAY_REPAINT_TIMEOUT_US;
+}
+#endif
 
 void lcd_shadow_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
@@ -119,9 +190,221 @@ void lcd_shadow_write_pixels(const uint8_t *data, size_t len)
     }
 }
 
+#if HK_ENABLE_APP_MICROPYTHON
+static uint32_t lcd_overlay_utf8_next(const uint8_t *text, size_t end,
+                                      size_t *position)
+{
+    uint8_t first;
+    uint32_t codepoint;
+    size_t required;
+
+    if(!text || !position || *position >= end)
+        return 0U;
+    first = text[(*position)++];
+    if(first < 0x80U)
+        return first;
+    if((first & 0xE0U) == 0xC0U)
+    {
+        codepoint = first & 0x1FU;
+        required = 1U;
+    }
+    else if((first & 0xF0U) == 0xE0U)
+    {
+        codepoint = first & 0x0FU;
+        required = 2U;
+    }
+    else if((first & 0xF8U) == 0xF0U)
+    {
+        codepoint = first & 0x07U;
+        required = 3U;
+    }
+    else
+    {
+        return '?';
+    }
+    if(required > end - *position)
+    {
+        *position = end;
+        return '?';
+    }
+    for(size_t i = 0U; i < required; i++)
+    {
+        uint8_t next = text[*position];
+        if((next & 0xC0U) != 0x80U)
+            return '?';
+        (*position)++;
+        codepoint = (codepoint << 6) | (next & 0x3FU);
+    }
+    return codepoint;
+}
+
+static void lcd_overlay_line_fill(uint8_t *line, uint32_t x0,
+                                  uint32_t x1, uint16_t color)
+{
+    if(x0 >= LCD_W)
+        return;
+    if(x1 > LCD_W)
+        x1 = LCD_W;
+    for(uint32_t x = x0; x < x1; x++)
+    {
+        line[x * 2U] = (uint8_t)(color >> 8);
+        line[x * 2U + 1U] = (uint8_t)color;
+    }
+}
+
+static void lcd_overlay_render_text_row(
+    uint8_t *line, uint16_t y, const lcd_overlay_command_t *command,
+    const uint8_t *text, size_t text_length)
+{
+    uint32_t y0 = command->y;
+    uint32_t glyph_row;
+    uint32_t glyph_x = command->x;
+    size_t position = command->text_offset;
+    size_t end = position + command->text_length;
+
+    if((uint32_t)y < y0 || (uint32_t)y >= y0 + HACKYLENS_FONT_H ||
+       end > text_length)
+        return;
+    glyph_row = (uint32_t)y - y0;
+    while(position < end && glyph_x < LCD_W)
+    {
+        const uint8_t *glyph = term_glyph(
+            lcd_overlay_utf8_next(text, end, &position));
+
+        for(uint32_t glyph_x_offset = 0U;
+            glyph_x_offset < HACKYLENS_FONT_W; glyph_x_offset++)
+        {
+            uint32_t x = glyph_x + glyph_x_offset;
+            uint8_t bit;
+            uint16_t color;
+
+            if(x >= LCD_W)
+                break;
+            bit = glyph[glyph_row * HACKYLENS_FONT_ROW_BYTES +
+                        glyph_x_offset / 8U] &
+                  (uint8_t)(0x80U >> (glyph_x_offset & 7U));
+            color = bit ? command->color : command->background;
+            line[x * 2U] = (uint8_t)(color >> 8);
+            line[x * 2U + 1U] = (uint8_t)color;
+        }
+        glyph_x += HACKYLENS_FONT_W;
+    }
+}
+
+static void lcd_overlay_render_row(
+    uint8_t *line, uint16_t y, const lcd_overlay_command_t *commands,
+    size_t command_count, const uint8_t *text, size_t text_length)
+{
+    memcpy(line, g_lcd_shadow + (uint32_t)y * LCD_W * 2U, LCD_W * 2U);
+    for(size_t index = 0U; index < command_count; index++)
+    {
+        const lcd_overlay_command_t *command = &commands[index];
+        uint32_t x0 = command->x;
+        uint32_t y0 = command->y;
+        uint32_t x1 = x0 + command->width;
+        uint32_t y1 = y0 + command->height;
+
+        switch(command->type)
+        {
+        case LCD_OVERLAY_COMMAND_CLEAR:
+            lcd_overlay_line_fill(line, 0U, LCD_W, command->color);
+            break;
+        case LCD_OVERLAY_COMMAND_TEXT:
+            lcd_overlay_render_text_row(line, y, command,
+                                        text, text_length);
+            break;
+        case LCD_OVERLAY_COMMAND_RECT:
+            if((uint32_t)y < y0 || (uint32_t)y >= y1)
+                break;
+            if(command->filled || (uint32_t)y == y0 ||
+               (uint32_t)y + 1U == y1)
+            {
+                lcd_overlay_line_fill(line, x0, x1, command->color);
+            }
+            else
+            {
+                lcd_overlay_line_fill(line, x0, x0 + 1U,
+                                      command->color);
+                if(x1 != 0U)
+                    lcd_overlay_line_fill(line, x1 - 1U, x1,
+                                          command->color);
+            }
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+static uint8_t lcd_overlay_commands_valid(
+    const lcd_overlay_command_t *commands, size_t command_count,
+    const uint8_t *text, size_t text_length)
+{
+    if(command_count > LCD_OVERLAY_COMMAND_MAX ||
+       text_length > LCD_OVERLAY_TEXT_MAX ||
+       (command_count && !commands) || (text_length && !text))
+        return 0U;
+    for(size_t index = 0U; index < command_count; index++)
+    {
+        const lcd_overlay_command_t *command = &commands[index];
+
+        if(command->type == LCD_OVERLAY_COMMAND_CLEAR)
+            continue;
+        if(command->type == LCD_OVERLAY_COMMAND_RECT)
+        {
+            if(!command->width || !command->height)
+                return 0U;
+            continue;
+        }
+        if(command->type != LCD_OVERLAY_COMMAND_TEXT ||
+           command->text_offset > text_length ||
+           command->text_length > text_length - command->text_offset)
+            return 0U;
+    }
+    return 1U;
+}
+#endif
+
 void lcd_write_pixels(const uint8_t *data, size_t len)
 {
-    lcd_data(data, len);
+#if HK_ENABLE_APP_MICROPYTHON
+    if(g_lcd_overlay_visible && data && len >= 2U)
+    {
+        uint16_t x = g_lcd_cursor_x;
+        uint16_t y = g_lcd_cursor_y;
+        size_t pixels = len / 2U;
+        uint8_t was_dirty = g_lcd_overlay_physical_dirty;
+
+        /* The base is updated first.  The transmitted bytes are then rebuilt
+         * from that latest base plus the immutable presented overlay. */
+        lcd_shadow_write_pixels(data, len);
+        g_lcd_overlay_physical_dirty = 1U;
+        while(pixels && y <= g_lcd_window_y1)
+        {
+            size_t count = (size_t)g_lcd_window_x1 - x + 1U;
+            if(count > pixels)
+                count = pixels;
+            lcd_overlay_render_row(
+                g_lcd_tx_line, y, g_lcd_overlay_commands,
+                g_lcd_overlay_command_count, g_lcd_overlay_text,
+                g_lcd_overlay_text_length);
+            if(!lcd_data(g_lcd_tx_line + (uint32_t)x * 2U, count * 2U))
+                return;
+            pixels -= count;
+            x = g_lcd_window_x0;
+            y++;
+        }
+        if(!was_dirty)
+            g_lcd_overlay_physical_dirty = 0U;
+        return;
+    }
+#endif
+#if HK_ENABLE_APP_MICROPYTHON
+    if(!lcd_data(data, len) && g_lcd_overlay_run_id)
+        g_lcd_overlay_physical_dirty = 1U;
+#else
+    (void)lcd_data(data, len);
+#endif
     lcd_shadow_write_pixels(data, len);
 }
 
@@ -146,14 +429,41 @@ uint8_t lcd_frame_acquire(lcd_frame_surface_t *surface)
 
 uint8_t lcd_frame_present(uint32_t lease_id)
 {
+    uint8_t result;
+
     if(!g_lcd_frame_leased || lease_id == 0 || lease_id != g_lcd_frame_lease_id)
         return 0;
 
-    lcd_set_window(0, 0, LCD_W - 1U, LCD_H - 1U);
-    lcd_data(g_lcd_shadow, sizeof(g_lcd_shadow));
+#if HK_ENABLE_APP_MICROPYTHON
+    if(g_lcd_overlay_visible)
+    {
+        result = lcd_overlay_repaint(
+                     g_lcd_overlay_commands,
+                     g_lcd_overlay_command_count,
+                     g_lcd_overlay_text, g_lcd_overlay_text_length,
+                     NULL, NULL) == LCD_OVERLAY_PRESENT_OK;
+    }
+    else
+    {
+        uint64_t deadline_us = lcd_overlay_deadline();
+
+        /* The common camera path stays one contiguous pixel transfer when no
+         * script overlay is visible. */
+        g_lcd_overlay_physical_dirty = 1U;
+        result = lcd_set_window_physical_until(
+                     0U, 0U, LCD_W - 1U, LCD_H - 1U, deadline_us) &&
+                 lcd_data_until(g_lcd_shadow, sizeof(g_lcd_shadow),
+                                deadline_us);
+        if(result)
+            g_lcd_overlay_physical_dirty = 0U;
+    }
+#else
+    result = lcd_set_window_physical(0U, 0U, LCD_W - 1U, LCD_H - 1U) &&
+             lcd_data(g_lcd_shadow, sizeof(g_lcd_shadow));
+#endif
     g_lcd_frame_leased = 0;
     g_lcd_frame_lease_id = 0;
-    return 1;
+    return result;
 }
 
 void lcd_frame_cancel(uint32_t lease_id)
@@ -164,12 +474,178 @@ void lcd_frame_cancel(uint32_t lease_id)
     g_lcd_frame_lease_id = 0;
 }
 
-void lcd_data_u8(uint8_t value)
+#if HK_ENABLE_APP_MICROPYTHON
+static lcd_overlay_present_result_t lcd_overlay_repaint(
+    const lcd_overlay_command_t *commands, size_t command_count,
+    const uint8_t *text, size_t text_length,
+    lcd_overlay_cancel_fn cancelled, void *cancel_context)
+{
+    uint64_t deadline_us;
+
+    if(cancelled && cancelled(cancel_context))
+        return LCD_OVERLAY_PRESENT_CANCELLED;
+    deadline_us = lcd_overlay_deadline();
+    g_lcd_overlay_physical_dirty = 1U;
+    if(!lcd_set_window_physical_until(
+           0U, 0U, LCD_W - 1U, LCD_H - 1U, deadline_us))
+        return LCD_OVERLAY_PRESENT_IO;
+
+    if(command_count == 0U)
+    {
+        if(!lcd_data_until(g_lcd_shadow, sizeof(g_lcd_shadow), deadline_us))
+            return LCD_OVERLAY_PRESENT_IO;
+        if(cancelled && cancelled(cancel_context))
+            return LCD_OVERLAY_PRESENT_CANCELLED;
+        if(hal_time_us() > deadline_us)
+            return LCD_OVERLAY_PRESENT_IO;
+        g_lcd_overlay_physical_dirty = 0U;
+        return LCD_OVERLAY_PRESENT_OK;
+    }
+
+    for(uint16_t y = 0U; y < LCD_H; y++)
+    {
+        if(cancelled && cancelled(cancel_context))
+            return LCD_OVERLAY_PRESENT_CANCELLED;
+        lcd_overlay_render_row(g_lcd_tx_line, y, commands, command_count,
+                               text, text_length);
+        if(!lcd_data_until(g_lcd_tx_line, LCD_W * 2U, deadline_us))
+            return LCD_OVERLAY_PRESENT_IO;
+    }
+    if(cancelled && cancelled(cancel_context))
+        return LCD_OVERLAY_PRESENT_CANCELLED;
+    if(hal_time_us() > deadline_us)
+        return LCD_OVERLAY_PRESENT_IO;
+    g_lcd_overlay_physical_dirty = 0U;
+    return LCD_OVERLAY_PRESENT_OK;
+}
+
+static uint8_t lcd_overlay_restore_presented(void)
+{
+    if(!g_lcd_overlay_physical_dirty)
+        return 1U;
+    return lcd_overlay_repaint(
+               g_lcd_overlay_commands,
+               g_lcd_overlay_visible ? g_lcd_overlay_command_count : 0U,
+               g_lcd_overlay_text, g_lcd_overlay_text_length, NULL, NULL) ==
+           LCD_OVERLAY_PRESENT_OK;
+}
+
+static void lcd_overlay_clear_logical(void)
+{
+    g_lcd_overlay_visible = 0U;
+    g_lcd_overlay_command_count = 0U;
+    g_lcd_overlay_text_length = 0U;
+    g_lcd_overlay_run_id = 0U;
+}
+
+uint8_t lcd_overlay_acquire(uint32_t run_id)
+{
+    if(!run_id)
+        return 0U;
+    if(g_lcd_overlay_run_id)
+        return g_lcd_overlay_run_id == run_id;
+
+    /* A prior owner's failed cleanup must never wedge future runs.  Attempt
+     * bounded base recovery, but grant logical ownership even if the panel is
+     * still unavailable; a later present/release can repair it. */
+    if(g_lcd_overlay_physical_dirty)
+        (void)lcd_overlay_repaint(NULL, 0U, NULL, 0U, NULL, NULL);
+    g_lcd_overlay_run_id = run_id;
+    return 1U;
+}
+
+lcd_overlay_present_result_t lcd_overlay_present(
+    uint32_t run_id, const lcd_overlay_command_t *commands,
+    size_t command_count, const uint8_t *text, size_t text_length,
+    lcd_overlay_cancel_fn cancelled, void *cancel_context)
+{
+    lcd_overlay_present_result_t result;
+
+    if(!run_id || run_id != g_lcd_overlay_run_id ||
+       !lcd_overlay_commands_valid(commands, command_count,
+                                   text, text_length))
+        return LCD_OVERLAY_PRESENT_INVALID;
+    result = lcd_overlay_repaint(commands, command_count, text, text_length,
+                                 cancelled, cancel_context);
+    if(result != LCD_OVERLAY_PRESENT_OK)
+    {
+        /* A failed/cancelled transfer may have changed a prefix of the panel.
+         * The prior logical overlay remains authoritative and is repainted on
+         * a best-effort basis before returning. */
+        (void)lcd_overlay_restore_presented();
+        return result;
+    }
+    if(command_count)
+        memcpy(g_lcd_overlay_commands, commands,
+               command_count * sizeof(commands[0]));
+    if(text_length)
+        memcpy(g_lcd_overlay_text, text, text_length);
+    g_lcd_overlay_command_count = command_count;
+    g_lcd_overlay_text_length = text_length;
+    g_lcd_overlay_visible = command_count != 0U;
+    return LCD_OVERLAY_PRESENT_OK;
+}
+
+uint8_t lcd_overlay_release(uint32_t run_id)
+{
+    if(!g_lcd_overlay_run_id)
+    {
+        /* Idempotent cleanup is also the retry path after logical ownership
+         * was dropped following an earlier physical failure. */
+        if(g_lcd_overlay_physical_dirty)
+            return lcd_overlay_repaint(NULL, 0U, NULL, 0U, NULL, NULL) ==
+                   LCD_OVERLAY_PRESENT_OK;
+        return 1U;
+    }
+    if(!run_id || run_id != g_lcd_overlay_run_id)
+        return 0U;
+    if((g_lcd_overlay_visible || g_lcd_overlay_physical_dirty) &&
+       lcd_overlay_repaint(NULL, 0U, NULL, 0U, NULL, NULL) !=
+           LCD_OVERLAY_PRESENT_OK)
+    {
+        /* The service cannot retain this failed ownership.  Preserve only
+         * physical dirty so idempotent cleanup or a new run can retry. */
+        lcd_overlay_clear_logical();
+        return 0U;
+    }
+    lcd_overlay_clear_logical();
+    return 1U;
+}
+#else
+uint8_t lcd_overlay_acquire(uint32_t run_id)
+{
+    (void)run_id;
+    return 0U;
+}
+
+lcd_overlay_present_result_t lcd_overlay_present(
+    uint32_t run_id, const lcd_overlay_command_t *commands,
+    size_t command_count, const uint8_t *text, size_t text_length,
+    lcd_overlay_cancel_fn cancelled, void *cancel_context)
+{
+    (void)run_id;
+    (void)commands;
+    (void)command_count;
+    (void)text;
+    (void)text_length;
+    (void)cancelled;
+    (void)cancel_context;
+    return LCD_OVERLAY_PRESENT_INVALID;
+}
+
+uint8_t lcd_overlay_release(uint32_t run_id)
+{
+    (void)run_id;
+    return 0U;
+}
+#endif
+
+static void lcd_data_u8(uint8_t value)
 {
     lcd_data(&value, 1);
 }
 
-void lcd_reset_like_original(void)
+static void lcd_reset_like_original(void)
 {
     hal_gpiohs_write(GPIOHS_LCD_RST, 1);
     hal_sleep_ms(1);
@@ -179,26 +655,71 @@ void lcd_reset_like_original(void)
     hal_sleep_ms(125);
 }
 
-void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+static uint8_t lcd_set_window_physical(uint16_t x0, uint16_t y0,
+                                       uint16_t x1, uint16_t y1)
 {
     uint8_t data[4];
 
-    lcd_cmd(0x2A);
+    if(!lcd_cmd(0x2A))
+        return 0U;
     data[0] = x0 >> 8;
     data[1] = x0 & 0xFF;
     data[2] = x1 >> 8;
     data[3] = x1 & 0xFF;
-    lcd_data(data, sizeof(data));
+    if(!lcd_data(data, sizeof(data)))
+        return 0U;
 
-    lcd_cmd(0x2B);
+    if(!lcd_cmd(0x2B))
+        return 0U;
     data[0] = y0 >> 8;
     data[1] = y0 & 0xFF;
     data[2] = y1 >> 8;
     data[3] = y1 & 0xFF;
-    lcd_data(data, sizeof(data));
+    if(!lcd_data(data, sizeof(data)))
+        return 0U;
 
-    lcd_cmd(0x2C);
+    return lcd_cmd(0x2C);
+}
+
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t lcd_set_window_physical_until(
+    uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
+    uint64_t deadline_us)
+{
+    uint8_t data[4];
+
+    if(!lcd_cmd_until(0x2AU, deadline_us))
+        return 0U;
+    data[0] = (uint8_t)(x0 >> 8);
+    data[1] = (uint8_t)x0;
+    data[2] = (uint8_t)(x1 >> 8);
+    data[3] = (uint8_t)x1;
+    if(!lcd_data_until(data, sizeof(data), deadline_us) ||
+       !lcd_cmd_until(0x2BU, deadline_us))
+        return 0U;
+    data[0] = (uint8_t)(y0 >> 8);
+    data[1] = (uint8_t)y0;
+    data[2] = (uint8_t)(y1 >> 8);
+    data[3] = (uint8_t)y1;
+    return lcd_data_until(data, sizeof(data), deadline_us) &&
+           lcd_cmd_until(0x2CU, deadline_us);
+}
+#endif
+
+void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+{
+    uint8_t result;
+
     lcd_shadow_set_window(x0, y0, x1, y1);
+    result = lcd_set_window_physical(
+        g_lcd_window_x0, g_lcd_window_y0,
+        g_lcd_window_x1, g_lcd_window_y1);
+#if HK_ENABLE_APP_MICROPYTHON
+    if(!result && g_lcd_overlay_run_id)
+        g_lcd_overlay_physical_dirty = 1U;
+#else
+    (void)result;
+#endif
 }
 
 void lcd_init_original_sequence(void)
