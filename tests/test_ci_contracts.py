@@ -83,6 +83,13 @@ class CiContractsTest(unittest.TestCase):
         self.assertNotIn("--ide", packager)
         self.assertNotIn("code.zip", packager)
 
+    def test_micropython_patches_keep_lf_on_windows_runners(self) -> None:
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn(
+            "firmware/third_party/micropython/patches/*.patch text eol=lf",
+            attributes.splitlines(),
+        )
+
     def test_release_workflow_validates_every_change_and_publishes_tags_only(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
             encoding="utf-8"
