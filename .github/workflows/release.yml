@@ -53,6 +53,7 @@ jobs:
 
       - name: Validate source and environment
         run: |
+          python tools/check_docs.py
           python tools/check_arch.py
           python tools/gen_flash_layout.py --check
           python tools/check_env.py

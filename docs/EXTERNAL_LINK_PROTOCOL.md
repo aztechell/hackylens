@@ -1,3 +1,10 @@
+---
+contract-id: hackylens.external-link
+owner: device-protocols
+version: 1.0.0
+stability: experimental
+---
+
 # HackyLens External Link Protocol v1
 
 This is a HackyLens-native protocol. It deliberately does not emulate the

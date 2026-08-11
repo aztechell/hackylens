@@ -1,4 +1,15 @@
+---
+contract-id: hackylens.legacy-app-lifecycle
+owner: firmware-runtime
+version: 0.2.0
+stability: experimental
+---
+
 # App Lifecycle
+
+This document describes the lifecycle shipped by firmware `0.2.0`. The matching
+version is historical and does not permanently couple firmware releases to the
+future App SDK or runtime contract.
 
 Apps are described by `hk_app_t`: `id`, `title`, `screen`, stable `autostart_id`, `enter`, optional `exit`, optional `tick`, optional `handle_input`, optional `owns_screen`, optional `draw_icon`, optional `background_tick(input)`, optional `handle_sd_event`, optional SD-poll blocking, optional tick interval, optional `handle_debug_command`, and optional `debug_help`. Registry entries use designated initializers so optional fields are independent of structure order. SETTINGS and SLEEP retain the zero/OFF autostart ID and cannot be selected as boot targets.
 

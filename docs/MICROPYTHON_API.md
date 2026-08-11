@@ -1,3 +1,10 @@
+---
+contract-id: hackylens.micropython-api
+owner: micropython-runtime
+version: 1.0.0
+stability: experimental
+---
+
 # HackyLens MicroPython API v1
 
 HackyLens embeds upstream MicroPython inside the main firmware. A program runs

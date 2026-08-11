@@ -1,3 +1,10 @@
+---
+contract-id: hackylens.hmpy
+owner: device-protocols
+version: 1.0.0
+stability: experimental
+---
+
 # HackyLens MicroPython Protocol (HMPY) v1
 
 HMPY is the binary protocol between the HackyLens firmware and a desktop IDE.

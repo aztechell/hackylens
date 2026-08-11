@@ -2,6 +2,13 @@
 
 HackyLens 0.2.0 is modular firmware built from separate C translation units under `core`, `runtime`, `controllers`, `services`, `storage`, `ui`, `drivers`, `hal`, and `apps`.
 
+> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> preview.
+
+This document describes the implemented v0.2 architecture. The normative
+direction is defined in [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md), and
+the remaining gaps are recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
+
 `firmware/targets/full.c` is a small composition root. It configures the runtime loop in `runtime/hk_main.c`, whose input polling and sleep timing remain platform-dependent. `core` owns app contracts, screen model, dispatch contracts, and neutral data contracts such as `core/pixel_source.h`; it does not access `hk_input` or `hal_time` directly.
 
 ## Startup
@@ -44,9 +51,21 @@ The shared `settings_menu` controller is an instance-based UI state machine driv
 
 ## Feature modules
 
-All eleven menu applications are self-contained modules: `apps/terminal/`, `apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`, `apps/object_detect/`, `apps/files/`, `apps/buttons/`, `apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point, controller, view, icon, feature configuration, and feature-specific state/services. The only public header of a module is its `*_app.h`, and only `apps/app_registry.c` may include it.
+All twelve menu applications are self-contained modules: `apps/terminal/`,
+`apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`,
+`apps/object_detect/`, `apps/micropython/`, `apps/files/`, `apps/buttons/`,
+`apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point,
+controller, view, icon, feature configuration, and feature-specific
+state/services. The only public header of a module is its `*_app.h`, and only
+`apps/app_registry.c` may include it.
 
-The build manifest maps each app ID to its whole directory. `--disable-app` therefore removes every source and private header of that feature. Shared camera sources remain while CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, or OBJECT DETECT is enabled; `quirc` is staged only for QR-CAMERA. The planar AI input is staged only for FACE/OBJECT, and the shared core-1 executor only for APRILTAG. With no camera consumer, sensor/DVP/camera runtime sources are omitted while the general KPU HAL remains available.
+The build manifest maps each app ID to its whole directory. `--disable-app`
+therefore removes every source and private header of that feature. Shared camera
+sources remain while CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, or OBJECT DETECT
+is enabled; `quirc` is staged only for QR-CAMERA. The planar AI input is staged
+only for FACE/OBJECT. The shared core-1 executor is retained while APRILTAG or
+MICROPYTHON needs it. With no camera consumer, sensor/DVP/camera runtime sources
+are omitted while the general KPU HAL remains available.
 
 The registry dispatches primary and secondary screen ownership, lifecycle callbacks, background ticks, SD events, menu icons, and debug commands. Shared screen, SD, debug, boot, and system-tick controllers do not include feature headers or select features with conditionals.
 
@@ -79,4 +98,4 @@ external-link, APRILTAG, or autostart data.
 
 ## Architecture guard
 
-`tools/check_arch.py` uses one declarative table for all eleven feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.
+`tools/check_arch.py` uses one declarative table for all twelve feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.

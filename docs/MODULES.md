@@ -1,5 +1,8 @@
 # Modules
 
+> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> preview.
+
 ## External link and vision results
 
 `services/external_link_protocol.*` owns the versioned transport-neutral wire
@@ -9,9 +12,17 @@ is the shared producer/consumer boundary for fixed BLOCK/ARROW results. Physical
 pin and peripheral operations stay in board/HAL. See
 `docs/EXTERNAL_LINK_PROTOCOL.md` for the public wire contract.
 
-Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, OBJECT DETECT, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
+Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG,
+OBJECT DETECT, MICROPYTHON, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
-Compile-time app flags are generated into `hk_config.h` by `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`. Every `--disable-app <name>` omits the corresponding complete `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling APRILTAG omits its vendored detector core, TAG36H11 table, and core-1 executor. Shared camera sources are retained only while at least one camera consumer is enabled; the shared planar AI input requires FACE or OBJECT.
+Compile-time app flags are generated into `hk_config.h` by
+`tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`.
+Every `--disable-app <name>` omits the corresponding complete
+`apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling
+APRILTAG omits its vendored detector core and TAG36H11 table. The shared core-1
+executor remains when APRILTAG or MICROPYTHON requires it. Shared camera sources
+are retained only while at least one camera consumer is enabled; the shared
+planar AI input requires FACE or OBJECT.
 
 Key public interfaces:
 

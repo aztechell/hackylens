@@ -1,3 +1,10 @@
+---
+contract-id: hackylens.ai-model-package
+owner: ai-runtime
+version: 1.0.0
+stability: experimental
+---
+
 # AI models
 
 HackyLens separates reusable K210 model mechanics from feature behavior.

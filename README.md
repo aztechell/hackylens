@@ -12,6 +12,15 @@
 
 HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
 
+> [!IMPORTANT]
+> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> preview. The primary project goal is a lightweight, portable application
+> architecture for robotics hardware: board-independent feature apps, explicit
+> platform capabilities, and a direct path from MicroPython prototypes to native
+> apps. See the [architecture vision](docs/ARCHITECTURE_VISION.md),
+> [current-state audit](docs/CURRENT_STATE.md), and
+> [platform roadmap](docs/ROADMAP.md).
+
 > [!WARNING]
 > Flashing custom firmware replaces the firmware currently installed on the device. Make sure you are comfortable entering the K210 bootloader and restoring your preferred firmware before proceeding.
 
@@ -238,7 +247,16 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 HackyLens Code is intentionally maintained in the separate sibling
 `hackylens-code` repository.
 
-More detail is available in [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md), [AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and [RAM/flash budget](docs/RAM_BUDGET.md).
+Project direction is defined by [Architecture vision](docs/ARCHITECTURE_VISION.md),
+[Current state](docs/CURRENT_STATE.md), and the
+[Platform roadmap](docs/ROADMAP.md). Implementation details are available in
+[Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md),
+[AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and
+[RAM/flash budget](docs/RAM_BUDGET.md).
+
+Normative governance is indexed in the
+[platform specifications](docs/spec/README.md). Significant architecture
+decisions are recorded as [ADRs](docs/adr/README.md).
 
 ## License
 

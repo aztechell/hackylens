@@ -89,6 +89,7 @@ class CiContractsTest(unittest.TestCase):
         )
         self.assertIn("  pull_request:\n", workflow)
         self.assertIn('      - "**"\n', workflow)
+        self.assertIn("python tools/check_docs.py", workflow)
         self.assertIn("python tools/run_tests.py", workflow)
         self.assertIn("full --disable-app micropython", workflow)
         self.assertIn("--expect absent", workflow)
