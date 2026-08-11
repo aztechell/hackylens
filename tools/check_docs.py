@@ -21,8 +21,12 @@ SEMVER_RE = re.compile(
 RELEASE_SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 CONTRACT_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 OWNER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+ENCODED_MAJOR_RE = re.compile(r"^(0|[1-9]\d*)$")
 ADR_FILE_RE = re.compile(r"^(\d{4})-[a-z0-9]+(?:-[a-z0-9]+)*\.md$")
 MARKDOWN_LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+REFERENCE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\[([^\]]*)\]")
+REFERENCE_DEFINITION_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(.+?)\s*$")
+ADR_REFERENCE_RE = re.compile(r"^\d{4}$")
 HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
 
 STABILITIES = {"experimental", "stable", "deprecated"}
@@ -314,46 +318,79 @@ def link_target(raw: str) -> str:
     return match.group(1) if match else value
 
 
+def reference_label(raw: str) -> str:
+    return re.sub(r"\s+", " ", raw.strip()).casefold()
+
+
+def check_link_target(
+    root: Path,
+    path: Path,
+    number: int,
+    target: str,
+    anchor_cache: dict[Path, set[str]],
+) -> list[Issue]:
+    lower = target.lower()
+    if lower.startswith(("http://", "https://", "mailto:", "data:")):
+        return []
+
+    decoded = unquote(target)
+    location, separator, fragment = decoded.partition("#")
+    location = location.split("?", 1)[0]
+    destination = path if not location else (path.parent / location).resolve()
+
+    try:
+        destination.relative_to(root.resolve())
+    except ValueError:
+        return [issue(root, path, number, f"local link escapes repository: {target!r}")]
+
+    if not destination.exists():
+        return [issue(root, path, number, f"broken local link: {target!r}")]
+
+    if separator and fragment and destination.is_file():
+        anchor = fragment.lower()
+        if destination not in anchor_cache:
+            anchor_cache[destination] = heading_anchors(read_text(destination))
+        if anchor not in anchor_cache[destination]:
+            return [issue(root, path, number, f"missing Markdown anchor: {target!r}")]
+    return []
+
+
 def check_links(root: Path, paths: Iterable[Path]) -> list[Issue]:
     issues: list[Issue] = []
     anchor_cache: dict[Path, set[str]] = {}
 
     for path in paths:
         text = read_text(path)
-        for number, line in lines_outside_fences(text):
+        source_lines = lines_outside_fences(text)
+        definitions: dict[str, tuple[int, str]] = {}
+
+        for number, line in source_lines:
+            match = REFERENCE_DEFINITION_RE.match(line)
+            if not match or match.group(1).startswith("^"):
+                continue
+            label = reference_label(match.group(1))
+            target = link_target(match.group(2))
+            if label in definitions:
+                issues.append(
+                    issue(root, path, number, f"duplicate Markdown reference definition: {label!r}")
+                )
+            else:
+                definitions[label] = (number, target)
+
+        for number, line in source_lines:
             for match in MARKDOWN_LINK_RE.finditer(line):
                 target = link_target(match.group(1))
-                lower = target.lower()
-                if lower.startswith(("http://", "https://", "mailto:", "data:")):
-                    continue
+                issues.extend(check_link_target(root, path, number, target, anchor_cache))
 
-                decoded = unquote(target)
-                location, separator, fragment = decoded.partition("#")
-                location = location.split("?", 1)[0]
-                destination = path if not location else (path.parent / location).resolve()
-
-                try:
-                    destination.relative_to(root.resolve())
-                except ValueError:
+            for match in REFERENCE_LINK_RE.finditer(line):
+                label = reference_label(match.group(2) or match.group(1))
+                if label not in definitions:
                     issues.append(
-                        issue(root, path, number, f"local link escapes repository: {target!r}")
+                        issue(root, path, number, f"missing Markdown reference definition: {label!r}")
                     )
-                    continue
 
-                if not destination.exists():
-                    issues.append(
-                        issue(root, path, number, f"broken local link: {target!r}")
-                    )
-                    continue
-
-                if separator and fragment and destination.is_file():
-                    anchor = fragment.lower()
-                    if destination not in anchor_cache:
-                        anchor_cache[destination] = heading_anchors(read_text(destination))
-                    if anchor not in anchor_cache[destination]:
-                        issues.append(
-                            issue(root, path, number, f"missing Markdown anchor: {target!r}")
-                        )
+        for number, target in definitions.values():
+            issues.extend(check_link_target(root, path, number, target, anchor_cache))
     return issues
 
 
@@ -404,19 +441,28 @@ def check_forbidden_claims(root: Path, paths: Iterable[Path]) -> list[Issue]:
     return issues
 
 
-def contract_major(
+def contract_encoded_major(
     root: Path,
     contracts: dict[str, tuple[Path, FrontMatter]],
     contract_id: str,
+    field: str,
 ) -> tuple[int | None, list[Issue]]:
     if contract_id not in contracts:
         return None, [issue(root, root / "docs" / "spec" / "README.md", 1, f"missing contract {contract_id!r}")]
     path, front = contracts[contract_id]
-    version = front.values.get("version", "")
-    match = SEMVER_RE.fullmatch(version)
-    if not match:
-        return None, []
-    return int(match.group(1)), []
+    value = front.values.get(field, "")
+    if not value:
+        return None, [issue(root, path, 1, f"{contract_id} lacks {field}")]
+    if not ENCODED_MAJOR_RE.fullmatch(value):
+        return None, [
+            issue(
+                root,
+                path,
+                front.lines.get(field, 1),
+                f"{field} must be a non-negative decimal integer",
+            )
+        ]
+    return int(value), []
 
 
 def fixed_constant(
@@ -456,6 +502,7 @@ def check_canonical_versions(
     mappings = (
         (
             "hackylens.hmpy",
+            "wire-major",
             (
                 ("tools/hmpy_protocol.py", r"^PROTOCOL_VERSION\s*=\s*(\d+)\s*$", "HMPY host version"),
                 ("firmware/src/services/hmpy_codec.h", r"^#define\s+HMPY_PROTOCOL_VERSION\s+(\d+)U?\s*$", "HMPY firmware version"),
@@ -465,6 +512,7 @@ def check_canonical_versions(
         ),
         (
             "hackylens.external-link",
+            "wire-major",
             (
                 ("firmware/src/services/external_link_protocol.h", r"^#define\s+HK_LINK_PROTOCOL_VERSION\s+(\d+)U?\s*$", "External Link version"),
             ),
@@ -473,6 +521,7 @@ def check_canonical_versions(
         ),
         (
             "hackylens.ai-model-package",
+            "schema-major",
             (
                 ("tools/ai_model.py", r"^MANIFEST_VERSION\s*=\s*(\d+)\s*$", "AI host manifest version"),
                 ("firmware/src/storage/ai_model_storage.c", r"^#define\s+AI_MANIFEST_VERSION\s+(\d+)U?\s*$", "AI firmware manifest version"),
@@ -482,14 +531,17 @@ def check_canonical_versions(
         ),
         (
             "hackylens.micropython-api",
+            "api-major",
             (),
             root / "docs" / "MICROPYTHON_API.md",
             r"^# HackyLens MicroPython API v(\d+)\s*$",
         ),
     )
 
-    for contract_id, constants, heading_path, heading_pattern in mappings:
-        major, major_issues = contract_major(root, contracts, contract_id)
+    for contract_id, encoded_field, constants, heading_path, heading_pattern in mappings:
+        major, major_issues = contract_encoded_major(
+            root, contracts, contract_id, encoded_field
+        )
         issues.extend(major_issues)
         if major is None:
             continue
@@ -502,7 +554,7 @@ def check_canonical_versions(
                         root,
                         root / relative,
                         1,
-                        f"{label} {value} does not match {contract_id} major {major}",
+                        f"{label} {value} does not match {contract_id} {encoded_field} {major}",
                     )
                 )
         if heading_path is not None and heading_pattern is not None:
@@ -511,7 +563,8 @@ def check_canonical_versions(
                 issues.append(issue(root, heading_path, 1, "versioned contract heading is missing"))
             elif int(match.group(1)) != major:
                 issues.append(
-                    issue(root, heading_path, 1, f"heading major does not match {contract_id} version")
+                    issue(root, heading_path, 1,
+                          f"heading major does not match {contract_id} {encoded_field}")
                 )
     return issues
 
@@ -522,16 +575,24 @@ def check_adrs(root: Path) -> list[Issue]:
     if not adr_dir.is_dir():
         return [issue(root, adr_dir, 1, "ADR directory is missing")]
 
-    for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
+    records: dict[str, list[tuple[Path, FrontMatter]]] = {}
+    paths = sorted(
+        path for path in adr_dir.glob("*.md")
+        if path.name not in {"README.md", "template.md"}
+    )
+
+    for path in paths:
         name_match = ADR_FILE_RE.fullmatch(path.name)
         if not name_match:
             issues.append(issue(root, path, 1, "invalid ADR filename"))
             continue
         front = parse_front_matter(path)
+        number = name_match.group(1)
+        records.setdefault(number, []).append((path, front))
         for key in ("adr", "title", "status", "date", "deciders"):
             if not front.values.get(key):
                 issues.append(issue(root, path, 1, f"missing ADR field {key!r}"))
-        if front.values.get("adr") and front.values["adr"] != name_match.group(1):
+        if front.values.get("adr") and front.values["adr"] != number:
             issues.append(issue(root, path, front.lines.get("adr", 1), "ADR number does not match filename"))
         status = front.values.get("status", "")
         if status and status not in {"proposed", "accepted", "rejected", "superseded"}:
@@ -544,11 +605,69 @@ def check_adrs(root: Path) -> list[Issue]:
                 issues.append(issue(root, path, front.lines.get("date", 1), "ADR date must be YYYY-MM-DD"))
         if status == "superseded" and not front.values.get("superseded-by"):
             issues.append(issue(root, path, 1, "superseded ADR lacks superseded-by"))
+        if status != "superseded" and front.values.get("superseded-by"):
+            issues.append(
+                issue(root, path, front.lines.get("superseded-by", 1),
+                      "only a superseded ADR may declare superseded-by")
+            )
+        if front.values.get("supersedes") and status != "accepted":
+            issues.append(
+                issue(root, path, front.lines.get("supersedes", 1),
+                      "only an accepted ADR may supersede another ADR")
+            )
 
         text = read_text(path)
         for section in ADR_SECTIONS:
             if not re.search(rf"^## {re.escape(section)}\s*$", text, flags=re.MULTILINE):
                 issues.append(issue(root, path, 1, f"missing ADR section {section!r}"))
+
+    for number, entries in records.items():
+        if len(entries) > 1:
+            first = relative_path(root, entries[0][0])
+            for path, _ in entries[1:]:
+                issues.append(
+                    issue(root, path, 1, f"duplicate ADR number {number}; first declared in {first}")
+                )
+
+    canonical = {number: entries[0] for number, entries in records.items()}
+    for number, (path, front) in canonical.items():
+        for field, reciprocal in (
+            ("supersedes", "superseded-by"),
+            ("superseded-by", "supersedes"),
+        ):
+            reference = front.values.get(field, "")
+            if not reference:
+                continue
+            line = front.lines.get(field, 1)
+            if not ADR_REFERENCE_RE.fullmatch(reference):
+                issues.append(issue(root, path, line, f"{field} must be a four-digit ADR number"))
+                continue
+            if reference == number:
+                issues.append(issue(root, path, line, f"ADR must not {field} itself"))
+                continue
+            if reference not in canonical:
+                issues.append(issue(root, path, line, f"{field} references missing ADR {reference}"))
+                continue
+
+            target_path, target_front = canonical[reference]
+            if target_front.values.get(reciprocal, "") != number:
+                target = relative_path(root, target_path)
+                issues.append(
+                    issue(
+                        root,
+                        path,
+                        line,
+                        f"ADR {reference} in {target} must declare {reciprocal}: {number}",
+                    )
+                )
+            if field == "supersedes" and target_front.values.get("status") != "superseded":
+                issues.append(
+                    issue(root, path, line, f"superseded ADR {reference} must have status superseded")
+                )
+            if field == "superseded-by" and target_front.values.get("status") != "accepted":
+                issues.append(
+                    issue(root, path, line, f"superseding ADR {reference} must have status accepted")
+                )
     return issues
 
 

@@ -48,6 +48,32 @@ def contract(
     )
 
 
+def adr(
+    number: str,
+    *,
+    status: str = "accepted",
+    supersedes: str = "",
+    superseded_by: str = "",
+) -> str:
+    sections = "\n".join(
+        f"## {section}\n\nEvidence for {section}.\n"
+        for section in CHECK_DOCS.ADR_SECTIONS
+    )
+    return (
+        "---\n"
+        f"adr: {number}\n"
+        f"title: Decision {number}\n"
+        f"status: {status}\n"
+        "date: 2026-08-11\n"
+        "deciders: test-owner\n"
+        f"supersedes: {supersedes}\n"
+        f"superseded-by: {superseded_by}\n"
+        "---\n\n"
+        f"# ADR-{number}: Decision {number}\n\n"
+        f"{sections}"
+    )
+
+
 class DocumentationContractsTest(unittest.TestCase):
     def test_repository_documentation_passes(self) -> None:
         self.assertEqual(CHECK_DOCS.check_repository(ROOT), [])
@@ -72,6 +98,24 @@ class DocumentationContractsTest(unittest.TestCase):
             issues = CHECK_DOCS.check_links(root, [source])
         self.assertEqual(len(issues), 1)
         self.assertIn("missing Markdown anchor", issues[0].message)
+
+    def test_reference_style_markdown_links_are_checked(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-reference-") as temp:
+            root = Path(temp)
+            write(root / "docs" / "target.md", "# Existing Heading\n")
+            source = write(
+                root / "docs" / "source.md",
+                "[valid][architecture]\n\n"
+                "[collapsed][]\n\n"
+                "[missing][unknown]\n\n"
+                "[architecture]: target.md#existing-heading\n"
+                "[collapsed]: missing.md\n",
+            )
+            issues = CHECK_DOCS.check_links(root, [source])
+        messages = [found.message for found in issues]
+        self.assertTrue(any("missing Markdown reference definition" in item for item in messages))
+        self.assertTrue(any("broken local link" in item for item in messages))
+        self.assertEqual(len(issues), 2)
 
     def test_invalid_metadata_and_duplicate_contract_id_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-meta-") as temp:
@@ -103,6 +147,17 @@ class DocumentationContractsTest(unittest.TestCase):
             )
             issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
         self.assertTrue(any("at least 1.4.0" in found.message for found in issues))
+
+    def test_experimental_versioning_is_independent_of_major(self) -> None:
+        policy = (ROOT / "docs" / "spec" / "VERSIONING.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "For an experimental contract at any major version, an intentional breaking\n"
+            "  change increments MINOR",
+            policy,
+        )
+        self.assertIn("For a stable contract, an incompatible change increments MAJOR", policy)
 
     def test_forbidden_claim_requires_same_paragraph_qualifier(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-claim-") as temp:
@@ -144,21 +199,37 @@ class DocumentationContractsTest(unittest.TestCase):
             )
             hmpy = write(
                 root / "docs" / "HMPY_PROTOCOL.md",
-                contract("hackylens.hmpy", version="1.0.0")
+                contract(
+                    "hackylens.hmpy",
+                    version="7.0.0",
+                    extra="wire-major: 1\n",
+                )
                 + "# HackyLens MicroPython Protocol (HMPY) v1\n",
             )
             external = write(
                 root / "docs" / "EXTERNAL_LINK_PROTOCOL.md",
-                contract("hackylens.external-link", version="1.0.0")
+                contract(
+                    "hackylens.external-link",
+                    version="1.0.0",
+                    extra="wire-major: 1\n",
+                )
                 + "# HackyLens External Link Protocol v1\n",
             )
             ai = write(
                 root / "docs" / "AI_MODELS.md",
-                contract("hackylens.ai-model-package", version="1.0.0"),
+                contract(
+                    "hackylens.ai-model-package",
+                    version="1.0.0",
+                    extra="schema-major: 1\n",
+                ),
             )
             micropython = write(
                 root / "docs" / "MICROPYTHON_API.md",
-                contract("hackylens.micropython-api", version="1.0.0")
+                contract(
+                    "hackylens.micropython-api",
+                    version="1.0.0",
+                    extra="api-major: 1\n",
+                )
                 + "# HackyLens MicroPython API v1\n",
             )
             write(root / "tools" / "hmpy_protocol.py", "PROTOCOL_VERSION = 2\n")
@@ -170,6 +241,7 @@ class DocumentationContractsTest(unittest.TestCase):
             _, contracts = CHECK_DOCS.validate_contract_documents(root, paths)
             issues = CHECK_DOCS.check_canonical_versions(root, contracts)
         self.assertTrue(any("HMPY host version 2" in found.message for found in issues))
+        self.assertFalse(any("7" in found.message and "HMPY" in found.message for found in issues))
 
     def test_malformed_adr_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-") as temp:
@@ -191,6 +263,52 @@ class DocumentationContractsTest(unittest.TestCase):
         self.assertTrue(any("invalid ADR status" in item for item in messages))
         self.assertTrue(any("ADR date" in item for item in messages))
         self.assertTrue(any("missing ADR section" in item for item in messages))
+
+    def test_malformed_adr_filename_and_duplicate_number_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-number-") as temp:
+            root = Path(temp)
+            write(root / "docs" / "adr" / "02-short.md", adr("0002"))
+            write(root / "docs" / "adr" / "0001-first.md", adr("0001"))
+            write(root / "docs" / "adr" / "0001-second.md", adr("0001"))
+            issues = CHECK_DOCS.check_adrs(root)
+        messages = [found.message for found in issues]
+        self.assertTrue(any("invalid ADR filename" in item for item in messages))
+        self.assertTrue(any("duplicate ADR number 0001" in item for item in messages))
+
+    def test_adr_superseding_references_must_exist_and_be_reciprocal(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-links-") as temp:
+            root = Path(temp)
+            write(
+                root / "docs" / "adr" / "0001-original.md",
+                adr("0001", status="accepted"),
+            )
+            write(
+                root / "docs" / "adr" / "0002-replacement.md",
+                adr("0002", supersedes="0001"),
+            )
+            write(
+                root / "docs" / "adr" / "0003-missing.md",
+                adr("0003", supersedes="9999"),
+            )
+            issues = CHECK_DOCS.check_adrs(root)
+        messages = [found.message for found in issues]
+        self.assertTrue(any("must declare superseded-by: 0002" in item for item in messages))
+        self.assertTrue(any("must have status superseded" in item for item in messages))
+        self.assertTrue(any("references missing ADR 9999" in item for item in messages))
+
+    def test_reciprocal_adr_superseding_pair_passes(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-pair-") as temp:
+            root = Path(temp)
+            write(
+                root / "docs" / "adr" / "0001-original.md",
+                adr("0001", status="superseded", superseded_by="0002"),
+            )
+            write(
+                root / "docs" / "adr" / "0002-replacement.md",
+                adr("0002", supersedes="0001"),
+            )
+            issues = CHECK_DOCS.check_adrs(root)
+        self.assertEqual(issues, [])
 
     def test_pull_request_template_captures_governance_evidence(self) -> None:
         template = (ROOT / ".github" / "pull_request_template.md").read_text(

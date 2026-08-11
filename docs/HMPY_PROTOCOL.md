@@ -3,6 +3,7 @@ contract-id: hackylens.hmpy
 owner: device-protocols
 version: 1.0.0
 stability: experimental
+wire-major: 1
 ---
 
 # HackyLens MicroPython Protocol (HMPY) v1

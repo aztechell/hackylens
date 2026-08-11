@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.versioning-policy
 owner: platform-architecture
-version: 0.1.0
+version: 0.2.0
 stability: experimental
 ---
 
@@ -52,19 +52,24 @@ coupling with firmware or with future App SDK/runtime contracts.
 
 Versions use `MAJOR.MINOR.PATCH`.
 
-- For an experimental `0.x` line, a breaking contract change increments MINOR.
-- For an experimental `0.x` line, PATCH MUST NOT contain an intentional breaking
+- For an experimental contract at any major version, an intentional breaking
+  change increments MINOR. PATCH MUST NOT contain an intentional breaking
   change.
-- For a `1.x` or later line, an incompatible change increments MAJOR, a
-  backward-compatible addition increments MINOR, and a compatible correction
-  increments PATCH.
+- For an experimental contract, a backward-compatible addition increments
+  MINOR and a compatible correction increments PATCH.
+- For a stable contract, an incompatible change increments MAJOR, a backward-
+  compatible addition increments MINOR, and a compatible correction increments
+  PATCH.
 - A firmware release MAY contain unchanged contract versions.
 - Documentation-only clarification MAY increment PATCH when it changes no
   observable requirement. A typo or link correction need not change the
   contract version.
-- Wire and storage formats increment their encoded major/schema field only for
-  incompatible representation changes. Compatible additions use the contract's
-  MINOR version and explicit feature discovery where the format provides it.
+- Wire and storage formats increment their encoded major/schema field for
+  incompatible representation changes. That encoded discriminator is separate
+  from the contract's semantic version; the semantic version follows the
+  experimental or stable lifecycle rule above. Compatible additions use the
+  contract's MINOR version and explicit feature discovery where the format
+  provides it.
 
 ## Lifecycle
 

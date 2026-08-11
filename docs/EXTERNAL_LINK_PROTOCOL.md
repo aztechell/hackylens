@@ -3,6 +3,7 @@ contract-id: hackylens.external-link
 owner: device-protocols
 version: 1.0.0
 stability: experimental
+wire-major: 1
 ---
 
 # HackyLens External Link Protocol v1

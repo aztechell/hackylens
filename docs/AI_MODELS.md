@@ -3,6 +3,7 @@ contract-id: hackylens.ai-model-package
 owner: ai-runtime
 version: 1.0.0
 stability: experimental
+schema-major: 1
 ---
 
 # AI models

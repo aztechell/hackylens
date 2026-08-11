@@ -3,6 +3,7 @@ contract-id: hackylens.micropython-api
 owner: micropython-runtime
 version: 1.0.0
 stability: experimental
+api-major: 1
 ---
 
 # HackyLens MicroPython API v1

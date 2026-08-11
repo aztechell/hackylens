@@ -19,6 +19,9 @@ stability: experimental
 
 The version identifies a compatibility line. Stability is independent: a
 `1.0.0` contract is not stable unless its `stability` field says `stable`.
+Contracts with an independently encoded generation also declare its canonical
+metadata explicitly: `wire-major`, `schema-major`, or `api-major`. These fields
+are not inferred from the semantic-version MAJOR component.
 
 ## Normative governance contracts
 

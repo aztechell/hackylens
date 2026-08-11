@@ -31,6 +31,11 @@ Accepted ADRs are historical records and MUST NOT be rewritten to change their
 meaning. Replace a decision with a new ADR and connect the records with
 `supersedes` and `superseded-by` metadata.
 
+Both relationship fields contain one four-digit ADR number. A superseding ADR
+MUST be accepted, the replaced ADR MUST have status `superseded`, and both
+records MUST name each other. ADR numbers are unique even when filenames have
+different titles.
+
 Typographical corrections, repaired links, and clarifications that do not alter
 the decision are allowed.
 
