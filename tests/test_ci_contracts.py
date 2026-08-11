@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -98,10 +99,12 @@ class CiContractsTest(unittest.TestCase):
         self.assertIn('      - "**"\n', workflow)
         self.assertIn("python tools/check_docs.py", workflow)
         self.assertIn("python tools/run_tests.py", workflow)
-        self.assertIn("msys2/setup-msys2@v2", workflow)
-        self.assertIn("msystem: UCRT64", workflow)
-        self.assertIn("mingw-w64-ucrt-x86_64-gcc", workflow)
-        self.assertNotIn("preinstalled host GCC", workflow)
+        self.assertNotIn("msys2/setup-msys2", workflow)
+        self.assertNotIn("update: true", workflow)
+        self.assertIn('HOST_GCC_VERSION: "13.2.0"', workflow)
+        self.assertIn("Configure pinned host GCC", workflow)
+        self.assertIn("-dumpfullversion -dumpversion", workflow)
+        self.assertIn("x86_64-w64-mingw32", workflow)
         self.assertIn("full --disable-app micropython", workflow)
         self.assertIn("--expect absent", workflow)
         self.assertIn("--expect present", workflow)
@@ -112,6 +115,13 @@ class CiContractsTest(unittest.TestCase):
         self.assertIn("path: dist/release/", workflow)
         self.assertIn("dist/release/*", workflow)
         self.assertIn("hashFiles('tools/bootstrap_deps.py')", workflow)
+
+    def test_host_gcc_dependency_is_version_and_content_pinned(self) -> None:
+        bootstrap = load_tool("bootstrap_deps")
+        self.assertEqual(bootstrap.HOST_GCC_VERSION, "13.2.0")
+        self.assertEqual(bootstrap.HOST_GCC_MACHINE, "x86_64-w64-mingw32")
+        self.assertIn("/13.2.0-rt_v11-rev0/", bootstrap.HOST_GCC_URL)
+        self.assertRegex(bootstrap.HOST_GCC_SHA256, re.compile(r"^[0-9a-f]{64}$"))
 
 
 if __name__ == "__main__":

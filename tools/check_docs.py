@@ -205,6 +205,8 @@ def validate_contract_documents(
         if stability == "deprecated":
             deprecated_since = front.values.get("deprecated-since", "")
             removal_version = front.values.get("removal-version", "")
+            migration_guide = front.values.get("migration-guide", "")
+            replacement_contract = front.values.get("replacement-contract", "")
             if not deprecated_since:
                 issues.append(
                     issue(root, path, 1, "deprecated contract lacks deprecated-since")
@@ -212,6 +214,15 @@ def validate_contract_documents(
             if not removal_version:
                 issues.append(
                     issue(root, path, 1, "deprecated contract lacks removal-version")
+                )
+            if not migration_guide and not replacement_contract:
+                issues.append(
+                    issue(
+                        root,
+                        path,
+                        1,
+                        "deprecated contract lacks migration-guide or replacement-contract",
+                    )
                 )
             if deprecated_since and not RELEASE_SEMVER_RE.fullmatch(deprecated_since):
                 issues.append(
@@ -260,6 +271,73 @@ def validate_contract_documents(
                 )
             else:
                 contracts[contract_id] = (path, front)
+
+    anchor_cache: dict[Path, set[str]] = {}
+    for contract_id, (path, front) in contracts.items():
+        if front.values.get("stability") != "deprecated":
+            continue
+
+        migration_guide = front.values.get("migration-guide", "")
+        if migration_guide:
+            line = front.lines.get("migration-guide", 1)
+            lower = migration_guide.lower()
+            if lower.startswith(("http://", "https://", "mailto:", "data:")):
+                issues.append(
+                    issue(
+                        root,
+                        path,
+                        line,
+                        "migration-guide must be a repository-local Markdown target",
+                    )
+                )
+            else:
+                decoded = unquote(migration_guide)
+                location = decoded.partition("#")[0].split("?", 1)[0]
+                destination = path if not location else (path.parent / location).resolve()
+                if destination.suffix.lower() != ".md":
+                    issues.append(
+                        issue(
+                            root,
+                            path,
+                            line,
+                            "migration-guide must target a Markdown document",
+                        )
+                    )
+                issues.extend(
+                    check_link_target(
+                        root, path, line, migration_guide, anchor_cache
+                    )
+                )
+
+        replacement = front.values.get("replacement-contract", "")
+        if replacement:
+            line = front.lines.get("replacement-contract", 1)
+            if not CONTRACT_ID_RE.fullmatch(replacement):
+                issues.append(
+                    issue(root, path, line, "replacement-contract must be a contract-id")
+                )
+            elif replacement == contract_id:
+                issues.append(
+                    issue(root, path, line, "replacement-contract cannot reference itself")
+                )
+            elif replacement not in contracts:
+                issues.append(
+                    issue(
+                        root,
+                        path,
+                        line,
+                        f"replacement-contract references unknown contract {replacement!r}",
+                    )
+                )
+            elif contracts[replacement][1].values.get("stability") == "deprecated":
+                issues.append(
+                    issue(
+                        root,
+                        path,
+                        line,
+                        f"replacement-contract {replacement!r} is also deprecated",
+                    )
+                )
 
     return issues, contracts
 

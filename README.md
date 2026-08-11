@@ -69,7 +69,8 @@ the exact model contract and reproducible fetch/package command.
 
 ## Build
 
-The bootstrap script currently provisions the Windows Kendryte toolchain. Run the following commands from the repository root in PowerShell.
+The bootstrap script provisions the pinned Windows host and Kendryte
+toolchains. Run the following commands from the repository root in PowerShell.
 
 ### Prerequisites
 
@@ -77,7 +78,7 @@ The bootstrap script currently provisions the Windows Kendryte toolchain. Run th
 - Python 3
 - CMake
 - Ninja
-- A MinGW-compatible build environment with host GCC and GNU make
+- 7-Zip (used to unpack the SHA-256-pinned host GCC on Windows)
 - Git for Windows (its Bash/coreutils are used by the upstream MicroPython generator)
 
 Install the Python serial dependency:
@@ -86,8 +87,8 @@ Install the Python serial dependency:
 python -m pip install pyserial
 ```
 
-Download the pinned Kendryte SDK/toolchain, MicroPython, littlefs, and flashing
-support files, then load the generated environment:
+Download the pinned host GCC, Kendryte SDK/toolchain, MicroPython, littlefs, and
+flashing support files, then load the generated environment:
 
 ```powershell
 python tools\bootstrap_deps.py

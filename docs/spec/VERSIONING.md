@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.versioning-policy
 owner: platform-architecture
-version: 0.2.0
+version: 0.3.0
 stability: experimental
 ---
 
@@ -93,10 +93,22 @@ The document MUST include:
 ```yaml
 deprecated-since: 1.3.2
 removal-version: 1.4.0
+migration-guide: ../MIGRATION.md#old-api
 ```
 
-Both values MUST be release versions without prerelease or build metadata. The
-earliest permitted removal version is calculated as:
+Every deprecated contract MUST also declare at least one machine-readable
+migration route:
+
+- `migration-guide` points to an existing repository-local Markdown document
+  and, when supplied, an existing heading anchor;
+- `replacement-contract` names another existing, non-deprecated `contract-id`.
+
+Both fields MAY be present. An external URL or prose outside this metadata does
+not satisfy the migration-route requirement.
+
+`deprecated-since` and `removal-version` MUST be release versions without
+prerelease or build metadata. The earliest permitted removal version is
+calculated as:
 
 ```text
 minimum_removal =
@@ -106,8 +118,8 @@ removal_version >= minimum_removal
 ```
 
 Therefore `1.3.2` permits removal no earlier than `1.4.0`, and `0.3.2` permits
-removal no earlier than `0.4.0`. Deprecation also requires a replacement or
-migration path and continued compatibility tests until removal.
+removal no earlier than `0.4.0`. Continued compatibility tests are required
+until removal.
 
 ## Changing a contract
 

@@ -142,11 +142,140 @@ class DocumentationContractsTest(unittest.TestCase):
                     extra=(
                         "deprecated-since: 1.3.2\n"
                         "removal-version: 1.3.9\n"
+                        "migration-guide: MIGRATION.md\n"
+                    ),
+                ),
+            )
+            write(root / "docs" / "MIGRATION.md", "# Move forward\n")
+            issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
+        self.assertTrue(any("at least 1.4.0" in found.message for found in issues))
+
+    def test_deprecated_contract_requires_machine_readable_migration(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
                     ),
                 ),
             )
             issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
-        self.assertTrue(any("at least 1.4.0" in found.message for found in issues))
+        self.assertTrue(
+            any(
+                "lacks migration-guide or replacement-contract" in found.message
+                for found in issues
+            )
+        )
+
+    def test_deprecated_contract_accepts_checked_migration_guide(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            write(root / "docs" / "MIGRATION.md", "# Old API\n")
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
+                        "migration-guide: MIGRATION.md#old-api\n"
+                    ),
+                ),
+            )
+            issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
+        self.assertEqual(issues, [])
+
+    def test_deprecated_contract_rejects_broken_migration_guide(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
+                        "migration-guide: missing.md#old-api\n"
+                    ),
+                ),
+            )
+            issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
+        self.assertTrue(any("broken local link" in found.message for found in issues))
+
+    def test_deprecated_contract_rejects_external_migration_guide(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
+                        "migration-guide: https://example.com/migrate\n"
+                    ),
+                ),
+            )
+            issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
+        self.assertTrue(
+            any("repository-local Markdown target" in found.message for found in issues)
+        )
+
+    def test_deprecated_contract_accepts_existing_replacement_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
+                        "replacement-contract: hackylens.replacement\n"
+                    ),
+                ),
+            )
+            replacement = write(
+                root / "docs" / "replacement.md",
+                contract("hackylens.replacement"),
+            )
+            issues, _ = CHECK_DOCS.validate_contract_documents(
+                root, [source, replacement]
+            )
+        self.assertEqual(issues, [])
+
+    def test_deprecated_contract_rejects_unknown_replacement_contract(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-deprecation-") as temp:
+            root = Path(temp)
+            source = write(
+                root / "docs" / "deprecated.md",
+                contract(
+                    "hackylens.deprecated",
+                    version="1.3.2",
+                    stability="deprecated",
+                    extra=(
+                        "deprecated-since: 1.3.2\n"
+                        "removal-version: 1.4.0\n"
+                        "replacement-contract: hackylens.missing\n"
+                    ),
+                ),
+            )
+            issues, _ = CHECK_DOCS.validate_contract_documents(root, [source])
+        self.assertTrue(any("unknown contract" in found.message for found in issues))
 
     def test_experimental_versioning_is_independent_of_major(self) -> None:
         policy = (ROOT / "docs" / "spec" / "VERSIONING.md").read_text(
