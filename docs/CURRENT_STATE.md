@@ -29,7 +29,9 @@ Two descriptors are tracked:
 The Cube port proves that a second descriptor, generated-header set, and
 minimal BSP satisfy the conformance compile/link harness. It does not prove
 that common runtime firmware is composed for Cube, nor is it evidence of Cube
-runtime behavior or general hardware independence.
+runtime behavior or general hardware independence. Its Grove connector records
+only the source-verified physical pins 24 and 25; it deliberately claims no
+UART/I2C protocol or routed-peripheral semantics.
 
 ## Implemented boundaries
 
@@ -83,7 +85,7 @@ feature-disabled configurations.
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
 locked to SHA-256
-`b6547bde1b87addd4056944b4f46dcdaea5db5986a0c1482f66b9e509701f261`,
+`75d8300766266c144847d1805541ca2303a1fffd1b4496649e50f38af3bb889f`,
 its commit must be an ancestor of HEAD, and the historical/current
 bootstrap pins and historical `VERSION` must match the evidence. The baseline
 BIN/ELF hashes are explicitly named manually pinned golden evidence, and the
@@ -101,11 +103,20 @@ source snapshot. It is a conservative lexical policy check rather than a full
 C/C++ semantic analyser, so alias-name propagation may intentionally reject
 ambiguous same-named calls. Result hashes are explicitly
 named `local_sha256` under `hash_scope=local-workspace-diagnostic`; they remain
-mandatory local evidence but are excluded from CI freshness because this
-pinned debug build embeds absolute workspace paths in both ELF and raw BIN
-bytes. Broader binary reproducibility is not claimed in Phase 1. Physical SEN0305
-smoke testing remains the final hardware gate for boot, display, camera,
-buttons, lights, SD, HMPY, external links, and package/flash round trip. Cube
+mandatory local evidence but are excluded from CI freshness because Phase 1
+does not claim general reproducible builds. Compiler and assembler prefix maps
+normalize workspace and SDK roots before compilation; builds from differently
+sized workspace paths have identical raw BIN bytes and identical resource
+sections, which makes the exact CI resource projection path-independent. The
+debug ELF hash remains diagnostic rather than a release identity.
+
+The physical SEN0305 gate passed on 2026-08-13 and is recorded in
+`docs/evidence/phase1-hardware-smoke.json`. The release-qualified package booted
+as firmware 0.3.0; display and camera captures were inspected; all four button
+masks, illumination, RGB, SD, HMPY, external-link runtime routing/transmit, and
+package/flash round trip passed. The ISP stub has no flash-read command, and no
+external electrical loopback fixture was attached, so those limitations are
+explicit in the evidence rather than being presented as qualifications. Cube
 hardware qualification is a separate future gate.
 
 ## Remaining architecture work

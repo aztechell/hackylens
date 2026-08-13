@@ -59,6 +59,15 @@ private metadata is not a general runtime-routing, switching, arbitration,
 capability, or discovery API, and new ports MUST NOT use it to infer such a
 contract.
 
+A conformance-only descriptor MAY record source-verified physical connector
+pins without routes only when `protocols=[]`. Such inventory states only that
+the pins reach the connector; it MUST NOT be interpreted as UART, I2C, GPIO,
+or other peripheral semantics. Runtime descriptors require explicit routes
+for connector pins. The Cube Grove pins 24 and 25 are pinned to Sipeed's
+[MaixPy-v1 Cube configuration](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/boards/config/cube.config.json);
+Phase 1 intentionally does not turn those physical names into invented
+UART/I2C devices.
+
 `route_selections` selects exactly one compiled route for each group on a
 runtime board. A conformance board may omit a selection only when every route
 in that group explicitly has `compile=false`. Unselected and `compile=false`

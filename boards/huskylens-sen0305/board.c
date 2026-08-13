@@ -1,7 +1,5 @@
 #include "hk_board_port.h"
 
-#include <stdint.h>
-
 #include <fpioa.h>
 
 #include "defaults.h"
@@ -9,21 +7,8 @@
 #include "hal_gpio.h"
 #include "hal_spi.h"
 
-/*
- * Phase 1 changes the board composition without changing the qualified runtime
- * RAM envelope. Keep the exact v0.2 static-RAM baseline until a versioned
- * resource baseline explicitly replaces it. The empty inline-assembly input
- * in early_init retains this private BSS object through --gc-sections without
- * reading or writing it at runtime.
- */
-static uint8_t phase1_static_ram_compatibility_reserve[176]
-    __attribute__((used));
-_Static_assert(sizeof(phase1_static_ram_compatibility_reserve) == 176U,
-               "Phase 1 static-RAM compatibility reserve changed");
-
 static void huskylens_early_init(void)
 {
-    __asm__ volatile("" : : "r"(phase1_static_ram_compatibility_reserve));
 }
 
 static void huskylens_lights_prepare(void)

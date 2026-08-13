@@ -31,7 +31,7 @@ from gen_flash_layout import load_validated
 
 DEFAULT_BASELINE = ROOT / "docs" / "evidence" / "phase1-baseline.json"
 PINNED_BASELINE_SHA256 = (
-    "b6547bde1b87addd4056944b4f46dcdaea5db5986a0c1482f66b9e509701f261"
+    "75d8300766266c144847d1805541ca2303a1fffd1b4496649e50f38af3bb889f"
 )
 SOURCE_ROOTS = ("firmware", "boards", "platforms")
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
@@ -88,7 +88,7 @@ BASELINE_FIELDS = {
     "manually_pinned_golden_elf_sha256",
 }
 ACCEPTANCE_FIELDS = {
-    "flash_delta_max_bytes", "static_ram_delta_bytes",
+    "flash_delta_max_bytes", "static_ram_delta_max_bytes",
     "new_background_tasks_queues_or_heap_allocations",
 }
 FORMULA_FIELDS = {"flash_occupied", "static_ram"}
@@ -671,14 +671,14 @@ def validate_baseline_document(document: Any) -> dict[str, object]:
         "acceptance.new_background_tasks_queues_or_heap_allocations",
     )
     _integer(
-        acceptance["static_ram_delta_bytes"],
-        "acceptance.static_ram_delta_bytes",
+        acceptance["static_ram_delta_max_bytes"],
+        "acceptance.static_ram_delta_max_bytes",
         minimum=-0x7FFFFFFF,
     )
     if acceptance["flash_delta_max_bytes"] != 8192:
         raise RuntimeError("resource baseline flash delta limit must be 8192")
-    if acceptance["static_ram_delta_bytes"] != 0:
-        raise RuntimeError("resource baseline static RAM delta must be zero")
+    if acceptance["static_ram_delta_max_bytes"] != 0:
+        raise RuntimeError("resource baseline static RAM growth limit must be zero")
     if acceptance["new_background_tasks_queues_or_heap_allocations"] != 0:
         raise RuntimeError("resource baseline runtime-object allowance must be zero")
     expected_formulas = {
@@ -876,7 +876,7 @@ def validate_result_document(document: Any) -> dict[str, Any]:
 
 
 def deterministic_result_projection(document: dict[str, Any]) -> dict[str, Any]:
-    """Omit build-path-sensitive hashes while retaining every budget metric."""
+    """Omit local diagnostic hashes while retaining every budget metric."""
     return {
         "schema": document["schema"],
         "board": document["board"],
@@ -898,6 +898,19 @@ def deterministic_result_projection(document: dict[str, Any]) -> dict[str, Any]:
             document["new_heap_allocations_background_tasks_or_queues"],
         "accepted": document["accepted"],
     }
+
+
+def resource_budget_passes(
+    flash_delta: int,
+    static_delta: int,
+    findings: list[str],
+    acceptance: dict[str, object],
+) -> bool:
+    return (
+        flash_delta <= int(acceptance["flash_delta_max_bytes"])
+        and static_delta <= int(acceptance["static_ram_delta_max_bytes"])
+        and not findings
+    )
 
 
 def measure(board_id: str, baseline_path: Path, image: Path,
@@ -960,10 +973,8 @@ def measure(board_id: str, baseline_path: Path, image: Path,
             "static_ram_delta_bytes": static_delta,
         },
         "new_heap_allocations_background_tasks_or_queues": findings,
-        "accepted": (
-            flash_delta <= int(acceptance["flash_delta_max_bytes"])
-            and static_delta == int(acceptance["static_ram_delta_bytes"])
-            and not findings
+        "accepted": resource_budget_passes(
+            flash_delta, static_delta, findings, acceptance
         ),
     }
     return result

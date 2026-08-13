@@ -4,6 +4,10 @@ platform = "kendryte-k210"
 support = "conformance"
 releaseable = false
 
+# Physical pin names are sourced from Sipeed MaixPy-v1 cube.config.json at
+# d8901fd2272f000226f1c1037c1eb7c412b88e66. Connector pins do not imply a
+# routed UART/I2C peripheral or runtime support.
+
 [[devices]]
 id = "k210"
 kind = "processor"
@@ -38,16 +42,6 @@ support = "known-unsupported"
 [[devices]]
 id = "sd-spi"
 kind = "sd-card"
-support = "known-unsupported"
-
-[[devices]]
-id = "grove-uart"
-kind = "external-uart"
-support = "known-unsupported"
-
-[[devices]]
-id = "grove-i2c"
-kind = "external-i2c"
 support = "known-unsupported"
 
 [[devices]]
@@ -96,7 +90,7 @@ lcd_height = 240
 [[connectors]]
 id = "grove"
 kind = "grove"
-pins = []
+pins = [24, 25]
 protocols = []
 routes = []
 

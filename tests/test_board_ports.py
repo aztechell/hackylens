@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import copy
+import hashlib
 import importlib.util
 import io
 import json
@@ -351,6 +352,37 @@ class BoardDescriptorTests(unittest.TestCase):
         unknown_route["connectors"][0]["routes"][0] = "imaginary-route"
         with self.assertRaisesRegex(board_contract.ContractError, "unknown route"):
             self.validate(unknown_route)
+
+    def test_cube_grove_records_only_source_verified_physical_pins(self) -> None:
+        connector = next(
+            item for item in self.cube.data["connectors"] if item["id"] == "grove"
+        )
+        self.assertEqual(connector["pins"], [24, 25])
+        self.assertEqual(connector["protocols"], [])
+        self.assertEqual(connector["routes"], [])
+        kinds = {device["kind"] for device in self.cube.data["devices"]}
+        self.assertNotIn("external-uart", kinds)
+        self.assertNotIn("external-i2c", kinds)
+
+        invented_protocol = copy.deepcopy(self.cube.data)
+        invented_protocol["connectors"][0]["protocols"] = ["uart1"]
+        with self.assertRaisesRegex(
+            board_contract.ContractError, "protocol semantics require explicit routes"
+        ):
+            self.validate(invented_protocol)
+
+        runtime_physical_only = copy.deepcopy(self.runtime.data)
+        runtime_physical_only["connectors"][0] = {
+            "id": "physical-only",
+            "kind": "grove",
+            "pins": [24, 25],
+            "protocols": [],
+            "routes": [],
+        }
+        with self.assertRaisesRegex(
+            board_contract.ContractError, "physical-only connector inventory"
+        ):
+            self.validate(runtime_physical_only)
 
     def test_compile_time_exclusive_route_selection(self) -> None:
         data = copy.deepcopy(self.runtime.data)
@@ -1178,6 +1210,60 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
 
 
 class ResourceEvidenceTests(unittest.TestCase):
+    def test_resource_policy_accepts_ram_savings_without_padding(self) -> None:
+        acceptance = {
+            "flash_delta_max_bytes": 8192,
+            "static_ram_delta_max_bytes": 0,
+            "new_background_tasks_queues_or_heap_allocations": 0,
+        }
+        self.assertTrue(
+            check_phase1_resources.resource_budget_passes(8192, -176, [], acceptance)
+        )
+        self.assertFalse(
+            check_phase1_resources.resource_budget_passes(8193, -176, [], acceptance)
+        )
+        self.assertFalse(
+            check_phase1_resources.resource_budget_passes(0, 1, [], acceptance)
+        )
+        self.assertFalse(
+            check_phase1_resources.resource_budget_passes(
+                0, -176, ["new allocation"], acceptance
+            )
+        )
+
+    def test_build_path_mapping_is_global_and_host_paths_are_rejected(self) -> None:
+        source = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
+        board_source = (
+            ROOT / "boards" / "huskylens-sen0305" / "board.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn("-DCMAKE_PROJECT_INCLUDE=", source)
+        self.assertIn("-ffile-prefix-map=", source)
+        self.assertNotIn("static_ram_compatibility_reserve", board_source)
+
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            mapping = temporary / "path-map.cmake"
+            sdk = temporary / "external-sdk"
+            sdk.mkdir()
+            build_firmware.write_reproducible_path_map(mapping, sdk)
+            text = mapping.read_text(encoding="utf-8")
+            self.assertIn("add_compile_options(", text)
+            self.assertIn("/hackylens/sdk", text)
+            self.assertIn("/hackylens/workspace", text)
+            self.assertLess(
+                text.index("/hackylens/workspace"),
+                text.index("/hackylens/sdk"),
+                "the specific SDK prefix map must follow the broad workspace map",
+            )
+
+            safe = temporary / "safe.bin"
+            safe.write_bytes(b"/hackylens/workspace/firmware/main.c")
+            build_firmware.reject_embedded_host_paths(safe, [ROOT, sdk])
+            unsafe = temporary / "unsafe.bin"
+            unsafe.write_bytes(str(ROOT.resolve()).encode("utf-8"))
+            with self.assertRaisesRegex(RuntimeError, "embeds host path"):
+                build_firmware.reject_embedded_host_paths(unsafe, [ROOT, sdk])
+
     def test_baseline_identity_repository_and_bootstrap_provenance_are_strict(self) -> None:
         baseline_path = ROOT / "docs" / "evidence" / "phase1-baseline.json"
         document = check_phase1_resources.load_baseline(baseline_path)
@@ -1502,6 +1588,53 @@ class ResourceEvidenceTests(unittest.TestCase):
         generic_hash["image"]["sha256"] = generic_hash["image"].pop("local_sha256")
         with self.assertRaisesRegex(RuntimeError, "missing or unknown"):
             check_phase1_resources.validate_result_document(generic_hash)
+
+    def test_phase1_hardware_evidence_is_canonical_sanitized_and_hash_bound(self) -> None:
+        path = ROOT / "docs" / "evidence" / "phase1-hardware-smoke.json"
+        encoded = path.read_bytes()
+        document = json.loads(encoded.decode("utf-8"))
+        self.assertEqual(
+            encoded, firmware_attestation.canonical_json_bytes(document)
+        )
+        self.assertEqual(document["schema"], 1)
+        self.assertTrue(document["accepted"])
+        self.assertEqual(document["board"], "huskylens-sen0305")
+        self.assertEqual(document["firmware"]["version"], "0.3.0")
+        self.assertFalse(document["privacy"]["host_port_recorded"])
+        self.assertFalse(document["privacy"]["usb_serial_recorded"])
+        self.assertNotIn(b"COM10", encoded)
+
+        resource = json.loads(
+            (ROOT / "docs" / "evidence" / "phase1-result.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            document["firmware"]["image_sha256"],
+            resource["image"]["local_sha256"],
+        )
+        self.assertEqual(
+            set(document["results"]),
+            {
+                "boot", "buttons", "camera", "display", "external_links",
+                "flash_package_round_trip", "hmpy", "lights", "sd",
+            },
+        )
+        self.assertTrue(
+            all(result["status"] == "pass"
+                for result in document["results"].values())
+        )
+        for artifact in document["visual_artifacts"]:
+            artifact_path = ROOT / artifact["path"]
+            content = artifact_path.read_bytes()
+            self.assertTrue(content.startswith(b"\x89PNG\r\n\x1a\n"))
+            self.assertEqual(hashlib.sha256(content).hexdigest(), artifact["sha256"])
+            self.assertEqual(
+                int.from_bytes(content[16:20], "big"), artifact["width"]
+            )
+            self.assertEqual(
+                int.from_bytes(content[20:24], "big"), artifact["height"]
+            )
 
 
 if __name__ == "__main__":

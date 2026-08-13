@@ -179,8 +179,9 @@ Capability/App SDK.
 Отделить K210 platform и product firmware от SEN0305. Новая K210-плата должна
 добавляться новым BSP, а не форком repository.
 
-Статус: software implementation и automated evidence завершены; физический
-SEN0305 smoke остаётся обязательным pending hardware gate.
+Статус: **DONE**. Software implementation, automated evidence и физический
+SEN0305 smoke завершены; evidence зафиксирован в
+`docs/evidence/phase1-hardware-smoke.json`.
 
 ### 1.1 Board descriptor
 
@@ -281,10 +282,12 @@ constant.
 - `huskylens-sen0305` проходит feature-disabled и full cross-build;
   `sipeed-maix-cube` проходит descriptor/BSP compile-link conformance и явно
   отклоняет full/release/flash.
-- Phase 1 resource result: erase-rounded flash delta `0`, static RAM delta `0`,
+- Phase 1 resource result: erase-rounded flash delta `-4096`, static RAM delta `-176`,
   новых heap allocations/background tasks/queues не обнаружено.
 - Физический SEN0305 smoke (boot/display/camera/buttons/lights/SD/HMPY/external
-  links/package-flash round trip) остаётся pending hardware gate.
+  link runtime routing/transmit/package-flash round trip) пройден 2026-08-13;
+  отсутствие ISP readback и external electrical loopback fixture явно отмечено
+  в evidence и не выдаётся за qualification.
 - Cube hardware qualification отложена; hardware-independence не заявляется.
 
 ---

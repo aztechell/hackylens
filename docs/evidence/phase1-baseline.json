@@ -2,7 +2,7 @@
   "acceptance": {
     "flash_delta_max_bytes": 8192,
     "new_background_tasks_queues_or_heap_allocations": 0,
-    "static_ram_delta_bytes": 0
+    "static_ram_delta_max_bytes": 0
   },
   "baseline": {
     "bss_bytes": 2697472,

@@ -817,12 +817,12 @@ def _validate_defaults_and_connectors(
                 + ", ".join(duplicate_claims)
             )
         claimed_routes.update(route_ids)
-        expected_pins = sorted({routes_by_id[route_id]["pin"] for route_id in route_ids})
-        if sorted(pins) != expected_pins:
-            raise ContractError(
-                f"{field}.pins: must exactly match referenced route pins {expected_pins}"
-            )
         if route_ids:
+            expected_pins = sorted({routes_by_id[route_id]["pin"] for route_id in route_ids})
+            if sorted(pins) != expected_pins:
+                raise ContractError(
+                    f"{field}.pins: must exactly match referenced route pins {expected_pins}"
+                )
             expected_protocols = {
                 routes_by_id[route_id]["peripheral"] for route_id in route_ids
             }
@@ -831,6 +831,14 @@ def _validate_defaults_and_connectors(
                     f"{field}.protocols: must exactly match route peripherals "
                     + ", ".join(sorted(expected_protocols))
                 )
+        elif protocols:
+            raise ContractError(
+                f"{field}.protocols: protocol semantics require explicit routes"
+            )
+        elif pins and data.get("support") != "conformance":
+            raise ContractError(
+                f"{field}.pins: physical-only connector inventory is conformance-only"
+            )
 
 
 def validate_board_data(data: dict[str, Any], registry: PlatformRegistry,
