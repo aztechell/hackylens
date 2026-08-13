@@ -8,7 +8,7 @@
 #include "camera_status.h"
 
 #include "../drivers/ov2640_sensor.h"
-#include "../hal/hal_dvp.h"
+#include "hal_dvp.h"
 #include "camera_fps.h"
 
 void camera_debug_format_camera_info(char *line, size_t line_size, const char *screen)

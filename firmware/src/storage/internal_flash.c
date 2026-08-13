@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "../config/flash_layout.h"
+#include "flash_layout.h"
 #include "../drivers/boot_flash.h"
 
 typedef struct

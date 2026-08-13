@@ -1,6 +1,7 @@
 #include "camera_frame.h"
 
 #include <stdio.h>
+#include "pins.h"
 #include "camera_light.h"
 #include "camera_persist_settings.h"
 #include "camera_status.h"
@@ -12,8 +13,8 @@
 #include "settings_lights.h"
 #include "../core/hk_camera_sizes.h"
 #include "../drivers/ov2640_sensor.h"
-#include "../hal/hal_dvp.h"
-#include "../hal/hal_time.h"
+#include "hal_dvp.h"
+#include "hal_time.h"
 #include "camera_capture.h"
 #include "camera_fps.h"
 #include "camera_input.h"
@@ -77,7 +78,16 @@ uint8_t camera_service_start(void)
         (camera_session_qvga_mode() ? CAMERA_SIZE_320X240 : camera_service_size());
 
     printf(camera_session_ever_initialized() ? "%s reinit\r\n" : "%s init\r\n", camera_log_prefix());
-    printf("%s pins PCLK=47 XCLK=46 HREF=45 PWDN=44 VSYNC=43 RST=42 SCCB=40/41\r\n", camera_log_prefix());
+    printf(
+        "%s pins PCLK=" IO_CAM_PCLK_LABEL
+        " XCLK=" IO_CAM_XCLK_LABEL
+        " HREF=" IO_CAM_HREF_LABEL
+        " PWDN=" IO_CAM_PWDN_LABEL
+        " VSYNC=" IO_CAM_VSYNC_LABEL
+        " RST=" IO_CAM_RST_LABEL
+        " SCCB=" IO_CAM_SCCB_SCLK_LABEL "/" IO_CAM_SCCB_SDA_LABEL "\r\n",
+        camera_log_prefix()
+    );
     camera_session_set_fail_reason("NO SENSOR");
 
     if(!camera_size_is_safe(requested))

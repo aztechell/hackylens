@@ -8,7 +8,7 @@
 #include "../core/hk_back_exit.h"
 #include "../core/hk_menu.h"
 #include "../core/hk_screen.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 #include "../services/camera_frame.h"
 #include "../services/camera_input.h"
 #include "../services/camera_light.h"

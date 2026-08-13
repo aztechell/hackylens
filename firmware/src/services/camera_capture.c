@@ -4,7 +4,7 @@
 
 #include "../config/camera_config.h"
 #include "../drivers/camera_stream.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 
 static uint8_t g_camera_frame_timeout_shown;
 static uint8_t g_camera_frame_timeout_event;

@@ -12,13 +12,19 @@
 #include "external_link_service.h"
 #include "micropython_runtime.h"
 #include "settings_lights.h"
-#include "../board/board_hackylens.h"
+#include "../internal/hk_board_port.h"
 #include "../config/display_config.h"
 #include "../drivers/hk_input.h"
 #include "../drivers/hk_lcd.h"
 #include "../drivers/hk_lights.h"
-#include "../hal/hal_external_link.h"
-#include "../hal/hal_time.h"
+#include "hal_external_link.h"
+#include "hal_time.h"
+#endif
+
+#if defined(MICROPYTHON_BINDING_TESTING)
+#define BINDING_PREPARE_EXTERNAL_I2C() board_external_link_i2c_pins()
+#else
+#define BINDING_PREPARE_EXTERNAL_I2C() hk_board_ops.external_i2c_prepare()
 #endif
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
@@ -278,7 +284,7 @@ static void binding_select_i2c(uint8_t address)
     binding_claim_external();
     if(g_external_mode == BINDING_EXTERNAL_I2C)
         binding_i2c_stop();
-    board_external_link_i2c_pins();
+    BINDING_PREPARE_EXTERNAL_I2C();
     i2c_init(I2C_DEVICE_0, address, 7U, MICROPYTHON_BINDING_I2C_HZ);
     g_external_mode = BINDING_EXTERNAL_I2C;
 }

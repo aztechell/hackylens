@@ -35,8 +35,9 @@ stop request and the run deadline at least every 5 ms.
 
 ## Display
 
-The display is 320 by 240 pixels. Colors are unsigned RGB565 values from
-`0x0000` through `0xffff`.
+The releaseable SEN0305 runtime currently selects a 320 by 240 display through
+descriptor-generated defaults. Colors are unsigned RGB565 values from `0x0000`
+through `0xffff`.
 
 | API | Meaning |
 |---|---|
@@ -66,9 +67,9 @@ light settings.
 
 ## External UART
 
-UART and I2C use the HUSKYLENS external connector on IO34/IO35. The script
-claims that connector on its first UART or I2C call; the normal HackyLens
-external-link service is suspended until script cleanup.
+UART and I2C use the descriptor-selected HUSKYLENS external connector routes.
+The script claims that connector on its first UART or I2C call; the normal
+HackyLens external-link service is suspended until script cleanup.
 
 | API | Meaning |
 |---|---|

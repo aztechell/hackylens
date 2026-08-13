@@ -6,7 +6,7 @@
 #include "../../services/camera_persist_settings.h"
 
 #include "camera_config.h"
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "camera_photo_service.h"
 #include "../../storage/file_mount.h"
 #include "../../storage/file_write_error.h"
@@ -28,7 +28,7 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
     {
         printf("[PHOTO] save fail no frame\r\n");
         camera_status_view_draw("SAVE FAIL", "NO FRAME");
-        hal_sleep_ms(550);
+        time_internal_sleep_ms(550);
         camera_view_clear();
         return;
     }
@@ -50,21 +50,21 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
     {
         printf("[PHOTO] save fail no sd\r\n");
         camera_status_view_draw("NO SD", "SAVE FAIL");
-        hal_sleep_ms(750);
+        time_internal_sleep_ms(750);
     }
     else if(photo_service_save_current_frame(saved_name, sizeof(saved_name)))
     {
         camera_status_view_draw("PHOTO SAVED", saved_name);
         if(camera_service_review_after_shot())
         {
-            hal_sleep_ms(450);
+            time_internal_sleep_ms(450);
             if(redraw_preview)
                 redraw_preview();
-            hal_sleep_ms(CAMERA_REVIEW_MS);
+            time_internal_sleep_ms(CAMERA_REVIEW_MS);
         }
         else
         {
-            hal_sleep_ms(650);
+            time_internal_sleep_ms(650);
         }
     }
     else
@@ -72,7 +72,7 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
         const char *error = file_write_last_error() ? file_write_last_error() : "UNKNOWN";
         printf("[PHOTO] save fail %s\r\n", error);
         camera_status_view_draw("SAVE FAIL", error);
-        hal_sleep_ms(750);
+        time_internal_sleep_ms(750);
     }
 
     camera_photo_capture_end();

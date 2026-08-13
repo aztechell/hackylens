@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #include "frame_pool.h"
-#include "../hal/hal_dvp.h"
+#include "hal_dvp.h"
 
 typedef enum
 {

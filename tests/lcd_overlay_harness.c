@@ -356,6 +356,18 @@ void hal_gpiohs_write(uint8_t pin, uint8_t high)
     g_dc_high = high;
 }
 
+void hal_pwm_init(uint8_t device) { (void)device; }
+void hal_spi_init(uint8_t device, uint32_t frame_bits)
+{
+    (void)device;
+    (void)frame_bits;
+}
+uint32_t hal_spi_set_clock(uint8_t device, uint32_t hz)
+{
+    (void)device;
+    return hz;
+}
+
 void hal_spi_fifo_set_tmod_tx(uint8_t device) { (void)device; }
 void hal_spi_fifo_set_frame_bits(uint8_t device, uint32_t bits)
 {

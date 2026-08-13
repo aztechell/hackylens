@@ -10,7 +10,7 @@
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "file_browser_mode.h"
 #include "files_actions.h"
 #include "files_presenter.h"
@@ -240,7 +240,7 @@ void files_controller_tick(const hk_input_snapshot_t *input)
         return;
     }
 
-    now_us = hal_time_us();
+    now_us = time_internal_us();
     files_controller_tick_delete(input->state, now_us);
     if(files_mode() == FILES_MODE_IMAGE)
         files_presenter_tick_image(now_us);
@@ -256,7 +256,7 @@ void files_controller_handle_buttons(const hk_input_snapshot_t *input)
             return;
         }
 
-        files_controller_handle_preview_buttons(input->pressed, input->changed, input->state, hal_time_us());
+        files_controller_handle_preview_buttons(input->pressed, input->changed, input->state, time_internal_us());
         return;
     }
 
@@ -267,5 +267,5 @@ void files_controller_handle_buttons(const hk_input_snapshot_t *input)
         return;
     }
 
-    files_controller_handle_list_buttons(input->pressed, input->changed, input->state, hal_time_us());
+    files_controller_handle_list_buttons(input->pressed, input->changed, input->state, time_internal_us());
 }

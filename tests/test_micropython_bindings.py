@@ -78,12 +78,12 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-Werror",
                 "-DHAL_EXTERNAL_LINK_TESTING",
                 f"-I{ROOT / 'tests'}",
-                f"-I{ROOT / 'firmware' / 'src' / 'hal'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 str(ROOT / "tests" / "hal_external_link_harness.c"),
                 str(
                     ROOT
-                    / "firmware"
-                    / "src"
+                    / "platforms"
+                    / "k210"
                     / "hal"
                     / "hal_external_link.c"
                 ),
@@ -121,9 +121,9 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-DLCD_ST7789_TESTING",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'config'}",
-                f"-I{ROOT / 'firmware' / 'src' / 'board'}",
+                f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'core'}",
-                f"-I{ROOT / 'firmware' / 'src' / 'hal'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
                 str(ROOT / "tests" / "lcd_overlay_harness.c"),
                 str(ROOT / "firmware" / "src" / "drivers" / "lcd_st7789.c"),

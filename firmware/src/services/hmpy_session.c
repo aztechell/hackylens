@@ -9,8 +9,9 @@
 #include "hmpy_codec.h"
 #include "micropython_program.h"
 #include "micropython_runtime.h"
-#include "../hal/hal_time.h"
-#include "../hal/hal_watchdog.h"
+#include "hal_time.h"
+#include "hal_watchdog.h"
+#include "inventory.h"
 #include "../storage/userfs.h"
 
 #define HMPY_SESSION_LEASE_US 10000000ULL
@@ -224,7 +225,7 @@ static void hmpy_emit_dropped(uint8_t stream, uint32_t run_id,
 
 static void hmpy_handle_hello(const hmpy_frame_t *frame)
 {
-    static const char board[] = "HackyLens K210";
+    static const char board[] = HK_BOARD_ID;
     userfs_status_t filesystem;
     micropython_runtime_status_t runtime;
     size_t version_length = strlen(HACKYLENS_VERSION);

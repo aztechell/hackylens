@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.versioning-policy
 owner: platform-architecture
-version: 0.3.0
+version: 0.4.0
 stability: experimental
 ---
 
@@ -25,8 +25,9 @@ promote any firmware, protocol, API, or format to stable.
 
 | Axis | Current version | Stability/maturity | Canonical source |
 | --- | --- | --- | --- |
-| Firmware | `0.2.0` | Technology preview | `VERSION` |
-| HMPY | `1.0.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
+| Firmware | `0.3.0` | Technology preview | `VERSION` |
+| HMPY | `1.1.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
+| Board Port Contract | `0.1.0` | Experimental | `BOARD_PORT.md` and board descriptors |
 | Platform API | Unpublished | No public contract | Future Platform API spec |
 | App SDK | Unpublished | No public contract | Future App SDK spec |
 | Project Format | Unpublished | No public contract | Future Project Format spec |

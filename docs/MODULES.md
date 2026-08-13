@@ -1,6 +1,6 @@
 # Modules
 
-> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 ## External link and vision results
@@ -28,7 +28,7 @@ Key public interfaces:
 
 - `core/ai_model_types.h` and `services/ai_model_runtime.h` for model metadata
   and the instance-based load/run/stop/unload API. `storage/ai_model_storage.h`
-  and `hal/hal_kpu.h` are implementation boundaries used by the runtime, not
+  and `platforms/k210/hal/hal_kpu.h` are implementation boundaries used by the runtime, not
   feature APIs. See `docs/AI_MODELS.md` for the SD manifest and conversion lab.
 - `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for app metadata, stable autostart IDs, lookup, and screen model. Registry enumeration is the only source of enabled autostart choices; SETTINGS and SLEEP have no autostart ID.
 - `apps/camera/camera_app.h`, `apps/qr_camera/qr_camera_app.h`, `apps/files/files_app.h`, `apps/buttons/buttons_app.h`, `apps/settings/settings_app.h`, and `apps/sleep/sleep_app.h` are the sole public contracts for the newly isolated modules. Their private controllers, adapters, decoders, views, and configuration are not shared APIs.
@@ -38,7 +38,7 @@ Key public interfaces:
 - `services/settings_persistence.h` and `services/settings_lights.h` for settings load and application.
 - `services/debug_console_service.h` for narrow debug UART read/write access.
 - `services/debug_screenshot_stream.h` and `services/screenshot_source.h` for screenshot UART transport and LCD shadow sourcing.
-- `drivers/camera_stream.h` for the IRQ-driven two-slot camera stream and its explicit frame-lease contract; SDK interrupt details remain private to `hal/hal_dvp.c`.
+- `drivers/camera_stream.h` for the IRQ-driven two-slot camera stream and its explicit frame-lease contract; SDK interrupt details remain private to `platforms/k210/hal/hal_dvp.c`.
 - `apps/face_detect/face_detect_app.h` is the sole public FACE DETECT interface; its private YOLO decoder, controller, DVP adapter, view, configuration, and types remain inside the module. The KPU model is read from `/hackylens.kmodels/detect.kmodel` through the shared AI runtime.
 - `apps/apriltag/apriltag_app.h` is the sole public APRILTAG interface. The module detects TAG36H11 markers on a core-1 worker, reports native IDs `0..586`, and owns its hold-OK settings lifecycle and descriptor adapter, central selection crosshair, persistent selected-ID bitmap, and `ALL/SELECTED` publication filter. Unselected blocks are green and selected IDs are yellow; the numeric ID stays inside each block.
 - `apps/object_detect/object_detect_app.h` is the sole public OBJECT DETECT interface. The module owns VOC20 decoding, class labels, overlays, settings, persistence, and diagnostics. Its SD package is `/hackylens.kmodels/object20/`.

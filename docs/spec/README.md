@@ -28,6 +28,7 @@ are not inferred from the semantic-version MAJOR component.
 - [Architecture Vision](../ARCHITECTURE_VISION.md)
 - [Glossary](GLOSSARY.md)
 - [Versioning Policy](VERSIONING.md)
+- [Board Port Contract](BOARD_PORT.md)
 
 ## Existing technical contracts
 

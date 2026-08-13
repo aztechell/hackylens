@@ -8,7 +8,7 @@
 #include "../../core/hk_screen.h"
 #include "../../services/settings_lights.h"
 #include "../../services/settings_service.h"
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "sleep_view.h"
 
 void sleep_controller_enter(const hk_input_snapshot_t *input)
@@ -36,7 +36,7 @@ void auto_sleep_controller_tick(const hk_input_snapshot_t *input)
     if(hk_screen_get() != SCREEN_MENU || input->state || auto_sleep_minutes == 0)
         return;
 
-    now = hal_time_us();
+    now = time_internal_us();
     timeout_us = (uint64_t)auto_sleep_minutes * 60ULL * 1000000ULL;
     if(hk_last_activity_us() != 0 && now - hk_last_activity_us() >= timeout_us)
     {

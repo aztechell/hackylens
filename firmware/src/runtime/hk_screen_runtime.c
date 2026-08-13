@@ -1,7 +1,7 @@
 #include "../core/hk_screen.h"
 
 #include "../core/hk_app.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 
 static screen_t s_screen = SCREEN_MENU;
 static uint64_t s_last_activity_us;

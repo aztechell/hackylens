@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.2.0" src="https://img.shields.io/badge/firmware-v0.2.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.3.0" src="https://img.shields.io/badge/firmware-v0.3.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
@@ -13,7 +13,7 @@
 HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
 
 > [!IMPORTANT]
-> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
 > preview. The primary project goal is a lightweight, portable application
 > architecture for robotics hardware: board-independent feature apps, explicit
 > platform capabilities, and a direct path from MicroPython prototypes to native
@@ -100,19 +100,28 @@ Run the architecture check and build the full firmware:
 
 ```powershell
 python tools\check_arch.py
-python tools\build_firmware.py full
+python tools\build_firmware.py full --board huskylens-sen0305
 ```
 
-The firmware image is written to `build\hackylens.bin`. Packaged image metadata is written to `dist\`.
+The qualified firmware image, same-stem schema-1 flasher sidecar, and private
+canonical build attestation are written to
+`dist\hackylens-full-huskylens-sen0305.bin`,
+`dist\hackylens-full-huskylens-sen0305.json`, and
+`dist\hackylens-full-huskylens-sen0305.attestation.json`. The attestation binds
+the exact image hash to the selected board/profile and complete app composition;
+feature-disabled builds are not release-qualified. Tagged release artifacts use
+the `dist\release\hackylens-huskylens-sen0305-v<version>.*` stem and include a
+separate `-attestation.json` file.
 
 Tagged releases are automated by `.github/workflows/release.yml`. A pushed
 `vX.Y.Z` tag must match `VERSION`; CI builds the full firmware and publishes a
-versioned binary, SD-card model bundle, metadata, and SHA-256 checksums.
+versioned binary, build attestation, SD-card model bundle, metadata, and SHA-256
+checksums.
 
 Apps can be excluded by repeating `--disable-app`:
 
 ```powershell
-python tools\build_firmware.py full --disable-app pong --disable-app terminal
+python tools\build_firmware.py full --board huskylens-sen0305 --disable-app pong --disable-app terminal
 ```
 
 ### HackyLens Code web IDE
@@ -213,19 +222,19 @@ python tools\hkflash.py list
 Flash the image and monitor the boot log:
 
 ```powershell
-python tools\hkflash.py flash-monitor build\hackylens.bin --port COM10
+python tools\hkflash.py flash-monitor dist\hackylens-full-huskylens-sen0305.bin --board huskylens-sen0305 --port COM10
 ```
 
 Capture the current LCD contents without a camera or screen-grabber:
 
 ```powershell
-python tools\hkflash.py screenshot --port COM10 --output screen.bmp
+python tools\hkflash.py screenshot --board huskylens-sen0305 --port COM10 --output screen.bmp
 ```
 
 Debug commands can also open firmware screens directly; for example:
 
 ```powershell
-python tools\hkflash.py cmd HKSETTINGS --port COM10
+python tools\hkflash.py cmd HKSETTINGS --board huskylens-sen0305 --port COM10
 ```
 
 Run `python tools\hkflash.py --help` or the help for an individual subcommand to see reset, baud-rate, verification, monitor, command, and frame-capture options.
@@ -239,7 +248,9 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 | `firmware/src/services` | Camera, QR, settings, debug, and screenshot services |
 | `firmware/src/storage` | Internal flash/littlefs, FAT32, files, images, photos, and persistent data |
 | `firmware/src/ui` | Screen rendering |
-| `firmware/src/drivers`, `board`, `hal` | Hardware-facing code |
+| `firmware/src/drivers` | Board-independent device drivers and services-facing hardware APIs |
+| `boards` | Descriptor-driven board ports, generated headers, layouts, and selected BSPs |
+| `platforms/k210/hal`, `platforms/k210/startup` | K210 HAL and platform startup composition |
 | `firmware/src/runtime` | Startup and the main loop |
 | `tools` | Dependency bootstrap, build, checks, flashing, and diagnostics |
 | `models` | Locked K210 conversion workflow and model descriptor specs |

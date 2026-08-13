@@ -2,9 +2,9 @@
 
 #include "../config/camera_config.h"
 
-#include "../board/board_hackylens.h"
-#include "../hal/hal_dvp.h"
-#include "../hal/hal_time.h"
+#include "../internal/hk_board_port.h"
+#include "hal_dvp.h"
+#include "hal_time.h"
 
 #include <stddef.h>
 
@@ -43,7 +43,7 @@ static const ov2640_reg8_t g_ov2640_init_regs[] = {
 
 void ov2640_init_bus(uint32_t *actual_xclk, uint32_t *actual_sccb)
 {
-    board_camera_init_pins();
+    hk_board_ops.camera_prepare();
     hal_dvp_init_bus(8);
     *actual_xclk = hal_dvp_set_xclk_rate(CAMERA_XCLK_HZ);
     *actual_sccb = hal_dvp_set_sccb_rate(CAMERA_SCCB_HZ);

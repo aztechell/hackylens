@@ -8,7 +8,15 @@
 #include <plic.h>
 #include <uart.h>
 
-#include "../board/board_hackylens.h"
+#include "../../../firmware/src/internal/hk_board_port.h"
+#endif
+
+#if defined(HAL_EXTERNAL_LINK_TESTING)
+#define PREPARE_EXTERNAL_UART() board_external_link_uart_pins()
+#define PREPARE_EXTERNAL_I2C() board_external_link_i2c_pins()
+#else
+#define PREPARE_EXTERNAL_UART() hk_board_ops.external_uart_prepare()
+#define PREPARE_EXTERNAL_I2C() hk_board_ops.external_i2c_prepare()
 #endif
 
 /* K210 general-purpose UART1/2/3 expose an 8-byte TX FIFO. */
@@ -71,7 +79,7 @@ static const i2c_slave_handler_t g_i2c_handler = {
 void hal_external_uart_init(uint32_t baud)
 {
     hal_external_i2c_stop();
-    board_external_link_uart_pins();
+    PREPARE_EXTERNAL_UART();
     uart_init(UART_DEVICE_1);
     uart_configure(UART_DEVICE_1, baud, UART_BITWIDTH_8BIT, UART_STOP_1, UART_PARITY_NONE);
 }
@@ -119,7 +127,7 @@ void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *
     hal_external_i2c_stop();
     g_i2c_callbacks = callbacks;
     g_i2c_skip_sdk_receive = 0U;
-    board_external_link_i2c_pins();
+    PREPARE_EXTERNAL_I2C();
     i2c_init_as_slave(I2C_DEVICE_0, address, 7U, &g_i2c_handler);
     g_i2c_active = 1U;
 }

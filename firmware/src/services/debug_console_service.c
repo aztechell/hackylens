@@ -8,7 +8,7 @@
 #include <syscalls.h>
 #endif
 
-#include "../hal/hal_uart.h"
+#include "hal_uart.h"
 
 #define DEBUG_DIAGNOSTIC_BYTES 1024U
 #define DEBUG_DIAGNOSTIC_MASK (DEBUG_DIAGNOSTIC_BYTES - 1U)

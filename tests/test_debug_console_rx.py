@@ -35,10 +35,10 @@ class DebugConsoleRxTests(unittest.TestCase):
                 "-Werror",
                 "-DDEBUG_CONSOLE_RX_TESTING",
                 f"-I{ROOT / 'tests'}",
-                f"-I{ROOT / 'firmware' / 'src' / 'hal'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                 str(ROOT / "tests" / "debug_console_rx_harness.c"),
-                str(ROOT / "firmware" / "src" / "hal" / "hal_uart.c"),
+                str(ROOT / "platforms" / "k210" / "hal" / "hal_uart.c"),
                 str(
                     ROOT
                     / "firmware"

@@ -3,9 +3,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "pins.h"
 #include "../core/hk_string.h"
-#include "../hal/hal_external_link.h"
-#include "../hal/hal_time.h"
+#include "hal_external_link.h"
+#include "hal_time.h"
 #include "debug_console_service.h"
 #include "external_link_protocol.h"
 #include "settings_persistence.h"
@@ -211,9 +212,11 @@ void external_link_service_set_transport(external_link_transport_t transport)
     else
         hal_external_uart_init(g_uart_baud);
     if(g_transport == EXTERNAL_LINK_I2C)
-        printf("[LINK] I2C slave 0x32 IO34/IO35\r\n");
+        printf("[LINK] I2C slave 0x32 " IO_EXTERNAL_I2C_R_LABEL "/"
+               IO_EXTERNAL_I2C_T_LABEL "\r\n");
     else
-        printf("[LINK] UART1 %u IO34/IO35\r\n", (unsigned)g_uart_baud);
+        printf("[LINK] UART1 %u " IO_EXTERNAL_UART_R_LABEL "/"
+               IO_EXTERNAL_UART_T_LABEL "\r\n", (unsigned)g_uart_baud);
 }
 
 external_link_transport_t external_link_service_transport(void)
@@ -305,12 +308,20 @@ void external_link_service_tick(void)
 void external_link_service_format_info(char *line, size_t line_size)
 {
     if(line && line_size)
-        snprintf(line, line_size, "HKLINKINFO mode=%s pins=%s uart=%u i2c=0x32 bytes=%u rx=%u tx=%u bad=%u\r\n",
-                 g_transport == EXTERNAL_LINK_I2C ? "I2C" : "UART",
-                 "IO34/IO35",
-                 (unsigned)g_uart_baud,
-                 (unsigned)g_rx_bytes, (unsigned)g_rx_frames, (unsigned)g_tx_frames,
-                 (unsigned)g_bad_frames);
+    {
+        const char *pins = g_transport == EXTERNAL_LINK_I2C
+            ? IO_EXTERNAL_I2C_R_LABEL "/" IO_EXTERNAL_I2C_T_LABEL
+            : IO_EXTERNAL_UART_R_LABEL "/" IO_EXTERNAL_UART_T_LABEL;
+        snprintf(
+            line, line_size,
+            "HKLINKINFO mode=%s pins=%s uart=%u i2c=0x32 bytes=%u rx=%u tx=%u bad=%u\r\n",
+            g_transport == EXTERNAL_LINK_I2C ? "I2C" : "UART",
+            pins,
+            (unsigned)g_uart_baud,
+            (unsigned)g_rx_bytes, (unsigned)g_rx_frames, (unsigned)g_tx_frames,
+            (unsigned)g_bad_frames
+        );
+    }
 }
 
 uint8_t external_link_service_handle_debug_command(const char *command)

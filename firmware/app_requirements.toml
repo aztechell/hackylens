@@ -1,0 +1,44 @@
+schema = 1
+
+[apps.terminal]
+requires = ["display", "buttons"]
+
+[apps.camera]
+requires = ["display", "camera", "buttons", "lights", "sd-card"]
+
+[apps.qr-camera]
+requires = ["display", "camera", "buttons", "lights", "sd-card"]
+
+[apps.face-detect]
+requires = ["display", "camera", "buttons", "lights", "sd-card"]
+
+[apps.apriltag]
+requires = ["display", "camera", "buttons", "lights"]
+
+[apps.object-detect]
+requires = ["display", "camera", "buttons", "lights", "sd-card"]
+
+[apps.files]
+requires = ["display", "buttons", "sd-card"]
+
+[apps.buttons]
+requires = ["display", "buttons"]
+
+[apps.pong]
+requires = ["display", "buttons"]
+
+[apps.settings]
+requires = ["display", "buttons", "lights"]
+
+[apps.sleep]
+requires = ["display", "buttons", "lights"]
+
+[apps.micropython]
+requires = [
+  "display",
+  "buttons",
+  "lights",
+  "internal-flash",
+  "external-uart",
+  "external-i2c",
+]

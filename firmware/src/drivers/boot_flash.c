@@ -3,10 +3,11 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "../board/board_pins.h"
-#include "../config/flash_layout.h"
-#include "../hal/hal_spi.h"
-#include "../hal/hal_time.h"
+#include "defaults.h"
+#include "flash_layout.h"
+#include "../internal/hk_board_port.h"
+#include "hal_spi.h"
+#include "hal_time.h"
 
 #define BOOT_FLASH_CMD_READ 0x03U
 #define BOOT_FLASH_CMD_READ_ID 0x9FU
@@ -145,6 +146,7 @@ boot_flash_result_t boot_flash_init(uint32_t hz)
     if(hz == 0U)
         return BOOT_FLASH_ERROR_INVALID_ARGUMENT;
 
+    hk_board_ops.internal_flash_prepare();
     boot_flash_lock();
     memset(&g_boot_flash_info, 0, sizeof(g_boot_flash_info));
     hal_spi_standard_init(FLASH_SPI, hz);

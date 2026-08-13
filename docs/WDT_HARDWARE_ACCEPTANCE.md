@@ -23,8 +23,8 @@ evidence that the physical WDT1 reset/recovery gate has passed.
 From the repository root:
 
 ```powershell
-python tools\build_firmware.py full --wdt-fault-injection
-python tools\hkflash.py flash-monitor build\hackylens-wdtfi.bin --port COM10 --duration 10
+python tools\build_firmware.py full --board huskylens-sen0305 --wdt-fault-injection
+python tools\hkflash.py flash-monitor build\huskylens-sen0305\hackylens-full-wdtfi.bin --board huskylens-sen0305 --port COM10 --duration 10 --allow-missing-sidecar
 ```
 
 Create a unique fixture and select it as startup. First note the previous

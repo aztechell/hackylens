@@ -17,30 +17,13 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from board_contract import Board, ContractError, load_board
+from firmware_sidecar import SidecarError, read_and_validate as read_and_validate_sidecar
 from gen_flash_layout import load_validated, partition_by_name
 
-_FLASH_LAYOUT, _FLASH_PARTITIONS = load_validated(
-    ROOT / "firmware" / "config" / "flash_layout.json"
-)
-_FIRMWARE_PARTITION = partition_by_name(_FLASH_PARTITIONS, "firmware")
-
-DEFAULT_BOOT_BAUD = 115200
-DEFAULT_FLASH_BAUD = 2_000_000
-UPLOADER_VID_RE = "(1A86)|(0403)|(067B)|(10C4)"
 FLASH_CHUNK = 4096
 SRAM_CHUNK = 1024
-FLASH_ADDRESS = _FIRMWARE_PARTITION["offset"]
-FIRMWARE_FLASH_LIMIT = FLASH_ADDRESS + _FIRMWARE_PARTITION["size"]
-FLASH_ERASE_SIZE = _FLASH_LAYOUT["erase_size"]
 STUB_ADDRESS = 0x80000000
-WORKSPACE = ROOT.parent
-BUNDLED_HUSKYLENS_STUB = ROOT / "isp_stub" / "isp_prog_huskylens.bin"
-WORKSPACE_HUSKYLENS_STUB = WORKSPACE / "ISP_stub" / "isp_prog_huskylens.bin"
-LEGACY_DEPS = WORKSPACE / "hackylens-legacy" / "_deps"
-DEFAULT_STUB = ROOT / "_deps" / "isp_prog.bin"
-DEFAULT_HUSKYLENS_STUB = ROOT / "_deps" / "isp_prog_huskylens.bin"
-LEGACY_STUB = LEGACY_DEPS / "isp_prog.bin"
-LEGACY_HUSKYLENS_STUB = LEGACY_DEPS / "isp_prog_huskylens.bin"
 
 BOOT_RET_OK = 0xE0
 FLASH_RET_OK = 0xE0
@@ -167,11 +150,13 @@ def resolve_port(args: argparse.Namespace, serial) -> str:
     if args.port:
         return args.port
 
+    if args.usb_detection_mode == "explicit-port":
+        raise SystemExit("[ERR] selected board requires --port explicitly")
     try:
-        port = next(serial.tools.list_ports.grep(UPLOADER_VID_RE))
+        port = next(serial.tools.list_ports.grep(args.usb_vid_regex))
     except StopIteration as exc:
         raise SystemExit(
-            f"[ERR] no HuskyLens-style USB serial port found by VID regex {UPLOADER_VID_RE}. "
+            f"[ERR] no board-compatible USB serial port found by VID regex {args.usb_vid_regex}. "
             "Pass --port COMx explicitly."
         ) from exc
 
@@ -380,7 +365,7 @@ class K210Isp:
             done += len(chunk)
             progress("[FLASH] image", done, total)
 
-    def reboot(self, fallback_reset: bool = False) -> None:
+    def reboot(self, fallback_reset=None) -> None:
         self.ser.write(b"\xc0\xd5" + b"\x00" * 12 + b"\xc0")
         try:
             expect_response(
@@ -395,8 +380,8 @@ class K210Isp:
                 if isinstance(exc, TimeoutError):
                     return
                 raise
-            print(f"[WARN] ISP reboot command failed ({exc}); using uploader-style reset")
-            reset_to_boot_uploader(self.ser)
+            print(f"[WARN] ISP reboot command failed ({exc}); using descriptor reboot profile")
+            fallback_reset(self.ser)
 
 
 def make_k210_image_payload(raw: bytes, io_mode: str = "qio") -> bytes:
@@ -409,28 +394,80 @@ def round_up(value: int, alignment: int) -> int:
     return (value + alignment - 1) // alignment * alignment
 
 
-def firmware_erase_length(payload_size: int) -> int:
+def firmware_erase_length(payload_size: int, *, flash_address: int,
+                          firmware_flash_limit: int,
+                          flash_erase_size: int) -> int:
     if payload_size <= 0:
         raise ValueError("firmware payload is empty")
-    erase_len = round_up(payload_size, FLASH_ERASE_SIZE)
-    if FLASH_ADDRESS + erase_len > FIRMWARE_FLASH_LIMIT:
+    erase_len = round_up(payload_size, flash_erase_size)
+    if flash_address + erase_len > firmware_flash_limit:
         raise ValueError(
             "firmware payload exceeds canonical partition: "
             f"payload={payload_size} erase={erase_len} "
-            f"limit=0x{FIRMWARE_FLASH_LIMIT:06X}"
+            f"limit=0x{firmware_flash_limit:06X}"
         )
     return erase_len
+
+
+def validate_image_sidecar(image: Path, args: argparse.Namespace) -> None:
+    default_sidecar = image.with_suffix(".json")
+    selected_sidecar = (
+        Path(args.sidecar) if args.sidecar else default_sidecar
+    )
+
+    # A same-stem sidecar is evidence attached to the image even when the
+    # caller supplies an alternate path.  Validate every existing candidate so
+    # ``--sidecar missing --allow-missing-sidecar`` cannot hide stale or
+    # mismatched metadata beside the image.
+    candidates: list[Path] = [default_sidecar]
+    if selected_sidecar.resolve() != default_sidecar.resolve():
+        candidates.append(selected_sidecar)
+    for sidecar in candidates:
+        if not sidecar.is_file():
+            continue
+        try:
+            read_and_validate_sidecar(
+                sidecar,
+                image,
+                args.board_descriptor,
+                expected_flash_address=args.flash_address,
+            )
+        except SidecarError as exc:
+            raise ValueError(
+                f"firmware sidecar mismatch ({sidecar}): {exc}"
+            ) from exc
+
+    if selected_sidecar.is_file():
+        return
+    if args.allow_missing_sidecar:
+        print(
+            "[WARN] selected sidecar missing under explicit raw-image "
+            f"override: {selected_sidecar}"
+        )
+        return
+    raise ValueError(
+        f"firmware sidecar is required: {selected_sidecar}; "
+        "use --allow-missing-sidecar only for a trusted raw image"
+    )
+
+
+def apply_runtime_reboot_profile(args: argparse.Namespace, ser) -> None:
+    handler = getattr(args, "runtime_reboot_handler", None)
+    if handler is None:
+        profile = getattr(args, "reboot_profile", None)
+        raise ProtocolError(f"reboot profile {profile!r} has no implementation")
+    handler(ser)
 
 
 def cmd_monitor(args: argparse.Namespace) -> int:
     serial = require_serial()
     port = resolve_port(args, serial)
-    monitor_baud = getattr(args, "monitor_baud", DEFAULT_BOOT_BAUD)
+    monitor_baud = args.monitor_baud
     duration = getattr(args, "duration", None)
     with serial.Serial(port, monitor_baud, timeout=0.1) as ser:
         if getattr(args, "reset_before_read", False):
             clear_serial_buffers(ser)
-            reset_to_boot_uploader(ser)
+            apply_runtime_reboot_profile(args, ser)
         print(f"[MON] {port} @ {monitor_baud}. Ctrl+C to stop.", flush=True)
         deadline = None if duration is None else time.monotonic() + duration
         try:
@@ -453,11 +490,22 @@ def cmd_flash(args: argparse.Namespace) -> int:
         print(f"[ERR] image not found: {image}", file=sys.stderr)
         return 1
 
-    serial = require_serial()
-    port = resolve_port(args, serial)
     print(f"[FLASH] image: {image}")
     print(f"[FLASH] size: {image.stat().st_size} bytes")
-    print(f"[FLASH] port: {port}")
+
+    raw_image = image.read_bytes()
+    flash_payload = make_k210_image_payload(raw_image, io_mode=args.io_mode)
+    try:
+        erase_len = firmware_erase_length(
+            len(flash_payload),
+            flash_address=args.flash_address,
+            firmware_flash_limit=args.firmware_flash_limit,
+            flash_erase_size=args.flash_erase_size,
+        )
+        validate_image_sidecar(image, args)
+    except ValueError as exc:
+        print(f"[ERR] {exc}", file=sys.stderr)
+        return 1
 
     stub = Path(args.isp_stub)
     if not stub.is_file():
@@ -465,13 +513,9 @@ def cmd_flash(args: argparse.Namespace) -> int:
         print("      Run: python hackylens\\tools\\bootstrap_deps.py", file=sys.stderr)
         return 1
 
-    raw_image = image.read_bytes()
-    flash_payload = make_k210_image_payload(raw_image, io_mode=args.io_mode)
-    try:
-        erase_len = firmware_erase_length(len(flash_payload))
-    except ValueError as exc:
-        print(f"[ERR] {exc}", file=sys.stderr)
-        return 1
+    serial = require_serial()
+    port = resolve_port(args, serial)
+    print(f"[FLASH] port: {port}")
 
     with serial.Serial(port, args.boot_baud, timeout=0.1) as ser:
         if args.manual:
@@ -486,7 +530,12 @@ def cmd_flash(args: argparse.Namespace) -> int:
                 pulse_auto_reset(args, ser)
                 isp.bootrom_greeting(timeout=3.0)
             else:
-                connect_bootrom_uploader(isp, ser, attempts=args.reset_attempts)
+                connector = args.reset_connector
+                if connector is None:
+                    raise ProtocolError(
+                        f"reset profile {args.reset_profile!r} has no implementation"
+                    )
+                connector(isp, ser, attempts=args.reset_attempts)
             print("[FLASH] loading ISP stub")
             isp.memory_write(STUB_ADDRESS, stub.read_bytes())
             isp.boot_sram(STUB_ADDRESS)
@@ -498,15 +547,15 @@ def cmd_flash(args: argparse.Namespace) -> int:
                 isp.change_baudrate(args.flash_baud)
             isp.init_flash(args.flash_type)
             if args.erase:
-                print(f"[FLASH] erase 0x{FLASH_ADDRESS:06x}+0x{erase_len:x}")
-                isp.erase_flash(FLASH_ADDRESS, erase_len)
-            print(f"[FLASH] write 0x{FLASH_ADDRESS:06x}+0x{len(flash_payload):x}")
-            isp.write_flash(FLASH_ADDRESS, flash_payload)
+                print(f"[FLASH] erase 0x{args.flash_address:06x}+0x{erase_len:x}")
+                isp.erase_flash(args.flash_address, erase_len)
+            print(f"[FLASH] write 0x{args.flash_address:06x}+0x{len(flash_payload):x}")
+            isp.write_flash(args.flash_address, flash_payload)
             if args.verify:
                 print("[WARN] verify readback is not implemented: this ISP stub has no flash-read command exposed.")
             if args.reboot:
                 print("[FLASH] reboot")
-                isp.reboot(fallback_reset=args.uploader_reset_after_reboot)
+                isp.reboot(fallback_reset=args.reboot_fallback_handler)
         except (TimeoutError, ProtocolError) as exc:
             print(f"[ERR] {exc}", file=sys.stderr)
             return 2
@@ -584,7 +633,7 @@ def cmd_screenshot(args: argparse.Namespace) -> int:
     with open_runtime_serial(serial, port, args.baud, timeout=0.1, dtr=args.runtime_dtr, rts=args.runtime_rts) as ser:
         if args.reset_before_read:
             clear_serial_buffers(ser)
-            reset_to_boot_uploader(ser)
+            apply_runtime_reboot_profile(args, ser)
             time.sleep(args.reset_wait)
 
         clear_serial_buffers(ser)
@@ -783,7 +832,84 @@ def connect_bootrom_uploader(isp: K210Isp, ser, attempts: int = 15) -> None:
     raise ProtocolError(f"uploader-compatible ISP entry failed: {last_error}")
 
 
+RESET_PROFILE_CONNECTORS = {
+    "huskylens-uploader": connect_bootrom_uploader,
+}
+
+REBOOT_PROFILE_HANDLERS = {
+    "uploader-normal": reset_to_boot_uploader,
+}
+
+
+def apply_board_configuration(args: argparse.Namespace) -> None:
+    try:
+        board = load_board(args.board)
+    except ContractError as exc:
+        raise SystemExit(f"[ERR] {exc}") from exc
+    programming = board.programming
+    hardware_affecting = args.cmd in {"flash", "flash-monitor"}
+    if hardware_affecting and not programming["supported"]:
+        raise SystemExit(
+            f"[ERR] board {board.id!r} has programming.supported=false; flash is forbidden"
+        )
+    args.board_descriptor = board
+    usb = programming["usb_detection"]
+    args.usb_detection_mode = usb["mode"]
+    args.usb_vid_regex = "|".join(f"({vid})" for vid in usb.get("vids", []))
+    args.reboot_profile = programming.get("reboot_profile")
+    args.runtime_reboot_handler = (
+        REBOOT_PROFILE_HANDLERS.get(args.reboot_profile)
+        if args.reboot_profile is not None else None
+    )
+    if args.reboot_profile is not None and args.runtime_reboot_handler is None:
+        raise SystemExit(
+            f"[ERR] reboot profile {args.reboot_profile!r} has no implementation"
+        )
+
+    if hardware_affecting:
+        flash, partitions = load_validated(board.flash_layout_path)
+        firmware = partition_by_name(partitions, "firmware")
+        args.flash_address = firmware["offset"]
+        args.firmware_flash_limit = firmware["offset"] + firmware["size"]
+        args.flash_erase_size = flash["erase_size"]
+        args.isp_stub = args.isp_stub or str(ROOT / programming["isp_stub"])
+        args.boot_baud = args.boot_baud or programming["boot_baud"]
+        args.flash_baud = args.flash_baud or programming["flash_baud"]
+        flash_type = args.flash_type or programming["flash_type"]
+        args.flash_type = {"spi0": 1}[flash_type]
+        args.io_mode = args.io_mode or programming["flash_mode"]
+        args.reset_attempts = args.reset_attempts or programming["reset_attempts"]
+        args.reset_profile = programming["reset_profile"]
+        if args.uploader_reset and args.reset_profile == "manual":
+            raise SystemExit(
+                "[ERR] --uploader-reset requires a descriptor reset profile implementation"
+            )
+        args.reset_connector = RESET_PROFILE_CONNECTORS.get(args.reset_profile)
+        if args.reset_profile != "manual" and args.reset_connector is None:
+            raise SystemExit(
+                f"[ERR] reset profile {args.reset_profile!r} has no implementation"
+            )
+        if not args.manual and not args.auto_reset and args.reset_profile == "manual":
+            args.manual = True
+        fallback_enabled = args.uploader_reset_after_reboot
+        if fallback_enabled is None:
+            fallback_enabled = args.reboot_profile is not None
+        args.reboot_fallback_handler = (
+            args.runtime_reboot_handler if fallback_enabled else None
+        )
+
+    runtime_baud = programming.get("boot_baud")
+    for attribute in ("baud", "monitor_baud"):
+        if hasattr(args, attribute) and getattr(args, attribute) is None:
+            if runtime_baud is None:
+                raise SystemExit(
+                    f"[ERR] board {board.id!r} has no runtime baud default; pass --baud"
+                )
+            setattr(args, attribute, runtime_baud)
+
+
 def add_common_port_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--board", required=True, help="Canonical board.toml ID")
     parser.add_argument("--port", help="Serial port, for example COM5. Omit to auto-detect by HuskyLens Uploader VID list.")
 
 
@@ -796,37 +922,37 @@ def add_reset_args(parser: argparse.ArgumentParser) -> None:
         "--huskylens-reset",
         dest="uploader_reset",
         action="store_true",
-        default=True,
-        help="Mimic HUSKYLENS Uploader dan/kd233 DTR/RTS ISP entry loop (default)",
+        default=False,
+        help="Use the selected board's named uploader reset implementation",
     )
     parser.add_argument("--boot-rts", action="store_true", help="Use RTS as BOOT control")
     parser.add_argument("--reset-dtr", action="store_true", help="Use DTR as RESET control")
     parser.add_argument("--invert-rts", action="store_true")
     parser.add_argument("--invert-dtr", action="store_true")
-    parser.add_argument("--reset-attempts", type=int, default=15, help="Uploader-compatible ISP entry attempts")
+    parser.add_argument("--reset-attempts", type=int, help="Override descriptor reset attempts")
 
 
 def add_flash_args(parser: argparse.ArgumentParser) -> None:
-    for candidate in (BUNDLED_HUSKYLENS_STUB, WORKSPACE_HUSKYLENS_STUB,
-                      DEFAULT_HUSKYLENS_STUB,
-                      DEFAULT_STUB, LEGACY_HUSKYLENS_STUB, LEGACY_STUB):
-        if candidate.is_file():
-            default_stub = candidate
-            break
-    else:
-        default_stub = DEFAULT_STUB
-    parser.add_argument("--isp-stub", default=str(default_stub),
-                        help="Path to the K210 ISP SRAM stub (bundled display stub by default)")
-    parser.add_argument("--boot-baud", type=int, default=DEFAULT_BOOT_BAUD, help="BootROM UART baudrate")
-    parser.add_argument("--flash-baud", type=int, default=DEFAULT_FLASH_BAUD, help="ISP flash UART baudrate")
-    parser.add_argument("--flash-type", type=int, default=1, choices=[0, 1], help="0=in-chip SPI3, 1=on-board SPI0")
-    parser.add_argument("--io-mode", choices=["dio", "qio"], default="qio")
+    parser.add_argument("--isp-stub", help="Safe override for descriptor ISP stub")
+    parser.add_argument("--boot-baud", type=int, help="Override descriptor BootROM baudrate")
+    parser.add_argument("--flash-baud", type=int, help="Override descriptor ISP flash baudrate")
+    parser.add_argument("--flash-type", choices=["spi0"], help="Override descriptor flash type")
+    parser.add_argument("--io-mode", choices=["dio", "qio"], help="Override descriptor flash mode")
+    parser.add_argument("--sidecar", help="Firmware metadata sidecar; defaults to image stem + .json")
+    parser.add_argument(
+        "--allow-missing-sidecar",
+        action="store_true",
+        help=(
+            "Allow an absent selected sidecar after layout/address/size checks; "
+            "every existing selected or same-stem sidecar is still validated"
+        ),
+    )
     parser.add_argument("--erase", action="store_true", help="Run explicit flash erase before write; HUSKYLENS Uploader does not do this in the normal path")
     parser.add_argument("--verify", action="store_true", help="Request readback verification if supported")
     parser.add_argument("--no-reboot", dest="reboot", action="store_false", help="Do not reboot after flashing")
     parser.add_argument("--uploader-reset-after-reboot", dest="uploader_reset_after_reboot", action="store_true", help="Pulse uploader-style normal boot reset if ISP reboot is unsupported")
     parser.add_argument("--no-uploader-reset-after-reboot", dest="uploader_reset_after_reboot", action="store_false")
-    parser.set_defaults(reboot=True, uploader_reset_after_reboot=True)
+    parser.set_defaults(reboot=True, uploader_reset_after_reboot=None)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -838,7 +964,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_monitor = sub.add_parser("monitor", help="Read UART logs")
     add_common_port_args(p_monitor)
-    p_monitor.add_argument("--monitor-baud", "--baud", dest="monitor_baud", type=int, default=DEFAULT_BOOT_BAUD)
+    p_monitor.add_argument("--monitor-baud", "--baud", dest="monitor_baud", type=int)
     p_monitor.add_argument("--reset-before-read", action="store_true", help="Pulse uploader-style normal boot reset before reading")
     p_monitor.add_argument("--duration", type=float, help="Stop after this many seconds")
     p_monitor.set_defaults(func=cmd_monitor)
@@ -846,7 +972,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_screenshot = sub.add_parser("screenshot", help="Request a firmware LCD screenshot over UART")
     add_common_port_args(p_screenshot)
     p_screenshot.add_argument("-o", "--output", help="Output BMP path. Default: hackylens/screenshots/screen_YYYYmmdd_HHMMSS.bmp")
-    p_screenshot.add_argument("--baud", type=int, default=DEFAULT_BOOT_BAUD, help="Firmware debug UART baudrate")
+    p_screenshot.add_argument("--baud", type=int, help="Firmware debug UART baudrate")
     p_screenshot.add_argument("--timeout", type=float, default=45.0, help="Screenshot transfer timeout")
     p_screenshot.add_argument("--reset-before-read", action="store_true", help="Pulse uploader-style normal boot reset before requesting screenshot")
     p_screenshot.add_argument("--reset-wait", type=float, default=2.5, help="Delay after reset before sending HKSHOT")
@@ -858,7 +984,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmd = sub.add_parser("cmd", help="Send a text command to running HackyLens firmware")
     add_common_port_args(p_cmd)
     p_cmd.add_argument("command", help="Command text, for example HKCAMINFO or HKCAMREGS")
-    p_cmd.add_argument("--baud", type=int, default=DEFAULT_BOOT_BAUD, help="Firmware debug UART baudrate")
+    p_cmd.add_argument("--baud", type=int, help="Firmware debug UART baudrate")
     p_cmd.add_argument("--duration", type=float, default=2.0, help="How long to print response lines")
     p_cmd.add_argument("--send-delay", type=float, default=0.0, help="Delay after opening UART before sending the command")
     p_cmd.add_argument("--line-delay", type=float, default=0.0,
@@ -870,7 +996,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_frame = sub.add_parser("frame", help="Request the current raw camera RGB565 frame over UART")
     add_common_port_args(p_frame)
     p_frame.add_argument("-o", "--output", help="Output RAW path. A BMP preview is written next to it.")
-    p_frame.add_argument("--baud", type=int, default=DEFAULT_BOOT_BAUD, help="Firmware debug UART baudrate")
+    p_frame.add_argument("--baud", type=int, help="Firmware debug UART baudrate")
     p_frame.add_argument("--timeout", type=float, default=60.0, help="Frame transfer timeout")
     p_frame.add_argument("--send-delay", type=float, default=0.0, help="Delay after opening UART before sending HKFRAME")
     p_frame.add_argument("--runtime-dtr", action="store_true", help="Keep DTR high while opening the runtime UART")
@@ -890,7 +1016,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_port_args(p_flash_monitor)
     add_reset_args(p_flash_monitor)
     add_flash_args(p_flash_monitor)
-    p_flash_monitor.add_argument("--monitor-baud", "--baud", dest="monitor_baud", type=int, default=DEFAULT_BOOT_BAUD)
+    p_flash_monitor.add_argument("--monitor-baud", "--baud", dest="monitor_baud", type=int)
     p_flash_monitor.add_argument("--duration", type=float, help="Stop monitor after this many seconds")
     p_flash_monitor.add_argument("--no-monitor-reset", dest="monitor_reset", action="store_false", help="Do not reset again before monitor")
     p_flash_monitor.set_defaults(monitor_reset=True)
@@ -902,6 +1028,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.cmd != "list":
+        apply_board_configuration(args)
     return args.func(args)
 
 

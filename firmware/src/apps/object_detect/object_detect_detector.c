@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "../../services/ai_model_runtime.h"
 #include "../../services/camera_ai_input.h"
 #include "object_detect_postprocess.h"
@@ -178,11 +178,11 @@ static uint8_t finish_inference(void)
     bank->epoch = g_inference_epoch;
     bank->sequence = sequence;
     bank->camera_sequence = g_inference_camera_sequence;
-    decode_started_us = hal_time_us();
+    decode_started_us = time_internal_us();
     bank->count = object_detect_postprocess(
         (const float *)output, bytes, g_confidence, g_nms,
         &g_workspace, bank->items, &bank->candidate_count, &bank->stats);
-    bank->ready_us = hal_time_us();
+    bank->ready_us = time_internal_us();
     g_last_decode_us = (uint32_t)(bank->ready_us - decode_started_us);
     g_last_pipeline_us = (uint32_t)(bank->ready_us - g_runtime.started_us);
     g_decode_count++;

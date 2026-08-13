@@ -1,10 +1,10 @@
 #include "sd_spi.h"
 
-#include "../board/board_pins.h"
+#include "defaults.h"
 
-#include "../board/board_hackylens.h"
-#include "../hal/hal_gpio.h"
-#include "../hal/hal_spi.h"
+#include "../internal/hk_board_port.h"
+#include "hal_gpio.h"
+#include "hal_spi.h"
 
 void sd_spi_cs_high(void)
 {
@@ -28,7 +28,7 @@ uint8_t sd_spi_xfer(uint8_t out)
 
 void sd_spi_board_init(uint32_t init_hz)
 {
-    board_sd_spi_init_pins();
+    hk_board_ops.sd_prepare();
     sd_spi_cs_high();
     sd_spi_config(init_hz);
 }

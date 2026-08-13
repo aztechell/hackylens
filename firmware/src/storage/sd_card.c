@@ -9,7 +9,7 @@
 #include "fat32_volume.h"
 
 #include "../drivers/sd_spi.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 
 static void sd_deselect(void)
 {

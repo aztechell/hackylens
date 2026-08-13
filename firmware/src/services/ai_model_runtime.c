@@ -2,8 +2,8 @@
 
 #include <string.h>
 
-#include "../hal/hal_kpu.h"
-#include "../hal/hal_time.h"
+#include "hal_kpu.h"
+#include "hal_time.h"
 #include "../storage/ai_model_storage.h"
 
 #define AI_MODEL_DEFAULT_UNLOAD_TIMEOUT_US 2000000ULL

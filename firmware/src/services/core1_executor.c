@@ -2,8 +2,8 @@
 
 #include <stddef.h>
 
-#include "../hal/hal_core.h"
-#include "../hal/hal_time.h"
+#include "hal_core.h"
+#include "hal_time.h"
 
 #define CORE1_EXECUTOR_START_TIMEOUT_US 250000ULL
 #define CORE1_EXECUTOR_IDLE_MS 1U

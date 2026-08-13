@@ -4,7 +4,7 @@
 #include "py/runtime.h"
 
 #include "../../config/input_config.h"
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "../../services/micropython_binding_service.h"
 #include "../../services/micropython_runtime.h"
 
@@ -73,7 +73,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(binding_button_obj, binding_button);
 
 static mp_obj_t binding_ticks_ms(void)
 {
-    return mp_obj_new_int_from_ull(hal_time_us() / 1000ULL);
+    return mp_obj_new_int_from_ull(time_internal_us() / 1000ULL);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_ticks_ms_obj, binding_ticks_ms);
 
@@ -81,20 +81,20 @@ static mp_obj_t binding_sleep_ms(mp_obj_t duration_object)
 {
     uint32_t duration = binding_uint(
         duration_object, MICROPYTHON_RUNTIME_MAX_LIMIT_MS);
-    uint64_t deadline = hal_time_us() + (uint64_t)duration * 1000ULL;
+    uint64_t deadline = time_internal_us() + (uint64_t)duration * 1000ULL;
 
-    while(hal_time_us() < deadline)
+    while(time_internal_us() < deadline)
     {
         uint64_t remaining;
         uint32_t slice;
 
         micropython_runtime_vm_hook();
-        remaining = deadline - hal_time_us();
+        remaining = deadline - time_internal_us();
         slice = (uint32_t)((remaining + 999ULL) / 1000ULL);
         if(slice > 5U)
             slice = 5U;
         if(slice)
-            hal_sleep_ms(slice);
+            time_internal_sleep_ms(slice);
     }
     micropython_runtime_vm_hook();
     return mp_const_none;

@@ -10,7 +10,7 @@
 #include "../services/settings_service.h"
 #include "hk_config.h"
 #if HK_ENABLE_APP_MICROPYTHON
-#include "../hal/hal_watchdog.h"
+#include "hal_watchdog.h"
 #endif
 
 void autostart_controller_start(void)

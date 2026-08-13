@@ -310,7 +310,7 @@ class DocumentationContractsTest(unittest.TestCase):
             bad = write(root / "bad.md", "HackyLens documentation.\n")
             good = write(
                 root / "good.md",
-                "> HackyLens v0.2 is a layered K210 reference firmware and MicroPython\n"
+                "> HackyLens v0.3 is a layered K210 reference firmware and MicroPython\n"
                 "> technology preview.\n",
             )
             bad_issues = CHECK_DOCS.check_preview_markers(root, [bad])

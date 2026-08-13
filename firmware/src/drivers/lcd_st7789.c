@@ -1,5 +1,6 @@
 #include "hk_lcd.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #if defined(LCD_ST7789_TESTING)
@@ -10,14 +11,15 @@
 #include "hk_config.h"
 #endif
 
-#include "../board/board_pins.h"
+#include "defaults.h"
 #include "../config/display_config.h"
 #include "../core/hk_string.h"
 #include "hackylens_boot_logo_1bpp.h"
 
-#include "../hal/hal_gpio.h"
-#include "../hal/hal_spi.h"
-#include "../hal/hal_time.h"
+#include "hal_gpio.h"
+#include "hal_pwm.h"
+#include "hal_spi.h"
+#include "hal_time.h"
 
 static uint8_t g_line[LCD_W * 2];
 #if HK_ENABLE_APP_MICROPYTHON
@@ -38,6 +40,14 @@ static uint32_t g_lcd_next_lease_id;
 
 static uint8_t lcd_set_window_physical(uint16_t x0, uint16_t y0,
                                        uint16_t x1, uint16_t y1);
+
+void lcd_driver_prepare(void)
+{
+    hal_pwm_init(SCREEN_BL_PWM_DEVICE);
+    hal_spi_init(LCD_SPI, 32);
+    printf("[LCD] spi original-ish clk=%u\r\n",
+           hal_spi_set_clock(LCD_SPI, LCD_SPI_HZ));
+}
 
 #if HK_ENABLE_APP_MICROPYTHON
 static uint8_t lcd_set_window_physical_until(

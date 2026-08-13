@@ -2,13 +2,15 @@
 
 #include <stdio.h>
 
+#include "defaults.h"
 #include "hk_config.h"
+#include "pins.h"
 #include "../config/settings_config.h"
 
 #include "../core/hk_app_registry.h"
 #include "../core/hk_dispatch.h"
 #include "../core/hk_menu.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 #include "../ui/boot_view.h"
 #include "../ui/hk_ui.h"
 #include "sd_event_controller.h"
@@ -23,11 +25,19 @@ static void boot_log_banner(void)
 {
     printf("[BOOT] HackyLens %s full\r\n", HACKYLENS_VERSION);
     printf("[BOOT] modular firmware ready\r\n");
-    printf("[LCD] IO18=DC via GPIOHS output bit15, IO22=RST, IO19=SPI0_SS3\r\n");
+    printf("[LCD] " IO_LCD_DC_OR_AUX_LABEL
+           "=DC via GPIOHS output bit" GPIOHS_LCD_DC_OR_AUX_LABEL ", "
+           IO_LCD_RST_LABEL "=RST, " IO_LCD_CS_LABEL "=SPI"
+           LCD_SPI_LABEL "_SS" LCD_CS_LABEL "\r\n");
     printf("[BTN] map LEFT=1 OK=2 RIGHT=4 BACK=8\r\n");
-    printf("[LED] illum candidate IO23 PWM2_CH3 default OFF\r\n");
-    printf("[RGB] candidate IO32/IO30/IO31 PWM2_CH0/1/2 default OFF\r\n");
-    printf("[SD] candidate IO27=SCLK IO28=D0 IO26=D1 IO29=CS\r\n");
+    printf("[LED] illum candidate " IO_LED_ILLUM_LABEL " PWM"
+           LED_PWM_DEVICE_LABEL "_CH" LED_PWM_CHANNEL_LABEL " default OFF\r\n");
+    printf("[RGB] candidate " IO_RGB_PWM0_LABEL "/" IO_RGB_PWM1_LABEL "/"
+           IO_RGB_PWM2_LABEL " PWM" RGB_PWM_DEVICE_LABEL "_CH"
+           RGB_PWM_CHANNEL0_LABEL "/" RGB_PWM_CHANNEL1_LABEL "/"
+           RGB_PWM_CHANNEL2_LABEL " default OFF\r\n");
+    printf("[SD] candidate " IO_SD_SCLK_LABEL "=SCLK " IO_SD_D0_LABEL
+           "=D0 " IO_SD_D1_LABEL "=D1 " IO_SD_CS_LABEL "=CS\r\n");
     printf("[SHOT] UART command HKSHOT streams BMP screenshot over USB serial\r\n");
     printf("[DEBUG] HKHELP lists commands available in this build\r\n");
     printf("[SETTINGS] flash slots 0x%06X/0x%06X\r\n", (unsigned)SETTINGS_FLASH_SLOT0, (unsigned)SETTINGS_FLASH_SLOT1);

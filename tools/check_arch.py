@@ -3,22 +3,91 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "firmware" / "src"
-INCLUDE_RE = re.compile(r'^\s*#include\s+[<"]([^>"]+)[>"]')
-SDK_HEADERS = {
-    "bsp.h", "dmac.h", "dvp.h", "fpioa.h", "gpiohs.h", "kpu.h",
-    "platform.h", "pwm.h", "sleep.h", "spi.h", "sysctl.h", "uart.h",
+DIRECTIVE_RE = re.compile(
+    r"^\s*(?:#|%:)\s*(?P<keyword>[A-Za-z_][A-Za-z0-9_]*)\b(?P<operand>.*)$"
+)
+INCLUDE_OPERAND_RE = re.compile(
+    r'^\s*(?:<(?P<angle>[^>\r\n]+)>|"(?P<quote>[^"\r\n]+)")\s*$'
+)
+SDK_HEADER_FALLBACK = {
+    "aes.h", "apu.h", "atomic.h", "bsp.h", "clint.h", "dmac.h",
+    "dump.h", "dvp.h", "encoding.h", "entry.h", "fft.h", "fpioa.h",
+    "gpio.h", "gpio_common.h", "gpiohs.h", "i2c.h", "i2s.h",
+    "interrupt.h", "io.h", "iomem.h", "kpu.h", "platform.h", "plic.h",
+    "printf.h", "pwm.h", "rtc.h", "sha256.h", "sleep.h", "spi.h",
+    "syscalls.h", "sysctl.h", "timer.h", "uart.h", "uarths.h", "util.h",
+    "utils.h", "wdt.h", "nncase.h", "nncase/runtime/k210/runtime_module.h",
+    "syslog.h",
 }
+PRIVATE_BOARD_HEADERS = {
+    "pins.h", "defaults.h", "inventory.h", "flash_layout.h",
+    "hk_board_port.h",
+}
+
+
+def discover_sdk_headers() -> set[str]:
+    """Discover every header exposed by the linked SDK's canonical include graph.
+
+    The SDK's ``header_directories(${SDK_ROOT}/lib)`` recursively exposes each
+    directory containing a header, including nncase and utils, not just BSP and
+    drivers.  Header basenames and paths relative to each include directory are
+    retained so both ``nncase.h`` and ``nncase/runtime/...`` spellings match.
+    """
+
+    result = set(SDK_HEADER_FALLBACK)
+    sdk = ROOT / "_deps" / "kendryte-standalone-sdk"
+    header_roots = [sdk / "include", sdk / "lib"]
+    for root in header_roots:
+        if not root.is_dir():
+            continue
+        headers = sorted(
+            path for path in root.rglob("*")
+            if path.is_file() and path.suffix.lower() in {".h", ".hpp"}
+        )
+        include_directories = {path.parent for path in headers}
+        for path in headers:
+            result.add(path.name.casefold())
+            relative_parts = path.relative_to(root).parts
+            for offset in range(len(relative_parts)):
+                result.add(
+                    "/".join(relative_parts[offset:]).casefold()
+                )
+            for include_directory in include_directories:
+                try:
+                    result.add(
+                        path.relative_to(include_directory).as_posix().casefold()
+                    )
+                except ValueError:
+                    pass
+    return result
+
+
+SDK_HEADERS = discover_sdk_headers()
+SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
 SDK_TOKEN_RE = re.compile(
-    r"\b(dmac_|dvp_|fpioa_|gpiohs_|kpu_|pwm_|spi_|sysctl_|uart_|msleep|"
+    r"\b(dmac_|dvp_|fpioa_|gpio_|gpiohs_|i2c_|plic_|kpu_|pwm_|spi_|"
+    r"sysctl_|timer_|uart_|uarths_|wdt_|msleep|"
     r"sysctl_get_time_us|DVP_|FUNC_CMOS|FUNC_SCCB|FUNC_SPI|FPIOA_|"
     r"SPI_DEVICE|SPI_CHIP|SPI_WORK)"
 )
+TRIGRAPHS = {
+    "??=": "#",
+    "??/": "\\",
+    "??'": "^",
+    "??(": "[",
+    "??)": "]",
+    "??!": "|",
+    "??<": "{",
+    "??>": "}",
+    "??-": "~",
+}
 PUBLIC_MUTABLE_EXTERN_RE = re.compile(
     r"^\s*extern\s+(?!const\b)(?!.*\()\S.*\s+\**[A-Za-z_]\w*"
     r"(?:\s*\[[^\]]*\])?\s*;"
@@ -131,8 +200,6 @@ AI_MODEL_SHARED = {
     "storage/ai_model_storage.h",
     "services/ai_model_runtime.c",
     "services/ai_model_runtime.h",
-    "hal/hal_kpu.c",
-    "hal/hal_kpu.h",
 }
 
 
@@ -140,19 +207,194 @@ def relative(path: Path) -> str:
     return path.relative_to(SRC).as_posix()
 
 
-def includes(path: Path) -> list[tuple[int, str]]:
-    result = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        match = INCLUDE_RE.match(line)
-        if match:
-            result.append((number, match.group(1)))
+def source_files() -> list[Path]:
+    return sorted(
+        path for path in SRC.rglob("*")
+        if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES
+    )
+
+
+def _translation_phase_lines(
+    source: str, *, preserve_literals: bool = True
+) -> list[tuple[int, str]]:
+    """Normalize directive-relevant C translation phases with source lines.
+
+    Backslash-newline splicing happens before comment removal.  We also
+    recognize digraph directives and C trigraphs so an app cannot spell a
+    hidden include directive or SDK token around the guard.  String and
+    character literal contents are retained only when requested by a caller.
+    """
+
+    source = source.replace("\r\n", "\n").replace("\r", "\n")
+    spliced: list[str] = []
+    line_map: list[int] = []
+    index = 0
+    line = 1
+    while index < len(source):
+        trigraph = TRIGRAPHS.get(source[index:index + 3])
+        current = trigraph if trigraph is not None else source[index]
+        consumed = 3 if trigraph is not None else 1
+        if current == "\\":
+            newline = index + consumed
+            # GCC accepts horizontal whitespace before a spliced newline as an
+            # extension.  Treat it conservatively as a splice too.
+            while newline < len(source) and source[newline] in " \t\f\v":
+                newline += 1
+            if newline < len(source) and source[newline] == "\n":
+                index = newline + 1
+                line += 1
+                continue
+        spliced.append(current)
+        line_map.append(line)
+        if current == "\n":
+            line += 1
+        index += consumed
+
+    text = "".join(spliced)
+    visible = list(text)
+    state = "code"
+    index = 0
+    while index < len(text):
+        current = text[index]
+        following = text[index + 1] if index + 1 < len(text) else ""
+        if state == "line-comment":
+            if current == "\n":
+                state = "code"
+            else:
+                visible[index] = " "
+            index += 1
+            continue
+        if state == "block-comment":
+            if current == "*" and following == "/":
+                visible[index] = visible[index + 1] = " "
+                index += 2
+                state = "code"
+            else:
+                if current != "\n":
+                    visible[index] = " "
+                index += 1
+            continue
+        if state in {"string", "character"}:
+            if current == "\\" and following:
+                if not preserve_literals:
+                    visible[index] = " "
+                    if following != "\n":
+                        visible[index + 1] = " "
+                index += 2
+                continue
+            terminator = '"' if state == "string" else "'"
+            if not preserve_literals and current != "\n":
+                visible[index] = " "
+            if current == terminator:
+                state = "code"
+            index += 1
+            continue
+        if current == "/" and following == "/":
+            visible[index] = visible[index + 1] = " "
+            index += 2
+            state = "line-comment"
+        elif current == "/" and following == "*":
+            visible[index] = visible[index + 1] = " "
+            index += 2
+            state = "block-comment"
+        elif current == '"':
+            state = "string"
+            if not preserve_literals:
+                visible[index] = " "
+            index += 1
+        elif current == "'":
+            state = "character"
+            if not preserve_literals:
+                visible[index] = " "
+            index += 1
+        else:
+            index += 1
+
+    translated = "".join(visible)
+    result: list[tuple[int, str]] = []
+    offset = 0
+    for logical in translated.splitlines(keepends=True):
+        content = logical.rstrip("\n")
+        mapped = line_map[offset:offset + len(logical)]
+        number = mapped[0] if mapped else 1
+        result.append((number, content))
+        offset += len(logical)
+    if translated and not translated.endswith("\n") and not result:
+        result.append((line_map[0], translated))
     return result
 
 
+def _include_directives(source: str) -> list[tuple[int, str, str | None, bool]]:
+    result: list[tuple[int, str, str | None, bool]] = []
+    for number, line in _translation_phase_lines(source):
+        directive = DIRECTIVE_RE.match(line)
+        if not directive:
+            continue
+        keyword = directive.group("keyword")
+        if keyword not in {"include", "include_next", "import"}:
+            continue
+        operand = INCLUDE_OPERAND_RE.fullmatch(directive.group("operand"))
+        include = None if operand is None else (
+            operand.group("angle") or operand.group("quote")
+        )
+        raw_lines = source.replace("\r\n", "\n").replace("\r", "\n").splitlines()
+        raw = raw_lines[number - 1] if 0 < number <= len(raw_lines) else ""
+        ordinary = bool(
+            re.fullmatch(
+                r'\s*#\s*include\s*(?:<[^>\r\n]+>|"[^"\r\n]+")\s*',
+                raw,
+            )
+        )
+        result.append((number, keyword, include, ordinary))
+    return result
+
+
+def includes(path: Path) -> list[tuple[int, str]]:
+    return [
+        (number, include)
+        for number, keyword, include, _ordinary in _include_directives(
+            path.read_text(encoding="utf-8")
+        )
+        if keyword == "include" and include is not None
+    ]
+
+
+def nonliteral_include_lines(source: str) -> list[int]:
+    """Allow only ordinary literal ``#include`` directives in apps."""
+
+    return [
+        number
+        for number, keyword, include, ordinary in _include_directives(source)
+        if keyword != "include" or include is None or not ordinary
+    ]
+
+
+def sdk_token_lines(source: str) -> list[tuple[int, str]]:
+    """Find SDK tokens after C splicing, outside comments and literals."""
+
+    result: list[tuple[int, str]] = []
+    for number, line in _translation_phase_lines(
+        source, preserve_literals=False
+    ):
+        directive = DIRECTIVE_RE.match(line)
+        if directive and directive.group("keyword") in {
+            "include", "include_next", "import"
+        }:
+            continue
+        if match := SDK_TOKEN_RE.search(line):
+            result.append((number, match.group(0)))
+    return result
+
+
+def normalize_include_path(include: str) -> str:
+    """Use one policy separator regardless of host or source spelling."""
+
+    return include.replace("\\", "/")
+
+
 def resolve_include(path: Path, include: str) -> str | None:
-    if include in SDK_HEADERS:
-        return None
-    for candidate in (path.parent / include, SRC / include):
+    normalized = normalize_include_path(include)
+    for candidate in (path.parent / normalized, SRC / normalized):
         try:
             resolved = candidate.resolve()
             resolved.relative_to(SRC.resolve())
@@ -171,8 +413,16 @@ def feature_for(path: str) -> tuple[str, str, str] | None:
 
 
 def layer_violation(path: str, include: str, target: str | None) -> str | None:
-    if include in SDK_HEADERS and not path.startswith(("board/", "hal/")):
-        return "SDK headers are limited to board/hal"
+    policy_include = normalize_include_path(include).casefold()
+    include_name = policy_include.rsplit("/", 1)[-1]
+    if (path.startswith("apps/") and target is None and
+            (policy_include in SDK_HEADERS or include_name in SDK_HEADERS)):
+        return "apps must not include K210 SDK headers"
+    if path.startswith("apps/") and (
+            "platforms/" in policy_include or "boards/" in policy_include or
+            include_name in PRIVATE_BOARD_HEADERS or
+            re.fullmatch(r"hal_[a-z0-9_]+\.h", include_name)):
+        return "apps must use private runtime facades, not board/BSP or platform HAL"
     if not path.startswith("runtime/") and target and target.startswith("runtime/"):
         return "only runtime may include runtime"
     if path.startswith("drivers/") and target and target.startswith(
@@ -195,7 +445,7 @@ def layer_violation(path: str, include: str, target: str | None) -> str | None:
         return "shared UI must not depend on storage or services"
     if (path.startswith(("services/", "controllers/")) and
             path != "services/debug_console_service.c" and
-            include == "../hal/hal_uart.h"):
+            include_name == "hal_uart.h"):
         return "use the debug console service instead of debug UART"
     return None
 
@@ -241,7 +491,7 @@ def ai_model_violation(path: str, target: str | None) -> str | None:
 
 def include_cycle_failures() -> list[str]:
     graph: dict[str, list[str]] = {}
-    for path in sorted(SRC.rglob("*.[ch]")):
+    for path in source_files():
         graph[relative(path)] = [
             target for _, include in includes(path)
             if (target := resolve_include(path, include))
@@ -274,6 +524,18 @@ def include_cycle_failures() -> list[str]:
 def layout_failures() -> list[str]:
     failures: list[str] = []
     manifest = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
+    if any((SRC / name).is_dir() and any((SRC / name).iterdir())
+           for name in ("board", "hal")):
+        failures.append("firmware/src/board and firmware/src/hal must not exist")
+    for required in (
+        ROOT / "platforms" / "k210" / "hal",
+        ROOT / "platforms" / "k210" / "startup",
+        ROOT / "firmware" / "src" / "internal" / "time_internal.h",
+        ROOT / "firmware" / "src" / "internal" / "boot_internal.h",
+        ROOT / "firmware" / "app_requirements.toml",
+    ):
+        if not required.exists():
+            failures.append(f"{required.relative_to(ROOT).as_posix()}: required Phase 1 path is missing")
     for path in sorted(LEGACY_PATHS | FORBIDDEN_FILES):
         if (SRC / path).exists():
             failures.append(f"{path}: legacy/forbidden path must not exist")
@@ -296,16 +558,118 @@ def layout_failures() -> list[str]:
     for path in AI_MODEL_SHARED:
         if not (SRC / path).is_file():
             failures.append(f"{path}: shared AI platform file is missing")
+    for path in (
+        ROOT / "platforms" / "k210" / "hal" / "hal_kpu.c",
+        ROOT / "platforms" / "k210" / "hal" / "hal_kpu.h",
+    ):
+        if not path.is_file():
+            failures.append(f"{path.relative_to(ROOT).as_posix()}: shared AI HAL is missing")
+    if "app_requirements.toml" in "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in source_files()):
+        failures.append("private build-time requirements must not provide runtime hardware access")
+    for path in sorted((ROOT / "tools").glob("*.py")):
+        for line, reason in board_behavior_violations(
+            path.read_text(encoding="utf-8")
+        ):
+            failures.append(
+                f"{path.relative_to(ROOT).as_posix()}:{line}: {reason}"
+            )
     lock_path = ROOT / "models" / "toolchain.lock.json"
     if not lock_path.is_file() or '"sha256"' not in lock_path.read_text(encoding="utf-8"):
         failures.append("models/toolchain.lock.json: pinned compiler checksum is missing")
     return failures
 
 
+def _board_selector(node: ast.AST) -> bool:
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and child.id == "board_id":
+            return True
+        if isinstance(child, ast.Attribute) and (
+            (isinstance(child.value, ast.Name)
+             and child.value.id == "args" and child.attr == "board")
+            or (isinstance(child.value, ast.Name)
+                and child.value.id == "board" and child.attr == "id")
+        ):
+            return True
+    return False
+
+
+def _runtime_board_selector(node: ast.AST) -> bool:
+    """Return true for the selected descriptor object / CLI identity."""
+
+    return any(
+        isinstance(child, ast.Attribute) and (
+            (isinstance(child.value, ast.Name)
+             and child.value.id == "args" and child.attr == "board")
+            or (isinstance(child.value, ast.Name)
+                and child.value.id == "board" and child.attr == "id")
+        )
+        for child in ast.walk(node)
+    )
+
+
+def _board_literal(node: ast.AST) -> bool:
+    known = {
+        path.name for path in (ROOT / "boards").iterdir()
+        if path.is_dir()
+    } if (ROOT / "boards").is_dir() else set()
+    return any(
+        isinstance(child, ast.Constant)
+        and isinstance(child.value, str)
+        and child.value in known
+        for child in ast.walk(node)
+    )
+
+
+def board_behavior_violations(source: str) -> list[tuple[int, str]]:
+    """Reject board-ID control flow/tables, while allowing identity metadata."""
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        return [(exc.lineno or 1, "cannot parse Python for board behavior guard")]
+    findings: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.If, ast.IfExp, ast.While)):
+            test = node.test
+            comparisons = [
+                item for item in ast.walk(test) if isinstance(item, ast.Compare)
+            ]
+            if any(
+                _board_selector(compare)
+                and (
+                    _runtime_board_selector(compare)
+                    or
+                    _board_literal(compare)
+                    or any(isinstance(operator, (ast.In, ast.NotIn))
+                           for operator in compare.ops)
+                )
+                for compare in comparisons
+            ):
+                findings.append(
+                    (node.lineno, "board-ID conditional is forbidden")
+                )
+        elif isinstance(node, ast.Match) and _board_selector(node.subject):
+            findings.append((node.lineno, "board-ID match/case is forbidden"))
+        elif isinstance(node, ast.Dict):
+            if any(key is not None and _board_literal(key) for key in node.keys):
+                findings.append(
+                    (node.lineno, "board-ID behavior table is forbidden")
+                )
+    return sorted(set(findings))
+
+
 def main() -> int:
     failures = layout_failures()
-    for path in sorted(SRC.rglob("*.[ch]")):
+    for path in source_files():
         path_rel = relative(path)
+        source_text = path.read_text(encoding="utf-8")
+        if path_rel.startswith("apps/"):
+            for number in nonliteral_include_lines(source_text):
+                failures.append(
+                    f"{path_rel}:{number}: apps must use literal include paths"
+                )
         for number, include in includes(path):
             target = resolve_include(path, include)
             for violation in (
@@ -316,14 +680,17 @@ def main() -> int:
             ):
                 if violation:
                     failures.append(f"{path_rel}:{number}: {violation}: {include}")
-        if not path_rel.startswith(("board/", "hal/")):
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not path_rel.startswith("apps/"):
+            for number, line in enumerate(source_text.splitlines(), 1):
                 if line.lstrip().startswith("#include"):
                     continue
-                if match := SDK_TOKEN_RE.search(line):
-                    failures.append(f"{path_rel}:{number}: SDK token outside board/hal: {match.group(0)}")
                 if PUBLIC_MUTABLE_EXTERN_RE.search(line):
                     failures.append(f"{path_rel}:{number}: public mutable extern variable")
+        else:
+            for number, token in sdk_token_lines(source_text):
+                failures.append(
+                    f"{path_rel}:{number}: K210 SDK token in app: {token}"
+                )
     failures.extend(include_cycle_failures())
     if failures:
         print("[ARCH] boundary violations:")

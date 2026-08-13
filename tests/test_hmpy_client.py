@@ -64,7 +64,10 @@ class FakeDeviceTransport:
     def handle(self, frame: Frame) -> None:
         if frame.type is MessageType.HELLO:
             fixed = HELLO_FIXED.pack(1, 5, int(self.running), self.boot_flags, 0xFF | CAP_BOOT_FLAGS, 1024, 1016, 63, 65535, 256 * 1024, 0x390000, 8192)
-            self.send(frame, fixed + pack_name("0.2.0") + pack_name("HackyLens K210"))
+            self.send(
+                frame,
+                fixed + pack_name("0.3.0") + pack_name("huskylens-sen0305"),
+            )
         elif frame.type is MessageType.LIST:
             for name, data in sorted(self.files.items()):
                 self.send(frame, pack_name(name) + struct.pack("<I", len(data)), more=True)

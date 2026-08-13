@@ -2,10 +2,15 @@
 
 #include "../core/camera_types.h"
 
-#include "../board/board_pins.h"
+#include "defaults.h"
 
 #include "../core/hk_binary.h"
-#include "../hal/hal_pwm.h"
+#include "hal_pwm.h"
+
+void lights_driver_prepare(void)
+{
+    hal_pwm_init(LED_PWM_DEVICE);
+}
 
 void lights_screen_backlight_set(uint8_t percent)
 {

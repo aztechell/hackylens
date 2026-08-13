@@ -97,8 +97,8 @@ class FakeClient:
             file_max=256 * 1024,
             filesystem_total=0x390000,
             filesystem_used=used,
-            firmware_version="0.2.0",
-            board="HackyLens K210",
+            firmware_version="0.3.0",
+            board="huskylens-sen0305",
         )
 
     def list_files(self) -> list[FileInfo]:
@@ -291,7 +291,7 @@ class HmpyAcceptanceTests(unittest.TestCase):
     def config(self, report: Path, **overrides) -> AcceptanceConfig:
         values = dict(
             port="FAKE",
-            expected_version="0.2.0",
+            expected_version="0.3.0",
             report=report,
             namespace="unit",
             poll_interval=0.001,

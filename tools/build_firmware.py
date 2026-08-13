@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,20 +19,19 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
+from board_contract import Board, ContractError, load_board
+from check_board_ports import compile_conformance_board
+from firmware_attestation import (
+    FULL_APP_IDS as ATTESTED_FULL_APP_IDS,
+    write as write_build_attestation,
+)
+from gen_board import generate as generate_board
 from gen_flash_layout import load_validated, partition_by_name
 
 WORKSPACE = ROOT.parent
 LOCAL_DEPS = ROOT / "_deps"
 LEGACY_DEPS = WORKSPACE / "hackylens-legacy" / "_deps"
-_FLASH_LAYOUT, _FLASH_PARTITIONS = load_validated(
-    ROOT / "firmware" / "config" / "flash_layout.json"
-)
-_FIRMWARE_PARTITION = partition_by_name(_FLASH_PARTITIONS, "firmware")
-FIRMWARE_FLASH_LIMIT = (
-    _FIRMWARE_PARTITION["offset"] + _FIRMWARE_PARTITION["size"]
-)
 K210_IMAGE_OVERHEAD = 37
-FLASH_ERASE_SIZE = _FLASH_LAYOUT["erase_size"]
 MICROPYTHON_NATIVE_POLL_PATCH = (
     ROOT / "firmware" / "third_party" / "micropython" /
     "patches" / "0001-poll-native-iterators.patch"
@@ -68,6 +69,90 @@ APP_SOURCE_DIRS = {
     "sleep": Path("firmware/src/apps/sleep"),
     "micropython": Path("firmware/src/apps/micropython"),
 }
+if set(APP_MODULES) != ATTESTED_FULL_APP_IDS:
+    raise RuntimeError(
+        "build app registry does not match firmware-attestation full composition"
+    )
+
+APP_REQUIREMENTS_PATH = ROOT / "firmware" / "app_requirements.toml"
+
+
+def load_app_requirements(path: Path = APP_REQUIREMENTS_PATH) -> dict[str, set[str]]:
+    """Load private build-only app composition requirements."""
+
+    try:
+        with path.open("rb") as source:
+            raw = tomllib.load(source)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise RuntimeError(f"cannot read private app requirements: {exc}") from exc
+    if set(raw) != {"schema", "apps"} or raw.get("schema") != 1:
+        raise RuntimeError("app requirements: expected only schema=1 and apps")
+    apps = raw.get("apps")
+    if not isinstance(apps, dict) or set(apps) != set(APP_MODULES):
+        raise RuntimeError("app requirements: apps must exactly match build app modules")
+    result: dict[str, set[str]] = {}
+    for app, table in apps.items():
+        if not isinstance(table, dict) or set(table) != {"requires"}:
+            raise RuntimeError(f"app requirements {app}: expected only requires")
+        required = table["requires"]
+        if (not isinstance(required, list) or
+                any(not isinstance(item, str) or not item for item in required) or
+                len(required) != len(set(required))):
+            raise RuntimeError(f"app requirements {app}: invalid requires array")
+        result[app] = set(required)
+    return result
+
+
+def compose_apps(board: Board, disabled_apps: set[str],
+                 required_apps: set[str]) -> tuple[set[str], list[dict[str, object]]]:
+    """Apply board-aware exclusions without exposing a runtime hardware API."""
+
+    unknown_required = sorted(required_apps - set(APP_MODULES))
+    if unknown_required:
+        raise RuntimeError("unknown required app(s): " + ", ".join(unknown_required))
+    conflict = sorted(required_apps & disabled_apps)
+    if conflict:
+        raise RuntimeError("app is both disabled and required: " + ", ".join(conflict))
+    requirements = load_app_requirements()
+    supported = board.driver_supported_kinds()
+    composed = set(disabled_apps)
+    exclusions: list[dict[str, object]] = []
+    for app in APP_MODULES:
+        if app in composed:
+            continue
+        missing = sorted(requirements[app] - supported)
+        if not missing:
+            continue
+        reason = {
+            "app": app,
+            "code": "missing-driver-supported-device",
+            "missing": missing,
+        }
+        if app in required_apps:
+            raise RuntimeError(
+                f"required app {app!r} is unavailable on {board.id}: " +
+                ", ".join(missing)
+            )
+        composed.add(app)
+        exclusions.append(reason)
+    return composed, exclusions
+
+
+def write_composition(board: Board, disabled_apps: set[str],
+                      exclusions: list[dict[str, object]]) -> Path:
+    path = ROOT / "build" / board.id / "composition.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    document = {
+        "schema": 1,
+        "board": board.id,
+        "disabled_apps": sorted(disabled_apps),
+        "exclusions": exclusions,
+    }
+    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8", newline="\n")
+    for exclusion in exclusions:
+        print(json.dumps({"event": "app-excluded", **exclusion}, sort_keys=True))
+    return path
 
 CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/controllers/camera_runtime_controller.c"),
@@ -78,8 +163,8 @@ CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/drivers/camera_stream.h"),
     Path("firmware/src/drivers/ov2640_sensor.c"),
     Path("firmware/src/drivers/ov2640_sensor.h"),
-    Path("firmware/src/hal/hal_dvp.c"),
-    Path("firmware/src/hal/hal_dvp.h"),
+    Path("platforms/k210/hal/hal_dvp.c"),
+    Path("platforms/k210/hal/hal_dvp.h"),
 }
 for camera_path in (ROOT / "firmware" / "src" / "services").glob("camera_*"):
     CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
@@ -99,8 +184,10 @@ CORE1_EXECUTOR_SOURCE_MODULES = {
 }
 
 MICROPYTHON_FEATURE_SOURCE_MODULES = {
-    Path("firmware/src/hal/hal_watchdog.c"),
-    Path("firmware/src/hal/hal_watchdog.h"),
+    Path("firmware/src/internal/boot_internal.c"),
+    Path("firmware/src/internal/boot_internal.h"),
+    Path("platforms/k210/hal/hal_watchdog.c"),
+    Path("platforms/k210/hal/hal_watchdog.h"),
     Path("firmware/src/services/hmpy_codec.c"),
     Path("firmware/src/services/hmpy_codec.h"),
     Path("firmware/src/services/hmpy_session.c"),
@@ -119,7 +206,7 @@ MICROPYTHON_FEATURE_SOURCE_MODULES = {
 TARGETS = {
     "full": {
         "project": "hackylens_full",
-        "output": "hackylens.bin",
+        "output": "hackylens-full.bin",
         "build_dir": "sdk-full",
         "target_source": ROOT / "firmware" / "targets" / "full.c",
     },
@@ -288,28 +375,47 @@ def generate_micropython_embed(micropython: Path) -> Path:
     return package
 
 
-def write_micropython_project_cmake(stage: Path, package: Path) -> None:
-    sources = [
-        path for path in sorted(package.rglob("*.c"))
-        if path.relative_to(package).as_posix() != "port/mphalport.c"
-    ]
-    if not sources:
-        raise RuntimeError(f"MicroPython embed package contains no C sources: {package}")
-    lines = ["# Generated by tools/build_firmware.py", "set(HACKYLENS_MICROPYTHON_SOURCES"]
-    lines.extend(f'    "{cmake_path(path)}"' for path in sources)
-    lines.extend([
-        ")",
-        "target_sources(${PROJECT_NAME} PRIVATE ${HACKYLENS_MICROPYTHON_SOURCES})",
+def write_project_cmake(stage: Path, package: Path | None, board: Board) -> None:
+    lines = [
+        "# Generated by tools/build_firmware.py",
         "target_include_directories(${PROJECT_NAME} PRIVATE",
-        f'    "{cmake_path(ROOT / "firmware" / "third_party" / "micropython")}"',
-        f'    "{cmake_path(package)}"',
+        f'    "{cmake_path(stage)}"',
+        f'    "{cmake_path(stage / "platforms" / "k210" / "hal")}"',
         ")",
-        "target_compile_definitions(${PROJECT_NAME} PRIVATE",
-        "    LFS_NO_MALLOC",
-        "    LFS_NAME_MAX=63",
+    ]
+    if package is not None:
+        sources = [
+            path for path in sorted(package.rglob("*.c"))
+            if path.relative_to(package).as_posix() != "port/mphalport.c"
+        ]
+        if not sources:
+            raise RuntimeError(f"MicroPython embed package contains no C sources: {package}")
+        lines.append("set(HACKYLENS_MICROPYTHON_SOURCES")
+        lines.extend(f'    "{cmake_path(path)}"' for path in sources)
+        lines.extend([
+            ")",
+            "target_sources(${PROJECT_NAME} PRIVATE ${HACKYLENS_MICROPYTHON_SOURCES})",
+            "target_include_directories(${PROJECT_NAME} PRIVATE",
+            f'    "{cmake_path(ROOT / "firmware" / "third_party" / "micropython")}"',
+            f'    "{cmake_path(package)}"',
+            ")",
+            "target_compile_definitions(${PROJECT_NAME} PRIVATE",
+            "    LFS_NO_MALLOC",
+            "    LFS_NAME_MAX=63",
+            ")",
+        ])
+    board_source = stage / "boards" / board.id / "board.c"
+    lines.extend([
+        "# Link the selected BSP after common sources. This keeps its documented",
+        "# Phase 1 static-RAM compatibility reserve free of alignment inflation.",
+        "get_target_property(HACKYLENS_TARGET_SOURCES ${PROJECT_NAME} SOURCES)",
+        f'list(REMOVE_ITEM HACKYLENS_TARGET_SOURCES "{cmake_path(board_source)}")',
+        "set_property(TARGET ${PROJECT_NAME} PROPERTY SOURCES ${HACKYLENS_TARGET_SOURCES})",
+        "target_sources(${PROJECT_NAME} PRIVATE",
+        f'    "{cmake_path(board_source)}"',
         ")",
-        "",
     ])
+    lines.append("")
     (stage / "project.cmake").write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -359,9 +465,45 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
         if not camera_feature_enabled and rel in CAMERA_FEATURE_SOURCE_MODULES:
             print(f"[SKIP] unused camera source {rel}")
             continue
-        out = stage / path.relative_to(ROOT / "firmware" / "src")
+        out = stage / rel
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, out)
+
+
+def stage_platform_sources(stage: Path, disabled_apps: set[str]) -> None:
+    camera_feature_enabled = ("camera" not in disabled_apps or
+                              "qr-camera" not in disabled_apps or
+                              "face-detect" not in disabled_apps or
+                              "apriltag" not in disabled_apps or
+                              "object-detect" not in disabled_apps)
+    micropython_feature_enabled = "micropython" not in disabled_apps
+    platform = ROOT / "platforms" / "k210"
+    for path in platform.rglob("*"):
+        if not path.is_file() or path.name == "devices.toml":
+            continue
+        rel = path.relative_to(ROOT)
+        if not camera_feature_enabled and rel in CAMERA_FEATURE_SOURCE_MODULES:
+            print(f"[SKIP] unused camera platform source {rel}")
+            continue
+        if not micropython_feature_enabled and rel in MICROPYTHON_FEATURE_SOURCE_MODULES:
+            print(f"[SKIP] unused MicroPython platform source {rel}")
+            continue
+        out = stage / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, out)
+
+
+def stage_board_port(stage: Path, board: Board) -> None:
+    destination = stage / "boards" / board.id
+    destination.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(board.directory / "board.c", destination / "board.c")
+    for name in ("pins.h", "defaults.h", "inventory.h", "flash_layout.h"):
+        source = board.generated_dir / name
+        shutil.copy2(source, stage / name)
+    shutil.copy2(
+        ROOT / "firmware" / "src" / "internal" / "hk_board_port.h",
+        stage / "hk_board_port.h",
+    )
 
 
 def write_config(stage: Path, disabled_apps: set[str],
@@ -387,7 +529,8 @@ def write_config(stage: Path, disabled_apps: set[str],
     (stage / "hk_config.h").write_text("\n".join(lines), encoding="utf-8")
 
 
-def stage_target(sdk: Path, target_name: str, disabled_apps: set[str],
+def stage_target(sdk: Path, target_name: str, board: Board,
+                  disabled_apps: set[str],
                   micropython_package: Path | None = None,
                   littlefs: Path | None = None,
                   wdt_fault_injection: bool = False) -> Path:
@@ -399,6 +542,8 @@ def stage_target(sdk: Path, target_name: str, disabled_apps: set[str],
 
     shutil.copy2(Path(target["target_source"]), stage / "main.c")
     stage_firmware_sources(stage, disabled_apps)
+    stage_platform_sources(stage, disabled_apps)
+    stage_board_port(stage, board)
 
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
         shutil.copy2(header, stage / header.name)
@@ -419,13 +564,12 @@ def stage_target(sdk: Path, target_name: str, disabled_apps: set[str],
             shutil.copy2(littlefs / name, stage / name)
 
     write_config(stage, disabled_apps, wdt_fault_injection)
-    if micropython_package is not None:
-        write_micropython_project_cmake(stage, micropython_package)
+    write_project_cmake(stage, micropython_package, board)
     return stage
 
 
-def build_target(name: str, sdk: Path, toolchain_bin: Path,
-                 disabled_apps: set[str],
+def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
+                 disabled_apps: set[str], exclusions: list[dict[str, object]],
                  wdt_fault_injection: bool = False) -> Path:
     target = TARGETS[name]
     project = str(target["project"])
@@ -435,7 +579,7 @@ def build_target(name: str, sdk: Path, toolchain_bin: Path,
             f"{output_name.stem}-wdtfi{output_name.suffix}"
         )
         print("[DANGER] building non-release WDT fault-injection firmware")
-    out_image = ROOT / "build" / output_name
+    out_image = ROOT / "build" / board.id / output_name
     micropython_package = None
     littlefs = None
     if "micropython" not in disabled_apps:
@@ -451,12 +595,12 @@ def build_target(name: str, sdk: Path, toolchain_bin: Path,
                 "pinned littlefs checkout not found; run python tools\\bootstrap_deps.py"
             )
     stage = stage_target(
-        sdk, name, disabled_apps, micropython_package, littlefs,
+        sdk, name, board, disabled_apps, micropython_package, littlefs,
         wdt_fault_injection,
     )
     print(f"[STAGE] {stage}")
 
-    build_dir = ROOT / "build" / str(target["build_dir"])
+    build_dir = ROOT / "build" / board.id / str(target["build_dir"])
     if build_dir.exists():
         shutil.rmtree(build_dir)
     build_dir.mkdir(parents=True, exist_ok=True)
@@ -483,29 +627,67 @@ def build_target(name: str, sdk: Path, toolchain_bin: Path,
     built = build_dir / f"{project}.bin"
     if not built.is_file() or built.stat().st_size == 0:
         raise RuntimeError(f"build did not produce a non-empty image: {built}")
-    flashed_size = ((built.stat().st_size + K210_IMAGE_OVERHEAD + FLASH_ERASE_SIZE - 1)
-                    // FLASH_ERASE_SIZE * FLASH_ERASE_SIZE)
-    if flashed_size > FIRMWARE_FLASH_LIMIT:
+    flash, partitions = load_validated(board.flash_layout_path)
+    firmware_partition = partition_by_name(partitions, "firmware")
+    flash_limit = firmware_partition["offset"] + firmware_partition["size"]
+    flashed_size = ((built.stat().st_size + K210_IMAGE_OVERHEAD + flash["erase_size"] - 1)
+                    // flash["erase_size"] * flash["erase_size"])
+    if firmware_partition["offset"] + flashed_size > flash_limit:
         raise RuntimeError(
             f"firmware image exceeds canonical firmware partition "
-            f"0x{FIRMWARE_FLASH_LIMIT:06X}: "
+            f"0x{flash_limit:06X}: "
             f"raw={built.stat().st_size} flashed={flashed_size} bytes"
         )
 
     out_image.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(built, out_image)
+    attestation = out_image.with_suffix(".attestation.json")
+    write_build_attestation(
+        attestation,
+        out_image,
+        board,
+        target=name,
+        disabled_apps=disabled_apps,
+        exclusions=exclusions,
+        wdt_fault_injection=wdt_fault_injection,
+    )
     if wdt_fault_injection:
         print("[DANGER] isolated test image kept under build/; dist/ was not touched")
+    elif disabled_apps:
+        print(
+            "[BUILD] feature-modified image kept under build/; qualified dist/ "
+            "artifacts were not replaced"
+        )
     else:
         run([sys.executable, str(ROOT / "tools" / "make_image.py"),
-             str(out_image), "--out-dir", str(ROOT / "dist")])
+             str(out_image), "--board", board.id,
+             "--attestation", str(attestation),
+             "--out-dir", str(ROOT / "dist")])
     print(f"[OK] {out_image} ({out_image.stat().st_size} bytes)")
     return out_image
 
 
+def conformance_check(board: Board) -> None:
+    if board.support != "conformance":
+        raise RuntimeError("conformance target requires support=conformance")
+    failures = generate_board(board, check=True)
+    if failures:
+        raise RuntimeError("; ".join(failures))
+    compile_conformance_board(board)
+    print(f"[OK] {board.id}: conformance descriptor/BSP compile-check passed")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build HackyLens full firmware")
-    parser.add_argument("target", choices=sorted(TARGETS))
+    parser.add_argument("target", choices=sorted(set(TARGETS) | {"conformance"}))
+    parser.add_argument("--board", required=True, help="Canonical board.toml ID")
+    parser.add_argument(
+        "--require-app",
+        action="append",
+        default=[],
+        choices=sorted(APP_MODULES),
+        help="Fail instead of board-excluding this app. Can be repeated.",
+    )
     parser.add_argument(
         "--disable-app",
         action="append",
@@ -526,6 +708,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        board = load_board(args.board)
+    except ContractError as exc:
+        print(f"[ERR] {exc}", file=sys.stderr)
+        return 2
+    failures = generate_board(board, check=True)
+    if failures:
+        for failure in failures:
+            print(f"[ERR] {failure}", file=sys.stderr)
+        return 2
+    if args.target == "conformance":
+        conformance_check(board)
+        return 0
+    if board.support != "runtime":
+        print(
+            f"[ERR] board {board.id!r} is conformance-only; full firmware is unavailable",
+            file=sys.stderr,
+        )
+        return 2
     sdk = find_sdk()
     if not sdk:
         print("[ERR] Kendryte SDK not found. Run: python hackylens\\tools\\bootstrap_deps.py", file=sys.stderr)
@@ -535,13 +736,16 @@ def main(argv: list[str] | None = None) -> int:
         print("[ERR] Kendryte toolchain not found. Run python tools\\bootstrap_deps.py and . .\\env.ps1", file=sys.stderr)
         return 1
 
-    disabled_apps = set(args.disable_app)
+    disabled_apps, exclusions = compose_apps(
+        board, set(args.disable_app), set(args.require_app)
+    )
+    write_composition(board, disabled_apps, exclusions)
     if args.wdt_fault_injection and "micropython" in disabled_apps:
         raise RuntimeError(
             "--wdt-fault-injection requires the micropython app"
         )
     build_target(
-        args.target, sdk, toolchain, disabled_apps,
+        args.target, board, sdk, toolchain, disabled_apps, exclusions,
         args.wdt_fault_injection,
     )
     return 0

@@ -6,8 +6,8 @@
 #include "../core/hk_screen.h"
 #include "core1_executor.h"
 #include "micropython_binding_service.h"
-#include "../hal/hal_time.h"
-#include "../hal/hal_watchdog.h"
+#include "hal_time.h"
+#include "hal_watchdog.h"
 #include "hk_config.h"
 
 #include "port/micropython_embed.h"

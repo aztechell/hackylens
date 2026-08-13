@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +35,10 @@ SYMBOL_SPEC.loader.exec_module(CHECK_SYMBOLS)
 
 
 class BuildContractsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.board = BUILD_FIRMWARE.load_board("huskylens-sen0305")
+
     def test_generated_config_uses_canonical_version(self):
         expected = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         with tempfile.TemporaryDirectory() as directory:
@@ -52,32 +57,51 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn("#define HK_MICROPYTHON_WDT_FAULT_INJECTION 1", config)
         self.assertIn(f'#define HACKYLENS_VERSION "{expected}-wdtfi"', config)
 
-    def test_release_packager_rejects_wdt_fault_injection_marker(self):
+    def test_release_partition_check_does_not_claim_build_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "firmware.bin"
-            image.write_bytes(b"prefix 0.2.0-wdtfi suffix")
-            with self.assertRaisesRegex(SystemExit, "fault-injection"):
-                PACKAGE_RELEASE.validate_release_firmware(image, "0.2.0")
-            image.write_bytes(b"prefix 0.2.0 suffix")
-            PACKAGE_RELEASE.validate_release_firmware(image, "0.2.0")
+            image.write_bytes(b"arbitrary small bytes")
+            PACKAGE_RELEASE.validate_release_firmware(image, self.board)
+            source = (ROOT / "tools" / "package_release.py").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("read_and_validate_attestation", source)
+            self.assertNotIn("version.encode", source)
 
     def test_build_package_and_flasher_share_canonical_partition(self):
-        firmware = PACKAGE_RELEASE._FIRMWARE_PARTITION
+        flash, partitions = PACKAGE_RELEASE.load_validated(
+            self.board.flash_layout_path
+        )
+        firmware = PACKAGE_RELEASE.partition_by_name(partitions, "firmware")
         expected_limit = firmware["offset"] + firmware["size"]
-        self.assertEqual(BUILD_FIRMWARE.FIRMWARE_FLASH_LIMIT, expected_limit)
-        self.assertEqual(HKFLASH.FLASH_ADDRESS, firmware["offset"])
-        self.assertEqual(HKFLASH.FIRMWARE_FLASH_LIMIT, expected_limit)
         self.assertEqual(
-            BUILD_FIRMWARE.FLASH_ERASE_SIZE, HKFLASH.FLASH_ERASE_SIZE
+            HKFLASH.firmware_erase_length(
+                1,
+                flash_address=firmware["offset"],
+                firmware_flash_limit=expected_limit,
+                flash_erase_size=flash["erase_size"],
+            ),
+            flash["erase_size"],
         )
 
     def test_flasher_rejects_payload_past_firmware_partition(self):
-        size = HKFLASH.FIRMWARE_FLASH_LIMIT - HKFLASH.FLASH_ADDRESS
-        self.assertEqual(HKFLASH.firmware_erase_length(size), size)
+        flash, partitions = PACKAGE_RELEASE.load_validated(
+            self.board.flash_layout_path
+        )
+        firmware = PACKAGE_RELEASE.partition_by_name(partitions, "firmware")
+        address = firmware["offset"]
+        limit = address + firmware["size"]
+        call = lambda size: HKFLASH.firmware_erase_length(
+            size,
+            flash_address=address,
+            firmware_flash_limit=limit,
+            flash_erase_size=flash["erase_size"],
+        )
+        self.assertEqual(call(firmware["size"]), firmware["size"])
         with self.assertRaisesRegex(ValueError, "canonical partition"):
-            HKFLASH.firmware_erase_length(size + 1)
+            call(firmware["size"] + 1)
         with self.assertRaisesRegex(ValueError, "empty"):
-            HKFLASH.firmware_erase_length(0)
+            call(0)
 
     def test_release_output_rejects_stray_fault_image(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -87,6 +111,28 @@ class BuildContractsTest(unittest.TestCase):
                 PACKAGE_RELEASE.ensure_allowlisted_output(
                     output, {"hackylens-v0.2.0.bin"}
                 )
+
+    def test_release_output_rejects_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "release"
+            output.mkdir()
+            external = root / "external.bin"
+            external.write_bytes(b"must remain unchanged")
+            linked = output / "hackylens.bin"
+            try:
+                linked.symlink_to(external)
+            except (OSError, NotImplementedError) as exc:
+                linked.write_bytes(b"placeholder")
+                with mock.patch.object(Path, "is_symlink", return_value=True):
+                    with self.assertRaisesRegex(
+                        SystemExit, "must not be a symlink"
+                    ):
+                        PACKAGE_RELEASE.validate_output_paths(output, [linked])
+            else:
+                with self.assertRaisesRegex(SystemExit, "must not be a symlink"):
+                    PACKAGE_RELEASE.validate_output_paths(output, [linked])
+            self.assertEqual(external.read_bytes(), b"must remain unchanged")
 
     def test_generated_dependency_manifest_lists_actual_embed_sources(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -168,7 +214,7 @@ class BuildContractsTest(unittest.TestCase):
         )
 
     def test_watchdog_reset_cause_guards_startup(self):
-        watchdog = (ROOT / "firmware" / "src" / "hal" / "hal_watchdog.c").read_text(
+        watchdog = (ROOT / "platforms" / "k210" / "hal" / "hal_watchdog.c").read_text(
             encoding="utf-8"
         )
         autostart = (
@@ -185,6 +231,7 @@ class BuildContractsTest(unittest.TestCase):
         self.assertNotIn("wdt_feed", watchdog)
         self.assertNotIn("wdt_clear_interrupt", watchdog)
         self.assertIn("hal_watchdog_reset_detected()", autostart)
+        self.assertIn("boot_internal_watchdog_reset_detected()", app)
         self.assertIn("g_startup[0] && !watchdog_recovery", app)
 
 

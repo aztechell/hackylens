@@ -9,7 +9,7 @@
 #include "../../core/hk_string.h"
 #include "../../services/debug_console_service.h"
 #include "../../services/micropython_program.h"
-#include "../../hal/hal_watchdog.h"
+#include "../../internal/boot_internal.h"
 #include "../../services/micropython_runtime.h"
 #include "../../storage/userfs.h"
 #include "micropython_config.h"
@@ -140,7 +140,7 @@ static void render_if_needed(uint8_t force)
 void micropython_enter(const hk_input_snapshot_t *input)
 {
     userfs_result_t mount_result;
-    uint8_t watchdog_recovery = hal_watchdog_reset_detected();
+    uint8_t watchdog_recovery = boot_internal_watchdog_reset_detected();
 
     (void)input;
     hk_screen_set(HK_MICROPYTHON_SCREEN);

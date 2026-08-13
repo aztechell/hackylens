@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "platform_bootstrap.h"
+#include "../../../platforms/k210/startup/platform_bootstrap.h"
 
 #include "../controllers/boot_controller.h"
 #include "../controllers/autostart_controller.h"

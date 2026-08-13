@@ -4,6 +4,7 @@
 #include "../core/camera_types.h"
 
 
+void lights_driver_prepare(void);
 void lights_screen_backlight_set(uint8_t percent);
 void lights_screen_backlight_off(void);
 void lights_illum_set(uint8_t enabled, uint8_t brightness);

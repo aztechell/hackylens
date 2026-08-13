@@ -13,7 +13,7 @@
 #include "../../config/settings_config.h"
 #include "../../services/settings_persistence.h"
 #include "../../services/settings_service.h"
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 
 static uint64_t g_qr_last_decode_us;
 static uint64_t g_qr_last_status_log_us;
@@ -31,7 +31,7 @@ void qr_service_enter(void)
 static void qr_log_info(uint8_t force)
 {
     qr_engine_stats_t stats;
-    uint64_t now = hal_time_us();
+    uint64_t now = time_internal_us();
 
     if(!force && g_qr_last_status_log_us != 0 && now - g_qr_last_status_log_us < QR_STATUS_LOG_INTERVAL_US)
         return;
@@ -110,7 +110,7 @@ static qr_decode_result_t qr_decode_current_frame(uint8_t force)
 
 qr_decode_result_t qr_service_decode_maybe(uint8_t force)
 {
-    uint64_t now = hal_time_us();
+    uint64_t now = time_internal_us();
     uint64_t interval_us = qr_decode_interval_us();
 
     if(force)

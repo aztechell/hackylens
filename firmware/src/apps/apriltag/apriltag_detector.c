@@ -6,7 +6,7 @@
 #include "apriltag.h"
 #include "tag36h11.h"
 
-#include "../../hal/hal_time.h"
+#include "../../internal/time_internal.h"
 #include "../../services/core1_executor.h"
 #include "apriltag_config.h"
 
@@ -122,7 +122,7 @@ static uint8_t detector_create(void)
     g_detector->qtp.min_cluster_pixels = APRILTAG_MIN_CLUSTER_PIXELS;
     g_detector->qtp.max_nmaxima = 10;
     g_detector->qtp.deglitch = 0;
-    g_detector->profile_now_us = hal_time_us;
+    g_detector->profile_now_us = time_internal_us;
     return 1;
 }
 
@@ -150,9 +150,9 @@ static void detector_run(uint32_t request_sequence, uint32_t request_epoch,
     uint64_t started_us;
     uint32_t publish_sequence;
 
-    started_us = hal_time_us();
+    started_us = time_internal_us();
     detections = apriltag_detector_detect(g_detector, &image);
-    g_last_us = (uint32_t)(hal_time_us() - started_us);
+    g_last_us = (uint32_t)(time_internal_us() - started_us);
     g_last_quads = g_detector->nquads;
     g_last_preprocess_us = g_detector->profile_preprocess_us;
     g_last_quad_search_us = g_detector->profile_quad_search_us;
@@ -295,7 +295,7 @@ void apriltag_detector_service_tick(void)
 
 uint8_t apriltag_detector_init(void)
 {
-    uint64_t deadline = hal_time_us() + APRILTAG_START_TIMEOUT_US;
+    uint64_t deadline = time_internal_us() + APRILTAG_START_TIMEOUT_US;
 
     if(!core1_executor_init())
     {
@@ -303,10 +303,10 @@ uint8_t apriltag_detector_init(void)
         return 0U;
     }
     while((g_cleanup_pending || !core1_executor_idle()) &&
-          hal_time_us() < deadline)
+          time_internal_us() < deadline)
     {
         apriltag_detector_service_tick();
-        hal_sleep_ms(1U);
+        time_internal_sleep_ms(1U);
     }
     if(g_cleanup_pending || !core1_executor_idle())
     {

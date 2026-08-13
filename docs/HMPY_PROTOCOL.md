@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.hmpy
 owner: device-protocols
-version: 1.0.0
+version: 1.1.0
 stability: experimental
 wire-major: 1
 ---
@@ -173,6 +173,13 @@ payload. An unsuccessful request uses the error envelope described below.
 | filesystem used | `u32` | allocated userfs bytes |
 | firmware version | `name` | build version string |
 | board | `name` | board identifier |
+
+In HMPY contract `1.1.0`, `board` is the exact canonical `id` from the
+selected `boards/<id>/board.toml` descriptor (for the qualified runtime port,
+`huskylens-sen0305`). The wire-major remains `1`; the field encoding is
+unchanged. Clients MUST NOT infer capabilities, wiring, or peripheral support
+from this identifier. They use the capabilities and limits explicitly carried
+by HMPY instead.
 
 Boot flags are backward-compatible with early v1 clients, which treated this
 byte as reserved and ignored it:

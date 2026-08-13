@@ -15,9 +15,9 @@ exit gates. Работа следующего слоя не считается �
 
 ## Текущий статус
 
-HackyLens v0.2 классифицируется как:
+HackyLens v0.3 классифицируется как:
 
-> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 Она уже доказывает:
@@ -179,6 +179,9 @@ Capability/App SDK.
 Отделить K210 platform и product firmware от SEN0305. Новая K210-плата должна
 добавляться новым BSP, а не форком repository.
 
+Статус: software implementation и automated evidence завершены; физический
+SEN0305 smoke остаётся обязательным pending hardware gate.
+
 ### 1.1 Board descriptor
 
 Определить versioned descriptor:
@@ -187,21 +190,14 @@ Capability/App SDK.
 schema = 1
 id = "huskylens-sen0305"
 platform = "kendryte-k210"
-
-[memory]
-sram_bytes = 6291456
-flash_bytes = 16777216
-
-[devices]
-camera = "ov2640"
-display = "st7789-320x240"
-buttons = 4
-sd = true
-external_uart = true
-external_i2c = true
+support = "runtime"
+releaseable = true
+runtime_profile = "hackylens-full"
 ```
 
-Descriptor должен описывать наличие hardware, а не app policy.
+Descriptor описывает hardware inventory, routes, defaults и programming
+metadata, а не app policy. Private platform registry фиксирует допустимые device
+kinds, drivers, FPIOA functions, peripherals и runtime profiles.
 
 ### 1.2 Source layout
 
@@ -211,33 +207,35 @@ Descriptor должен описывать наличие hardware, а не app 
 platforms/k210/
   hal/
   startup/
-  toolchain/
-boards/huskylens_sen0305/
+  devices.toml
+boards/huskylens-sen0305/
   board.toml
-  pins.h
   board.c
   flash_layout.json
-  defaults.h
-boards/<second_board>/
+  generated/
+    pins.h
+    defaults.h
+    inventory.h
+    flash_layout.h
+boards/sipeed-maix-cube/
   ...
-firmware/
-  core/
-  services/
-  apps/
+firmware/src/internal/
+  time_internal.h
+  boot_internal.h
+  memory_internal.h
 ```
 
-Миграция может выполняться постепенно; промежуточные forwarding headers должны
-иметь removal issue и не становиться новым public API.
+Старые `firmware/src/board`, `firmware/src/hal` и forwarding headers удалены.
 
 ### 1.3 Build selection
 
-- [ ] Добавить обязательный `--board`.
-- [ ] Оставить временный documented default только на период миграции.
-- [ ] Генерировать board configuration и capability inventory.
-- [ ] Валидировать flash layout относительно descriptor.
-- [ ] Делать board-specific artifact names.
-- [ ] Публиковать board ID в firmware metadata и HMPY HELLO.
-- [ ] Проверять несовпадение image/board во flasher/package metadata.
+- [x] Добавить обязательный `--board` без implicit/default board.
+- [x] Генерировать board configuration и driver-supported inventory.
+- [x] Валидировать canonical flash layout относительно descriptor.
+- [x] Делать board-specific artifact names.
+- [x] Публиковать canonical `board.toml.id` в firmware metadata и HMPY HELLO.
+- [x] Проверять image/board/profile/composition через hash-bound build
+  attestation, sidecar, flasher и package metadata.
 
 ### 1.4 Remove leaked assumptions
 
@@ -263,17 +261,31 @@ constant.
 - required callbacks;
 - unique pins/peripherals;
 - partition alignment/overlap;
-- capability-to-driver mapping;
+- device-to-driver mapping;
 - generated config;
 - smoke build;
-- board metadata in image.
+- board metadata and build-attestation identity.
 
 ### Exit gate
 
 - Full firmware собирается только с явным board target.
 - `huskylens-sen0305` не используется как implicit global assumption.
-- Dummy/reference second descriptor проходит compile-time conformance.
+- `sipeed-maix-cube` проходит compile-time descriptor/BSP conformance, но не
+  считается runtime/release/hardware-qualified портом.
 - Ни один feature app не включает BSP/HAL headers.
+
+### Evidence
+
+- Host contract/docs/architecture checks проходят без skip; CI проверяет
+  явный multi-commit diff range через `git diff --check`.
+- `huskylens-sen0305` проходит feature-disabled и full cross-build;
+  `sipeed-maix-cube` проходит descriptor/BSP compile-link conformance и явно
+  отклоняет full/release/flash.
+- Phase 1 resource result: erase-rounded flash delta `0`, static RAM delta `0`,
+  новых heap allocations/background tasks/queues не обнаружено.
+- Физический SEN0305 smoke (boot/display/camera/buttons/lights/SD/HMPY/external
+  links/package-flash round trip) остаётся pending hardware gate.
+- Cube hardware qualification отложена; hardware-independence не заявляется.
 
 ---
 

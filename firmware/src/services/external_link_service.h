@@ -13,8 +13,9 @@ void external_link_service_set_transport(external_link_transport_t transport);
 external_link_transport_t external_link_service_transport(void);
 void external_link_service_set_uart_baud(uint32_t baud);
 uint32_t external_link_service_uart_baud(void);
-/* Temporarily yields IO34/IO35 to the MicroPython binding owner. The selected
- * transport remains configured logically and is restored by resume(). */
+/* Temporarily yields the descriptor-selected external connector pins to the
+ * MicroPython binding owner. The selected transport remains configured
+ * logically and is restored by resume(). */
 void external_link_service_suspend(void);
 void external_link_service_resume(void);
 uint8_t external_link_service_suspended(void);

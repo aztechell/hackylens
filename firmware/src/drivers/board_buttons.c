@@ -2,10 +2,10 @@
 
 #include "../core/hk_app.h"
 
-#include "../board/board_pins.h"
+#include "defaults.h"
 #include "../config/input_config.h"
 
-#include "../hal/hal_gpio.h"
+#include "hal_gpio.h"
 
 static uint32_t g_buttons_state;
 static uint32_t g_buttons_pressed;

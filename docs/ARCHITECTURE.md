@@ -1,11 +1,11 @@
 # Architecture
 
-HackyLens 0.2.0 is modular firmware built from separate C translation units under `core`, `runtime`, `controllers`, `services`, `storage`, `ui`, `drivers`, `hal`, and `apps`.
+HackyLens 0.3.0 is modular firmware built from common `firmware/src` layers, the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
-> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-This document describes the implemented v0.2 architecture. The normative
+This document describes the implemented v0.3 architecture. The normative
 direction is defined in [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md), and
 the remaining gaps are recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
 
@@ -13,13 +13,13 @@ the remaining gaps are recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
 
 ## Startup
 
-`runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `runtime/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, and mounts storage. The neutral autostart controller then opens the persisted registry target or falls back to the menu; it never includes feature headers.
+`runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `platforms/k210/startup/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, and mounts storage. The neutral autostart controller then opens the persisted registry target or falls back to the menu; it never includes feature headers.
 
 `platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, and writes the boot banner; feature view initialization belongs to each app's `enter` callback.
 
 ## Layer boundaries
 
-- `drivers`, `board`, and `hal` contain hardware-specific access.
+- `drivers` contain board-independent device APIs. The selected `boards/<id>` BSP owns board wiring and `platforms/k210/hal` owns K210 SDK access.
 - `runtime` adapts core lifecycle and startup to platform facilities.
 - `controllers` coordinate scenarios and pass state to services and UI views.
 - `services` own runtime operations such as camera sessions, settings application, debug console I/O, LCD screenshot sourcing, and screenshot UART streaming.
@@ -35,7 +35,7 @@ describes tensors, normalization, post-processing, and exact KModel contracts.
 `storage/ai_model_storage.*` owns aligned FAT32 loading plus the optional
 CRC-protected SD manifest. `services/ai_model_runtime.*` owns the single-KPU
 lease, descriptor/manifest/model-identity/output validation, asynchronous run timing, and
-deferred stop/unload state machine. `hal/hal_kpu.*` remains limited to SDK and
+deferred stop/unload state machine. `platforms/k210/hal/hal_kpu.*` remains limited to SDK and
 peripheral operations. None of these shared files knows about a camera, DVP
 capture policy, a feature app, or a particular post-processor.
 

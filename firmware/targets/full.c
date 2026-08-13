@@ -1,8 +1,8 @@
-#include "runtime/hk_main.h"
-#include "runtime/firmware_startup.h"
+#include "firmware/src/runtime/hk_main.h"
+#include "firmware/src/runtime/firmware_startup.h"
 
-#include "controllers/debug_controller.h"
-#include "controllers/system_tick_controller.h"
+#include "firmware/src/controllers/debug_controller.h"
+#include "firmware/src/controllers/system_tick_controller.h"
 
 int main(void)
 {

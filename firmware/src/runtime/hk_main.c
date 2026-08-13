@@ -7,7 +7,7 @@
 #include "../core/hk_menu.h"
 #include "../core/hk_screen.h"
 #include "../drivers/hk_input.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 
 static hk_main_hooks_t s_hooks;
 

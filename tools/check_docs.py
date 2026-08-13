@@ -55,7 +55,7 @@ CLAIM_SURFACES = (
 )
 
 PREVIEW_MARKER = (
-    "hackylens v0.2 is a layered k210 reference firmware and micropython "
+    "hackylens v0.3 is a layered k210 reference firmware and micropython "
     "technology preview"
 )
 
@@ -485,7 +485,7 @@ def check_preview_markers(root: Path, paths: Iterable[Path]) -> list[Issue]:
             issues.append(issue(root, path, 1, "required entry document is missing"))
             continue
         if PREVIEW_MARKER not in plain_text(read_text(path)):
-            issues.append(issue(root, path, 1, "missing canonical v0.2 technology-preview marker"))
+            issues.append(issue(root, path, 1, "missing canonical v0.3 technology-preview marker"))
     return issues
 
 

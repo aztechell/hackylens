@@ -52,6 +52,7 @@ typedef enum
 typedef uint8_t (*lcd_overlay_cancel_fn)(void *context);
 
 void lcd_init_original_sequence(void);
+void lcd_driver_prepare(void);
 void lcd_draw_boot_logo(void);
 void lcd_set_window(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
 void lcd_write_pixels(const uint8_t *data, size_t len);

@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "../drivers/camera_stream.h"
-#include "../hal/hal_dvp.h"
+#include "hal_dvp.h"
 
 #define CAMERA_AI_MAX_WIDTH 320U
 #define CAMERA_AI_MAX_HEIGHT 240U

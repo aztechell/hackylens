@@ -9,7 +9,7 @@
 #include "camera_session_preferences.h"
 
 #include "settings_persistence.h"
-#include "../hal/hal_time.h"
+#include "hal_time.h"
 
 static uint8_t g_camera_fps_enabled = 1;
 static uint32_t g_camera_fps_total_frames;

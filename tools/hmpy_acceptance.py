@@ -38,7 +38,7 @@ from hmpy_protocol import ErrorCode, MessageType
 
 ROOT = Path(__file__).resolve().parents[1]
 FORMAT_CONFIRMATION = FORMAT_TOKEN.decode("ascii")
-EXPECTED_BOARD = "HackyLens K210"
+EXPECTED_BOARD = "huskylens-sen0305"
 EXPECTED_FILESYSTEM_TOTAL = 0x00390000
 TRANSPORT_PING_COUNT = 1
 TRANSPORT_PING_PAYLOAD = bytes(range(256)) * 4

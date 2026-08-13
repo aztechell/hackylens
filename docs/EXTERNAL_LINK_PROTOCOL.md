@@ -16,13 +16,14 @@ original HUSKYLENS command set or packet layout.
 The four-pin `T R - +` connector is independent from the UART3 debug/PC
 connection. Reverse engineering maps the signal pins as follows:
 
-| Connector | K210 IO | UART mode | I2C mode |
-|---|---:|---|---|
-| `T` | IO35 | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
-| `R` | IO34 | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
+| Connector | Descriptor route roles | UART mode | I2C mode |
+|---|---|---|---|
+| `T` | `IO_EXTERNAL_UART_T` / `IO_EXTERNAL_I2C_T` | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
+| `R` | `IO_EXTERNAL_UART_R` / `IO_EXTERNAL_I2C_R` | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
 | `-` | — | Ground | Ground |
 | `+` | — | 3.3–5.0 V power input | 3.3–5.0 V power input |
 
+The selected board descriptor is the sole source of physical pin numbers.
 The signal mapping has medium confidence from the recovered board setup. Treat
 the signal lines as 3.3 V logic. DFRobot specifies a 3.3–5.0 V supply range and
 typical consumption of 320 mA at 3.3 V or 230 mA at 5 V. Its automatic source

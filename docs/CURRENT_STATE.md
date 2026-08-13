@@ -1,314 +1,121 @@
 # Current Project State
 
-> HackyLens v0.2 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-## Назначение
-
-Этот документ фиксирует состояние проекта после HackyLens v0.2 и отделяет:
-
-- уже доказанные свойства;
-- рабочие, но ограниченные прототипы;
-- архитектурные разрывы;
-- отсутствующие пользовательские функции;
-- qualification gates, которые ещё не пройдены.
-
-Оценка основана на текущем source tree, host tests, build contracts и выполненных
-hardware acceptance runs. Наличие исходного кода само по себе не считается
-доказательством production readiness.
-
-## Итоговая оценка
-
-HackyLens v0.2 — сильная reference firmware и MicroPython technology preview.
-Проект уже имеет слои, изолированные feature directories, compile-time app
-gating, аппаратные сервисы, работающий MicroPython runtime, USERFS, HMPY и
-отдельную Web Serial IDE.
-
-Однако это ещё не аппаратно-независимая application platform:
-
-- существует только один реальный board port;
-- build system не имеет обязательного `--board`;
-- registry составляется вручную, а не из manifests;
-- apps не получают versioned capability context;
-- native apps и MicroPython используют разные entry surfaces;
-- перенос Python prototype в C app не формализован;
-- Python не имеет camera/vision/KPU/storage API уровня OpenMV;
-- программы нельзя полноценно выбирать и управлять ими с устройства;
-- IDE остаётся однопроектным/однофайловым functional prototype;
-- parity с оригинальной HUSKYLENS firmware не инвентаризирован формально.
-
-## Матрица зрелости
-
-| Область | Состояние | Оценка |
-| --- | --- | --- |
-| Базовые слои firmware | Реализованы и проверяются guard | Strong foundation |
-| Изоляция feature directories | Реализована для 12 apps | Working |
-| Compile-time отключение apps | `--disable-app` работает | Working |
-| Board portability | Только `board_hackylens`, нет `--board` | Not proven |
-| Capability architecture | Есть отдельные reusable services, общего контракта нет | Partial |
-| App manifests/SDK | Отсутствуют | Missing |
-| MicroPython runtime | Работает на core 1 | Technology preview |
-| Python hardware API | Buttons/display/lights/UART/I2C/time | Limited v1 |
-| Python camera/vision/KPU | Отсутствует | Missing |
-| On-device program manager | Startup/smoke run, без browser/selection | Missing product UX |
-| USERFS/HMPY | Реализованы и hardware-tested | Working v1 |
-| Python-to-native workflow | Не определён | Missing |
-| Web IDE | Рабочий transport/editor/device files | Functional prototype |
-| Original firmware parity | Несколько apps есть, полной матрицы нет | Unknown/partial |
-| Multi-board conformance | Отсутствует | Missing |
-| Long-run qualification | Часть gates открыта | Incomplete |
-
-## Что уже сделано правильно
-
-### Layered source tree
-
-Код разделён на `core`, `runtime`, `controllers`, `services`, `storage`, `ui`,
-`drivers`, `hal`, `board` и `apps`. `tools/check_arch.py` проверяет ряд направлений
-зависимостей, запрещённые legacy paths, include cycles и приватность feature
-headers.
-
-Это хорошая основа для platform architecture. Её не требуется заменять; её нужно
-довести до формального board/capability/app contracts.
-
-### Feature-based applications
-
-В `firmware/src/apps/` находятся 12 отдельных модулей:
-
-- terminal;
-- camera;
-- qr_camera;
-- face_detect;
-- apriltag;
-- object_detect;
-- files;
-- buttons;
-- pong;
-- settings;
-- sleep;
-- micropython.
-
-Каждый модуль имеет публичный app header, а `app_registry.c` является единственным
-местом композиции. Build manifest позволяет исключить app directory через
-`--disable-app`.
-
-Это уже соответствует feature-based направлению, но registry и зависимости
-описаны вручную. Нет manifest schema, capability requirements, generation и
-независимого App SDK.
-
-### Reusable subsystems
-
-В проекте уже присутствуют важные platform primitives:
-
-- camera frame leases;
-- shared camera sessions;
-- single-owner AI model runtime;
-- reusable core-1 executor;
-- display shadow/overlay и bounded SPI deadlines;
-- settings persistence/migrations;
-- neutral vision-result transport;
-- debug console service;
-- internal flash validation;
-- USERFS с atomic operations;
-- watchdog recovery.
-
-Они показывают, что platform-oriented decomposition практически возможна.
-
-### Build и tests
-
-Текущий проект имеет:
-
-- architecture guard;
-- full и feature-disabled builds;
-- flash layout generation/check;
-- firmware symbol gates;
-- executable C harnesses для USERFS, bindings, LCD и UART RX;
-- protocol/client/acceptance tests;
-- CI contract tests;
-- strict runner, запрещающий скрытые skips.
-
-После v0.2 host suite содержит 57 tests. Full K210 build и физический HMPY
-workflow проходили на SEN0305.
-
-## Firmware architecture gaps
-
-### Board layer не является полноценным BSP system
-
-Сейчас существуют `board_hackylens.*` и `board_pins.h`, но:
-
-- build CLI не принимает `--board`;
-- нет board descriptor или capability inventory;
-- flash/layout assumptions ориентированы на конкретный SEN0305;
-- отдельные hardware assumptions остаются в drivers/services/config;
-- нет второй платы, проверяющей границу переносимости;
-- нет board conformance tests.
-
-Следовательно, переносимость на другие K210 boards пока является целью, а не
-доказанным свойством.
-
-### App contract является callback table, а не App SDK
-
-`hk_app_t` описывает callbacks меню и экрана, но не предоставляет:
-
-- versioned app ABI/API;
-- app context;
-- capability handles;
-- manifest;
-- memory/time budget;
-- permission/dependency declaration;
-- structured event model;
-- uniform prepare/start/stop/cleanup result contract;
-- генератор и standalone test kit.
-
-Приложения изолированы по файлам, но всё ещё знают конкретные shared headers и
-глобальные services.
-
-### Capability contracts не унифицированы
-
-Некоторые services уже используют lease/owner, другие предоставляют глобальные
-функции. Error models, cancellation и lifetime описаны неодинаково. Нет единого
-`hk_app_context_t`, через который runtime выдаёт только доступные capabilities.
-
-Это усложняет перенос apps между платами и не позволяет build system заранее
-доказать совместимость app с board.
-
-### Composition остаётся ручной
-
-`apps/app_registry.c`, Python-таблицы build manifest и compile definitions должны
-изменяться согласованно. Architecture guard обнаруживает часть рассинхронизаций,
-но source of truth пока не единственный.
-
-## MicroPython state
-
-### Доказано
-
-- официальный upstream MicroPython встроен без MaixPy;
-- VM исполняется на K210 core 1;
-- core 0 сохраняет управление UI, storage и bindings;
-- статический GC heap и stack limit ограничены;
-- STOP проверяется в VM и native iterator gateways;
-- blocking bindings имеют cancellation/cleanup protocol;
-- USERFS, HMPY, stdout/stderr и reconnect работают;
-- startup имеет WDT recovery policy;
-- запуск из sleep пробуждает устройство перед VM execution.
-
-### Ограничения v1
-
-Python API предоставляет buttons, time, display overlay, LED/RGB, UART и I2C.
-Это доказывает end-to-end путь, но не позволяет создавать основные computer
-vision приложения.
-
-Отсутствуют:
-
-- camera capture/frame object;
-- sensor controls;
-- grayscale/ROI/resize;
-- image drawing поверх camera frame;
-- blobs/lines/circles/statistics;
-- QR/AprilTag/face/object APIs;
-- generic KPU model API;
-- SD/files project API;
-- structured app lifecycle/events;
-- capability discovery.
-
-### Отдельный binding path
-
-`micropython_binding_service` использует собственный opcode/RPC dispatcher. Native
-apps обычно вызывают shared services напрямую. Семантика API не сформулирована
-как один capability contract с двумя adapters.
-
-Поэтому Python prototype сейчас нельзя системно перенести в native app: hardware
-calls, lifecycle, state и UI приходится сопоставлять вручную.
-
-## On-device program UX
-
-Приложение MicroPython показывает runtime/log status и по OK запускает startup
-file либо встроенный smoke script. Оно не является Program Manager.
-
-Не хватает:
-
-- списка программ на устройстве;
-- выбора конкретного файла;
-- run/stop действий для выбранного файла;
-- rename/delete/startup UX;
-- просмотра metadata и ошибок;
-- project awareness;
-- safe-mode/recovery UI;
-- перехода между несколькими программами без IDE.
-
-Таким образом утверждение «программы можно запускать с самого HackyLens» пока
-выполняется только для заранее выбранного startup, а не как полноценный workflow.
-
-## IDE state
-
-Отдельный `hackylens-code` repository содержит:
-
-- Monaco editor;
-- Web Serial transport;
-- HMPY client;
-- device file list;
-- upload/run/stop/status/startup/delete/format;
-- runtime console;
-- встроенную API documentation;
-- transport/protocol/unit tests;
-- GitHub Pages deployment.
-
-Текущий UI хранит один активный source buffer и работает прежде всего с файлами
-на устройстве. Не обнаружены полноценные abstractions локального workspace,
-multi-file project, folders, rename, manifest editor, persistent drafts, sync
-diff, examples gallery или device simulator.
-
-Визуальная система улучшена относительно первого прототипа, но layout и flows
-остаются специально написанной узкой оболочкой и ещё не достигают целостности
-Pybricks Code.
-
-## Original firmware parity
-
-HackyLens уже реализует camera preview, QR, face detection, AprilTag, object
-detection, file browser, settings и external result transport. Но отсутствие
-versioned parity matrix не позволяет точно ответить, какие функции оригинальной
-HUSKYLENS восстановлены полностью.
-
-Как минимум требуют отдельного аудита или реализации:
-
-- face recognition/enrollment, а не только face detection;
-- object/line/color tracking и learning workflows;
-- learned object persistence;
-- exact algorithm modes и settings original firmware;
-- external UART/I2C protocol compatibility;
-- сохранённые algorithms/models/user data;
-- update/recovery и system UX;
-- edge cases конкретных hardware revisions.
-
-До создания `ORIGINAL_FIRMWARE_PARITY.md` parity нельзя использовать как release
-claim.
-
-## Открытые qualification gates
-
-Несмотря на успешный SEN0305 workflow, остаются:
-
-- второй и последующие K210 board ports;
-- multi-device flash geometry validation;
-- physical NOR endurance и power-loss campaigns;
-- WDT1 fault-injection acceptance;
-- physical BACK cleanup;
-- live browser Web Serial full E2E;
-- 1000-cycle run/stop/reconnect stress;
-- long-running camera/KPU/Python coexistence;
-- memory/stack watermarks;
-- compatibility and migration across future API versions.
-
-## Главный вывод
-
-Проект не нужно переписывать с нуля. Текущая layered/feature foundation пригодна.
-Следующий этап должен превратить существующие хорошие границы в формальный
-portable platform contract:
-
-1. BSP system;
-2. Capability API;
-3. App Runtime/SDK/manifests;
-4. общий native/Python surface;
-5. conformance suite;
-6. второй hardware port.
-
-Расширение Python API, IDE или набора apps до этих контрактов будет увеличивать
-стоимость будущего переноса.
+## Phase 1 status
+
+Firmware 0.3.0 implements the experimental Board Port Contract 0.1.0. The
+common firmware is composed with the K210 platform and exactly one selected
+board support package. Build, image, package, release, and flash commands
+require an explicit `--board`; there is no implicit board.
+
+Full builds emit canonical private build attestations bound to the exact image
+hash, version, selected board/platform/runtime profile, target, and complete app
+composition. `make_image.py` and `package_release.py` require this evidence;
+only the complete unmodified full build is release-qualified. Feature-disabled
+or fault-injection images cannot be promoted by adding version/board text or by
+renaming the file. The attestation is private build evidence, not a public
+contract or runtime-discovery surface.
+
+Two descriptors are tracked:
+
+- `huskylens-sen0305` is the runtime-qualified, releaseable port using the
+  `hackylens-full` runtime profile.
+- `sipeed-maix-cube` is a descriptor/BSP compile-conformance port. It is not
+  runtime-qualified or releaseable, and its full build, package, release, and
+  flash operations fail before performing work.
+
+The Cube port proves that a second descriptor, generated-header set, and
+minimal BSP satisfy the conformance compile/link harness. It does not prove
+that common runtime firmware is composed for Cube, nor is it evidence of Cube
+runtime behavior or general hardware independence.
+
+## Implemented boundaries
+
+- Board descriptors own identity, inventory, routes, defaults, flash layout,
+  and programming metadata.
+- `platforms/k210/devices.toml` privately registers recognized hardware,
+  drivers, exact route roles, the one legacy runtime-mux exception, base
+  runtime devices, programming values, and runtime profiles.
+- Generated `pins.h`, `defaults.h`, `inventory.h`, and `flash_layout.h` are
+  checked for staleness.
+- Applications do not include K210 SDK headers. BSP/HAL code and explicitly
+  platform-bound internals may include them; startup lives in
+  `platforms/k210/startup`.
+- Applications may continue to call board-independent driver/service APIs in
+  Phase 1, but cannot include a board BSP, platform HAL, or K210 SDK header.
+- Application needs for platform time and boot/recovery use private internal
+  runtime facades. These are not public or versioned capability APIs.
+- Private build-time app requirements only control board-aware composition and
+  exclusion. They do not expose runtime hardware access. `--require-app`
+  changes an incompatible exclusion into an error.
+
+The twelve feature applications remain self-contained source modules with
+compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
+link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
+
+## Contract and release status
+
+| Area | Status |
+| --- | --- |
+| Firmware | 0.3.0 |
+| Board Port Contract | 0.1.0 experimental |
+| HMPY Contract | 1.1.0 experimental; wire-major 1 |
+| Versioning Policy | 0.4.0 |
+| SEN0305 runtime port | Supported and releaseable |
+| Cube port | Compile conformance only |
+| Capability Platform / App SDK | Deferred to Phase 2 |
+| General hardware portability | Not claimed |
+
+`HELLO.board` is the canonical `board.toml.id`; clients must not infer
+capabilities from it. Runtime discovery and versioned capability APIs do not
+exist in Phase 1.
+
+## Verification and evidence
+
+Host checks cover descriptor/profile/programming validation, route selection
+and collisions, generated-file freshness, canonical flash-layout bytes,
+architecture boundaries, board-aware composition, sidecar safety, and CLI
+rejection paths. CI compile-checks the Cube BSP and builds SEN0305 full and
+feature-disabled configurations.
+
+The pinned pre-change resource baseline is recorded in
+`docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
+locked to SHA-256
+`b6547bde1b87addd4056944b4f46dcdaea5db5986a0c1482f66b9e509701f261`,
+its commit must be an ancestor of HEAD, and the historical/current
+bootstrap pins and historical `VERSION` must match the evidence. The baseline
+BIN/ELF hashes are explicitly named manually pinned golden evidence, and the
+CMake version is explicitly operator-recorded; none is presented as a
+reproduced build attestation. Acceptance
+requires no static-RAM growth and no more than 8192 bytes of erase-rounded
+flash growth. CI remeasures and compares the tracked result's deterministic
+identity, section/image sizes, flash occupancy, deltas, snapshot-compared
+runtime-object findings, and acceptance value. The lexical runtime-object guard
+applies translation-phase splicing, removes comments and literals, tracks
+direct primitives, cross-translation-unit explicit aliases/macros,
+allocation/task/queue wrapper calls, file-scope creation, and C++ creation
+forms, then compares site-aware fingerprints against the complete baseline
+source snapshot. It is a conservative lexical policy check rather than a full
+C/C++ semantic analyser, so alias-name propagation may intentionally reject
+ambiguous same-named calls. Result hashes are explicitly
+named `local_sha256` under `hash_scope=local-workspace-diagnostic`; they remain
+mandatory local evidence but are excluded from CI freshness because this
+pinned debug build embeds absolute workspace paths in both ELF and raw BIN
+bytes. Broader binary reproducibility is not claimed in Phase 1. Physical SEN0305
+smoke testing remains the final hardware gate for boot, display, camera,
+buttons, lights, SD, HMPY, external links, and package/flash round trip. Cube
+hardware qualification is a separate future gate.
+
+## Remaining architecture work
+
+Phase 2 introduces the Capability Platform and App SDK. That phase may forbid
+direct application-to-driver dependencies and replace them with capability
+handles. Phase 1 deliberately does not create temporary display, camera, or
+input facades merely to replace them again in Phase 2.
+
+Other product gaps remain unchanged: broader MicroPython hardware APIs,
+on-device program management, multi-project IDE workflows, formal
+Python-to-native migration, complete original-firmware parity, and long-run
+hardware qualification.
