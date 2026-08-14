@@ -78,6 +78,16 @@ class DocumentationContractsTest(unittest.TestCase):
     def test_repository_documentation_passes(self) -> None:
         self.assertEqual(CHECK_DOCS.check_repository(ROOT), [])
 
+    def test_nested_spec_contracts_are_discovered(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-doc-nested-") as temp:
+            root = Path(temp)
+            nested = write(
+                root / "docs" / "spec" / "capabilities" / "EXAMPLE.md",
+                contract("hackylens.capability.example"),
+            )
+            paths = CHECK_DOCS.contract_paths(root)
+        self.assertIn(nested, paths)
+
     def test_broken_local_link_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-link-") as temp:
             root = Path(temp)

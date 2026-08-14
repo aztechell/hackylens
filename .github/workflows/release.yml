@@ -76,6 +76,7 @@ jobs:
           }
           Invoke-NativeChecked git diff --check $diffRange
           Invoke-NativeChecked python tools/check_docs.py
+          Invoke-NativeChecked python tools/check_phase2_evidence.py
           Invoke-NativeChecked python tools/check_arch.py
           Invoke-NativeChecked python tools/check_board_ports.py --all
           Invoke-NativeChecked python tools/check_board_ports.py --board sipeed-maix-cube --compile

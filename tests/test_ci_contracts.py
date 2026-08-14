@@ -30,6 +30,7 @@ class CiContractsTest(unittest.TestCase):
             "python tools/ci_diff_range.py",
             "git diff --check $diffRange",
             "python tools/check_docs.py",
+            "python tools/check_phase2_evidence.py",
             "python tools/check_arch.py",
             "python tools/check_board_ports.py --all",
             "python tools/check_board_ports.py --board sipeed-maix-cube --compile",
@@ -121,6 +122,10 @@ class CiContractsTest(unittest.TestCase):
             "firmware/third_party/micropython/patches/*.patch text eol=lf",
             attributes.splitlines(),
         )
+        self.assertIn(
+            "docs/evidence/phase2-*.json text eol=lf",
+            attributes.splitlines(),
+        )
 
     def test_release_workflow_validates_every_change_and_publishes_tags_only(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
@@ -129,6 +134,7 @@ class CiContractsTest(unittest.TestCase):
         self.assertIn("  pull_request:\n", workflow)
         self.assertIn('      - "**"\n', workflow)
         self.assertIn("python tools/check_docs.py", workflow)
+        self.assertIn("python tools/check_phase2_evidence.py", workflow)
         self.assertIn("python tools/run_tests.py", workflow)
         self.assertNotIn("msys2/setup-msys2", workflow)
         self.assertNotIn("update: true", workflow)

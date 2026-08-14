@@ -30,6 +30,15 @@ are not inferred from the semantic-version MAJOR component.
 - [Versioning Policy](VERSIONING.md)
 - [Board Port Contract](BOARD_PORT.md)
 
+## Capability contracts
+
+- [Capability API](CAPABILITY_API.md)
+- [Time Capability](capabilities/TIME.md)
+- [Input Capability](capabilities/INPUT.md)
+- [Display Capability](capabilities/DISPLAY.md)
+- [External Link Capability](capabilities/EXTERNAL_LINK.md)
+- [Lights Capability](capabilities/LIGHTS.md)
+
 ## Existing technical contracts
 
 Phase 0 keeps the following existing documents in their current locations and
@@ -41,9 +50,10 @@ applies the same metadata policy to them:
 - [Current App Lifecycle](../APP_LIFECYCLE.md)
 - [AI Model Package](../AI_MODELS.md)
 
-New normative public contracts MUST be added under `docs/spec/`. Moving the
-five existing technical documents is intentionally deferred to avoid unrelated
-link churn during the governance baseline.
+New normative public contracts MUST be added under `docs/spec/` or a
+contract-specific subdirectory below it. Moving the five existing technical
+documents is intentionally deferred to avoid unrelated link churn during the
+governance baseline.
 
 ## Logical owners
 

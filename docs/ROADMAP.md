@@ -294,6 +294,9 @@ constant.
 
 ## Phase 2 — Platform Capability API
 
+Подробная последовательность отдельных implementation-пакетов и их локальные
+exit gates зафиксированы в [PHASE2_MASTERPLAN.md](PHASE2_MASTERPLAN.md).
+
 ### Цель
 
 Создать единственную переносимую поверхность hardware возможностей для native

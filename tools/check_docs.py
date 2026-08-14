@@ -133,7 +133,7 @@ def parse_front_matter(path: Path) -> FrontMatter:
 def contract_paths(root: Path) -> list[Path]:
     specs = sorted(
         path
-        for path in (root / "docs" / "spec").glob("*.md")
+        for path in (root / "docs" / "spec").rglob("*.md")
         if path.name != "README.md"
     )
     return [
