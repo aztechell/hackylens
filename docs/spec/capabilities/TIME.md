@@ -28,8 +28,9 @@ Version `0.1.0` requires both features.
 - `hk_time_deadline_after_us(owner, handle, duration_us, deadline)` creates an
   absolute deadline and rejects overflow or a duration above the published
   maximum.
-- `hk_time_sleep_until(owner, handle, deadline, cancel)` sleeps cooperatively
-  until the deadline or cancellation.
+- `hk_time_sleep_until(owner, handle, wake_target, operation_deadline, cancel)`
+  sleeps cooperatively until the wake target, cancellation, or the operation
+  deadline.
 
 The monotonic value MUST NOT move backwards during one boot. It is not wall
 clock time and has no calendar, timezone, or persistence semantics.
@@ -39,11 +40,16 @@ clock time and has no calendar, timezone, or persistence semantics.
 Time leases are shared. A provider may advertise `ANY_CORE` only when the same
 monotonic domain and atomic read semantics are valid on every supported core.
 
-`sleep_until` uses the caller's absolute deadline as both the requested wake
-time and the operation deadline. It MUST check cancellation at least every
-5 ms. It returns `HK_OK` when the wake time is reached and
-`HK_ERR_CANCELLED` when cancellation is observed first. There is no infinite
-sleep.
+`wake_target` and `operation_deadline` are distinct absolute monotonic values.
+The wake target describes requested sleep completion; the operation deadline
+is the common contract's unchanged bound for the entire call. The operation
+deadline MAY precede the wake target to bound a longer requested sleep. The
+provider MUST check cancellation and the operation deadline at least every
+5 ms. It returns `HK_OK` when the wake target is reached,
+`HK_ERR_CANCELLED` when cancellation is observed first, and
+`HK_ERR_DEADLINE_EXCEEDED` when the operation deadline expires first. The
+common terminal precedence applies when events coincide. There is no infinite
+sleep, and neither absolute value is extended between sleep slices.
 
 ## Errors and cleanup
 
@@ -70,8 +76,9 @@ same provider without changing MicroPython API v1.
 
 The fake supports explicit clock advancement and deterministic cancellation at
 chosen timestamps. Contract tests cover monotonicity, addition overflow,
-already-expired deadlines, cancellation races, maximum duration, and shared
-leases.
+already-expired wake targets and operation deadlines, invalid target/deadline
+combinations, cancellation/deadline/wake races, maximum duration, unchanged
+deadlines across slices, and shared leases.
 
 SEN0305 acceptance records read overhead and sleep/cancel latency. A Cube build
 may prove compile conformance but does not claim clock runtime qualification.
@@ -80,4 +87,3 @@ may prove compile conformance but does not claim clock runtime qualification.
 
 - [Capability API](../CAPABILITY_API.md)
 - [MicroPython API](../../MICROPYTHON_API.md)
-

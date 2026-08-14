@@ -37,8 +37,10 @@ class CiContractsTest(unittest.TestCase):
             "python tools/check_env.py",
             "python tools/run_tests.py",
             "python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython",
+            "python tools/check_phase2_evidence.py --verify-profile micropython-disabled",
             "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent",
             "python tools/build_firmware.py full --board huskylens-sen0305",
+            "python tools/check_phase2_evidence.py --verify-profile full",
             "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present",
             "python tools/check_phase1_resources.py --board huskylens-sen0305 --check-result docs/evidence/phase1-result.json",
             'python tools/package_release.py --board huskylens-sen0305 --tag "${{ github.ref_name }}"',
@@ -145,6 +147,28 @@ class CiContractsTest(unittest.TestCase):
         self.assertIn(
             "full --board huskylens-sen0305 --disable-app micropython", workflow
         )
+        disabled_build = workflow.index(
+            "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython"
+        )
+        disabled_verify = workflow.index(
+            "Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile micropython-disabled"
+        )
+        disabled_symbols = workflow.index(
+            "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent"
+        )
+        self.assertLess(disabled_build, disabled_verify)
+        self.assertLess(disabled_verify, disabled_symbols)
+        full_build = workflow.index(
+            "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305\n"
+        )
+        full_verify = workflow.index(
+            "Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile full"
+        )
+        full_symbols = workflow.index(
+            "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present"
+        )
+        self.assertLess(full_build, full_verify)
+        self.assertLess(full_verify, full_symbols)
         self.assertIn("check_board_ports.py --all", workflow)
         self.assertIn(
             "check_board_ports.py --board sipeed-maix-cube --compile", workflow

@@ -97,7 +97,7 @@ exit gate:
 
 ## 2.1 — Governance, contracts и Phase 2 baseline
 
-Статус пакета: `completed` (2026-08-14).
+Статус пакета: `in_progress`; ожидается зелёный Phase 2.1 CI.
 
 ### Цель
 
@@ -106,22 +106,22 @@ resource/performance baseline для Phase 2.
 
 ### Scope
 
-- [x] Добавить normative `docs/spec/CAPABILITY_API.md` с metadata:
+- [ ] Добавить normative `docs/spec/CAPABILITY_API.md` с metadata:
   `contract-id: hackylens.capability-api`, owner `platform-architecture`, version
   `0.1.0`, stability `experimental`.
-- [x] Добавить normative capability sub-specs для time, input, display,
+- [ ] Добавить normative capability sub-specs для time, input, display,
   external-link и lights.
-- [x] Зафиксировать canonical numeric IDs, canonical names, version ranges,
+- [ ] Зафиксировать canonical numeric IDs, canonical names, version ranges,
   feature flags и extensible-struct rules.
-- [x] Добавить два proposed ADR:
+- [ ] Добавить два proposed ADR:
   owner-scoped handles/lifetime и generated immutable inventory/discovery.
-- [x] Зафиксировать version matrix: Firmware `0.4.0`, Capability API `0.1.0`; без
+- [ ] Зафиксировать version matrix: Firmware `0.4.0`, Capability API `0.1.0`; без
   необоснованных bumps Board Port, HMPY, MicroPython API или Versioning Policy.
-- [x] Создать canonical `docs/evidence/phase2-baseline.json` для текущего main:
+- [ ] Создать canonical `docs/evidence/phase2-baseline.json` для текущего main:
   full SEN0305 и MicroPython-disabled build, raw/rounded flash, static RAM,
   source-declared timing bounds и image/ELF/composition/attestation hashes.
   Hardware latency измеряется отдельно в `2.13` и не выдумывается в baseline.
-- [x] Не изменять runtime behavior в этом пакете.
+- [ ] Не изменять runtime behavior в этом пакете.
 
 ### Основные файлы
 

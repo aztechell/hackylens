@@ -124,4 +124,3 @@ full present MUST fit its advertised maximum, initially 500 ms.
 
 - [Capability API](../CAPABILITY_API.md)
 - [MicroPython API](../../MICROPYTHON_API.md)
-

@@ -113,4 +113,3 @@ qualified.
 - [Capability API](../CAPABILITY_API.md)
 - [Current App Lifecycle](../../APP_LIFECYCLE.md)
 - [MicroPython API](../../MICROPYTHON_API.md)
-

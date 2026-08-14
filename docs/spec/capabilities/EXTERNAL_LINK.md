@@ -105,4 +105,3 @@ cannot close the electrical gate.
 - [External Link Protocol](../../EXTERNAL_LINK_PROTOCOL.md)
 - [MicroPython API](../../MICROPYTHON_API.md)
 - [Board Port Contract](../BOARD_PORT.md)
-

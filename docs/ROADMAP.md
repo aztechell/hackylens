@@ -304,16 +304,19 @@ apps и language adapters.
 
 ### 2.1 Common capability model
 
-Определить:
+Определить typed handles только для пяти начальных capabilities:
 
 ```c
-typedef struct hk_app_context hk_app_context_t;
-typedef struct hk_camera_capability hk_camera_capability_t;
+typedef struct hk_time_capability hk_time_capability_t;
+typedef struct hk_input_capability hk_input_capability_t;
 typedef struct hk_display_capability hk_display_capability_t;
-typedef struct hk_storage_capability hk_storage_capability_t;
+typedef struct hk_external_link_capability hk_external_link_capability_t;
+typedef struct hk_lights_capability hk_lights_capability_t;
 ```
 
-Runtime выдаёт app только handles, объявленные manifest и доступные board.
+Phase 2 выдаёт handles через private runtime wiring и generated immutable
+inventory. Public `hk_app_context`, public app manifest/project format и их
+capability declarations вводятся не раньше Phase 3.
 
 Каждый capability contract содержит:
 
@@ -352,22 +355,22 @@ Runtime выдаёт app только handles, объявленные manifest �
 3. lights;
 4. display;
 5. external UART/I2C;
-6. storage;
-7. camera/frame;
-8. vision;
-9. AI model runtime;
-10. power/settings/logging.
 
-Простые capabilities используются для отладки общей модели до camera/KPU.
+Public storage, camera/frame, vision и AI model runtime capabilities, а также
+power/settings/logging expansion, остаются Phase 3+. Phase 2 может переносить
+существующие private storage/frame-pool operations между внутренними слоями
+только для закрытия architecture guard; это не создаёт public capability.
 
 ### 2.4 Capability discovery
 
-Board/build создаёт immutable inventory. App может:
+Board/build создаёт immutable inventory. Private Phase 2 consumer wiring может:
 
 - потребовать capability и не включиться без неё;
-- объявить optional capability и получить `NULL`/feature flag;
+- объявить optional capability и получить явный fallback;
 - запросить supported operations/version;
 - не угадывать hardware по board ID.
+
+Public app-facing discovery и manifest integration остаются Phase 3+.
 
 ### 2.5 Architecture guard v2
 
