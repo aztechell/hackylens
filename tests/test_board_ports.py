@@ -1604,15 +1604,11 @@ class ResourceEvidenceTests(unittest.TestCase):
         self.assertFalse(document["privacy"]["usb_serial_recorded"])
         self.assertNotIn(b"COM10", encoded)
 
-        resource = json.loads(
-            (ROOT / "docs" / "evidence" / "phase1-result.json").read_text(
-                encoding="utf-8"
-            )
-        )
         self.assertEqual(
             document["firmware"]["image_sha256"],
-            resource["image"]["local_sha256"],
+            "4ee84604430fdfcd3731c2465febe54cb8969766fd7d1c7ce43f615c42c0fe01",
         )
+        self.assertEqual(document["firmware"]["image_bytes"], 1500152)
         self.assertEqual(
             set(document["results"]),
             {

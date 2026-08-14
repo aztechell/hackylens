@@ -7,6 +7,7 @@
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
+#include "../../internal/time_internal.h"
 #include "pong_config.h"
 #include "pong_view.h"
 
@@ -33,6 +34,8 @@ static uint8_t g_pong_serve_index;
 static uint8_t g_pong_ai_reaction_ticks;
 static uint8_t g_pong_ai_noise;
 static int8_t g_pong_serve_direction;
+static uint64_t g_pong_last_tick_us;
+static uint64_t g_pong_accumulator_us;
 
 static int16_t pong_clamp(int16_t value, int16_t minimum, int16_t maximum)
 {
@@ -135,6 +138,8 @@ static void pong_reset(void)
     g_pong_ai_score = 0;
     g_pong_serve_index = 0;
     g_pong_ai_noise = 0xA5;
+    g_pong_last_tick_us = time_internal_us();
+    g_pong_accumulator_us = 0;
     pong_begin_serve(1);
 }
 
@@ -326,18 +331,8 @@ static uint8_t pong_update_score(void)
     return 0;
 }
 
-void pong_controller_enter(const hk_input_snapshot_t *input)
+static uint8_t pong_simulate_step(const hk_input_snapshot_t *input)
 {
-    hk_screen_set(HK_PONG_SCREEN);
-    hk_back_exit_set_armed(0);
-    pong_reset();
-    pong_view_render_initial(pong_view_state());
-    printf("[SHELL] screen PONG\r\n");
-}
-
-void pong_controller_tick(const hk_input_snapshot_t *input)
-{
-    pong_view_state_t previous = pong_view_state();
     uint8_t ball_was_active = g_pong_serve_ticks == 0;
 
     if(g_pong_flash_ticks > 0)
@@ -352,13 +347,67 @@ void pong_controller_tick(const hk_input_snapshot_t *input)
     }
     pong_update_ai();
 
-    if(ball_was_active)
+    if(!ball_was_active)
+        return 0;
+    pong_advance_ball();
+    return pong_update_score();
+}
+
+void pong_controller_enter(const hk_input_snapshot_t *input)
+{
+    (void)input;
+    hk_screen_set(HK_PONG_SCREEN);
+    hk_back_exit_set_armed(0);
+    pong_reset();
+    pong_view_render_initial(pong_view_state());
+    printf("[SHELL] screen PONG\r\n");
+}
+
+void pong_controller_tick(const hk_input_snapshot_t *input)
+{
+    static const hk_input_snapshot_t idle_input = {0U, 0U, 0U};
+    const uint64_t maximum_accumulator =
+        PONG_FIXED_STEP_US * PONG_MAX_CATCH_UP_STEPS;
+    pong_view_state_t previous;
+    pong_view_state_t current;
+    uint64_t now_us = time_internal_us();
+    uint64_t elapsed_us;
+    uint8_t score_changed = 0;
+    uint8_t steps = 0;
+
+    if(!input)
+        input = &idle_input;
+    if(now_us < g_pong_last_tick_us)
     {
-        pong_advance_ball();
-        if(pong_update_score())
-            pong_view_render_score(pong_view_state());
+        g_pong_last_tick_us = now_us;
+        g_pong_accumulator_us = 0;
+        return;
     }
-    pong_view_render_frame(previous, pong_view_state());
+
+    elapsed_us = now_us - g_pong_last_tick_us;
+    g_pong_last_tick_us = now_us;
+    if(elapsed_us >= maximum_accumulator ||
+       g_pong_accumulator_us >= maximum_accumulator - elapsed_us)
+        g_pong_accumulator_us = maximum_accumulator;
+    else
+        g_pong_accumulator_us += elapsed_us;
+
+    if(g_pong_accumulator_us < PONG_FIXED_STEP_US)
+        return;
+
+    previous = pong_view_state();
+    while(g_pong_accumulator_us >= PONG_FIXED_STEP_US &&
+          steps < PONG_MAX_CATCH_UP_STEPS)
+    {
+        score_changed |= pong_simulate_step(input);
+        g_pong_accumulator_us -= PONG_FIXED_STEP_US;
+        steps++;
+    }
+
+    current = pong_view_state();
+    pong_view_render_frame(previous, current);
+    if(score_changed)
+        pong_view_render_score(current);
 }
 
 void pong_controller_handle_buttons(const hk_input_snapshot_t *input)
@@ -375,3 +424,10 @@ void pong_controller_handle_buttons(const hk_input_snapshot_t *input)
         printf("[PONG] reset\r\n");
     }
 }
+
+#ifdef PONG_HOST_TESTING
+pong_view_state_t pong_controller_test_state(void)
+{
+    return pong_view_state();
+}
+#endif
