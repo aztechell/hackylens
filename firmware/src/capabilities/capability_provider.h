@@ -19,6 +19,11 @@ typedef hk_result_t (*hk_capability_provider_cleanup_fn)(
     void *context,
     hk_owner_t owner,
     hk_deadline_t deadline);
+typedef hk_result_t (*hk_capability_provider_cleanup_dispatch_fn)(
+    void *context,
+    hk_owner_t owner,
+    uint16_t target_core,
+    hk_deadline_t deadline);
 typedef hk_result_t (*hk_capability_provider_recover_fn)(
     void *context,
     hk_deadline_t deadline);
@@ -28,6 +33,7 @@ typedef struct
     void *context;
     hk_capability_provider_acquire_fn acquire;
     hk_capability_provider_cleanup_fn cleanup;
+    hk_capability_provider_cleanup_dispatch_fn cleanup_dispatch;
     hk_capability_provider_recover_fn recover;
     uint16_t max_leases;
     uint16_t reserved;

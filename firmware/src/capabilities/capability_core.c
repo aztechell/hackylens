@@ -165,6 +165,36 @@ static hk_result_t cleanup_lease(
     return HK_OK;
 }
 
+static hk_result_t cleanup_lease_for_owner_close(
+    hk_capability_core_t *core,
+    hk_capability_lease_slot_t *slot,
+    uint16_t current_core,
+    hk_deadline_t deadline)
+{
+    uint16_t provider_index = slot->provider_index;
+    const hk_capability_info_t *info = &core->inventory[provider_index];
+    const hk_capability_provider_t *provider = &core->providers[provider_index];
+    hk_result_t result = HK_OK;
+
+    if(provider->cleanup)
+    {
+        if(affinity_matches(info, current_core))
+            result = provider->cleanup(provider->context, slot->owner, deadline);
+        else
+            result = provider->cleanup_dispatch(
+                provider->context, slot->owner, info->affinity_core, deadline);
+    }
+    if(core->provider_state[provider_index].active_leases > 0U)
+        core->provider_state[provider_index].active_leases--;
+    retire_or_advance_lease(slot);
+    if(result != HK_OK)
+    {
+        core->provider_state[provider_index].quarantined = 1U;
+        return HK_ERR_INTERNAL;
+    }
+    return HK_OK;
+}
+
 hk_result_t hk_capability_core_init(
     hk_capability_core_t *core,
     const hk_capability_info_t *inventory,
@@ -191,6 +221,9 @@ hk_result_t hk_capability_core_init(
            (sharing != HK_CAPABILITY_FLAG_SHARED &&
             sharing != HK_CAPABILITY_FLAG_EXCLUSIVE) ||
            providers[index].max_leases == 0U ||
+           (info->affinity_core != HK_CAPABILITY_CORE_ANY &&
+            providers[index].cleanup &&
+            !providers[index].cleanup_dispatch) ||
            providers[index].reserved != 0U ||
            (index > 0U && provider_compare(
                &inventory[index - 1U], info->id, info->instance) >= 0))
@@ -269,16 +302,8 @@ hk_result_t hk_capability_core_owner_close(
         hk_capability_lease_slot_t *lease = &core->leases[index];
         if(!lease->active || !owner_equal(lease->owner, owner))
             continue;
-        if(!affinity_matches(&core->inventory[lease->provider_index], current_core))
-        {
-            core->provider_state[lease->provider_index].quarantined = 1U;
-            if(core->provider_state[lease->provider_index].active_leases > 0U)
-                core->provider_state[lease->provider_index].active_leases--;
-            retire_or_advance_lease(lease);
-            cleanup_result = HK_ERR_INTERNAL;
-            continue;
-        }
-        if(cleanup_lease(core, lease, deadline) != HK_OK)
+        if(cleanup_lease_for_owner_close(
+               core, lease, current_core, deadline) != HK_OK)
             cleanup_result = HK_ERR_INTERNAL;
     }
     retire_or_advance_owner(owner_slot);

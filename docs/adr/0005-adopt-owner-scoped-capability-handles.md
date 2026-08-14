@@ -37,7 +37,10 @@ arguments, cancellation, and one absolute deadline before hardware access.
 Release is idempotent only for an all-zero handle. A copied non-zero handle
 after release is stale. Owner-wide cleanup is bounded and non-cancellable,
 invalidates every lease, and quarantines a provider that cannot reach a safe
-state. Generation counters do not wrap into reuse during one boot.
+state. Mixed-affinity owner teardown uses each provider's private synchronous,
+bounded cleanup dispatcher with the caller's original absolute deadline;
+ordinary operations retain strict affinity checks. Generation counters do not
+wrap into reuse during one boot.
 
 Buffers are borrowed with explicit size, stride, flags, and lifetime. Providers
 make bounded progress and may use only declared fixed storage. Native and

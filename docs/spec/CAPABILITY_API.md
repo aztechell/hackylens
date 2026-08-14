@@ -223,7 +223,12 @@ objects linked into the same firmware.
 Closing an owner MUST attempt bounded cleanup of every active lease, invalidate
 all of those leases, and then invalidate the owner generation. Owner-wide
 cleanup is not cancellable; abandoning cleanup would leave ownership
-ambiguous.
+ambiguous. When owner close is initiated on a different core from a fixed-
+affinity provider, the core uses that provider's private synchronous teardown
+dispatcher. The dispatcher MUST target the declared provider core, preserve the
+original absolute deadline, and return only after cleanup reaches a safe state
+or bounded dispatch/cleanup failure is known. Affinity mismatch alone does not
+quarantine the provider.
 
 ## Lease and handle lifecycle
 
@@ -292,7 +297,9 @@ Release and owner cleanup accept a deadline but are not cancellable.
 
 Every inventory entry declares `ANY_CORE` or a specific core affinity. Calling a
 valid handle from the wrong context returns `HK_ERR_WRONG_CONTEXT` before
-hardware access.
+hardware access. The trusted owner-close dispatcher is the only lifecycle
+exception; it does not weaken affinity validation for acquire, release,
+recovery, validation, or provider operations.
 
 Language adapters running on another core MUST use a bounded transport to the
 declared provider core. That transport does not become a second hardware

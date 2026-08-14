@@ -156,7 +156,8 @@ implementation, два ADR имеют согласованный статус, �
 
 ## 2.2 — Common Capability API core
 
-Статус пакета: `completed` (2026-08-14); closure CI `31813863025` прошёл.
+Статус пакета: `in_progress` (2026-08-14); mixed-affinity cleanup correction
+awaits green CI.
 
 ### Depends on
 
@@ -182,6 +183,8 @@ implementation, два ADR имеют согласованный статус, �
 - [x] Добавить private current-app owner binding через существующие registry/menu
   entry/exit paths без изменения `hk_app_t` callback signatures.
 - [x] Не добавлять реальный display/input/external/lights provider.
+- [ ] Исправить owner-wide cleanup для mixed-affinity leases и закрыть
+  focused regression зелёным corrective CI.
 
 ### Основные файлы
 

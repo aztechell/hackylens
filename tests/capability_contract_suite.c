@@ -62,7 +62,10 @@ static hk_capability_request_t request(
     return result;
 }
 
-static void setup_core(hk_capability_core_t *core)
+static void setup_core_with_affinity(
+    hk_capability_core_t *core,
+    uint16_t time_core,
+    uint16_t input_core)
 {
     uint16_t index;
 
@@ -79,11 +82,11 @@ static void setup_core(hk_capability_core_t *core)
         s_inventory[index].features = FEATURE_A | FEATURE_B;
         s_inventory[index].flags = index == 0U
             ? HK_CAPABILITY_FLAG_SHARED : HK_CAPABILITY_FLAG_EXCLUSIVE;
-        s_inventory[index].affinity_core = index == 0U
-            ? HK_CAPABILITY_CORE_ANY : 1U;
+        s_inventory[index].affinity_core = index == 0U ? time_core : input_core;
         s_providers[index].context = &s_fake[index];
         s_providers[index].acquire = capability_fake_acquire;
         s_providers[index].cleanup = capability_fake_cleanup;
+        s_providers[index].cleanup_dispatch = capability_fake_cleanup_dispatch;
         s_providers[index].recover = capability_fake_recover;
         s_providers[index].max_leases = UINT16_MAX;
         s_grants[index].request = request(CAP_TIME + index,
@@ -91,6 +94,11 @@ static void setup_core(hk_capability_core_t *core)
     }
     CHECK(hk_capability_core_init(
         core, s_inventory, s_providers, 2U) == HK_OK);
+}
+
+static void setup_core(hk_capability_core_t *core)
+{
+    setup_core_with_affinity(core, HK_CAPABILITY_CORE_ANY, 1U);
 }
 
 static hk_owner_t open_owner(hk_capability_core_t *core)
@@ -162,6 +170,100 @@ static void test_wrong_owner_type_context_and_inactive_owner(void)
         &core, first, &lease, CAP_TIME, 0U, NULL) == HK_ERR_STALE_HANDLE);
     CHECK(hk_capability_core_owner_close(
         &core, second, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
+}
+
+static void test_mixed_affinity_owner_close(void)
+{
+    hk_capability_core_t core;
+    hk_owner_t owner;
+    hk_lease_t time_lease;
+    hk_lease_t input_lease;
+    hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
+    hk_deadline_t deadline = {800U};
+
+    setup_core_with_affinity(&core, 0U, 1U);
+    owner = open_owner(&core);
+    time_lease = acquire_time(&core, owner);
+    CHECK(hk_capability_core_acquire(
+        &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
+    CHECK(hk_capability_core_owner_close(
+        &core, owner, 0U, deadline) == HK_OK);
+    CHECK(s_fake[0].cleanup_calls == 1U);
+    CHECK(s_fake[0].cleanup_dispatch_calls == 0U);
+    CHECK(s_fake[1].cleanup_calls == 1U);
+    CHECK(s_fake[1].cleanup_dispatch_calls == 1U);
+    CHECK(s_fake[1].last_cleanup_target_core == 1U);
+    CHECK(s_fake[0].last_deadline.at_us == deadline.at_us);
+    CHECK(s_fake[1].last_deadline.at_us == deadline.at_us);
+    CHECK(core.provider_state[0].quarantined == 0U);
+    CHECK(core.provider_state[1].quarantined == 0U);
+    CHECK(core.leases[time_lease.slot].active == 0U);
+    CHECK(core.leases[input_lease.slot].active == 0U);
+    CHECK(hk_capability_core_validate_lease(
+        &core, owner, &time_lease, CAP_TIME, 0U, NULL) == HK_ERR_STALE_HANDLE);
+    CHECK(hk_capability_core_validate_lease(
+        &core, owner, &input_lease, CAP_INPUT, 1U, NULL) ==
+          HK_ERR_STALE_HANDLE);
+    CHECK(hk_capability_core_owner_close(
+        &core, owner, 0U, deadline) == HK_ERR_STALE_HANDLE);
+}
+
+static void test_mixed_affinity_owner_close_partial_failure(void)
+{
+    hk_capability_core_t core;
+    hk_owner_t owner;
+    hk_lease_t time_lease;
+    hk_lease_t input_lease;
+    hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
+
+    setup_core_with_affinity(&core, 0U, 1U);
+    owner = open_owner(&core);
+    time_lease = acquire_time(&core, owner);
+    CHECK(hk_capability_core_acquire(
+        &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
+    s_fake[0].cleanup_result = HK_ERR_IO;
+    CHECK(hk_capability_core_owner_close(
+        &core, owner, 0U, (hk_deadline_t){900U}) == HK_ERR_INTERNAL);
+    CHECK(s_fake[0].cleanup_calls == 1U);
+    CHECK(s_fake[1].cleanup_calls == 1U);
+    CHECK(s_fake[1].cleanup_dispatch_calls == 1U);
+    CHECK(core.provider_state[0].quarantined == 1U);
+    CHECK(core.provider_state[1].quarantined == 0U);
+    CHECK(core.leases[time_lease.slot].active == 0U);
+    CHECK(core.leases[input_lease.slot].active == 0U);
+    CHECK(hk_capability_core_owner_close(
+        &core, owner, 0U, HK_DEADLINE_IMMEDIATE) == HK_ERR_STALE_HANDLE);
+}
+
+static void test_wrong_core_operations_remain_strict(void)
+{
+    hk_capability_core_t core;
+    hk_owner_t owner;
+    hk_lease_t input_lease;
+    hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
+    void *provider_context = NULL;
+
+    setup_core_with_affinity(&core, 0U, 1U);
+    owner = open_owner(&core);
+    CHECK(hk_capability_core_acquire(
+        &core, owner, &input, CAP_INPUT, 0U, &input_lease) ==
+          HK_ERR_WRONG_CONTEXT);
+    CHECK(s_fake[1].acquire_calls == 0U);
+    CHECK(hk_capability_core_acquire(
+        &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
+    CHECK(hk_capability_core_validate_lease(
+        &core, owner, &input_lease, CAP_INPUT, 0U, &provider_context) ==
+          HK_ERR_WRONG_CONTEXT);
+    CHECK(provider_context == NULL);
+    CHECK(hk_capability_core_release(
+        &core, owner, CAP_INPUT, 0U, HK_DEADLINE_IMMEDIATE, &input_lease) ==
+          HK_ERR_WRONG_CONTEXT);
+    CHECK(s_fake[1].cleanup_calls == 0U);
+    CHECK(hk_capability_core_release(
+        &core, owner, CAP_INPUT, 1U, HK_DEADLINE_IMMEDIATE, &input_lease) ==
+          HK_OK);
+    CHECK(hk_capability_core_owner_close(
+        &core, owner, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
 }
 
 static void test_owner_close_cleanup_failure_and_recovery(void)
@@ -374,6 +476,9 @@ int main(void)
 {
     test_acquire_release_and_stale_copy();
     test_wrong_owner_type_context_and_inactive_owner();
+    test_mixed_affinity_owner_close();
+    test_mixed_affinity_owner_close_partial_failure();
+    test_wrong_core_operations_remain_strict();
     test_owner_close_cleanup_failure_and_recovery();
     test_quarantine_still_allows_remaining_release();
     test_fixed_capacity_and_generation_exhaustion();

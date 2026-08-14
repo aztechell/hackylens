@@ -30,6 +30,18 @@ hk_result_t capability_fake_cleanup(
     return fake->cleanup_result;
 }
 
+hk_result_t capability_fake_cleanup_dispatch(
+    void *context,
+    hk_owner_t owner,
+    uint16_t target_core,
+    hk_deadline_t deadline)
+{
+    capability_fake_provider_t *fake = context;
+    fake->cleanup_dispatch_calls++;
+    fake->last_cleanup_target_core = target_core;
+    return capability_fake_cleanup(context, owner, deadline);
+}
+
 hk_result_t capability_fake_recover(void *context, hk_deadline_t deadline)
 {
     capability_fake_provider_t *fake = context;
