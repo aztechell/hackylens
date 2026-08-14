@@ -110,6 +110,14 @@ sized workspace paths have identical raw BIN bytes and identical resource
 sections, which makes the exact CI resource projection path-independent. The
 debug ELF hash remains diagnostic rather than a release identity.
 
+`docs/evidence/phase1-result.json` is the rolling resource result for the
+current HEAD. It proves the current build remains within the Phase 1 resource
+budget, but it is not hardware qualification. The immutable Phase 1 closure
+snapshot is `docs/evidence/phase1-closure-result.json`. The hardware-smoke
+document names that closure file, pins its canonical-file SHA-256, and must
+match its board, firmware version, image size, and image SHA-256. Consequently,
+later rolling results do not inherit the closure image's hardware-tested status.
+
 The physical SEN0305 gate passed on 2026-08-13 and is recorded in
 `docs/evidence/phase1-hardware-smoke.json`. The release-qualified package booted
 as firmware 0.3.0; display and camera captures were inspected; all four button

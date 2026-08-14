@@ -1,6 +1,10 @@
 {
   "accepted": true,
   "board": "huskylens-sen0305",
+  "closure_result": {
+    "path": "docs/evidence/phase1-closure-result.json",
+    "sha256": "631264dbec05212214eba236db96f9d29017cc0b63224e32aaafec6c51177cde"
+  },
   "firmware": {
     "build_attestation_sha256": "9beaed01c4ac9976b1f34c5ede53f83abe016d5bf694e04aa15dd414b2527ca0",
     "flash_layout_sha256": "f62596c27dd3950807a7c0b6db016dc2fd0be797a091c65bcf23a43a7c04502b",

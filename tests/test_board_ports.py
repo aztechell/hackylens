@@ -1604,11 +1604,44 @@ class ResourceEvidenceTests(unittest.TestCase):
         self.assertFalse(document["privacy"]["usb_serial_recorded"])
         self.assertNotIn(b"COM10", encoded)
 
+        closure_link = document["closure_result"]
+        self.assertEqual(set(closure_link), {"path", "sha256"})
+        self.assertEqual(
+            closure_link["path"],
+            "docs/evidence/phase1-closure-result.json",
+        )
+        self.assertNotEqual(
+            closure_link["path"], "docs/evidence/phase1-result.json"
+        )
+        closure_path = (ROOT / closure_link["path"]).resolve()
+        self.assertEqual(
+            closure_path.parent, (ROOT / "docs" / "evidence").resolve()
+        )
+        closure_encoded = closure_path.read_bytes()
+        self.assertEqual(
+            hashlib.sha256(closure_encoded).hexdigest(),
+            closure_link["sha256"],
+        )
+        closure = check_phase1_resources.validate_result_document(
+            json.loads(closure_encoded.decode("utf-8"))
+        )
+        self.assertEqual(
+            closure_encoded,
+            firmware_attestation.canonical_json_bytes(closure),
+        )
+        self.assertTrue(closure["accepted"])
+        self.assertEqual(document["board"], closure["board"])
+        self.assertEqual(
+            document["firmware"]["version"], closure["firmware_version"]
+        )
+        self.assertEqual(
+            document["firmware"]["image_bytes"],
+            closure["image"]["raw_bytes"],
+        )
         self.assertEqual(
             document["firmware"]["image_sha256"],
-            "4ee84604430fdfcd3731c2465febe54cb8969766fd7d1c7ce43f615c42c0fe01",
+            closure["image"]["local_sha256"],
         )
-        self.assertEqual(document["firmware"]["image_bytes"], 1500152)
         self.assertEqual(
             set(document["results"]),
             {
