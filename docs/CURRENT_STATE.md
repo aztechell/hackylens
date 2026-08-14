@@ -52,6 +52,10 @@ UART/I2C protocol or routed-peripheral semantics.
 - Private build-time app requirements only control board-aware composition and
   exclusion. They do not expose runtime hardware access. `--require-app`
   changes an incompatible exclusion into an error.
+- Phase 2.2 adds Capability API 0.1 common types and a fixed-capacity host-tested
+  owner/lease core. Current app entry/exit paths privately bind an empty-grant
+  owner without changing `hk_app_t`; the production inventory is still empty
+  and no display/input/external-link/lights/time provider exists yet.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -67,12 +71,13 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability Platform / App SDK | Deferred to Phase 2 |
+| Capability API common core | Phase 2.2 implemented; closure CI pending |
+| App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
-capabilities from it. Runtime discovery and versioned capability APIs do not
-exist in Phase 1.
+capabilities from it. Capability discovery currently returns the immutable
+empty Phase 2.2 inventory and is not an App Runtime or manifest surface.
 
 ## Verification and evidence
 
@@ -92,9 +97,7 @@ BIN/ELF hashes are explicitly named manually pinned golden evidence, and the
 CMake version is explicitly operator-recorded; none is presented as a
 reproduced build attestation. Acceptance
 requires no static-RAM growth and no more than 8192 bytes of erase-rounded
-flash growth. CI remeasures and compares the tracked result's deterministic
-identity, section/image sizes, flash occupancy, deltas, snapshot-compared
-runtime-object findings, and acceptance value. The lexical runtime-object guard
+flash growth for the historical Phase 1 closure. The lexical runtime-object guard
 applies translation-phase splicing, removes comments and literals, tracks
 direct primitives, cross-translation-unit explicit aliases/macros,
 allocation/task/queue wrapper calls, file-scope creation, and C++ creation
@@ -110,10 +113,11 @@ sized workspace paths have identical raw BIN bytes and identical resource
 sections, which makes the exact CI resource projection path-independent. The
 debug ELF hash remains diagnostic rather than a release identity.
 
-`docs/evidence/phase1-result.json` is the rolling resource result for the
-current HEAD. It proves the current build remains within the Phase 1 resource
-budget, but it is not hardware qualification. The immutable Phase 1 closure
-snapshot is `docs/evidence/phase1-closure-result.json`. The hardware-smoke
+`docs/evidence/phase1-result.json` records the Phase 1 rolling result at Phase 1
+closure and is no longer compared byte-for-byte with later Phase 2 binaries.
+Phase 2 CI instead checks both current build profiles against the immutable
+`phase2-baseline.json` attestation and resource budgets. The immutable Phase 1
+closure snapshot is `docs/evidence/phase1-closure-result.json`. The hardware-smoke
 document names that closure file, pins its canonical-file SHA-256, and must
 match its board, firmware version, image size, and image SHA-256. Consequently,
 later rolling results do not inherit the closure image's hardware-tested status.
@@ -129,10 +133,11 @@ hardware qualification is a separate future gate.
 
 ## Remaining architecture work
 
-Phase 2 introduces the Capability Platform and App SDK. That phase may forbid
-direct application-to-driver dependencies and replace them with capability
-handles. Phase 1 deliberately does not create temporary display, camera, or
-input facades merely to replace them again in Phase 2.
+Later Phase 2 packages generate the non-empty inventory and migrate the five
+initial capabilities: time, input, display, external-link, and lights. They may
+forbid direct application-to-driver dependencies as migrations complete.
+Public App Runtime/context, app manifests, App SDK, and public storage, camera,
+vision, and AI capabilities remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,
 on-device program management, multi-project IDE workflows, formal

@@ -16,6 +16,7 @@ static uint8_t s_menu_index;
 static uint32_t s_menu_repeat_button;
 static uint8_t s_menu_repeat_ticks;
 static hk_menu_view_t s_menu_view;
+static hk_menu_owner_hooks_t s_owner_hooks;
 
 void menu_view_set(const hk_menu_view_t *view)
 {
@@ -62,6 +63,8 @@ void shell_show_menu(void)
 
     if(app && app->exit)
         app->exit();
+    if(s_owner_hooks.exit)
+        s_owner_hooks.exit(app);
     hk_screen_set(SCREEN_MENU);
     hk_back_exit_set_armed(0);
     menu_render();
@@ -86,8 +89,18 @@ uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
     s_menu_repeat_button = 0;
     s_menu_repeat_ticks = 0;
     printf("[MENU] open %s\r\n", app->title);
+    if(s_owner_hooks.enter && !s_owner_hooks.enter(app))
+        return 0U;
     app->enter(input);
     return 1U;
+}
+
+void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks)
+{
+    if(hooks)
+        s_owner_hooks = *hooks;
+    else
+        memset(&s_owner_hooks, 0, sizeof(s_owner_hooks));
 }
 
 void shell_open_selected(const hk_input_snapshot_t *input)

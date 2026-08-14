@@ -42,7 +42,6 @@ class CiContractsTest(unittest.TestCase):
             "python tools/build_firmware.py full --board huskylens-sen0305",
             "python tools/check_phase2_evidence.py --verify-profile full",
             "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present",
-            "python tools/check_phase1_resources.py --board huskylens-sen0305 --check-result docs/evidence/phase1-result.json",
             'python tools/package_release.py --board huskylens-sen0305 --tag "${{ github.ref_name }}"',
         )
         self.assertIn("function Invoke-NativeChecked", workflow)
@@ -173,8 +172,7 @@ class CiContractsTest(unittest.TestCase):
         self.assertIn(
             "check_board_ports.py --board sipeed-maix-cube --compile", workflow
         )
-        self.assertIn("check_phase1_resources.py --board huskylens-sen0305", workflow)
-        self.assertIn("--check-result docs/evidence/phase1-result.json", workflow)
+        self.assertNotIn("check_phase1_resources.py --board huskylens-sen0305", workflow)
         self.assertNotIn("--write-result docs/evidence/phase1-result.json", workflow)
         self.assertEqual(workflow.count("fetch-depth: 0"), 2)
         self.assertNotIn("\n          git diff --check\n", workflow)

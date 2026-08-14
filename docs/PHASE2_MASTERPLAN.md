@@ -137,7 +137,9 @@ resource/performance baseline для Phase 2.
 
 - `tools/check_docs.py`;
 - canonical JSON/hash validation;
-- baseline воспроизводится вторым запуском на том же HEAD/toolchain;
+- на pinned baseline commit артефакты воспроизводятся вторым запуском; на
+  последующих Phase 2 commits `--verify-profile` проверяет attestation integrity
+  и resource deltas относительно immutable baseline;
 - `git diff` не содержит firmware behavior changes.
 
 ### Exit gate
@@ -153,6 +155,8 @@ implementation, два ADR имеют согласованный статус, �
 ---
 
 ## 2.2 — Common Capability API core
+
+Статус пакета: `in_progress`; ожидается зелёный Phase 2.2 CI.
 
 ### Depends on
 

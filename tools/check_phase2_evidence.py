@@ -312,9 +312,40 @@ def read_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def verify_profile_budget(
+    document: dict[str, Any],
+    profile_name: str,
+    *,
+    raw_bytes: int,
+    data_bytes: int,
+    bss_bytes: int,
+    erase_size: int,
+) -> tuple[int, int]:
+    profile = document["baseline"]["profiles"][profile_name]
+    acceptance = document["acceptance"]
+    occupied = math.ceil(
+        (raw_bytes + build_firmware.K210_IMAGE_OVERHEAD) / erase_size
+    ) * erase_size
+    flash_delta = occupied - profile["image"]["flash_occupied_bytes"]
+    static_ram_delta = (
+        data_bytes + bss_bytes - profile["elf"]["static_ram_bytes"]
+    )
+    if flash_delta > acceptance["flash_delta_max_bytes"]:
+        raise RuntimeError(
+            f"{profile_name} flash delta {flash_delta} exceeds Phase 2 budget "
+            f"{acceptance['flash_delta_max_bytes']}"
+        )
+    if static_ram_delta > acceptance["static_ram_delta_max_bytes"]:
+        raise RuntimeError(
+            f"{profile_name} static RAM delta {static_ram_delta} exceeds "
+            f"Phase 2 budget {acceptance['static_ram_delta_max_bytes']}"
+        )
+    return flash_delta, static_ram_delta
+
+
 def verify_profile_artifacts(
     document: dict[str, Any], profile_name: str, *, root: Path = ROOT
-) -> None:
+) -> tuple[int, int]:
     profile = document["baseline"]["profiles"][profile_name]
     image = root / profile["image"]["path"]
     elf = root / profile["elf"]["path"]
@@ -324,20 +355,9 @@ def verify_profile_artifacts(
         if not path.is_file():
             raise RuntimeError(f"profile artifact is missing: {path}")
 
-    if image.stat().st_size != profile["image"]["raw_bytes"] or sha256(image) != profile["image"]["sha256"]:
-        raise RuntimeError(f"{profile_name} image does not reproduce baseline")
-    if elf.stat().st_size != profile["elf"]["file_bytes"] or sha256(elf) != profile["elf"]["sha256"]:
-        raise RuntimeError(f"{profile_name} ELF does not reproduce baseline")
+    image_size = image.stat().st_size
+    image_sha256 = sha256(image)
     text_bytes, data_bytes, bss_bytes = check_phase1_resources.read_elf_size(elf)
-    if (text_bytes, data_bytes, bss_bytes) != (
-        profile["elf"]["text_bytes"], profile["elf"]["data_bytes"],
-        profile["elf"]["bss_bytes"],
-    ):
-        raise RuntimeError(f"{profile_name} ELF sections do not reproduce baseline")
-    if sha256(composition_path) != profile["composition"]["sha256"]:
-        raise RuntimeError(f"{profile_name} composition does not reproduce baseline")
-    if sha256(attestation_path) != profile["attestation"]["sha256"]:
-        raise RuntimeError(f"{profile_name} attestation does not reproduce baseline")
 
     composition = read_json(composition_path, f"{profile_name} composition")
     attestation = read_json(attestation_path, f"{profile_name} attestation")
@@ -347,8 +367,24 @@ def verify_profile_artifacts(
         raise RuntimeError(f"{profile_name} attestation build profile mismatch")
     if attestation.get("release_qualified") is not profile["release_qualified"]:
         raise RuntimeError(f"{profile_name} release qualification mismatch")
-    if attestation.get("image", {}).get("sha256") != profile["image"]["sha256"]:
+    if attestation.get("image", {}).get("sha256") != image_sha256:
         raise RuntimeError(f"{profile_name} attestation image hash mismatch")
+    if attestation.get("image", {}).get("size") != image_size:
+        raise RuntimeError(f"{profile_name} attestation image size mismatch")
+    if attestation.get("composition", {}).get("disabled_apps") != \
+            composition.get("disabled_apps"):
+        raise RuntimeError(f"{profile_name} attestation composition mismatch")
+
+    board = load_board(document["baseline"]["board"], root=root)
+    flash, _ = load_validated(board.flash_layout_path)
+    return verify_profile_budget(
+        document,
+        profile_name,
+        raw_bytes=image_size,
+        data_bytes=data_bytes,
+        bss_bytes=bss_bytes,
+        erase_size=flash["erase_size"],
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -361,14 +397,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         document = load_baseline(args.baseline)
         verify_provenance(document)
+        deltas = None
         if args.verify_profile:
-            verify_profile_artifacts(document, args.verify_profile)
+            deltas = verify_profile_artifacts(document, args.verify_profile)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"[ERR] Phase 2 evidence check failed: {exc}", file=sys.stderr)
         return 1
     message = "[OK] Phase 2 baseline evidence is canonical and provenance-checked"
     if args.verify_profile:
-        message += f"; {args.verify_profile} artifacts reproduced"
+        flash_delta, static_ram_delta = deltas
+        message += (
+            f"; {args.verify_profile} artifacts are attested and within budget "
+            f"(flash_delta={flash_delta}, static_ram_delta={static_ram_delta})"
+        )
     print(message)
     return 0
 

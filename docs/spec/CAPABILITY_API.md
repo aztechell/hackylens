@@ -232,16 +232,22 @@ handle allocation. A typed handle is valid only while its lease slot,
 generation, owner, capability ID, type, and affinity all validate.
 
 - Releasing an all-zero handle is idempotent `HK_OK`.
+- A partially zero or otherwise malformed non-zero handle returns
+  `HK_ERR_STALE_HANDLE`; it is never treated as the zero handle.
 - The first valid release performs capability cleanup, invalidates the lease,
   and zeros the caller's handle.
 - A non-zero copied handle after release returns `HK_ERR_STALE_HANDLE`.
 - An operation presented with another active owner returns
   `HK_ERR_WRONG_OWNER`.
+- An inactive or generation-stale owner returns `HK_ERR_STALE_HANDLE`. Passing
+  a valid lease through the wrong typed capability entry point returns
+  `HK_ERR_INVALID_ARGUMENT` before provider access.
 - Generation values MUST NOT silently wrap into reuse. An exhausted slot is
   retired until reboot.
 - A failed cleanup invalidates the logical lease and quarantines the provider.
-  It cannot be reacquired until a bounded recovery succeeds or the platform
-  performs a controlled reset.
+  It cannot be reacquired (`HK_ERR_INVALID_STATE`) until an explicit bounded
+  recovery succeeds or the platform performs a controlled reset. Failed
+  recovery leaves the provider quarantined.
 
 Every capability contract states whether leases are shared, exclusive, or
 exclusive over a declared resource mask.

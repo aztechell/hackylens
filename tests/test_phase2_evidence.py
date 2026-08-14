@@ -84,6 +84,49 @@ class Phase2EvidenceTest(unittest.TestCase):
             with mock.patch.object(CHECKER, "PINNED_BASELINE_SHA256", digest):
                 self.assertEqual(CHECKER.load_baseline(path), document)
 
+    def test_profile_budget_accepts_limits_and_rejects_overages(self) -> None:
+        document = CHECKER.load_baseline()
+        profile = document["baseline"]["profiles"]["full"]
+        acceptance = document["acceptance"]
+        erase_size = 4096
+        baseline_occupied = profile["image"]["flash_occupied_bytes"]
+        allowed_occupied = baseline_occupied + acceptance["flash_delta_max_bytes"]
+        allowed_raw = allowed_occupied - CHECKER.build_firmware.K210_IMAGE_OVERHEAD
+        baseline_static = profile["elf"]["static_ram_bytes"]
+        data_bytes = profile["elf"]["data_bytes"]
+        allowed_bss = baseline_static + acceptance["static_ram_delta_max_bytes"] - data_bytes
+
+        self.assertEqual(
+            CHECKER.verify_profile_budget(
+                document,
+                "full",
+                raw_bytes=allowed_raw,
+                data_bytes=data_bytes,
+                bss_bytes=allowed_bss,
+                erase_size=erase_size,
+            ),
+            (acceptance["flash_delta_max_bytes"],
+             acceptance["static_ram_delta_max_bytes"]),
+        )
+        with self.assertRaisesRegex(RuntimeError, "flash delta"):
+            CHECKER.verify_profile_budget(
+                document,
+                "full",
+                raw_bytes=allowed_raw + erase_size,
+                data_bytes=data_bytes,
+                bss_bytes=allowed_bss,
+                erase_size=erase_size,
+            )
+        with self.assertRaisesRegex(RuntimeError, "static RAM delta"):
+            CHECKER.verify_profile_budget(
+                document,
+                "full",
+                raw_bytes=allowed_raw,
+                data_bytes=data_bytes,
+                bss_bytes=allowed_bss + 1,
+                erase_size=erase_size,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

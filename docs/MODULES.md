@@ -15,6 +15,21 @@ pin and peripheral operations stay in board/HAL. See
 Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG,
 OBJECT DETECT, MICROPYTHON, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
+## Capability core
+
+`firmware/include/hackylens/capability/` contains the experimental Capability
+API 0.1 common ABI. `firmware/src/capabilities/capability_core.c` owns fixed
+owner/lease tables, grant and generation validation, affinity checks, provider
+quarantine/recovery, and bounded owner-wide cleanup. Provider callbacks and
+mutable core state are private in `capability_provider.h`; public typed handles
+contain only an `hk_lease_t`.
+
+Phase 2.2 intentionally ships an empty production capability inventory and no
+hardware providers. `runtime/capability_owner_runtime.c` privately binds one
+generation-checked owner around existing menu entry/exit callbacks through
+neutral menu hooks, without changing `hk_app_t` callback signatures or current
+app behavior. The deterministic host fake runs the common lifecycle suite.
+
 Compile-time app flags are generated into `hk_config.h` by
 `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`.
 Every `--disable-app <name>` omits the corresponding complete
@@ -26,6 +41,8 @@ planar AI input requires FACE or OBJECT.
 
 Key public interfaces:
 
+- `hackylens/capability/common.h`, `inventory.h`, and `owner.h` for the public
+  Capability API ABI, immutable discovery shape, and typed-handle convention.
 - `core/ai_model_types.h` and `services/ai_model_runtime.h` for model metadata
   and the instance-based load/run/stop/unload API. `storage/ai_model_storage.h`
   and `platforms/k210/hal/hal_kpu.h` are implementation boundaries used by the runtime, not

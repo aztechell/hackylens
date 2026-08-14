@@ -10,7 +10,14 @@ typedef struct
     void (*draw_item_at)(uint8_t index, const hk_app_t *app, uint8_t selected);
 } hk_menu_view_t;
 
+typedef struct
+{
+    uint8_t (*enter)(const hk_app_t *app);
+    void (*exit)(const hk_app_t *app);
+} hk_menu_owner_hooks_t;
+
 void menu_view_set(const hk_menu_view_t *view);
+void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks);
 uint8_t hk_menu_index_get(void);
 void menu_render(void);
 void shell_show_menu(void);

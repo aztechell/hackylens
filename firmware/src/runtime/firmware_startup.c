@@ -1,4 +1,5 @@
 #include "firmware_startup.h"
+#include "capability_owner_runtime.h"
 
 #include <stdio.h>
 
@@ -27,8 +28,24 @@ static void firmware_wake_from_sleep(void)
     shell_show_menu();
 }
 
+static uint8_t firmware_capability_owner_enter(const hk_app_t *app)
+{
+    return (uint8_t)(capability_owner_runtime_enter(app) == HK_OK);
+}
+
+static void firmware_capability_owner_exit(const hk_app_t *app)
+{
+    (void)capability_owner_runtime_exit(app);
+}
+
 void firmware_startup(void)
 {
+    static const hk_menu_owner_hooks_t owner_hooks = {
+        .enter = firmware_capability_owner_enter,
+        .exit = firmware_capability_owner_exit,
+    };
+
+    menu_owner_hooks_set(&owner_hooks);
     debug_console_init();
     hk_screen_set_wake_handler(firmware_wake_from_sleep);
     platform_bootstrap_init_clocks();

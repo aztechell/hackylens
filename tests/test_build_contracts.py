@@ -48,6 +48,46 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn(f'#define HACKYLENS_VERSION "{expected}"', config)
         self.assertIn("#define HK_MICROPYTHON_WDT_FAULT_INJECTION 0", config)
 
+    def test_public_capability_headers_are_staged_and_included(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory) / "stage"
+            stage.mkdir()
+            BUILD_FIRMWARE.copy_tree_files(
+                ROOT / "firmware" / "include",
+                stage / "firmware" / "include",
+            )
+            BUILD_FIRMWARE.write_project_cmake(stage, None, self.board)
+            project = (stage / "project.cmake").read_text(encoding="utf-8")
+            common = (
+                stage / "firmware" / "include" / "hackylens" /
+                "capability" / "common.h"
+            )
+            self.assertTrue(common.is_file())
+            self.assertIn("firmware/include", project.replace("\\", "/"))
+
+    def test_private_owner_binding_wraps_existing_menu_lifecycle(self):
+        app_header = (ROOT / "firmware" / "src" / "core" / "hk_app.h").read_text(
+            encoding="utf-8"
+        )
+        menu = (ROOT / "firmware" / "src" / "core" / "hk_menu.c").read_text(
+            encoding="utf-8"
+        )
+        startup = (
+            ROOT / "firmware" / "src" / "runtime" / "firmware_startup.c"
+        ).read_text(encoding="utf-8")
+        runtime = (
+            ROOT / "firmware" / "src" / "runtime" /
+            "capability_owner_runtime.c"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("hk_owner_t", app_header)
+        self.assertIn("s_owner_hooks.exit(app)", menu)
+        self.assertIn("s_owner_hooks.enter(app)", menu)
+        self.assertIn("menu_owner_hooks_set(&owner_hooks)", startup)
+        self.assertIn(
+            "hk_capability_core_init(&s_capability_core, NULL, NULL, 0U)",
+            runtime,
+        )
+
     def test_wdt_fault_injection_is_explicit_and_test_build_only(self):
         expected = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         with tempfile.TemporaryDirectory() as directory:
