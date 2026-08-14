@@ -156,7 +156,7 @@ implementation, два ADR имеют согласованный статус, �
 
 ## 2.2 — Common Capability API core
 
-Статус пакета: `in_progress`; ожидается зелёный Phase 2.2 CI.
+Статус пакета: `completed` (2026-08-14); closure CI `31813863025` прошёл.
 
 ### Depends on
 
@@ -168,20 +168,20 @@ implementation, два ADR имеют согласованный статус, �
 
 ### Scope
 
-- [ ] Добавить public типы `hk_result_t`, `hk_deadline_t`, `hk_cancel_t`,
+- [x] Добавить public типы `hk_result_t`, `hk_deadline_t`, `hk_cancel_t`,
   `hk_owner_t`, `hk_lease_t`, `hk_buffer_view_t`, capability ID/version/request
   и immutable info.
-- [ ] Добавить opaque typed-handle convention: каждый capability handle содержит
+- [x] Добавить opaque typed-handle convention: каждый capability handle содержит
   только validated lease token, без public vtable pointer.
-- [ ] Реализовать fixed owner/lease tables, generation validation, grant checking,
+- [x] Реализовать fixed owner/lease tables, generation validation, grant checking,
   acquire/release и owner-wide cleanup.
-- [ ] Определить точное поведение zero handle, copied stale handle, wrong owner,
+- [x] Определить точное поведение zero handle, copied stale handle, wrong owner,
   wrong capability type, generation exhaustion и cleanup failure.
-- [ ] Реализовать affinity validation и provider quarantine/recovery state.
-- [ ] Добавить private provider interface и deterministic host fake.
-- [ ] Добавить private current-app owner binding через существующие registry/menu
+- [x] Реализовать affinity validation и provider quarantine/recovery state.
+- [x] Добавить private provider interface и deterministic host fake.
+- [x] Добавить private current-app owner binding через существующие registry/menu
   entry/exit paths без изменения `hk_app_t` callback signatures.
-- [ ] Не добавлять реальный display/input/external/lights provider.
+- [x] Не добавлять реальный display/input/external/lights provider.
 
 ### Основные файлы
 

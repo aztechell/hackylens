@@ -71,7 +71,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability API common core | Phase 2.2 implemented; closure CI pending |
+| Capability API common core | Phase 2.2 complete; empty production inventory |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
