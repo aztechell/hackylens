@@ -291,7 +291,8 @@ Schema/generator можно откатить целиком до начала co
 
 ## 2.4 — Error/deadline/cancellation model и Time capability
 
-Статус пакета: `in_progress` (2026-08-20); implementation and CI pending.
+Статус пакета: `completed` (2026-08-20); implementation CI green in
+[`Release firmware` run 32340013749](https://github.com/aztechell/hackylens/actions/runs/32340013749).
 
 ### Depends on
 
@@ -303,16 +304,16 @@ Schema/generator можно откатить целиком до начала co
 
 ### Scope
 
-- [ ] Финализировать result code semantics и порядок terminal outcomes.
-- [ ] Реализовать absolute monotonic deadlines, immediate deadline и rejection
+- [x] Финализировать result code semantics и порядок terminal outcomes.
+- [x] Реализовать absolute monotonic deadlines, immediate deadline и rejection
   infinite/over-limit waits.
-- [ ] Реализовать borrowed cancellation token; callback bounded и allocation-free.
-- [ ] Добавить `hackylens.cap.time` version `0.1.0` и K210 adapter.
-- [ ] Добавить `now_us`, `deadline_after_us`, `sleep_until` с cancellation probe не
+- [x] Реализовать borrowed cancellation token; callback bounded и allocation-free.
+- [x] Добавить `hackylens.cap.time` version `0.1.0` и K210 adapter.
+- [x] Добавить `now_us`, `deadline_after_us`, `sleep_until` с cancellation probe не
   реже одного раза в 5 ms.
-- [ ] Мигрировать все native `time_internal` call sites.
-- [ ] Мигрировать MicroPython `ticks_ms`/`sleep_ms` без изменения API v1.
-- [ ] Удалить app/adapter dependence на `internal/time_internal.h`; оставить
+- [x] Мигрировать все native `time_internal` call sites.
+- [x] Мигрировать MicroPython `ticks_ms`/`sleep_ms` без изменения API v1.
+- [x] Удалить app/adapter dependence на `internal/time_internal.h`; оставить
   private boot/runtime use только если он не дублирует capability behavior.
 
 ### Основные файлы
