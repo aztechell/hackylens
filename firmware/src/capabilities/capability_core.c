@@ -149,9 +149,16 @@ static hk_result_t cleanup_lease(
     hk_deadline_t deadline)
 {
     uint16_t provider_index = slot->provider_index;
+    hk_lease_t lease = {
+        (uint32_t)(slot - core->leases), slot->generation, slot->owner,
+        slot->capability_id,
+    };
     hk_result_t result = HK_OK;
 
-    if(core->providers[provider_index]->cleanup)
+    if(core->providers[provider_index]->cleanup_lease)
+        result = core->providers[provider_index]->cleanup_lease(
+            core->providers[provider_index]->context, &lease, deadline);
+    else if(core->providers[provider_index]->cleanup)
         result = core->providers[provider_index]->cleanup(
             core->providers[provider_index]->context, slot->owner, deadline);
     if(core->provider_state[provider_index].active_leases > 0U)

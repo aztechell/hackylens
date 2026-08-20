@@ -1,7 +1,5 @@
 #include "hk_lights.h"
 
-#include "../core/camera_types.h"
-
 #include "defaults.h"
 
 #include "../core/hk_binary.h"
@@ -43,38 +41,4 @@ void lights_rgb_set(uint8_t enabled, uint8_t red, uint8_t green, uint8_t blue)
     hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL0, enabled && r > 0);
     hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL1, enabled && g > 0);
     hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL2, enabled && b > 0);
-}
-
-void lights_camera_outputs_off(void)
-{
-    lights_illum_set(0, 0);
-    lights_rgb_set(0, 0, 0, 0);
-}
-
-void lights_camera_set(camera_light_mode_t mode, uint8_t level, uint8_t red, uint8_t green, uint8_t blue)
-{
-    uint8_t duty = clamp_u8(level, 0, 100);
-    double scale = (double)duty / 100.0;
-
-    if(duty == 0)
-    {
-        lights_camera_outputs_off();
-        return;
-    }
-
-    if(mode == CAMERA_LIGHT_RGB)
-    {
-        lights_illum_set(0, 0);
-        hal_pwm_set(RGB_PWM_DEVICE, RGB_PWM_CHANNEL0, PWM_FREQ_HZ, scale * (double)clamp_u8(red, 0, 100) / 100.0);
-        hal_pwm_set(RGB_PWM_DEVICE, RGB_PWM_CHANNEL1, PWM_FREQ_HZ, scale * (double)clamp_u8(green, 0, 100) / 100.0);
-        hal_pwm_set(RGB_PWM_DEVICE, RGB_PWM_CHANNEL2, PWM_FREQ_HZ, scale * (double)clamp_u8(blue, 0, 100) / 100.0);
-        hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL0, red > 0);
-        hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL1, green > 0);
-        hal_pwm_enable(RGB_PWM_DEVICE, RGB_PWM_CHANNEL2, blue > 0);
-        return;
-    }
-
-    lights_rgb_set(0, 0, 0, 0);
-    hal_pwm_set(LED_PWM_DEVICE, LED_PWM_CHANNEL, PWM_FREQ_HZ, scale);
-    hal_pwm_enable(LED_PWM_DEVICE, LED_PWM_CHANNEL, 1);
 }

@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <hackylens/capability/lights.h>
+
 #include "hk_lcd.h"
 
 #define LCD_W 320U
@@ -37,13 +39,11 @@ int plic_irq_disable(int interrupt);
 
 void external_link_service_suspend(void);
 void external_link_service_resume(void);
-void illum_led_apply(void);
-void rgb_led_apply(void);
+void settings_lights_suspend(uint32_t channels);
+void settings_lights_restore(uint32_t channels);
+hk_owner_t capability_client_consumer_owner(const char *consumer_id);
 void board_external_link_i2c_pins(void);
 uint32_t hk_input_state(void);
-void lights_illum_set(uint8_t enabled, uint8_t brightness);
-void lights_rgb_set(uint8_t enabled, uint8_t red,
-                    uint8_t green, uint8_t blue);
 void hal_external_uart_init(uint32_t baud);
 size_t hal_external_uart_receive(uint8_t *data, size_t length);
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t length);

@@ -1,91 +1,137 @@
+#include "settings_lights.h"
+
+#include <stddef.h>
+
+#include <hackylens/capability/lights.h>
+
 #include "settings_service.h"
+#include "../capabilities/capability_client_binding.h"
 
-#include <stdio.h>
+typedef struct
+{
+    const char *consumer_id;
+    uint32_t channel;
+    uint64_t feature;
+    hk_owner_t owner;
+    hk_lights_t handle;
+} settings_light_lease_t;
 
-#include "../core/camera_types.h"
-#include "../core/hk_binary.h"
-#include "../drivers/hk_lights.h"
-#include "hk_config.h"
-#if HK_ENABLE_CAMERA_FEATURE
-#include "camera_light.h"
-#include "camera_session_preferences.h"
-#endif
+static settings_light_lease_t s_backlight = {
+    "consumer:settings-lights", HK_LIGHTS_CHANNEL_BACKLIGHT,
+    HK_LIGHTS_FEATURE_BACKLIGHT, HK_OWNER_NONE, {HK_LEASE_NONE},
+};
+static settings_light_lease_t s_illumination = {
+    "consumer:settings-lights", HK_LIGHTS_CHANNEL_ILLUMINATION,
+    HK_LIGHTS_FEATURE_ILLUMINATION, HK_OWNER_NONE, {HK_LEASE_NONE},
+};
+static settings_light_lease_t s_rgb = {
+    "consumer:settings-lights", HK_LIGHTS_CHANNEL_RGB,
+    HK_LIGHTS_FEATURE_RGB, HK_OWNER_NONE, {HK_LEASE_NONE},
+};
+
+static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
+{
+    return (uint8_t)(left.slot == right.slot &&
+                     left.generation == right.generation);
+}
+
+static hk_result_t settings_light_acquire(settings_light_lease_t *light)
+{
+    hk_capability_request_t request = HK_LIGHTS_REQUEST_0_1_INIT;
+    hk_owner_t owner;
+
+    if(!light)
+        return HK_ERR_INVALID_ARGUMENT;
+    owner = capability_client_consumer_owner(light->consumer_id);
+    if(hk_owner_is_zero(owner))
+        return HK_ERR_CAPABILITY_ABSENT;
+    if(!hk_lease_is_zero(&light->handle.lease) &&
+       owner_equal(owner, light->owner))
+        return HK_OK;
+    light->handle.lease = HK_LEASE_NONE;
+    light->owner = owner;
+    request.required_features = light->feature;
+    return hk_lights_acquire(
+        owner, &request, light->channel, &light->handle);
+}
+
+static void settings_light_release(settings_light_lease_t *light)
+{
+    if(!light || hk_lease_is_zero(&light->handle.lease))
+        return;
+    (void)hk_lights_release(
+        light->owner, HK_DEADLINE_IMMEDIATE, &light->handle);
+}
 
 void screen_brightness_apply(void)
 {
     settings_set_screen_brightness(settings_screen_brightness());
-    lights_screen_backlight_set(settings_screen_brightness());
+    if(settings_light_acquire(&s_backlight) == HK_OK)
+        (void)hk_lights_set_level(
+            s_backlight.owner, &s_backlight.handle,
+            HK_LIGHTS_CHANNEL_BACKLIGHT,
+            (uint16_t)settings_screen_brightness() * 10U,
+            HK_DEADLINE_IMMEDIATE, NULL);
 }
 
 void screen_brightness_off(void)
 {
-    lights_screen_backlight_off();
+    if(settings_light_acquire(&s_backlight) == HK_OK)
+        (void)hk_lights_set_level(
+            s_backlight.owner, &s_backlight.handle,
+            HK_LIGHTS_CHANNEL_BACKLIGHT, 0U,
+            HK_DEADLINE_IMMEDIATE, NULL);
 }
 
 void illum_led_apply(void)
 {
+    uint16_t level;
+
     settings_set_led_brightness(settings_led_brightness());
-    lights_illum_set(settings_led_enabled(), settings_led_brightness());
+    level = settings_led_enabled() ?
+            (uint16_t)settings_led_brightness() * 10U : 0U;
+    if(settings_light_acquire(&s_illumination) == HK_OK)
+        (void)hk_lights_set_level(
+            s_illumination.owner, &s_illumination.handle,
+            HK_LIGHTS_CHANNEL_ILLUMINATION, level,
+            HK_DEADLINE_IMMEDIATE, NULL);
 }
 
 void rgb_led_apply(void)
 {
+    uint16_t red;
+    uint16_t green;
+    uint16_t blue;
+
     settings_set_rgb_red(settings_rgb_red());
     settings_set_rgb_green(settings_rgb_green());
     settings_set_rgb_blue(settings_rgb_blue());
-    lights_rgb_set(settings_rgb_enabled(), settings_rgb_red(), settings_rgb_green(), settings_rgb_blue());
+    red = settings_rgb_enabled() ? (uint16_t)settings_rgb_red() * 10U : 0U;
+    green = settings_rgb_enabled() ?
+            (uint16_t)settings_rgb_green() * 10U : 0U;
+    blue = settings_rgb_enabled() ? (uint16_t)settings_rgb_blue() * 10U : 0U;
+    if(settings_light_acquire(&s_rgb) == HK_OK)
+        (void)hk_lights_set_rgb(
+            s_rgb.owner, &s_rgb.handle, red, green, blue,
+            HK_DEADLINE_IMMEDIATE, NULL);
 }
 
-const char *camera_light_mode_label(camera_light_mode_t mode)
+void settings_lights_suspend(uint32_t channels)
 {
-    return mode == CAMERA_LIGHT_RGB ? "RGB" : "LED";
+    if(channels & HK_LIGHTS_CHANNEL_BACKLIGHT)
+        settings_light_release(&s_backlight);
+    if(channels & HK_LIGHTS_CHANNEL_ILLUMINATION)
+        settings_light_release(&s_illumination);
+    if(channels & HK_LIGHTS_CHANNEL_RGB)
+        settings_light_release(&s_rgb);
 }
 
-#if HK_ENABLE_CAMERA_FEATURE
-void camera_light_outputs_off(void)
+void settings_lights_restore(uint32_t channels)
 {
-    lights_camera_outputs_off();
+    if(channels & HK_LIGHTS_CHANNEL_BACKLIGHT)
+        screen_brightness_apply();
+    if(channels & HK_LIGHTS_CHANNEL_ILLUMINATION)
+        illum_led_apply();
+    if(channels & HK_LIGHTS_CHANNEL_RGB)
+        rgb_led_apply();
 }
-
-void camera_light_apply(void)
-{
-    uint8_t level = clamp_u8(camera_service_light_level(), 0, 100);
-
-    camera_service_set_light_level(level);
-    lights_camera_set(camera_session_preferences_light_mode(),
-                      level,
-                      camera_session_preferences_rgb_red(),
-                      camera_session_preferences_rgb_green(),
-                      camera_session_preferences_rgb_blue());
-}
-
-void camera_light_restore_global(void)
-{
-    camera_service_set_light_active(0);
-    camera_service_set_light_level(0);
-    camera_light_outputs_off();
-    illum_led_apply();
-    rgb_led_apply();
-}
-
-void camera_light_adjust(int8_t delta)
-{
-    int16_t next = (int16_t)camera_service_light_level() + (int16_t)delta * 10;
-
-    if(next < 0)
-        next = 0;
-    if(next > 100)
-        next = 100;
-    if((uint8_t)next == camera_service_light_level())
-        return;
-
-    camera_service_set_light_level((uint8_t)next);
-    camera_light_apply();
-    printf("[CAM] light mode=%s level=%u rgb=%u/%u/%u\r\n",
-           camera_light_mode_label(camera_session_preferences_light_mode()),
-           camera_service_light_level(),
-           camera_session_preferences_rgb_red(),
-           camera_session_preferences_rgb_green(),
-           camera_session_preferences_rgb_blue());
-}
-#endif

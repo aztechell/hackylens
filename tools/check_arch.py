@@ -538,6 +538,9 @@ def layout_failures() -> list[str]:
         ROOT / "firmware" / "include" / "hackylens" / "capability" / "time.h",
         ROOT / "firmware" / "src" / "capabilities" / "time.c",
         ROOT / "platforms" / "k210" / "capabilities" / "time_adapter.c",
+        ROOT / "firmware" / "include" / "hackylens" / "capability" / "lights.h",
+        ROOT / "firmware" / "src" / "capabilities" / "lights.c",
+        ROOT / "platforms" / "k210" / "capabilities" / "lights_adapter.c",
         ROOT / "firmware" / "app_requirements.toml",
         ROOT / "firmware" / "capability_consumers.toml",
         ROOT / "platforms" / "k210" / "capabilities.toml",
@@ -564,6 +567,24 @@ def layout_failures() -> list[str]:
                     f"{relative(app_source)}: app time must use the public Time capability; "
                     f"found {forbidden_time_call}"
                 )
+    for consumer_root in (
+        SRC / "apps", SRC / "controllers", SRC / "services", SRC / "runtime",
+        SRC / "ui", ROOT / "platforms" / "k210" / "startup",
+    ):
+        for source in sorted(consumer_root.rglob("*")):
+            if source.suffix not in {".c", ".h"}:
+                continue
+            text = source.read_text(encoding="utf-8")
+            for forbidden_light_access in (
+                "hk_lights.h", "lights_screen_backlight_set",
+                "lights_screen_backlight_off", "lights_illum_set",
+                "lights_rgb_set",
+            ):
+                if forbidden_light_access in text:
+                    failures.append(
+                        f"{relative(source)}: light consumers must use the public "
+                        f"Lights capability; found {forbidden_light_access}"
+                    )
     for path in sorted(LEGACY_PATHS | FORBIDDEN_FILES):
         if (SRC / path).exists():
             failures.append(f"{path}: legacy/forbidden path must not exist")

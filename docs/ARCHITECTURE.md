@@ -49,6 +49,12 @@ time; feature modules do not replace each other's core-1 entry point.
 
 The shared `settings_menu` controller is an instance-based UI state machine driven by a constant item descriptor table and owner callbacks. Its passive view owns only LCD rendering. It has no camera, application, storage, persistence, or screen-navigation dependencies; owner controllers retain opening/closing lifecycle and all settings side effects. CAMERA, QR, APRILTAG, OBJECT DETECT, and the system SETTINGS app supply separate descriptor adapters. Cycle-on-OK and edit-on-OK rows share navigation, partial redraw, hold-repeat, commit lifecycle, and optional dynamic choice providers without sharing their data models.
 
+Backlight, illumination, and RGB writes cross the public Lights capability. Its
+fixed K210 provider owns exclusive overlapping channel masks, validates
+cancellation/deadlines before register writes, and performs safe-off cleanup.
+Settings and temporary camera/MicroPython policy remain above that provider;
+only the K210 adapter includes the lights driver interface.
+
 ## Feature modules
 
 All twelve menu applications are self-contained modules: `apps/terminal/`,

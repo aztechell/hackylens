@@ -223,7 +223,7 @@ max_leases = 1
         cube = generator.compose(self.cube, apps, set(), set(), set())
         self.assertEqual(
             [item.id for item in runtime.capabilities],
-            ["hackylens.cap.time", "hackylens.cap.input"],
+            ["hackylens.cap.time", "hackylens.cap.input", "hackylens.cap.lights"],
         )
         self.assertEqual(
             [item.id for item in cube.capabilities],

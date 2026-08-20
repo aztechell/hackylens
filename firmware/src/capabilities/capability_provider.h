@@ -15,6 +15,10 @@
 typedef hk_result_t (*hk_capability_provider_acquire_fn)(
     void *context,
     hk_owner_t owner);
+typedef hk_result_t (*hk_capability_provider_cleanup_lease_fn)(
+    void *context,
+    const hk_lease_t *lease,
+    hk_deadline_t deadline);
 typedef hk_result_t (*hk_capability_provider_cleanup_fn)(
     void *context,
     hk_owner_t owner,
@@ -32,6 +36,7 @@ typedef struct
 {
     void *context;
     hk_capability_provider_acquire_fn acquire;
+    hk_capability_provider_cleanup_lease_fn cleanup_lease;
     hk_capability_provider_cleanup_fn cleanup;
     hk_capability_provider_cleanup_dispatch_fn cleanup_dispatch;
     hk_capability_provider_recover_fn recover;

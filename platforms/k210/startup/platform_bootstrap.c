@@ -4,7 +4,6 @@
 
 #include "../../../firmware/src/internal/hk_board_port.h"
 #include "../../../firmware/src/drivers/hk_lcd.h"
-#include "../../../firmware/src/drivers/hk_lights.h"
 #include "../hal/hal_system.h"
 
 void platform_bootstrap_init_clocks(void)
@@ -18,7 +17,6 @@ void platform_bootstrap_init_hardware(void)
     hk_board_ops.display_prepare();
     lcd_driver_prepare();
     hk_board_ops.lights_prepare();
-    lights_driver_prepare();
     hk_board_ops.buttons_prepare();
 
     printf("[LCD] init original sequence\r\n");

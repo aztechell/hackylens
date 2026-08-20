@@ -209,13 +209,12 @@ static void test_cleanup_is_idempotent(void)
     require_true(g_external_suspend_calls == 1U &&
                  g_external_resume_calls == 1U,
                  "external connector lease must be restored exactly once");
-    require_true(g_illum_restore_calls == 1U && g_rgb_restore_calls == 1U,
-                 "light settings must be restored exactly once");
-    require_true(g_cleanup_event_count == 4U &&
+    require_true(g_illum_restore_calls == 1U && g_rgb_restore_calls == 0U,
+                 "only the changed light setting must be restored once");
+    require_true(g_cleanup_event_count == 3U &&
                  g_cleanup_events[0] == 1U &&
                  g_cleanup_events[1] == 2U &&
-                 g_cleanup_events[2] == 3U &&
-                 g_cleanup_events[3] == 4U,
+                 g_cleanup_events[2] == 4U,
                  "cleanup must follow external, lights, then display order");
 }
 
@@ -389,15 +388,30 @@ void external_link_service_resume(void)
     g_external_resume_calls++;
     g_cleanup_events[g_cleanup_event_count++] = 1U;
 }
-void illum_led_apply(void)
+void settings_lights_suspend(uint32_t channels)
 {
-    g_illum_restore_calls++;
-    g_cleanup_events[g_cleanup_event_count++] = 2U;
+    (void)channels;
 }
-void rgb_led_apply(void)
+void settings_lights_restore(uint32_t channels)
 {
-    g_rgb_restore_calls++;
-    g_cleanup_events[g_cleanup_event_count++] = 3U;
+    if(channels & HK_LIGHTS_CHANNEL_ILLUMINATION)
+    {
+        g_illum_restore_calls++;
+        g_cleanup_events[g_cleanup_event_count++] = 2U;
+    }
+    if(channels & HK_LIGHTS_CHANNEL_RGB)
+    {
+        g_rgb_restore_calls++;
+        g_cleanup_events[g_cleanup_event_count++] = 3U;
+    }
+}
+hk_owner_t capability_client_consumer_owner(const char *consumer_id)
+{
+    hk_owner_t owner = {1U, 1U};
+
+    if(consumer_id && strstr(consumer_id, "rgb"))
+        owner.slot = 2U;
+    return owner;
 }
 void board_external_link_i2c_pins(void) {}
 uint32_t hk_input_state(void) { return 0x0aU; }
@@ -443,18 +457,62 @@ uint8_t lcd_overlay_release(uint32_t run_id)
     return run_id == g_overlay_acquired_run_id;
 }
 
-void lights_illum_set(uint8_t enabled, uint8_t brightness)
+hk_result_t hk_lights_acquire(
+    hk_owner_t owner, const hk_capability_request_t *request,
+    uint32_t channels, hk_lights_t *handle)
 {
-    (void)enabled;
-    (void)brightness;
-    g_light_writes++;
+    static uint32_t generation = 1U;
+
+    (void)request;
+    if(!handle || channels == 0U)
+        return HK_ERR_INVALID_ARGUMENT;
+    handle->lease = (hk_lease_t){
+        channels, generation++, owner, HK_CAPABILITY_ID_LIGHTS,
+    };
+    return HK_OK;
 }
 
-void lights_rgb_set(uint8_t enabled, uint8_t red,
-                    uint8_t green, uint8_t blue)
+hk_result_t hk_lights_release(
+    hk_owner_t owner, hk_deadline_t deadline, hk_lights_t *handle)
 {
-    (void)enabled; (void)red; (void)green; (void)blue;
+    (void)owner;
+    (void)deadline;
+    if(!handle)
+        return HK_ERR_INVALID_ARGUMENT;
+    handle->lease = HK_LEASE_NONE;
+    return HK_OK;
+}
+
+hk_result_t hk_lights_set_level(
+    hk_owner_t owner, const hk_lights_t *handle, uint32_t channel,
+    uint16_t level, hk_deadline_t deadline, const hk_cancel_t *cancel)
+{
+    (void)owner;
+    (void)handle;
+    (void)channel;
+    (void)level;
+    (void)deadline;
+    if(cancel && cancel->probe && cancel->probe(cancel->context))
+        return HK_ERR_CANCELLED;
     g_light_writes++;
+    return HK_OK;
+}
+
+hk_result_t hk_lights_set_rgb(
+    hk_owner_t owner, const hk_lights_t *handle, uint16_t red,
+    uint16_t green, uint16_t blue, hk_deadline_t deadline,
+    const hk_cancel_t *cancel)
+{
+    (void)owner;
+    (void)handle;
+    (void)red;
+    (void)green;
+    (void)blue;
+    (void)deadline;
+    if(cancel && cancel->probe && cancel->probe(cancel->context))
+        return HK_ERR_CANCELLED;
+    g_light_writes++;
+    return HK_OK;
 }
 
 void hal_external_uart_init(uint32_t baud)

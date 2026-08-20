@@ -35,6 +35,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-Werror",
                 "-DMICROPYTHON_BINDING_TESTING",
                 f"-I{ROOT / 'tests'}",
+                f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 str(ROOT / "tests" / "micropython_bindings_harness.c"),

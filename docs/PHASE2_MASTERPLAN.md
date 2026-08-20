@@ -412,6 +412,9 @@ layer и runtime adapter откатываются одним изменение�
 
 ## 2.6 — Lights capability
 
+Статус пакета: `in_progress` (2026-08-20); implementation and local contract
+tests are in progress, CI pending.
+
 ### Depends on
 
 `2.5`.

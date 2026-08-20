@@ -5,8 +5,8 @@
 #include "apriltag_config.h"
 #include "apriltag_detector.h"
 #include "../../core/camera_types.h"
+#include "../../services/camera_light.h"
 #include "../../services/camera_session_preferences.h"
-#include "../../services/settings_lights.h"
 #include "../../services/settings_app_data.h"
 #include "../../services/settings_persistence.h"
 

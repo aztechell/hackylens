@@ -652,13 +652,22 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         self.assertNotIn("app_requirements.toml", source_text)
 
         requirements = build_firmware.load_app_requirements()
-        self.assertIn("lights", requirements["micropython"])
+        self.assertNotIn("lights", requirements["micropython"])
+        capability_requirements = (
+            build_firmware.capability_inventory.load_app_requirements()
+        )
+        self.assertTrue(any(
+            request.id == "hackylens.cap.lights"
+            for request in capability_requirements["micropython"].required
+        ))
         binding_service = (
             ROOT / "firmware" / "src" / "services" /
             "micropython_binding_service.c"
         ).read_text(encoding="utf-8")
-        for token in ("lights_illum_set", "lights_rgb_set"):
+        for token in ("hk_lights_set_level", "hk_lights_set_rgb"):
             self.assertIn(token, binding_service)
+        for token in ("lights_illum_set", "lights_rgb_set", "hk_lights.h"):
+            self.assertNotIn(token, binding_service)
 
     def test_phase1_allows_app_driver_but_forbids_board_hal_and_sdk(self) -> None:
         app = "apps/buttons/buttons_view.c"

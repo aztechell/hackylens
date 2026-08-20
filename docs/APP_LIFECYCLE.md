@@ -22,6 +22,13 @@ the existing `hk_input_snapshot_t` ABI from the runtime loop. The loop adapts
 sequenced `hackylens.cap.input` events; apps and controllers must not access the
 raw button sampler or capability provider state directly.
 
+Light policy services use `hackylens.cap.lights` channel-mask leases. Persisted
+settings keep separate backlight, illumination, and RGB leases; a camera session
+or MicroPython releases only the overlapping settings lease, owns that channel
+through the same K210 provider, reaches safe-off on cleanup, and then lets the
+settings service reacquire and apply its latest values. Sleep switches the
+settings-owned backlight through the same capability rather than the driver.
+
 Reusable settings menus are neutral child sessions rather than screens or applications. `settings_menu` reports a close request to its owner; the owner decides whether BACK resumes a camera, returns to a game, or changes screens. Values, persistence, and immediate hardware effects are provided through owner callbacks. Ending edit mode through OK, BACK, or forced session close emits the same commit callback.
 
 CAMERA and QR each own a settings child session and descriptor table. `owns_screen` maps their shared `SCREEN_CAMERA_SETTINGS` secondary screen back to the correct active app. BACK closes the child session and preserves the existing camera resume, QR resume, or size-reinitialization path. System SETTINGS uses edit-on-OK rows; BACK first commits and leaves edit mode, while a second BACK exits. Its app `exit` callback closes the session so `HKMENU` also commits an active edit.

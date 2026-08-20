@@ -24,5 +24,10 @@ uint8_t camera_service_light_active(void);
 void camera_service_set_light_active(uint8_t active);
 camera_light_mode_t camera_service_toggle_light_mode(void);
 uint8_t camera_service_cycle_rgb_channel(camera_rgb_channel_t channel);
+const char *camera_light_mode_label(camera_light_mode_t mode);
+void camera_light_outputs_off(void);
+void camera_light_apply(void);
+void camera_light_restore_global(void);
+void camera_light_adjust(int8_t delta);
 
 #endif

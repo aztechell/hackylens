@@ -19,6 +19,7 @@ static capability_consumer_owner_t s_consumer_owners[] = {
     {"consumer:object-detect-detector", HK_OWNER_NONE},
     {"consumer:hmpy-service", HK_OWNER_NONE},
     {"consumer:micropython-adapter", HK_OWNER_NONE},
+    {"consumer:settings-lights", HK_OWNER_NONE},
 };
 
 static hk_capability_core_t s_capability_core;

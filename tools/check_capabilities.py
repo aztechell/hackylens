@@ -89,9 +89,9 @@ def validate(root: Path = ROOT) -> list[str]:
         ) or input_capability.max_leases != 16:
             failures.append("input capability must publish the Phase 2.5 shared profile")
         if [item.id for item in composed_by_board["huskylens-sen0305"].capabilities] != [
-            "hackylens.cap.time", "hackylens.cap.input"
+            "hackylens.cap.time", "hackylens.cap.input", "hackylens.cap.lights"
         ]:
-            failures.append("SEN0305 inventory must contain exactly Time and Input")
+            failures.append("SEN0305 inventory must contain exactly Time, Input, and Lights")
         if [item.id for item in composed_by_board["sipeed-maix-cube"].capabilities] != [
             "hackylens.cap.time"
         ]:
@@ -105,6 +105,18 @@ def validate(root: Path = ROOT) -> list[str]:
                 for request in requirements.required
             ):
                 failures.append(f"{app}: canonical required Input capability is missing")
+        lights_apps = {
+            "camera", "qr-camera", "face-detect", "apriltag",
+            "object-detect", "settings", "sleep", "micropython",
+        }
+        for app, requirements in generator.load_app_requirements(apps_path).items():
+            if "lights" in requirements.legacy:
+                failures.append(f"{app}: private lights requirement survived Phase 2.6")
+            if app in lights_apps and not any(
+                request.id == "hackylens.cap.lights"
+                for request in requirements.required
+            ):
+                failures.append(f"{app}: required Lights capability is missing")
     except (generator.CapabilityError, ContractError, OSError, ValueError) as exc:
         failures.append(str(exc))
 

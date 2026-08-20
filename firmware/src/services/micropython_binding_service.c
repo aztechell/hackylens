@@ -3,6 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <hackylens/capability/lights.h>
+
 #if defined(MICROPYTHON_BINDING_TESTING)
 #include "micropython_binding_test_platform.h"
 #else
@@ -17,7 +19,6 @@
 #include "../internal/hk_board_port.h"
 #include "../config/display_config.h"
 #include "../drivers/hk_lcd.h"
-#include "../drivers/hk_lights.h"
 #include "hal_external_link.h"
 #include "hal_time.h"
 #endif
@@ -127,7 +128,11 @@ typedef struct
 static micropython_binding_control_t g_control_storage
     __attribute__((aligned(64)));
 static uint8_t g_external_owned;
-static uint8_t g_lights_owned;
+static uint32_t g_lights_owned;
+static hk_lights_t g_illumination_lights;
+static hk_owner_t g_illumination_owner;
+static hk_lights_t g_rgb_lights;
+static hk_owner_t g_rgb_owner;
 static binding_external_mode_t g_external_mode;
 static uint32_t g_uart_baud = 115200U;
 static binding_uart_write_t g_uart_write;
@@ -160,6 +165,62 @@ static uint8_t binding_display_cancelled(void *context)
     return !cancel_context || binding_request_cancelled(
         cancel_context->control, cancel_context->ticket,
         cancel_context->run_id);
+}
+
+static uint8_t binding_lights_cancelled(const void *context)
+{
+    const binding_display_cancel_context_t *cancel_context =
+        (const binding_display_cancel_context_t *)context;
+
+    return !cancel_context || binding_request_cancelled(
+        cancel_context->control, cancel_context->ticket,
+        cancel_context->run_id);
+}
+
+static hk_result_t binding_claim_light(
+    const char *consumer_id, uint32_t channel, uint64_t feature,
+    hk_lights_t *handle, hk_owner_t *owner)
+{
+    hk_capability_request_t request = HK_LIGHTS_REQUEST_0_1_INIT;
+    hk_owner_t candidate;
+    hk_result_t result;
+
+    if(!handle || !owner)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!hk_lease_is_zero(&handle->lease))
+        return HK_OK;
+    candidate = capability_client_consumer_owner(consumer_id);
+    if(hk_owner_is_zero(candidate))
+        return HK_ERR_STALE_HANDLE;
+    request.required_features = feature;
+    settings_lights_suspend(channel);
+    result = hk_lights_acquire(candidate, &request, channel, handle);
+    if(result != HK_OK)
+    {
+        settings_lights_restore(channel);
+        return result;
+    }
+    *owner = candidate;
+    g_lights_owned |= channel;
+    return HK_OK;
+}
+
+static micropython_binding_result_t binding_lights_result(hk_result_t result)
+{
+    if(result == HK_OK)
+        return MICROPYTHON_BINDING_OK;
+    if(result == HK_ERR_INVALID_ARGUMENT || result == HK_ERR_LIMIT)
+        return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+    if(result == HK_ERR_CANCELLED || result == HK_ERR_DEADLINE_EXCEEDED)
+        return MICROPYTHON_BINDING_ERROR_TIMEOUT;
+    if(result == HK_ERR_BUSY)
+        return MICROPYTHON_BINDING_ERROR_BUSY;
+    return MICROPYTHON_BINDING_ERROR_IO;
+}
+
+static uint16_t binding_rgb_level(uint32_t value)
+{
+    return (uint16_t)((value * 1000U + 127U) / 255U);
 }
 
 static void binding_display_stage_reset(uint32_t run_id)
@@ -536,18 +597,72 @@ static micropython_binding_result_t binding_execute(
         return MICROPYTHON_BINDING_ERROR_IO;
     }
     case MICROPYTHON_BINDING_OP_LED:
+    {
+        binding_display_cancel_context_t cancel_context = {
+            control, ticket, run_id,
+        };
+        hk_cancel_t cancel = {
+            binding_lights_cancelled, &cancel_context,
+        };
+        hk_result_t result;
+        uint8_t already_owned =
+            (g_lights_owned & HK_LIGHTS_CHANNEL_ILLUMINATION) != 0U;
+
         if(a[0] > 100U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        lights_illum_set(a[0] != 0U, (uint8_t)a[0]);
-        g_lights_owned = 1U;
-        return MICROPYTHON_BINDING_OK;
+        result = binding_claim_light(
+            "consumer:micropython-adapter",
+            HK_LIGHTS_CHANNEL_ILLUMINATION,
+            HK_LIGHTS_FEATURE_ILLUMINATION,
+            &g_illumination_lights, &g_illumination_owner);
+        if(result == HK_OK)
+            result = hk_lights_set_level(
+                g_illumination_owner, &g_illumination_lights,
+                HK_LIGHTS_CHANNEL_ILLUMINATION, (uint16_t)a[0] * 10U,
+                HK_DEADLINE_IMMEDIATE, &cancel);
+        if(result != HK_OK && !already_owned &&
+           !hk_lease_is_zero(&g_illumination_lights.lease))
+        {
+            (void)hk_lights_release(
+                g_illumination_owner, HK_DEADLINE_IMMEDIATE,
+                &g_illumination_lights);
+            g_lights_owned &= ~HK_LIGHTS_CHANNEL_ILLUMINATION;
+            settings_lights_restore(HK_LIGHTS_CHANNEL_ILLUMINATION);
+        }
+        return binding_lights_result(result);
+    }
     case MICROPYTHON_BINDING_OP_RGB:
+    {
+        binding_display_cancel_context_t cancel_context = {
+            control, ticket, run_id,
+        };
+        hk_cancel_t cancel = {
+            binding_lights_cancelled, &cancel_context,
+        };
+        hk_result_t result;
+        uint8_t already_owned =
+            (g_lights_owned & HK_LIGHTS_CHANNEL_RGB) != 0U;
+
         if(a[0] > 255U || a[1] > 255U || a[2] > 255U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        lights_rgb_set((a[0] | a[1] | a[2]) != 0U,
-                       (uint8_t)a[0], (uint8_t)a[1], (uint8_t)a[2]);
-        g_lights_owned = 1U;
-        return MICROPYTHON_BINDING_OK;
+        result = binding_claim_light(
+            "consumer:micropython-adapter", HK_LIGHTS_CHANNEL_RGB,
+            HK_LIGHTS_FEATURE_RGB, &g_rgb_lights, &g_rgb_owner);
+        if(result == HK_OK)
+            result = hk_lights_set_rgb(
+                g_rgb_owner, &g_rgb_lights,
+                binding_rgb_level(a[0]), binding_rgb_level(a[1]),
+                binding_rgb_level(a[2]), HK_DEADLINE_IMMEDIATE, &cancel);
+        if(result != HK_OK && !already_owned &&
+           !hk_lease_is_zero(&g_rgb_lights.lease))
+        {
+            (void)hk_lights_release(
+                g_rgb_owner, HK_DEADLINE_IMMEDIATE, &g_rgb_lights);
+            g_lights_owned &= ~HK_LIGHTS_CHANNEL_RGB;
+            settings_lights_restore(HK_LIGHTS_CHANNEL_RGB);
+        }
+        return binding_lights_result(result);
+    }
     case MICROPYTHON_BINDING_OP_UART_INIT:
         if(a[0] < 1200U || a[0] > 2000000U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
@@ -763,11 +878,14 @@ void micropython_binding_service_cleanup(void)
         binding_i2c_stop();
     if(g_external_owned)
         external_link_service_resume();
-    if(g_lights_owned)
-    {
-        illum_led_apply();
-        rgb_led_apply();
-    }
+    if(g_lights_owned & HK_LIGHTS_CHANNEL_ILLUMINATION)
+        (void)hk_lights_release(
+            g_illumination_owner, HK_DEADLINE_IMMEDIATE,
+            &g_illumination_lights);
+    if(g_lights_owned & HK_LIGHTS_CHANNEL_RGB)
+        (void)hk_lights_release(
+            g_rgb_owner, HK_DEADLINE_IMMEDIATE, &g_rgb_lights);
+    settings_lights_restore(g_lights_owned);
     if(g_display_owned)
         (void)lcd_overlay_release(run_id);
     g_external_owned = 0U;
