@@ -125,8 +125,10 @@ int main(void)
 {
     hk_input_t input_a;
     hk_input_t input_b;
+    hk_input_t input_c;
     hk_input_event_t event;
     hk_input_info_t info;
+    hk_owner_t owner_c;
     uint32_t state;
     uint64_t now = 0U;
 
@@ -212,8 +214,19 @@ int main(void)
         s_owner_a, (hk_deadline_t){UINT64_MAX}, &input_a) ==
         HK_ERR_INVALID_ARGUMENT);
     CHECK(hk_input_next_event(s_owner_a, &input_a, &event) == HK_PENDING);
+
+    /* Closing an owner cleans up its live lease and retires the old handle. */
+    CHECK(hk_capability_core_owner_close(
+        &s_core, s_owner_a, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
+    CHECK(hk_input_get_state(s_owner_a, &input_a, &state) ==
+          HK_ERR_STALE_HANDLE);
+    CHECK(hk_capability_core_owner_open(
+        &s_core, &s_grant, 1U, &owner_c) == HK_OK);
+    CHECK(hk_input_acquire(owner_c, &s_grant.request, &input_c) == HK_OK);
+    CHECK(hk_input_get_state(owner_c, &input_c, &state) == HK_OK);
+    CHECK(state == s_state.stable_state);
     CHECK(hk_input_release(
-        s_owner_a, HK_DEADLINE_IMMEDIATE, &input_a) == HK_OK);
+        owner_c, HK_DEADLINE_IMMEDIATE, &input_c) == HK_OK);
     CHECK(hk_input_get_state(s_owner_b, &input_b, &state) == HK_OK);
     CHECK(hk_input_release(
         s_owner_b, HK_DEADLINE_IMMEDIATE, &input_b) == HK_OK);

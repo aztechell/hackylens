@@ -25,9 +25,9 @@ Version `0.1.0` requires all three features for the HackyLens button profile.
 ## Logical state and events
 
 Logical button identifiers are public bit values independent of GPIO numbers,
-electrical polarity, or board routes. The initial profile contains Up, Down,
-Right/OK, and Back. A platform mapping translates physical inputs to those
-logical bits.
+electrical polarity, or board routes. The initial profile contains Left, OK,
+Right, and Back. A platform mapping translates physical inputs to those logical
+bits.
 
 The public event shape is:
 
@@ -48,10 +48,12 @@ bits changed by the event. `pressed = changed & state` and
 `released = changed & ~state`. One accepted transition produces one event;
 holding a button does not repeat an edge.
 
-The initial K210 provider samples no less often than every 10 ms and accepts a
-transition after 20 ms of continuous stable raw state. Event timestamp is the
-monotonic time at which the stable transition is accepted, not the first raw
-bounce.
+The runtime services the initial K210 provider on a 10 ms target cadence in the
+existing cooperative superloop. Raw electrical sampling is gated to no more
+than once per 10 ms; blocking core-0 work can delay a sample. The provider
+accepts a transition after 20 ms of continuous stable raw state. Event timestamp
+is the monotonic time at which the stable transition is accepted, not the first
+raw bounce.
 
 ## Public operations
 
@@ -69,9 +71,10 @@ runtime loop.
 
 ## Bounded storage and overflow
 
-The initial provider uses one explicit static ring of eight events. The ring is
-provider storage declared in inventory limits; it is not a hidden task or
-queue.
+The initial provider uses one explicit static ring of eight events. Its capacity
+is reported by `hk_input_get_info`; the ring is fixed provider storage accounted
+for by the Phase 2 static-RAM evidence, not an inventory limit. It is not a
+hidden task or queue.
 
 When a lease falls behind overwritten events, `hk_input_next_event` returns
 `HK_ERR_OVERFLOW`. The output reports latest stable state and exact dropped
