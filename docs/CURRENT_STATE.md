@@ -65,7 +65,11 @@ UART/I2C protocol or routed-peripheral semantics.
   state provider for the native dispatcher and MicroPython. Phase 2.6 adds
   non-overlapping channel-mask ownership for backlight, illumination, and RGB,
   safe-off cleanup, and persisted settings restoration after temporary leases.
-  Display and external-link remain honestly absent until their own packages.
+  Phase 2.7 freezes Display 0.1 semantics with a deterministic fixed-capacity
+  host fake, including planes, clipped batches, borrowed surfaces, dirty-region
+  transfer accounting, retry, repair, and cleanup. It deliberately does not add
+  a K210 Display provider or migrate production consumers. Display and
+  external-link therefore remain honestly absent from runtime inventory.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -81,7 +85,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.6 Time + Input + Lights providers; two initial providers still absent |
+| Capability build composition | Phase 2.7 contract; Time + Input + Lights runtime providers, Display + external-link absent |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
@@ -147,7 +151,9 @@ hardware qualification is a separate future gate.
 ## Remaining architecture work
 
 Later Phase 2 packages add the remaining mapped providers to the generated
-inventory and migrate display and external-link. They may
+inventory and migrate display and external-link. The Display contract/fake is
+already fixed, but it is not runtime support or hardware qualification. Those
+packages may
 forbid direct application-to-driver dependencies as migrations complete.
 Public App Runtime/context, app manifests, App SDK, and public storage, camera,
 vision, and AI capabilities remain Phase 3+.

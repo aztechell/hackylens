@@ -76,6 +76,9 @@ typedef struct
     uint32_t flags;
 } hk_buffer_view_t;
 
+#define HK_BUFFER_ACCESS_READABLE (UINT32_C(1) << 0)
+#define HK_BUFFER_ACCESS_WRITABLE (UINT32_C(1) << 1)
+
 typedef struct
 {
     uint16_t struct_size;

@@ -469,6 +469,9 @@ channels без определённого cleanup owner.
 
 ## 2.7 — Display contract и fake
 
+Статус пакета: `in_progress` (2026-08-20); public contract and deterministic
+host fake are under implementation, CI pending.
+
 ### Depends on
 
 `2.6`.

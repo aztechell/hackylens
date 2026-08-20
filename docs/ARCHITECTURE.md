@@ -55,6 +55,12 @@ cancellation/deadlines before register writes, and performs safe-off cleanup.
 Settings and temporary camera/MicroPython policy remain above that provider;
 only the K210 adapter includes the lights driver interface.
 
+Display 0.1 is currently a public contract plus a deterministic fixed-capacity
+host fake. It fixes plane ownership, batch/surface staging, clipped dirty
+regions, borrowed-buffer lifetime, present retry, repair, and cleanup semantics
+before any production LCD migration. The K210 LCD driver, views, composition,
+and runtime inventory remain unchanged until Phase 2.8.
+
 ## Feature modules
 
 All twelve menu applications are self-contained modules: `apps/terminal/`,

@@ -24,6 +24,10 @@ Feature bits:
 | `1 << 5` | `HK_DISPLAY_FEATURE_BORROWED_SURFACE` | Writable borrowed surface |
 | `1 << 6` | `HK_DISPLAY_FEATURE_TEXT` | Bounded text command |
 
+The initial pixel-view format is `HK_DISPLAY_FORMAT_RGB565_BE`. Colors passed
+as scalar `uint16_t` values use the usual `rrrrrggggggbbbbb` bit layout. Pixel
+buffers use RGB565 big-endian byte order, independent of host endianness.
+
 ## Coordinates, rectangles, and clipping
 
 The logical origin is top-left. X grows right and Y grows down. Rectangles are
@@ -33,13 +37,23 @@ half-open: `[x, x + width)` and `[y, y + height)`. Public coordinates are signed
 All arithmetic MUST be checked before conversion to driver coordinates. An
 overflow returns `HK_ERR_INVALID_ARGUMENT`. A valid rectangle wholly outside
 the active clip is a successful no-op. Partly visible primitives and pixel
-views are clipped to the intersection.
+views are clipped to the intersection. `x + width` and `y + height` MUST fit in
+the signed 32-bit coordinate domain. A zero-area rectangle is a successful
+no-op and consumes no command, text, borrowed-view, or dirty-list capacity.
+
+`set_clip(NULL)` selects the full logical display. A non-null clip replaces the
+current clip and is intersected with the display bounds; it is not relative to
+the previous clip. The fake command log records post-clip rectangles.
 
 ## Info, planes, and ownership
 
 `hk_display_info_t` reports width, height, pixel formats, planes, alignment,
 maximum commands, text bytes, dirty rectangles, borrowed surfaces, transfer
 slice, and maximum present duration.
+
+`buffer_alignment_bytes` applies to the first byte of a borrowed pixel view;
+`row_alignment_bytes` applies to every stride. `transfer_slice_bytes` bounds
+one cancellation/deadline-free hardware transfer interval.
 
 `BASE` and `OVERLAY` are separate exclusive resource planes. At most one owner
 leases each plane. Base and overlay MAY be leased concurrently when the overlay
@@ -60,8 +74,22 @@ The public batch lifecycle is:
 7. release the plane.
 
 Primitive parameters and bounded text are copied into declared static batch
-storage. Large pixel views are borrowed until terminal present or abort.
-Limits are checked before mutating the staged batch.
+storage. Large pixel views are borrowed until successful present, abort, or release.
+A cancelled, deadline-exceeded, or failed present retains the borrow because
+the same staged batch remains retryable. The caller MUST keep that storage
+unchanged and valid across the retry interval.
+
+`begin_batch` is valid only in the idle lease state. Batch and borrowed-surface
+staging are mutually exclusive. A successful present returns the lease to idle
+and advances committed generation; `abort` returns it to idle without changing
+logical committed state. Calling batch/surface creation while already staged,
+or present/abort while idle, returns `HK_ERR_INVALID_STATE`.
+
+Command, text, dirty-list, borrowed-view, format, stride, size, and alignment
+limits are checked transactionally. On `HK_ERR_LIMIT` or validation failure the
+provider MUST NOT mutate staged state or consume any capacity. Text bytes are
+opaque bounded UTF-8 storage in version `0.1.0`; rendering invalid byte
+sequences is not defined.
 
 Dirty regions are derived from clipped commands and explicit marks. A provider
 may merge overlapping regions to remain within its advertised limit, but when
@@ -72,8 +100,10 @@ incremental batch to full-screen merely for implementation convenience.
 
 `surface_acquire` returns an implementation-owned writable
 `hk_buffer_view_t` with explicit format, stride, size, and alignment. The caller
-may access it only until surface present, abort, or plane release. The caller
-MUST mark every modified region.
+may access it only until successful present, abort, or release. A failed present
+retains the borrow for retry. The caller MUST mark every modified region;
+surface acquisition alone does not imply full-screen damage. Returned flags
+include both `HK_BUFFER_ACCESS_READABLE` and `HK_BUFFER_ACCESS_WRITABLE`.
 
 The provider MUST NOT allocate a second full framebuffer implicitly. Additional
 full-frame storage is a separate advertised resource and is absent from the
@@ -83,7 +113,10 @@ initial K210 provider.
 
 One caller deadline applies to every dirty region, row, transport chunk, and
 retry attempt inside that invocation. The provider checks cancellation between
-bounded transfer slices.
+bounded transfer slices. Work whose deterministic bound exceeds
+`maximum_present_duration_us` returns `HK_ERR_LIMIT` before transfer. An
+already-expired finite deadline returns `HK_ERR_DEADLINE_EXCEEDED` before the
+first transfer; `HK_DEADLINE_IMMEDIATE` does not invent a replacement deadline.
 
 A successful present atomically advances the logical committed batch. Physical
 panels may expose partial progress while a transfer is running. If present is
@@ -96,8 +129,19 @@ cancelled or fails after physical progress:
 - the next successful present or bounded release cleanup repairs the affected
   region before claiming a consistent committed display.
 
+Failure before physical progress leaves `needs_repair` unchanged. Failure after
+any physical progress records the complete affected staged damage, not merely
+the last completed slice. Retry repairs previous committed content first, then
+replays the unchanged staged operation. Only complete success advances logical
+committed generation.
+
 Overlay release discards its staged/committed overlay and restores the current
-base content. Cleanup uses the caller's release deadline and is not cancellable.
+base content. Base release repairs any outstanding physical damage before
+dropping ownership. Cleanup uses the caller's original release deadline and is
+not cancellable. An already-expired cleanup deadline causes no hardware effect
+and preserves an ordinary lease for bounded retry. Cleanup failure after
+physical progress follows the common lease invalidation and provider quarantine
+rules.
 
 ## Required resources and consumers
 

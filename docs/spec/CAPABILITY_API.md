@@ -320,6 +320,9 @@ implementation-owned and when the borrow ends.
 
 - Providers MUST validate pointer, size, stride, alignment, access flags, and
   capability limits before hardware access.
+- `HK_BUFFER_ACCESS_READABLE` and `HK_BUFFER_ACCESS_WRITABLE` are the public
+  `hk_buffer_view_t.flags` bits; capability contracts state which are required
+  or returned.
 - A caller MUST NOT mutate a borrowed TX/input buffer before terminal
   completion.
 - A caller MUST NOT read an RX/output buffer before terminal completion unless
