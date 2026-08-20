@@ -597,10 +597,9 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ## 2.9 — External-link contract и fake
 
-Статус пакета: `completed` (2026-08-21); public ABI, deterministic fake, both
-firmware profiles, and resource evidence passed in
-[`Release firmware` run 32411147831](https://github.com/aztechell/hackylens/actions/runs/32411147831).
-K210 provider и consumer migration остаются границей `2.10`.
+Статус пакета: `in_progress`; corrective release lifecycle и I2C-target preload
+semantics реализуются и повторно проходят полный CI gate. Предыдущий successful
+run не закрывает исправленный пакет.
 
 ### Depends on
 
@@ -613,19 +612,21 @@ K210 provider и consumer migration остаются границей `2.10`.
 
 ### Scope
 
-- [x] Добавить `hackylens.cap.external-link` version `0.1.0`.
-- [x] Features: UART, I2C controller, I2C target.
-- [x] Один exclusive connector lease для shared physical routing.
-- [x] Определить mode configuration и validation без board ID.
-- [x] Определить async operation token: begin, poll, cancel, terminal result.
-- [x] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
+- [~] Добавить `hackylens.cap.external-link` version `0.1.0`.
+- [~] Features: UART, I2C controller, I2C target.
+- [~] Один exclusive connector lease для shared physical routing.
+- [~] Определить mode configuration и validation без board ID.
+- [~] Определить async operation token: begin, poll, cancel, terminal result.
+- [~] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
   bytes.
-- [x] UART completion требует empty FIFO и idle shift register.
-- [x] I2C transfer использует один deadline на весь transaction и возвращает
+- [~] UART completion требует empty FIFO и idle shift register.
+- [~] I2C transfer использует один deadline на весь transaction и возвращает
   определённые NACK/timeout/cancel results.
-- [x] TX/RX buffer ownership действует до terminal result.
-- [x] Реализовать deterministic fake с routing/mode/buffer/event log.
-- [x] Production external service и Python implementation пока не менять.
+- [~] I2C target использует one-shot preload следующего READ с deterministic
+  truncation/zero-fill/replacement/cleanup semantics.
+- [~] TX/RX buffer ownership действует до terminal result.
+- [~] Реализовать deterministic fake с routing/mode/buffer/event log.
+- [~] Production external service и Python implementation пока не менять.
 
 ### Основные файлы
 
@@ -643,6 +644,9 @@ K210 provider и consumer migration остаются границей `2.10`.
 - cancellation before and during operation;
 - original deadline не меняется между polls;
 - no late writes после terminal cancel;
+- idempotent zero release, stale partial/copy и wrong typed handle;
+- I2C target preload replacement, no-preload fill, truncation, one-shot и
+  cleanup;
 - borrowed buffer lifetime.
 
 ### Exit gate

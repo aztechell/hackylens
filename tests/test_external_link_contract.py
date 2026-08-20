@@ -54,6 +54,8 @@ class ExternalLinkContractTests(unittest.TestCase):
                            "external-link capability ID changed");
             _Static_assert(HK_EXTERNAL_LINK_FEATURES_0_1 == 7U,
                            "external-link 0.1 feature bits changed");
+            _Static_assert(HK_EXTERNAL_LINK_TARGET_FILL_BYTE == 0U,
+                           "target fill byte changed");
             int main(void) {
                 hk_capability_request_t request =
                     HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
@@ -110,9 +112,20 @@ class ExternalLinkContractTests(unittest.TestCase):
             "completed RX prefix",
             "MUST NOT perform late writes",
             "generation-checked",
+            "all-zero typed handle is idempotent `HK_OK`",
+            "uses a preload model",
+            "one-shot response for the next master READ",
+            "atomically replaces an unread preload",
+            "pads a longer request with `0x00`",
+            "READ event is queued after that master transaction completes",
             "Phase 2.10",
         ):
             self.assertIn(required, normalized)
+
+        fake = (ROOT / "tests" / "capability_fake_external_link.h").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("late_effect_attempts", fake)
 
     def test_public_contract_contains_no_board_routing_identity(self) -> None:
         header = (

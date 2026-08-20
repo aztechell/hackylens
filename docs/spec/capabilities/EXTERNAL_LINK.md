@@ -33,6 +33,13 @@ during capability negotiation. Trying to configure a mode outside that
 negotiated set returns `HK_ERR_NOT_DECLARED`; a negotiated feature unsupported
 by the selected provider returns `HK_ERR_FEATURE_UNAVAILABLE`.
 
+Release follows the common lifecycle exactly: a null handle pointer is
+`HK_ERR_INVALID_ARGUMENT`, an all-zero typed handle is idempotent `HK_OK`, a
+partially-zero or otherwise malformed non-zero handle is
+`HK_ERR_STALE_HANDLE`, and a valid non-zero handle of another capability type
+is `HK_ERR_INVALID_ARGUMENT`. The first successful release zeros the caller's
+handle; a copied non-zero handle is stale afterward.
+
 One capability instance represents one physical connector. UART and I2C modes
 that share pins, muxes, or peripherals MUST NOT be advertised as independently
 ownable capabilities. There is one exclusive connector lease, even when the
@@ -112,11 +119,27 @@ phase must be non-empty. The 32-byte poll bound applies to the sum of write and
 read progress. NACK maps to `HK_ERR_IO`; NACK, timeout, and cancellation stop
 and reset the controller before returning terminal.
 
-I2C target polling is synchronous and non-blocking. It returns `HK_PENDING`
-when no event is queued. A write event is consumed only when the caller's
-writable buffer can hold the complete bounded payload. A read event reports the
-requested byte count. `hk_external_link_i2c_target_respond` copies a bounded
-readable response before returning, so it does not retain the caller's buffer.
+I2C target uses a preload model; it does not wait for application code after a
+master READ has begun. Polling is synchronous and non-blocking and returns
+`HK_PENDING` when no completed event is queued. A WRITE event is consumed only
+when the caller's writable buffer can hold the complete bounded payload.
+
+`hk_external_link_i2c_target_preload_response` synchronously copies a bounded
+readable buffer and arms it as the one-shot response for the next master READ
+that has not begun. A later preload atomically replaces an unread preload; a
+zero-length preload clears it. A READ snapshots the then-current preload. It
+serves `min(preload_size, requested_bytes)` bytes, pads a longer request with
+`0x00` (`HK_EXTERNAL_LINK_TARGET_FILL_BYTE`), and discards an unused preload
+tail when the transaction ends. A READ with no preload returns only `0x00`.
+The preload is consumed by exactly one READ.
+
+A READ event is queued after that master transaction completes and reports its
+actual `requested_bytes`; it is notification, not a pending request that
+`preload_response` can complete. Preloading after a WRITE is therefore the
+normal request/next-read flow. If a preload call races with a READ already in
+progress, the active READ retains its snapshot and the new preload belongs to
+the following READ. Mode reconfiguration, mode change, release, and owner
+cleanup discard unread preload and queued target events.
 
 ## Deadline and buffer ownership
 
@@ -158,11 +181,14 @@ service, HAL, routing, or MicroPython runtime behavior.
 
 The fixed-capacity fake records routing modes, FIFO progress, bytes, I2C phases,
 buffer lifetime, original deadline, resets, cancellation, terminal results,
-and late-effect attempts. Tests cover exclusive conflicts, unsupported
+preload replacement, read consumption, and zero fill. Tests cover exclusive conflicts, unsupported
 features/modes, active mode switching, UART partial progress/drain and
 non-blocking read, combined I2C transfer, NACK/timeout, cancellation before and
 during an operation, stale generations, target buffers, release cleanup, and no
-late effects. It allocates no heap, task, queue, or unbounded event storage.
+late effects. Late-effect absence is proven through unchanged observable byte
+counters and terminal state across repeated poll/cancel and stale-handle calls;
+there is no write-only metric that can remain trivially zero. The fake allocates
+no heap, task, queue, or unbounded event storage.
 
 SEN0305 physical acceptance requires UART TX/RX loopback and a known 7-bit I2C
 target, plus restoration of the normal external/HMPY service. Host tests alone

@@ -47,7 +47,8 @@ typedef struct
     uint32_t uart_drain_polls;
     uint8_t lease_active;
     uint8_t target_event_pending;
-    uint8_t reserved0[2];
+    uint8_t target_preload_active;
+    uint8_t reserved0;
     hk_owner_t owner;
     hk_fake_external_link_operation_t operation;
     hk_result_t next_i2c_result;
@@ -60,8 +61,10 @@ typedef struct
     uint32_t target_event_received_bytes;
     uint32_t target_event_requested_bytes;
     uint8_t target_event_data[HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES];
-    uint8_t target_response[HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES];
-    uint32_t target_response_size;
+    uint8_t target_preload[HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES];
+    uint32_t target_preload_size;
+    uint8_t target_read[HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES];
+    uint32_t target_read_size;
     hk_fake_external_link_metrics_t metrics;
     hk_fake_external_link_event_t events[HK_FAKE_EXTERNAL_LINK_MAX_EVENTS];
 } hk_fake_external_link_state_t;
@@ -145,6 +148,20 @@ static void clear_borrowed_buffers(void)
 {
     g_fake.metrics.borrowed_tx_bytes = 0U;
     g_fake.metrics.borrowed_rx_bytes = 0U;
+}
+
+static void clear_target_state(void)
+{
+    g_fake.target_event_pending = 0U;
+    g_fake.target_event_type = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
+    g_fake.target_event_received_bytes = 0U;
+    g_fake.target_event_requested_bytes = 0U;
+    g_fake.target_preload_active = 0U;
+    g_fake.target_preload_size = 0U;
+    g_fake.target_read_size = 0U;
+    memset(g_fake.target_event_data, 0, sizeof(g_fake.target_event_data));
+    memset(g_fake.target_preload, 0, sizeof(g_fake.target_preload));
+    memset(g_fake.target_read, 0, sizeof(g_fake.target_read));
 }
 
 static hk_result_t validate_request(
@@ -357,6 +374,7 @@ static hk_result_t set_mode(uint32_t mode)
 {
     if (g_fake.operation.state == HK_FAKE_OP_IN_FLIGHT)
         return HK_ERR_BUSY;
+    clear_target_state();
     if (g_fake.mode != HK_EXTERNAL_LINK_MODE_UNCONFIGURED)
         reset_peripheral();
     if (g_fake.mode != mode)
@@ -433,17 +451,61 @@ hk_result_t hk_fake_external_link_push_target_event(
     uint32_t received_bytes,
     uint32_t requested_bytes)
 {
+    uint32_t captured;
+    uint32_t prefix;
+
+    if (!g_fake.lease_active ||
+        g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
+        return remember(HK_ERR_INVALID_STATE);
     if (g_fake.target_event_pending)
         return remember(HK_ERR_BUSY);
     if ((type != HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
          type != HK_EXTERNAL_LINK_TARGET_EVENT_READ) ||
         received_bytes > HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES ||
         (!bytes && received_bytes != 0U) ||
+        (type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
+         requested_bytes != 0U) ||
         (type == HK_EXTERNAL_LINK_TARGET_EVENT_READ &&
-         received_bytes != 0U))
+         (received_bytes != 0U || requested_bytes == 0U)))
         return remember(HK_ERR_INVALID_ARGUMENT);
     if (received_bytes != 0U)
         memcpy(g_fake.target_event_data, bytes, received_bytes);
+    if (type == HK_EXTERNAL_LINK_TARGET_EVENT_READ)
+    {
+        captured = requested_bytes;
+        if (captured > HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES)
+            captured = HK_FAKE_EXTERNAL_LINK_MAX_TRANSFER_BYTES;
+        prefix = g_fake.target_preload_active ?
+                     g_fake.target_preload_size :
+                     0U;
+        if (prefix > captured)
+            prefix = captured;
+        if (prefix != 0U)
+            memcpy(g_fake.target_read, g_fake.target_preload, prefix);
+        if (captured > prefix)
+            memset(
+                &g_fake.target_read[prefix],
+                HK_EXTERNAL_LINK_TARGET_FILL_BYTE,
+                captured - prefix);
+        g_fake.target_read_size = captured;
+        g_fake.metrics.target_read_bytes += requested_bytes;
+        g_fake.metrics.target_zero_fill_bytes +=
+            requested_bytes -
+            (g_fake.target_preload_active &&
+                     g_fake.target_preload_size < requested_bytes
+                 ? g_fake.target_preload_size
+                 : (g_fake.target_preload_active ? requested_bytes : 0U));
+        log_event(
+            HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_READ,
+            0U,
+            0U,
+            requested_bytes,
+            HK_OK,
+            HK_DEADLINE_IMMEDIATE);
+        g_fake.target_preload_active = 0U;
+        g_fake.target_preload_size = 0U;
+        memset(g_fake.target_preload, 0, sizeof(g_fake.target_preload));
+    }
     g_fake.target_event_type = type;
     g_fake.target_event_received_bytes = received_bytes;
     g_fake.target_event_requested_bytes = requested_bytes;
@@ -451,11 +513,20 @@ hk_result_t hk_fake_external_link_push_target_event(
     return remember(HK_OK);
 }
 
-const uint8_t *hk_fake_external_link_target_response(uint32_t *size_bytes)
+const uint8_t *hk_fake_external_link_target_preload(uint32_t *size_bytes)
 {
     if (size_bytes)
-        *size_bytes = g_fake.target_response_size;
-    return g_fake.target_response;
+        *size_bytes = g_fake.target_preload_active ?
+                          g_fake.target_preload_size :
+                          0U;
+    return g_fake.target_preload;
+}
+
+const uint8_t *hk_fake_external_link_target_read(uint32_t *size_bytes)
+{
+    if (size_bytes)
+        *size_bytes = g_fake.target_read_size;
+    return g_fake.target_read;
 }
 
 const hk_fake_external_link_metrics_t *hk_fake_external_link_metrics(void)
@@ -516,12 +587,22 @@ hk_result_t hk_external_link_release(
     hk_deadline_t deadline,
     hk_external_link_t *handle)
 {
-    hk_result_t result = validate_handle(owner, handle);
+    hk_result_t result;
 
+    if (!handle || deadline.at_us == UINT64_MAX)
+        return remember(HK_ERR_INVALID_ARGUMENT);
+    if (hk_lease_is_zero(&handle->lease))
+        return remember(HK_OK);
+    if (handle->lease.capability_id == 0U)
+        return remember(HK_ERR_STALE_HANDLE);
+    if (handle->lease.capability_id != HK_CAPABILITY_ID_EXTERNAL_LINK)
+        return remember(HK_ERR_INVALID_ARGUMENT);
+    if (handle->lease.generation == 0U ||
+        handle->lease.owner.generation == 0U)
+        return remember(HK_ERR_STALE_HANDLE);
+    result = validate_handle(owner, handle);
     if (result != HK_OK)
         return remember(result);
-    if (deadline.at_us == UINT64_MAX)
-        return remember(HK_ERR_INVALID_ARGUMENT);
     if (deadline_expired(deadline))
         return remember(HK_ERR_DEADLINE_EXCEEDED);
     if (g_fake.operation.state == HK_FAKE_OP_IN_FLIGHT)
@@ -531,6 +612,7 @@ hk_result_t hk_external_link_release(
     g_fake.metrics.active_operations = 0U;
     g_fake.metrics.active_leases = 0U;
     g_fake.metrics.current_mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
+    clear_target_state();
     g_fake.mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
     g_fake.lease_active = 0U;
     g_fake.acquired_features = 0U;
@@ -1017,19 +1099,23 @@ hk_result_t hk_external_link_i2c_target_poll(
     event->type = g_fake.target_event_type;
     event->received_bytes = g_fake.target_event_received_bytes;
     event->requested_bytes = g_fake.target_event_requested_bytes;
-    g_fake.metrics.target_rx_bytes += g_fake.target_event_received_bytes;
-    log_event(
-        HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_RX,
-        0U,
-        0U,
-        g_fake.target_event_received_bytes,
-        HK_OK,
-        HK_DEADLINE_IMMEDIATE);
+    if (g_fake.target_event_type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE)
+    {
+        g_fake.metrics.target_write_bytes +=
+            g_fake.target_event_received_bytes;
+        log_event(
+            HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_WRITE,
+            0U,
+            0U,
+            g_fake.target_event_received_bytes,
+            HK_OK,
+            HK_DEADLINE_IMMEDIATE);
+    }
     g_fake.target_event_pending = 0U;
     return remember(HK_OK);
 }
 
-hk_result_t hk_external_link_i2c_target_respond(
+hk_result_t hk_external_link_i2c_target_preload_response(
     hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx)
@@ -1047,12 +1133,16 @@ hk_result_t hk_external_link_i2c_target_respond(
         return remember(result);
     if (g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
         return remember(HK_ERR_INVALID_STATE);
+    if (g_fake.target_preload_active)
+        ++g_fake.metrics.target_preload_replacements;
+    memset(g_fake.target_preload, 0, sizeof(g_fake.target_preload));
     if (tx->size_bytes != 0U)
-        memcpy(g_fake.target_response, tx->data, tx->size_bytes);
-    g_fake.target_response_size = tx->size_bytes;
-    g_fake.metrics.target_tx_bytes += tx->size_bytes;
+        memcpy(g_fake.target_preload, tx->data, tx->size_bytes);
+    g_fake.target_preload_size = tx->size_bytes;
+    g_fake.target_preload_active = (uint8_t)(tx->size_bytes != 0U);
+    g_fake.metrics.target_preload_bytes += tx->size_bytes;
     log_event(
-        HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_TX,
+        HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_PRELOAD,
         0U,
         0U,
         tx->size_bytes,

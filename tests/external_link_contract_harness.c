@@ -57,6 +57,8 @@ static int case_identity_modes_and_exclusivity(void)
     hk_external_link_t first = {0};
     hk_external_link_t second = {0};
     hk_external_link_t stale;
+    hk_external_link_t malformed;
+    hk_external_link_t wrong_type;
     hk_external_link_info_t info;
     hk_external_link_uart_config_t uart = uart_config(115200U);
     hk_external_link_i2c_controller_config_t controller =
@@ -93,9 +95,27 @@ static int case_identity_modes_and_exclusivity(void)
     CHECK(hk_fake_external_link_metrics()->route_changes == 2U);
     CHECK(hk_fake_external_link_metrics()->peripheral_resets == 1U);
     stale = first;
+    malformed = first;
+    malformed.lease.generation = 0U;
+    wrong_type = first;
+    wrong_type.lease.capability_id = UINT32_C(0x00010003);
+    CHECK(hk_external_link_release(
+              OWNER_A, HK_DEADLINE_IMMEDIATE, NULL) ==
+          HK_ERR_INVALID_ARGUMENT);
     CHECK(hk_external_link_release(
               OWNER_A, (hk_deadline_t){1000U}, &first) == HK_OK);
     CHECK(hk_lease_is_zero(&first.lease));
+    CHECK(hk_external_link_release(
+              OWNER_A, HK_DEADLINE_IMMEDIATE, &first) == HK_OK);
+    CHECK(hk_external_link_release(
+              OWNER_A, HK_DEADLINE_IMMEDIATE, &stale) ==
+          HK_ERR_STALE_HANDLE);
+    CHECK(hk_external_link_release(
+              OWNER_A, HK_DEADLINE_IMMEDIATE, &malformed) ==
+          HK_ERR_STALE_HANDLE);
+    CHECK(hk_external_link_release(
+              OWNER_A, HK_DEADLINE_IMMEDIATE, &wrong_type) ==
+          HK_ERR_INVALID_ARGUMENT);
     CHECK(hk_external_link_get_mode(OWNER_A, &stale, &mode) ==
           HK_ERR_STALE_HANDLE);
 
@@ -263,7 +283,6 @@ static int case_cancel_and_no_late_effects(void)
     CHECK(hk_external_link_poll(
               OWNER_A, &handle, &operation, &progress) == HK_ERR_CANCELLED);
     CHECK(hk_fake_external_link_metrics()->uart_tx_bytes == effects_at_cancel);
-    CHECK(hk_fake_external_link_metrics()->late_effect_attempts == 0U);
     CHECK(hk_fake_external_link_metrics()->borrowed_tx_bytes == 0U);
     CHECK(hk_external_link_configure_i2c_controller(
               OWNER_A, &handle, &controller) == HK_OK);
@@ -295,6 +314,7 @@ static int case_i2c_whole_transaction_semantics(void)
     hk_external_link_i2c_transfer_t write_only;
     hk_external_link_i2c_transfer_t immediate_transfer;
     uint32_t resets;
+    uint32_t effects;
     uint32_t index;
 
     for (index = 0U; index < sizeof(rx_source); ++index)
@@ -348,6 +368,10 @@ static int case_i2c_whole_transaction_semantics(void)
               OWNER_A, &handle, &operation, &progress) == HK_ERR_IO);
     CHECK(progress.tx_completed_bytes == 8U);
     CHECK(hk_fake_external_link_metrics()->peripheral_resets == resets + 1U);
+    effects = hk_fake_external_link_metrics()->i2c_tx_bytes;
+    CHECK(hk_external_link_poll(
+              OWNER_A, &handle, &operation, &progress) == HK_ERR_IO);
+    CHECK(hk_fake_external_link_metrics()->i2c_tx_bytes == effects);
 
     CHECK(hk_external_link_i2c_transfer_begin(
               OWNER_A,
@@ -362,6 +386,11 @@ static int case_i2c_whole_transaction_semantics(void)
           HK_ERR_DEADLINE_EXCEEDED);
     CHECK(progress.tx_completed_bytes == 0U);
     CHECK(hk_fake_external_link_metrics()->original_deadline.at_us == 150U);
+    effects = hk_fake_external_link_metrics()->i2c_tx_bytes;
+    CHECK(hk_external_link_poll(
+              OWNER_A, &handle, &operation, &progress) ==
+          HK_ERR_DEADLINE_EXCEEDED);
+    CHECK(hk_fake_external_link_metrics()->i2c_tx_bytes == effects);
 
     immediate_transfer = write_only;
     immediate_transfer.tx.data = immediate_bytes;
@@ -386,7 +415,7 @@ static int case_i2c_whole_transaction_semantics(void)
     return 0;
 }
 
-static int case_i2c_target_buffers(void)
+static int case_i2c_target_preload_state_machine(void)
 {
     hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
     hk_external_link_t handle = {0};
@@ -394,15 +423,28 @@ static int case_i2c_target_buffers(void)
     hk_external_link_target_event_t event;
     uint8_t payload[4] = {1U, 2U, 3U, 4U};
     uint8_t receive[4] = {0};
-    uint8_t response[3] = {9U, 8U, 7U};
+    uint8_t response_a[3] = {1U, 2U, 3U};
+    uint8_t response_b[2] = {9U, 8U};
+    uint8_t response_long[3] = {4U, 5U, 6U};
     hk_buffer_view_t short_rx = {
         receive, 2U, 0U, HK_BUFFER_ACCESS_WRITABLE};
     hk_buffer_view_t rx = {
         receive, sizeof(receive), 0U, HK_BUFFER_ACCESS_WRITABLE};
-    hk_buffer_view_t tx = {
-        response, sizeof(response), 0U, HK_BUFFER_ACCESS_READABLE};
-    const uint8_t *stored_response;
-    uint32_t response_size = 0U;
+    hk_buffer_view_t empty_rx = {
+        NULL, 0U, 0U, HK_BUFFER_ACCESS_WRITABLE};
+    hk_buffer_view_t empty_tx = {
+        NULL, 0U, 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_buffer_view_t tx_a = {
+        response_a, sizeof(response_a), 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_buffer_view_t tx_b = {
+        response_b, sizeof(response_b), 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_buffer_view_t tx_long = {
+        response_long,
+        sizeof(response_long),
+        0U,
+        HK_BUFFER_ACCESS_READABLE};
+    const uint8_t *observed;
+    uint32_t observed_size = 0U;
 
     hk_fake_external_link_reset(HK_EXTERNAL_LINK_FEATURE_I2C_TARGET);
     CHECK(hk_external_link_acquire(
@@ -415,6 +457,69 @@ static int case_i2c_target_buffers(void)
     CHECK(hk_external_link_i2c_target_poll(
               OWNER_A, &handle, &rx, &event) == HK_PENDING);
     CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_NONE);
+
+    /* A READ without a preload is served immediately with the fill byte. */
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 3U) == HK_OK);
+    observed = hk_fake_external_link_target_read(&observed_size);
+    CHECK(observed_size == 3U);
+    CHECK(observed[0] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE &&
+          observed[1] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE &&
+          observed[2] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE);
+    CHECK(hk_external_link_i2c_target_poll(
+              OWNER_A, &handle, &empty_rx, &event) == HK_OK);
+    CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ);
+    CHECK(event.requested_bytes == 3U);
+
+    /* An empty preload clears; a later preload atomically replaces unread. */
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_a) == HK_OK);
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &empty_tx) == HK_OK);
+    (void)hk_fake_external_link_target_preload(&observed_size);
+    CHECK(observed_size == 0U);
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_a) == HK_OK);
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_b) == HK_OK);
+    response_b[0] = 0U;
+    observed = hk_fake_external_link_target_preload(&observed_size);
+    CHECK(observed_size == 2U);
+    CHECK(observed[0] == 9U && observed[1] == 8U);
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 5U) == HK_OK);
+    observed = hk_fake_external_link_target_read(&observed_size);
+    CHECK(observed_size == 5U);
+    CHECK(observed[0] == 9U && observed[1] == 8U);
+    CHECK(observed[2] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE &&
+          observed[3] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE &&
+          observed[4] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE);
+    (void)hk_fake_external_link_target_preload(&observed_size);
+    CHECK(observed_size == 0U);
+    CHECK(hk_external_link_i2c_target_poll(
+              OWNER_A, &handle, &empty_rx, &event) == HK_OK);
+    CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ);
+    CHECK(event.requested_bytes == 5U);
+
+    /* A short READ discards the unused tail; the preload is one-shot. */
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_long) == HK_OK);
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 2U) == HK_OK);
+    observed = hk_fake_external_link_target_read(&observed_size);
+    CHECK(observed_size == 2U);
+    CHECK(observed[0] == 4U && observed[1] == 5U);
+    CHECK(hk_external_link_i2c_target_poll(
+              OWNER_A, &handle, &empty_rx, &event) == HK_OK);
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 1U) == HK_OK);
+    observed = hk_fake_external_link_target_read(&observed_size);
+    CHECK(observed_size == 1U);
+    CHECK(observed[0] == HK_EXTERNAL_LINK_TARGET_FILL_BYTE);
+    CHECK(hk_external_link_i2c_target_poll(
+              OWNER_A, &handle, &empty_rx, &event) == HK_OK);
+
+    /* WRITE is independent; preloading after it prepares a later READ. */
     CHECK(hk_fake_external_link_push_target_event(
               HK_EXTERNAL_LINK_TARGET_EVENT_WRITE,
               payload,
@@ -427,14 +532,30 @@ static int case_i2c_target_buffers(void)
     CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE);
     CHECK(event.received_bytes == sizeof(payload));
     CHECK(memcmp(receive, payload, sizeof(payload)) == 0);
-    CHECK(hk_external_link_i2c_target_respond(
-              OWNER_A, &handle, &tx) == HK_OK);
-    response[0] = 0U;
-    stored_response = hk_fake_external_link_target_response(&response_size);
-    CHECK(response_size == 3U);
-    CHECK(stored_response[0] == 9U);
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_long) == HK_OK);
+
+    /* Reconfiguration and release discard any unread preload/events. */
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 2U) == HK_OK);
+    CHECK(hk_external_link_configure_i2c_target(
+              OWNER_A, &handle, &config) == HK_OK);
+    (void)hk_fake_external_link_target_preload(&observed_size);
+    CHECK(observed_size == 0U);
+    CHECK(hk_external_link_i2c_target_poll(
+              OWNER_A, &handle, &empty_rx, &event) == HK_PENDING);
+    CHECK(hk_external_link_i2c_target_preload_response(
+              OWNER_A, &handle, &tx_long) == HK_OK);
     CHECK(hk_external_link_release(
               OWNER_A, (hk_deadline_t){1000U}, &handle) == HK_OK);
+    (void)hk_fake_external_link_target_preload(&observed_size);
+    CHECK(observed_size == 0U);
+    CHECK(hk_fake_external_link_push_target_event(
+              HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, 1U) ==
+          HK_ERR_INVALID_STATE);
+    CHECK(hk_fake_external_link_metrics()->target_preload_replacements == 2U);
+    CHECK(hk_fake_external_link_metrics()->target_read_bytes == 13U);
+    CHECK(hk_fake_external_link_metrics()->target_zero_fill_bytes == 7U);
     return 0;
 }
 
@@ -476,7 +597,6 @@ static int case_release_quiesces_active_operation(void)
               OWNER_A, &stale, &operation, &progress) ==
           HK_ERR_STALE_HANDLE);
     CHECK(hk_fake_external_link_metrics()->uart_tx_bytes == effects);
-    CHECK(hk_fake_external_link_metrics()->late_effect_attempts == 0U);
     return 0;
 }
 
@@ -486,7 +606,7 @@ int main(void)
     CHECK(case_uart_partial_progress_and_drain() == 0);
     CHECK(case_cancel_and_no_late_effects() == 0);
     CHECK(case_i2c_whole_transaction_semantics() == 0);
-    CHECK(case_i2c_target_buffers() == 0);
+    CHECK(case_i2c_target_preload_state_machine() == 0);
     CHECK(case_release_quiesces_active_operation() == 0);
     puts("EXTERNAL_LINK_CONTRACT_OK cases=6 burst=32 fixed_capacity=256");
     return 0;

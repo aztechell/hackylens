@@ -32,6 +32,7 @@ extern "C" {
 #define HK_EXTERNAL_LINK_TARGET_EVENT_NONE UINT32_C(0)
 #define HK_EXTERNAL_LINK_TARGET_EVENT_WRITE UINT32_C(1)
 #define HK_EXTERNAL_LINK_TARGET_EVENT_READ UINT32_C(2)
+#define HK_EXTERNAL_LINK_TARGET_FILL_BYTE UINT8_C(0x00)
 
 #define HK_EXTERNAL_LINK_INFO_VERSION 1U
 #define HK_EXTERNAL_LINK_UART_CONFIG_VERSION 1U
@@ -199,7 +200,7 @@ hk_result_t hk_external_link_i2c_target_poll(
     const hk_external_link_t *handle,
     hk_buffer_view_t *rx,
     hk_external_link_target_event_t *event);
-hk_result_t hk_external_link_i2c_target_respond(
+hk_result_t hk_external_link_i2c_target_preload_response(
     hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx);

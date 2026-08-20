@@ -17,9 +17,10 @@ typedef enum
     HK_FAKE_EXTERNAL_LINK_EVENT_UART_RX = 6,
     HK_FAKE_EXTERNAL_LINK_EVENT_I2C_TX = 7,
     HK_FAKE_EXTERNAL_LINK_EVENT_I2C_RX = 8,
-    HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_RX = 9,
-    HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_TX = 10,
-    HK_FAKE_EXTERNAL_LINK_EVENT_TERMINAL = 11
+    HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_WRITE = 9,
+    HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_PRELOAD = 10,
+    HK_FAKE_EXTERNAL_LINK_EVENT_TARGET_READ = 11,
+    HK_FAKE_EXTERNAL_LINK_EVENT_TERMINAL = 12
 } hk_fake_external_link_event_type_t;
 
 typedef struct
@@ -46,9 +47,11 @@ typedef struct
     uint32_t uart_rx_bytes;
     uint32_t i2c_tx_bytes;
     uint32_t i2c_rx_bytes;
-    uint32_t target_rx_bytes;
-    uint32_t target_tx_bytes;
-    uint32_t late_effect_attempts;
+    uint32_t target_write_bytes;
+    uint32_t target_preload_bytes;
+    uint32_t target_read_bytes;
+    uint32_t target_zero_fill_bytes;
+    uint32_t target_preload_replacements;
     uint32_t borrowed_tx_bytes;
     uint32_t borrowed_rx_bytes;
     hk_deadline_t original_deadline;
@@ -69,7 +72,8 @@ hk_result_t hk_fake_external_link_push_target_event(
     const uint8_t *bytes,
     uint32_t received_bytes,
     uint32_t requested_bytes);
-const uint8_t *hk_fake_external_link_target_response(uint32_t *size_bytes);
+const uint8_t *hk_fake_external_link_target_preload(uint32_t *size_bytes);
+const uint8_t *hk_fake_external_link_target_read(uint32_t *size_bytes);
 const hk_fake_external_link_metrics_t *hk_fake_external_link_metrics(void);
 const hk_fake_external_link_event_t *hk_fake_external_link_event(
     uint32_t index);
