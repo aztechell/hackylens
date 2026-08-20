@@ -1,78 +1,92 @@
 schema = 2
 
 [apps.terminal]
-requires = ["display", "buttons"]
-required_capabilities = []
+requires = ["display"]
+required_capabilities = [
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+]
 optional_capabilities = []
 
 [apps.camera]
-requires = ["display", "camera", "buttons", "lights", "sd-card"]
+requires = ["display", "camera", "lights", "sd-card"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.qr-camera]
-requires = ["display", "camera", "buttons", "lights", "sd-card"]
+requires = ["display", "camera", "lights", "sd-card"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.face-detect]
-requires = ["display", "camera", "buttons", "lights", "sd-card"]
-required_capabilities = []
+requires = ["display", "camera", "lights", "sd-card"]
+required_capabilities = [
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+]
 optional_capabilities = []
 
 [apps.apriltag]
-requires = ["display", "camera", "buttons", "lights"]
+requires = ["display", "camera", "lights"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.object-detect]
-requires = ["display", "camera", "buttons", "lights", "sd-card"]
+requires = ["display", "camera", "lights", "sd-card"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.files]
-requires = ["display", "buttons", "sd-card"]
+requires = ["display", "sd-card"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.buttons]
-requires = ["display", "buttons"]
-required_capabilities = []
+requires = ["display"]
+required_capabilities = [
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+]
 optional_capabilities = []
 
 [apps.pong]
-requires = ["display", "buttons"]
+requires = ["display"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.settings]
-requires = ["display", "buttons", "lights"]
-required_capabilities = []
+requires = ["display", "lights"]
+required_capabilities = [
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+]
 optional_capabilities = []
 
 [apps.sleep]
-requires = ["display", "buttons", "lights"]
+requires = ["display", "lights"]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []
 
 [apps.micropython]
 requires = [
   "display",
-  "buttons",
   "lights",
   "internal-flash",
   "external-uart",
@@ -80,5 +94,6 @@ requires = [
 ]
 required_capabilities = [
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
 ]
 optional_capabilities = []

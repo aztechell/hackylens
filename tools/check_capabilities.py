@@ -47,6 +47,7 @@ def validate(root: Path = ROOT) -> list[str]:
             failures.append("platform capability catalog must contain exactly the five initial IDs")
         if generator.ABSENCE_CODES != EXPECTED_ABSENCE_CODES:
             failures.append("capability composer must expose exactly the six Phase 2.3 absence codes")
+        composed_by_board: dict[str, generator.Composition] = {}
         for board_id in ("huskylens-sen0305", "sipeed-maix-cube"):
             board = load_board(board_id, root=root)
             first = generator.compose(
@@ -63,6 +64,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 catalog_path=catalog_path,
                 root=root,
             )
+            composed_by_board[board_id] = first
             first_caps = generator.canonical_json_bytes(
                 generator.capabilities_document(first)
             )
@@ -79,6 +81,30 @@ def validate(root: Path = ROOT) -> list[str]:
         time = next(item for item in catalog if item.id == "hackylens.cap.time")
         if time.limits != (("max-sleep-us", 1, 300000000),):
             failures.append("time capability must publish the canonical finite sleep limit")
+        input_capability = next(
+            item for item in catalog if item.id == "hackylens.cap.input"
+        )
+        if input_capability.features != (
+            "state", "events", "debounced-buttons"
+        ) or input_capability.max_leases != 16:
+            failures.append("input capability must publish the Phase 2.5 shared profile")
+        if [item.id for item in composed_by_board["huskylens-sen0305"].capabilities] != [
+            "hackylens.cap.time", "hackylens.cap.input"
+        ]:
+            failures.append("SEN0305 inventory must contain exactly Time and Input")
+        if [item.id for item in composed_by_board["sipeed-maix-cube"].capabilities] != [
+            "hackylens.cap.time"
+        ]:
+            failures.append("Cube conformance inventory must keep Input absent")
+        for app, requirements in generator.load_app_requirements(apps_path).items():
+            if "buttons" in requirements.legacy:
+                failures.append(f"{app}: private buttons requirement survived Phase 2.5")
+            if not any(
+                request.id == "hackylens.cap.input"
+                and request.features == ("state", "events", "debounced-buttons")
+                for request in requirements.required
+            ):
+                failures.append(f"{app}: canonical required Input capability is missing")
     except (generator.CapabilityError, ContractError, OSError, ValueError) as exc:
         failures.append(str(exc))
 

@@ -348,6 +348,9 @@ Time consumer migration и provider откатываются вместе; dual 
 
 ## 2.5 — Input/buttons capability
 
+Статус пакета: `in_progress` (2026-08-20); implementation and local profile
+verification passed, CI pending.
+
 ### Depends on
 
 `2.4`.

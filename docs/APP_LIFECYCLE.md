@@ -17,7 +17,10 @@ Apps are described by `hk_app_t`: `id`, `title`, `screen`, stable `autostart_id`
 
 After settings load, boot UI, and SD mount, startup resolves the persisted autostart ID through the registry and calls the target's normal `enter` with an empty input snapshot. The menu index is set to the target before entry, so BACK returns with that item selected. OFF or a target omitted by the current build opens the menu; an omitted target remains persisted and becomes active again when a later build restores it. `HKMENU` and ordinary exits never retrigger autostart.
 
-Screen state is exposed through `core/hk_screen.h`. Apps and controllers receive `hk_input_snapshot_t` from the runtime loop and must not access input driver state directly.
+Screen state is exposed through `core/hk_screen.h`. Apps and controllers receive
+the existing `hk_input_snapshot_t` ABI from the runtime loop. The loop adapts
+sequenced `hackylens.cap.input` events; apps and controllers must not access the
+raw button sampler or capability provider state directly.
 
 Reusable settings menus are neutral child sessions rather than screens or applications. `settings_menu` reports a close request to its owner; the owner decides whether BACK resumes a camera, returns to a game, or changes screens. Values, persistence, and immediate hardware effects are provided through owner callbacks. Ending edit mode through OK, BACK, or forced session close emits the same commit callback.
 

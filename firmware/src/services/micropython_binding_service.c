@@ -6,15 +6,16 @@
 #if defined(MICROPYTHON_BINDING_TESTING)
 #include "micropython_binding_test_platform.h"
 #else
+#include <hackylens/capability/input.h>
 #include <i2c.h>
 #include <plic.h>
 
 #include "external_link_service.h"
 #include "micropython_runtime.h"
 #include "settings_lights.h"
+#include "../capabilities/capability_client_binding.h"
 #include "../internal/hk_board_port.h"
 #include "../config/display_config.h"
-#include "../drivers/hk_input.h"
 #include "../drivers/hk_lcd.h"
 #include "../drivers/hk_lights.h"
 #include "hal_external_link.h"
@@ -32,6 +33,33 @@
 #define MICROPYTHON_BINDING_I2C_HZ 100000U
 #define MICROPYTHON_BINDING_UART_BITS_PER_BYTE 10ULL
 #define MICROPYTHON_BINDING_UART_MIN_BAUD 1200ULL
+
+#if !defined(MICROPYTHON_BINDING_TESTING)
+static hk_input_t s_binding_input;
+static hk_owner_t s_binding_input_owner;
+
+static hk_result_t binding_input_state(uint32_t *state)
+{
+    static const hk_capability_request_t request = HK_INPUT_REQUEST_0_1_INIT;
+    hk_owner_t owner = capability_client_consumer_owner(
+        "consumer:micropython-adapter");
+    hk_result_t result;
+
+    if(hk_owner_is_zero(owner))
+        return HK_ERR_STALE_HANDLE;
+    if(owner.slot != s_binding_input_owner.slot ||
+       owner.generation != s_binding_input_owner.generation ||
+       hk_lease_is_zero(&s_binding_input.lease))
+    {
+        s_binding_input.lease = HK_LEASE_NONE;
+        s_binding_input_owner = owner;
+        result = hk_input_acquire(owner, &request, &s_binding_input);
+        if(result != HK_OK)
+            return result;
+    }
+    return hk_input_get_state(owner, &s_binding_input, state);
+}
+#endif
 
 typedef enum
 {
@@ -415,7 +443,13 @@ static micropython_binding_result_t binding_execute(
     {
     case MICROPYTHON_BINDING_OP_BUTTONS:
     {
+#if defined(MICROPYTHON_BINDING_TESTING)
         uint32_t buttons = hk_input_state();
+#else
+        uint32_t buttons = 0U;
+        if(binding_input_state(&buttons) != HK_OK)
+            return MICROPYTHON_BINDING_ERROR_IO;
+#endif
         control->data[0] = (uint8_t)buttons;
         control->data[1] = (uint8_t)(buttons >> 8);
         control->data[2] = (uint8_t)(buttons >> 16);

@@ -24,7 +24,7 @@ import hackylens as hl
 
 | API | Result |
 |---|---|
-| `buttons()` | current debounced button bit mask |
+| `buttons()` | current debounced button bit mask from `hackylens.cap.input` |
 | `button(mask)` | `True` if any bit in `mask` is pressed |
 | `ticks_ms()` | monotonic milliseconds since boot |
 | `sleep_ms(duration)` | cooperative sleep; `0..300000` ms |
