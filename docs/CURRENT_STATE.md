@@ -50,8 +50,9 @@ UART/I2C protocol or routed-peripheral semantics.
 - Application time needs use the public `hackylens.cap.time` 0.1 capability;
   runtime and MicroPython button reads share `hackylens.cap.input` 0.1; and
   settings, camera sessions, Sleep, and MicroPython light writes share
-  `hackylens.cap.lights` 0.1. Private boot/recovery wiring remains outside the
-  capability surface.
+  `hackylens.cap.lights` 0.1. The native external-link service and MicroPython
+  UART/I2C bindings share `hackylens.cap.external-link` 0.1. Private
+  boot/recovery wiring remains outside the capability surface.
 - Private schema-2 app requirements and the separate runtime/service/adapter
   consumer manifest control board-aware composition, capability grants,
   optional fallbacks, and exclusion. They do not expose runtime hardware
@@ -72,8 +73,9 @@ UART/I2C protocol or routed-peripheral semantics.
   views through a private typed BASE binding, and moves MicroPython drawing to
   OVERLAY. Both planes reuse the single shadow framebuffer. Phase 2.9 freezes
   the public External Link 0.1 connector/async contract with a deterministic
-  fixed-capacity fake; its K210 provider and native/MicroPython migration remain
-  Phase 2.10 work, so external-link remains absent from runtime inventory.
+  fixed-capacity fake. Phase 2.10 adds the K210 provider, migrates the native
+  UART/I2C-target service and MicroPython UART/I2C-controller bindings to that
+  single provider, and removes the Python-only hardware implementation.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -89,14 +91,15 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.9 contract; Time + Input + Display + Lights runtime providers, external-link runtime provider absent |
+| Capability build composition | Phase 2.10 implementation; Time + Input + Display + External Link + Lights runtime providers |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
 capabilities from it. Capability discovery returns the generated immutable
-inventory, currently Time, Input, Display, and Lights on SEN0305, and is not an App Runtime or
-manifest surface. The private generated `runtime_supported` marker describes
+inventory, currently Time, Input, Display, External Link, and Lights on SEN0305,
+and is not an App Runtime or manifest surface. The private generated
+`runtime_supported` marker describes
 Board Port runtime eligibility only; it is not physical capability or hardware
 qualification.
 
@@ -154,9 +157,8 @@ hardware qualification is a separate future gate.
 
 ## Remaining architecture work
 
-Later Phase 2 packages add the external-link provider to the generated
-inventory and migrate its native and MicroPython consumers. Display is runtime-composed; its borrowed
-BASE surface is explicitly an in-place backing store, while retained command
+Display is runtime-composed; its borrowed BASE surface is explicitly an in-place
+backing store, while retained command
 batches remain transactional. Host timing checks do not constitute physical
 hardware qualification; real display latency is deferred to Phase 2.13. Later
 packages may
