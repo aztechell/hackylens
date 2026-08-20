@@ -412,8 +412,8 @@ layer и runtime adapter откатываются одним изменение�
 
 ## 2.6 — Lights capability
 
-Статус пакета: `in_progress` (2026-08-20); implementation and local contract
-tests are in progress, CI pending.
+Статус пакета: `completed` (2026-08-20); implementation and both firmware
+profiles passed in [`Release firmware` run 32354601883](https://github.com/aztechell/hackylens/actions/runs/32354601883).
 
 ### Depends on
 
@@ -426,16 +426,16 @@ tests are in progress, CI pending.
 
 ### Scope
 
-- [ ] Добавить `hackylens.cap.lights` version `0.1.0`.
-- [ ] Feature/channel masks: display backlight, illumination, RGB.
-- [ ] Exclusive ownership только пересекающихся channel masks.
-- [ ] Public level range `0..1000`; MicroPython v1 adapter сохраняет свои
+- [x] Добавить `hackylens.cap.lights` version `0.1.0`.
+- [x] Feature/channel masks: display backlight, illumination, RGB.
+- [x] Exclusive ownership только пересекающихся channel masks.
+- [x] Public level range `0..1000`; MicroPython v1 adapter сохраняет свои
   observable values.
-- [ ] Immediate writes проверяют owner, cancel и deadline до hardware side effect.
-- [ ] Release переводит owned channels в implementation safe-off.
-- [ ] Settings service после reacquire восстанавливает latest persisted values.
-- [ ] Мигрировать settings/camera light services, Sleep и MicroPython.
-- [ ] Удалить `hk_lights.h` из MicroPython hardware bridge.
+- [x] Immediate writes проверяют owner, cancel и deadline до hardware side effect.
+- [x] Release переводит owned channels в implementation safe-off.
+- [x] Settings service после reacquire восстанавливает latest persisted values.
+- [x] Мигрировать settings/camera light services, Sleep и MicroPython.
+- [x] Удалить `hk_lights.h` из MicroPython hardware bridge.
 
 ### Основные файлы
 
