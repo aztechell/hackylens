@@ -127,6 +127,13 @@ typedef struct
 
 static k210_display_state_t s_display;
 
+#if defined(K210_DISPLAY_ADAPTER_TESTING)
+void hk_k210_display_test_reset(void)
+{
+    memset(&s_display, 0, sizeof(s_display));
+}
+#endif
+
 static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
 {
     return (uint8_t)(left.slot == right.slot &&
@@ -898,6 +905,11 @@ static hk_result_t repair_regions(
 
     if(plane->repair_count == 0U)
         return HK_OK;
+    /*
+     * BASE surface borrows mutate the only shadow framebuffer in place.  A
+     * repair therefore converges the panel to that authoritative backing
+     * store; retained batches still pass their staged commands separately.
+     */
     return transfer_regions(
         plane->repair, plane->repair_count, NULL, overlay,
         deadline, cancel, progress);

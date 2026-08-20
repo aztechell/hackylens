@@ -524,8 +524,8 @@ buffers, dirty regions или cancel не переносится в K210 impleme
 
 ## 2.8 — K210 display implementation и consumer migration
 
-Статус пакета: `completed` (2026-08-20); K210 provider migration, both firmware
-profiles, and resource evidence passed in [`Release firmware` run 32400366802](https://github.com/aztechell/hackylens/actions/runs/32400366802).
+Статус пакета: `in_progress`; closure повторно открыта для согласования
+in-place borrowed-surface contract и общего fake/K210 normative suite.
 
 ### Depends on
 
@@ -538,21 +538,21 @@ dirty rendering и без второго framebuffer.
 
 ### Scope
 
-- [x] Добавить K210 display adapter поверх private ST7789 transport.
-- [x] Разделить raw panel transport и capability state/ownership.
-- [x] Удалить Python-specific `HK_ENABLE_APP_MICROPYTHON`, `lcd_overlay_*` и
+- [ ] Добавить K210 display adapter поверх private ST7789 transport.
+- [ ] Разделить raw panel transport и capability state/ownership.
+- [ ] Удалить Python-specific `HK_ENABLE_APP_MICROPYTHON`, `lcd_overlay_*` и
   run-ID ownership из driver.
-- [x] Переиспользовать existing shadow framebuffer и bounded overlay
+- [ ] Переиспользовать existing shadow framebuffer и bounded overlay
   command/text storage; второй 320x240 framebuffer запрещён.
-- [x] Мигрировать 13 current app views с `hk_lcd.h` на typed display handle.
-- [x] Передавать handle через private app registry/module binding, не через global
+- [ ] Мигрировать 13 current app views с `hk_lcd.h` на typed display handle.
+- [ ] Передавать handle через private app registry/module binding, не через global
   public facade.
-- [x] Заменить app `display_config.h` assumptions на `hk_display_info_t` или
+- [ ] Заменить app `display_config.h` assumptions на `hk_display_info_t` или
   explicit capability limits (`min_width`, `min_height`, format features).
-- [x] Мигрировать MicroPython clear/text/rect/present на `OVERLAY` plane.
-- [x] Сохранить camera/files full-frame behavior.
-- [x] Сохранить Pong 20 ms fixed-step, catch-up limit и bounded dirty regions.
-- [x] Перевести display requirements на public capability features/limits.
+- [ ] Мигрировать MicroPython clear/text/rect/present на `OVERLAY` plane.
+- [ ] Сохранить camera/files full-frame behavior.
+- [ ] Сохранить Pong 20 ms fixed-step, catch-up limit и bounded dirty regions.
+- [ ] Перевести display requirements на public capability features/limits.
 
 ### Основные файлы
 
@@ -575,8 +575,10 @@ dirty rendering и без второго framebuffer.
 - Pong incremental frame не выполняет full-screen present;
 - transfer bytes не превышают объединение clipped dirty regions;
 - no second framebuffer по map/static RAM evidence;
-- полный present укладывается в 500 ms, одинаковая workload не медленнее current
-  baseline более чем на 10%.
+- host suite проверяет advertised 500 ms bound и deadline state machine;
+  физические SEN0305 `full present <= 500 ms` и matched-workload regression
+  `<= 10%` измеряются в `2.13`, как уже зафиксировано в Phase 2 baseline, и не
+  считаются подтверждёнными пакетом `2.8`.
 
 ### Exit gate
 

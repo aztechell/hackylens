@@ -63,5 +63,6 @@ void hk_fake_display_fail_next_present(
     hk_result_t result, uint32_t after_transferred_slices);
 const hk_fake_display_metrics_t *hk_fake_display_metrics(void);
 const hk_fake_display_command_t *hk_fake_display_command(uint32_t index);
+uint16_t hk_fake_display_panel_pixel(uint32_t plane, uint32_t x, uint32_t y);
 
 #endif

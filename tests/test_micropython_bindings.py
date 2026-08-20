@@ -124,6 +124,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-Werror",
                 "-DK210_DISPLAY_ADAPTER_TESTING",
                 f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'tests'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'ui'}",
@@ -133,8 +134,11 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
                 str(ROOT / "tests" / "k210_display_harness.c"),
+                str(ROOT / "tests" / "display_normative_suite.c"),
                 str(ROOT / "platforms" / "k210" / "capabilities" /
                     "display_adapter.c"),
+                str(ROOT / "firmware" / "src" / "capabilities" /
+                    "display.c"),
                 str(ROOT / "firmware" / "src" / "ui" / "hk_font.c"),
                 "-o",
                 str(executable),
@@ -150,7 +154,8 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "K210_DISPLAY_ADAPTER_OK cases=8 slice=128 framebuffer=153600",
+            "K210_DISPLAY_ADAPTER_OK cases=9 normative=7 public_api=1 "
+            "slice=128 framebuffer=153600",
             result.stdout,
         )
 

@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "capability_fake_display.h"
+#include "display_normative_suite.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
@@ -35,6 +36,26 @@ static hk_capability_request_t request(void)
 {
     hk_capability_request_t result = HK_DISPLAY_REQUEST_0_1_INIT;
     return result;
+}
+
+static void normative_reset(void)
+{
+    hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
+}
+
+static void normative_fail(hk_result_t result, uint32_t after_slices)
+{
+    hk_fake_display_fail_next_present(result, after_slices);
+}
+
+static uint64_t normative_transferred_bytes(void)
+{
+    return hk_fake_display_metrics()->transferred_bytes;
+}
+
+static uint16_t normative_panel_pixel(uint32_t x, uint32_t y)
+{
+    return hk_fake_display_panel_pixel(HK_DISPLAY_PLANE_BASE, x, y);
 }
 
 static int test_info_planes_and_handles(void)
@@ -436,6 +457,12 @@ static int test_partial_failure_abort_cleanup(void)
 
 int main(void)
 {
+    const hk_display_normative_fixture_t normative = {
+        "fake", normative_reset, normative_fail,
+        normative_transferred_bytes, normative_panel_pixel,
+    };
+
+    CHECK(hk_display_run_normative_suite(&normative) == 0);
     CHECK(test_info_planes_and_handles() == 0);
     CHECK(test_clipping_noops_and_log() == 0);
     CHECK(test_transactional_limits() == 0);
@@ -444,6 +471,6 @@ int main(void)
     CHECK(test_clipped_blit_source_mapping() == 0);
     CHECK(test_disjoint_damage_stays_bounded_during_repair() == 0);
     CHECK(test_partial_failure_abort_cleanup() == 0);
-    puts("DISPLAY_CONTRACT_OK cases=8 full_bytes=384 slice_bytes=8");
+    puts("DISPLAY_CONTRACT_OK cases=15 normative=7 full_bytes=384 slice_bytes=8");
     return 0;
 }

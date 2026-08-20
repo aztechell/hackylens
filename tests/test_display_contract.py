@@ -29,6 +29,7 @@ class DisplayContractTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'tests'}",
                 str(ROOT / "tests" / "display_contract_harness.c"),
+                str(ROOT / "tests" / "display_normative_suite.c"),
                 str(ROOT / "tests" / "capability_fake_display.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
@@ -37,7 +38,7 @@ class DisplayContractTests(unittest.TestCase):
                 text=True, capture_output=True, timeout=30,
             )
         self.assertIn(
-            "DISPLAY_CONTRACT_OK cases=8 full_bytes=384 slice_bytes=8",
+            "DISPLAY_CONTRACT_OK cases=15 normative=7 full_bytes=384 slice_bytes=8",
             result.stdout,
         )
 
@@ -105,6 +106,10 @@ class DisplayContractTests(unittest.TestCase):
             "MUST NOT silently promote",
             "source_x = clipped.x - destination.x",
             "MUST NOT replace disjoint damage with one bounding rectangle",
+            "does not roll back backing pixel mutations",
+            "current backing store",
+            "Retained command batches",
+            "Phase 2.13",
         ):
             self.assertIn(required, contract)
 

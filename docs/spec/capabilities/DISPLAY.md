@@ -93,10 +93,11 @@ the same staged batch remains retryable. The caller MUST keep that storage
 unchanged and valid across the retry interval.
 
 `begin_batch` is valid only in the idle lease state. Batch and borrowed-surface
-staging are mutually exclusive. A successful present returns the lease to idle
-and advances committed generation; `abort` returns it to idle without changing
-logical committed state. Calling batch/surface creation while already staged,
-or present/abort while idle, returns `HK_ERR_INVALID_STATE`.
+staging are mutually exclusive. For a retained command batch, a successful
+present returns the lease to idle and advances committed generation; `abort`
+returns it to idle without changing logical committed state. Calling
+batch/surface creation while already staged, or present/abort while idle,
+returns `HK_ERR_INVALID_STATE`.
 
 Command, text, dirty-list, borrowed-view, format, stride, size, and alignment
 limits are checked transactionally. On `HK_ERR_LIMIT` or validation failure the
@@ -111,12 +112,24 @@ incremental batch to full-screen merely for implementation convenience.
 
 ## Borrowed full-frame surface
 
-`surface_acquire` returns an implementation-owned writable
-`hk_buffer_view_t` with explicit format, stride, size, and alignment. The caller
-may access it only until successful present, abort, or release. A failed present
-retains the borrow for retry. The caller MUST mark every modified region;
-surface acquisition alone does not imply full-screen damage. Returned flags
-include both `HK_BUFFER_ACCESS_READABLE` and `HK_BUFFER_ACCESS_WRITABLE`.
+`surface_acquire` returns the implementation-owned, in-place mutable backing
+store for the `BASE` plane as a writable `hk_buffer_view_t` with explicit
+format, stride, size, and alignment. Writes change backing pixels immediately;
+the borrow is not a pixel-level transaction. The caller may access it only
+until successful present, abort, or release. A failed present retains the
+borrow for retry. The caller MUST mark every modified region; `mark_dirty`
+declares backing regions that require panel synchronization, while surface
+acquisition alone does not imply full-screen damage. Returned flags include
+both `HK_BUFFER_ACCESS_READABLE` and `HK_BUFFER_ACCESS_WRITABLE`.
+
+A successful surface present synchronizes the declared regions, advances the
+committed generation, and ends the borrow. `abort` ends the borrow and cancels
+its pending presentation, but does not roll back backing pixel mutations.
+Those mutations remain visible through a later borrow. If no transfer made
+physical progress, abort creates no repair work and the panel may remain older
+than those cancelled backing changes until a caller marks them dirty again.
+Retained command batches keep their transactional staged/committed semantics;
+their abort still discards commands without changing the committed backing.
 
 The provider MUST NOT allocate a second full framebuffer implicitly. Additional
 full-frame storage is a separate advertised resource and is absent from the
@@ -131,12 +144,15 @@ bounded transfer slices. Work whose deterministic bound exceeds
 already-expired finite deadline returns `HK_ERR_DEADLINE_EXCEEDED` before the
 first transfer; `HK_DEADLINE_IMMEDIATE` does not invent a replacement deadline.
 
-A successful present atomically advances the logical committed batch. Physical
+A successful present atomically advances the committed generation. Physical
 panels may expose partial progress while a transfer is running. If present is
 cancelled or fails after physical progress:
 
 - the staged batch remains available for retry or abort;
-- the previous logical committed state remains identified;
+- for a retained command batch, the previous logical committed state remains
+  identified;
+- for an in-place borrowed surface, the current backing store remains
+  authoritative and is not rolled back;
 - the provider records the affected damage as a bounded `needs_repair` region
   list;
 - no late panel writes occur after the terminal result;
@@ -147,9 +163,12 @@ Failure before physical progress leaves `needs_repair` unchanged. Failure after
 any physical progress records the complete affected staged dirty-region list,
 not merely the last completed slice. Repair retains disjoint regions and may
 merge only overlapping regions under the same rules as ordinary dirty damage;
-it MUST NOT replace disjoint damage with one bounding rectangle. Retry repairs
-previous committed content first, then replays the unchanged staged operation.
-Only complete success advances logical committed generation.
+it MUST NOT replace disjoint damage with one bounding rectangle. For a retained
+command batch, retry repairs previous committed content first, then replays the
+unchanged staged operation. For an in-place surface, retry or release cleanup
+makes the physical panel converge to the current backing store over the
+complete affected region list. Only complete success advances logical committed
+generation.
 
 Overlay release discards its staged/committed overlay and restores the current
 base content. Base release repairs any outstanding physical damage before
@@ -176,9 +195,12 @@ The fake logs plane ownership, commands, clips, dirty regions, transferred
 bytes, slices, deadlines, cancellation, committed state, and repair state. The
 same contract suite runs against the K210 adapter with stubbed panel transport.
 
-SEN0305 acceptance covers native screens, full-frame camera/files, Pong dirty
-frames, MicroPython overlay, cancellation/retry, cleanup, and restoration. A
-full present MUST fit its advertised maximum, initially 500 ms.
+Host acceptance covers native screens, full-frame camera/files, Pong dirty
+frames, MicroPython overlay, cancellation/retry, cleanup, restoration, and the
+advertised 500 ms operation bound. Stubbed transport timing validates the
+deadline state machine only; it is not physical latency evidence. Real SEN0305
+full-present `<= 500 ms` and matched-workload `<= 10%` regression qualification
+is recorded in Phase 2.13 and is not claimed by Phase 2.8.
 
 ## References
 

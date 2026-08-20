@@ -48,6 +48,7 @@ typedef struct
     hk_display_info_t info;
     fake_plane_t planes[FAKE_PLANE_COUNT];
     uint16_t surfaces[FAKE_PLANE_COUNT][FAKE_SURFACE_BYTES / 2U];
+    uint16_t panels[FAKE_PLANE_COUNT][FAKE_SURFACE_BYTES / 2U];
     hk_fake_display_command_t command_log[FAKE_COMMAND_LOG_CAPACITY];
     uint32_t command_log_count;
     uint64_t now_us;
@@ -58,6 +59,8 @@ typedef struct
 } fake_display_t;
 
 static fake_display_t s_display;
+
+static uint32_t plane_index(uint32_t plane);
 
 static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
 {
@@ -185,6 +188,22 @@ const hk_fake_display_command_t *hk_fake_display_command(uint32_t index)
        index >= FAKE_COMMAND_LOG_CAPACITY)
         return NULL;
     return &s_display.command_log[index];
+}
+
+uint16_t hk_fake_display_panel_pixel(
+    uint32_t plane, uint32_t x, uint32_t y)
+{
+    const uint8_t *pixels;
+    uint32_t offset;
+
+    ensure_initialized();
+    if((plane != HK_DISPLAY_PLANE_BASE &&
+        plane != HK_DISPLAY_PLANE_OVERLAY) ||
+       x >= s_display.info.width || y >= s_display.info.height)
+        return 0U;
+    pixels = (const uint8_t *)s_display.panels[plane_index(plane)];
+    offset = (y * s_display.info.width + x) * 2U;
+    return (uint16_t)((uint16_t)pixels[offset] << 8) | pixels[offset + 1U];
 }
 
 static hk_result_t request_validate(
@@ -770,16 +789,41 @@ static uint64_t rect_slices(const hk_display_rect_t *rect)
             s_display.info.transfer_slice_bytes;
 }
 
+static void sync_backing_chunk(
+    const fake_plane_t *plane, const hk_display_rect_t *rect,
+    uint64_t rect_offset, uint32_t size_bytes)
+{
+    uint32_t index = plane_index(plane->plane);
+    const uint8_t *backing = (const uint8_t *)s_display.surfaces[index];
+    uint8_t *panel = (uint8_t *)s_display.panels[index];
+
+    for(uint32_t byte = 0U; byte < size_bytes; byte++)
+    {
+        uint64_t position = rect_offset + byte;
+        uint64_t pixel = position / 2U;
+        uint32_t x = (uint32_t)rect->x +
+            (uint32_t)(pixel % rect->width);
+        uint32_t y = (uint32_t)rect->y +
+            (uint32_t)(pixel / rect->width);
+        uint32_t offset = (y * s_display.info.width + x) * 2U +
+            (uint32_t)(position & 1U);
+        panel[offset] = backing[offset];
+    }
+}
+
 static hk_result_t transfer_rect(
+    const fake_plane_t *plane,
     const hk_display_rect_t *rect,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel,
     uint8_t repair,
     uint8_t cleanup,
+    uint8_t synchronize_backing,
     uint8_t allow_injected_failure,
     uint32_t *invocation_slices)
 {
     uint64_t remaining = rect_bytes(rect);
+    uint64_t rect_offset = 0U;
 
     while(remaining > 0U)
     {
@@ -805,13 +849,71 @@ static hk_result_t transfer_rect(
             s_display.metrics.repair_bytes += chunk;
         if(cleanup)
             s_display.metrics.cleanup_bytes += chunk;
+        if(synchronize_backing)
+            sync_backing_chunk(plane, rect, rect_offset, chunk);
         s_display.now_us += s_display.slice_duration_us;
         remaining -= chunk;
+        rect_offset += chunk;
         (*invocation_slices)++;
     }
     if(!rect_empty(rect))
         s_display.metrics.transferred_regions++;
     return HK_OK;
+}
+
+static void write_fake_pixel(
+    uint8_t *pixels, uint32_t x, uint32_t y, uint16_t color)
+{
+    uint32_t offset = (y * s_display.info.width + x) * 2U;
+    pixels[offset] = (uint8_t)(color >> 8);
+    pixels[offset + 1U] = (uint8_t)color;
+}
+
+static void apply_batch_to_backing(fake_plane_t *plane)
+{
+    uint32_t index = plane_index(plane->plane);
+    uint8_t *backing = (uint8_t *)s_display.surfaces[index];
+    uint8_t *panel = (uint8_t *)s_display.panels[index];
+
+    for(uint16_t command_index = 0U;
+        command_index < plane->command_count; command_index++)
+    {
+        const hk_fake_display_command_t *command =
+            &plane->commands[command_index];
+        for(uint32_t row = 0U; row < command->rect.height; row++)
+        {
+            uint32_t y = (uint32_t)command->rect.y + row;
+            if(command->type == HK_FAKE_DISPLAY_COMMAND_BLIT)
+            {
+                const uint8_t *source =
+                    (const uint8_t *)command->borrowed_data +
+                    row * command->source_stride_bytes;
+                uint32_t offset =
+                    (y * s_display.info.width + (uint32_t)command->rect.x) * 2U;
+                uint32_t size_bytes = command->rect.width * 2U;
+                memcpy(backing + offset, source, size_bytes);
+                memcpy(panel + offset, source, size_bytes);
+                continue;
+            }
+            for(uint32_t column = 0U;
+                column < command->rect.width; column++)
+            {
+                uint32_t x = (uint32_t)command->rect.x + column;
+                uint8_t paint = (uint8_t)(
+                    command->type == HK_FAKE_DISPLAY_COMMAND_CLEAR ||
+                    command->type == HK_FAKE_DISPLAY_COMMAND_FILL_RECT ||
+                    (command->type == HK_FAKE_DISPLAY_COMMAND_STROKE_RECT &&
+                     (row == 0U || column == 0U ||
+                      row + 1U == command->rect.height ||
+                      column + 1U == command->rect.width)));
+                if(paint)
+                {
+                    write_fake_pixel(backing, x, y, command->color);
+                    write_fake_pixel(panel, x, y, command->color);
+                }
+            }
+        }
+    }
 }
 
 static uint8_t present_exceeds_limit(const fake_plane_t *plane)
@@ -859,7 +961,8 @@ hk_result_t hk_display_present(
     for(uint16_t index = 0U; index < plane->repair_count; index++)
     {
         result = transfer_rect(
-            &plane->repair[index], deadline, cancel, 1U, 0U, 1U,
+            plane, &plane->repair[index], deadline, cancel,
+            1U, 0U, 1U, 1U,
             &invocation_slices);
         if(result != HK_OK)
         {
@@ -873,7 +976,8 @@ hk_result_t hk_display_present(
     for(uint16_t index = 0U; index < plane->dirty_count; index++)
     {
         result = transfer_rect(
-            &plane->dirty[index], deadline, cancel, 0U, 0U, 1U,
+            plane, &plane->dirty[index], deadline, cancel,
+            0U, 0U, (uint8_t)(plane->stage == FAKE_STAGE_SURFACE), 1U,
             &invocation_slices);
         if(result != HK_OK)
         {
@@ -887,6 +991,8 @@ hk_result_t hk_display_present(
             return result;
         }
     }
+    if(plane->stage == FAKE_STAGE_BATCH)
+        apply_batch_to_backing(plane);
     if(plane->committed_generation != UINT32_MAX)
         plane->committed_generation++;
     plane->has_committed = 1U;
@@ -966,7 +1072,8 @@ hk_result_t hk_display_release(
         for(uint16_t index = 0U; index < cleanup_count; index++)
         {
             result = transfer_rect(
-                &cleanup_rects[index], deadline, NULL, 1U, 1U, 0U,
+                plane, &cleanup_rects[index], deadline, NULL,
+                1U, 1U, 1U, 0U,
                 &invocation_slices);
             if(result == HK_OK)
                 continue;

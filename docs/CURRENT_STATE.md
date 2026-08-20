@@ -153,8 +153,10 @@ hardware qualification is a separate future gate.
 ## Remaining architecture work
 
 Later Phase 2 packages add the remaining mapped providers to the generated
-inventory and migrate display and external-link. The Display contract/fake is
-already fixed, but it is not runtime support or hardware qualification. Those
+inventory and migrate external-link. Display is runtime-composed; its borrowed
+BASE surface is explicitly an in-place backing store, while retained command
+batches remain transactional. Host timing checks do not constitute physical
+hardware qualification; real display latency is deferred to Phase 2.13. Later
 packages may
 forbid direct application-to-driver dependencies as migrations complete.
 Public App Runtime/context, app manifests, App SDK, and public storage, camera,
