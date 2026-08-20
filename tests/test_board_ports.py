@@ -713,7 +713,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         self.assertIsNone(
             check_arch.layer_violation(app, "i2c.h", "apps/buttons/i2c.h")
         )
-        self.assertIsNone(
+        self.assertIsNotNone(
             check_arch.layer_violation(
                 app, "../../internal/time_internal.h", "internal/time_internal.h"
             )

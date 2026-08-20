@@ -47,8 +47,8 @@ UART/I2C protocol or routed-peripheral semantics.
   `platforms/k210/startup`.
 - Applications may continue to call board-independent driver/service APIs in
   Phase 1, but cannot include a board BSP, platform HAL, or K210 SDK header.
-- Application needs for platform time and boot/recovery use private internal
-  runtime facades. These are not public or versioned capability APIs.
+- Application time needs use the public `hackylens.cap.time` 0.1 capability;
+  private boot/recovery wiring remains outside the capability surface.
 - Private schema-2 app requirements and the separate runtime/service/adapter
   consumer manifest control board-aware composition, capability grants,
   optional fallbacks, and exclusion. They do not expose runtime hardware
@@ -56,8 +56,11 @@ UART/I2C protocol or routed-peripheral semantics.
 - Phase 2.2 adds Capability API 0.1 common types and a fixed-capacity host-tested
   owner/lease core. Phase 2.3 generates its immutable provider table and owner
   grants from the selected board/profile and the private K210 capability map,
-  without changing `hk_app_t`. The generated production inventory is honestly
-  empty because no display/input/external-link/lights/time provider exists yet.
+  without changing `hk_app_t`. Phase 2.4 adds the first production provider:
+  the generated SEN0305 inventory contains only Time, with one K210 adapter and
+  shared native/MicroPython deadline and cancellation semantics. Input,
+  display, external-link, and lights remain honestly absent until their own
+  packages.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -73,14 +76,16 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.3 generated inventory/grants; providers still absent |
+| Capability build composition | Phase 2.4 Time provider; four initial providers still absent |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
-capabilities from it. Capability discovery currently returns the generated
-immutable empty Phase 2.3 inventory and is not an App Runtime or manifest
-surface.
+capabilities from it. Capability discovery returns the generated immutable
+inventory, currently Time only on SEN0305, and is not an App Runtime or
+manifest surface. The private generated `runtime_supported` marker describes
+Board Port runtime eligibility only; it is not physical capability or hardware
+qualification.
 
 ## Verification and evidence
 
@@ -136,8 +141,8 @@ hardware qualification is a separate future gate.
 
 ## Remaining architecture work
 
-Later Phase 2 packages add mapped providers to the generated inventory and
-migrate the five initial capabilities: time, input, display, external-link, and lights. They may
+Later Phase 2 packages add the remaining mapped providers to the generated
+inventory and migrate input, display, external-link, and lights. They may
 forbid direct application-to-driver dependencies as migrations complete.
 Public App Runtime/context, app manifests, App SDK, and public storage, camera,
 vision, and AI capabilities remain Phase 3+.

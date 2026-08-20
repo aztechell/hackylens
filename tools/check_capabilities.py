@@ -74,8 +74,11 @@ def validate(root: Path = ROOT) -> list[str]:
             if any(item["code"] not in generator.ABSENCE_CODES for item in first.absences):
                 failures.append(f"{board_id}: unknown absence reason")
             capability_doc = generator.capabilities_document(first)
-            if board.support == "conformance" and capability_doc["runtime_qualified"]:
+            if board.support == "conformance" and capability_doc["runtime_supported"]:
                 failures.append(f"{board_id}: conformance inventory claims runtime qualification")
+        time = next(item for item in catalog if item.id == "hackylens.cap.time")
+        if time.limits != (("max-sleep-us", 1, 300000000),):
+            failures.append("time capability must publish the canonical finite sleep limit")
     except (generator.CapabilityError, ContractError, OSError, ValueError) as exc:
         failures.append(str(exc))
 

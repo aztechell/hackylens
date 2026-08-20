@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <hackylens/capability/time.h>
+
 #include "apriltag.h"
 #include "tag36h11.h"
 
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 #include "../../services/core1_executor.h"
 #include "apriltag_config.h"
 
@@ -67,6 +69,62 @@ static volatile uint32_t g_last_result_us;
 static volatile uint32_t g_last_reconcile_us;
 static volatile uint32_t g_last_cleanup_us;
 static volatile uint8_t g_refine_edges_requested = APRILTAG_REFINE_EDGES;
+static hk_time_t s_apriltag_time;
+static hk_owner_t s_apriltag_time_owner;
+
+static hk_result_t apriltag_time_prepare(hk_owner_t *owner)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+
+    *owner = capability_client_consumer_owner(
+        "consumer:apriltag-detector");
+    if(hk_owner_is_zero(*owner))
+        return HK_ERR_STALE_HANDLE;
+    if(owner->slot != s_apriltag_time_owner.slot ||
+       owner->generation != s_apriltag_time_owner.generation ||
+       hk_lease_is_zero(&s_apriltag_time.lease))
+    {
+        s_apriltag_time.lease = HK_LEASE_NONE;
+        s_apriltag_time_owner = *owner;
+        return hk_time_acquire(*owner, &request, &s_apriltag_time);
+    }
+    return HK_OK;
+}
+
+static uint64_t apriltag_time_now_us(void)
+{
+    hk_owner_t owner;
+    uint64_t value = 0U;
+
+    if(apriltag_time_prepare(&owner) != HK_OK ||
+       hk_time_now_us(owner, &s_apriltag_time, &value) != HK_OK)
+        return 0U;
+    return value;
+}
+
+static hk_result_t apriltag_time_deadline_after_us(
+    uint64_t duration_us, hk_deadline_t *deadline)
+{
+    hk_owner_t owner;
+
+    if(apriltag_time_prepare(&owner) != HK_OK)
+        return HK_ERR_STALE_HANDLE;
+    return hk_time_deadline_after_us(
+        owner, &s_apriltag_time, duration_us, deadline);
+}
+
+static void apriltag_time_sleep_us(uint64_t duration_us)
+{
+    hk_owner_t owner;
+    hk_deadline_t wake;
+
+    if(apriltag_time_prepare(&owner) != HK_OK ||
+       hk_time_deadline_after_us(
+           owner, &s_apriltag_time, duration_us, &wake) != HK_OK)
+        return;
+    (void)hk_time_sleep_until(
+        owner, &s_apriltag_time, wake, wake, NULL);
+}
 
 static void *shared_uncached(void *pointer)
 {
@@ -122,7 +180,7 @@ static uint8_t detector_create(void)
     g_detector->qtp.min_cluster_pixels = APRILTAG_MIN_CLUSTER_PIXELS;
     g_detector->qtp.max_nmaxima = 10;
     g_detector->qtp.deglitch = 0;
-    g_detector->profile_now_us = time_internal_us;
+    g_detector->profile_now_us = apriltag_time_now_us;
     return 1;
 }
 
@@ -150,9 +208,9 @@ static void detector_run(uint32_t request_sequence, uint32_t request_epoch,
     uint64_t started_us;
     uint32_t publish_sequence;
 
-    started_us = time_internal_us();
+    started_us = apriltag_time_now_us();
     detections = apriltag_detector_detect(g_detector, &image);
-    g_last_us = (uint32_t)(time_internal_us() - started_us);
+    g_last_us = (uint32_t)(apriltag_time_now_us() - started_us);
     g_last_quads = g_detector->nquads;
     g_last_preprocess_us = g_detector->profile_preprocess_us;
     g_last_quad_search_us = g_detector->profile_quad_search_us;
@@ -295,7 +353,14 @@ void apriltag_detector_service_tick(void)
 
 uint8_t apriltag_detector_init(void)
 {
-    uint64_t deadline = time_internal_us() + APRILTAG_START_TIMEOUT_US;
+    hk_deadline_t deadline;
+
+    if(apriltag_time_deadline_after_us(
+           APRILTAG_START_TIMEOUT_US, &deadline) != HK_OK)
+    {
+        g_worker_state = APRILTAG_WORKER_ERROR;
+        return 0U;
+    }
 
     if(!core1_executor_init())
     {
@@ -303,10 +368,10 @@ uint8_t apriltag_detector_init(void)
         return 0U;
     }
     while((g_cleanup_pending || !core1_executor_idle()) &&
-          time_internal_us() < deadline)
+          apriltag_time_now_us() < deadline.at_us)
     {
         apriltag_detector_service_tick();
-        time_internal_sleep_ms(1U);
+        apriltag_time_sleep_us(1000U);
     }
     if(g_cleanup_pending || !core1_executor_idle())
     {

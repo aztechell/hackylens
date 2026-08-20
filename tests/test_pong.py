@@ -37,6 +37,8 @@ class PongHostTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'src' / 'config'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'internal'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'ui'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
                 f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",

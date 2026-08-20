@@ -49,6 +49,8 @@ void firmware_startup(void)
     debug_console_init();
     hk_screen_set_wake_handler(firmware_wake_from_sleep);
     platform_bootstrap_init_clocks();
+    if(capability_owner_runtime_initialize() != HK_OK)
+        printf("[CAPABILITY] owner initialization failed\r\n");
     settings_storage_init();
     platform_bootstrap_init_hardware();
     external_link_service_init(settings_external_link_transport());

@@ -7,6 +7,7 @@ numeric_id = 65537
 instance = 0
 version = "0.1.0"
 feature_bits = { monotonic-us = 0, sleep-until = 1 }
+limits = { max-sleep-us = { key = 1, value = 300000000 } }
 flags = ["shared"]
 affinity = "any"
 resources = ["processor"]
@@ -21,6 +22,7 @@ numeric_id = 65538
 instance = 0
 version = "0.1.0"
 feature_bits = { state = 0, events = 1, debounced-buttons = 2 }
+limits = {}
 flags = ["shared"]
 affinity = 0
 resources = ["buttons"]
@@ -35,6 +37,7 @@ numeric_id = 65539
 instance = 0
 version = "0.1.0"
 feature_bits = { base-plane = 0, overlay-plane = 1, batch = 2, dirty-regions = 3, rgb565 = 4, borrowed-surface = 5, text = 6 }
+limits = {}
 flags = ["shared"]
 affinity = 0
 resources = ["display"]
@@ -49,6 +52,7 @@ numeric_id = 65540
 instance = 0
 version = "0.1.0"
 feature_bits = { uart = 0, i2c-controller = 1, i2c-target = 2 }
+limits = {}
 flags = ["exclusive"]
 affinity = 0
 resources = ["external-uart", "external-i2c"]
@@ -63,6 +67,7 @@ numeric_id = 65541
 instance = 0
 version = "0.1.0"
 feature_bits = { backlight = 0, illumination = 1, rgb = 2 }
+limits = {}
 flags = ["shared"]
 affinity = 0
 resources = ["lights"]

@@ -194,6 +194,12 @@ an inventory entry cannot be constructed from the selected descriptor,
 platform mapping, driver support, provider source, version, and features.
 Runtime MUST NOT infer capability presence from a board ID or HMPY metadata.
 
+The private generated `runtime_supported` field describes only whether the
+selected Board Port is eligible for runtime firmware. It MUST NOT be
+interpreted as physical qualification of the inventory, an individual
+capability, or the produced image. Hardware qualification remains separate
+evidence bound to its exact tested artifact.
+
 ## Required and optional declarations
 
 Required and optional are build-composition declarations, not different

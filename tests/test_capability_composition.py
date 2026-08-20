@@ -56,6 +56,7 @@ numeric_id = 65537
 instance = 0
 version = "0.1.0"
 feature_bits = { monotonic-us = 0, sleep-until = 1 }
+limits = { max-sleep-us = { key = 1, value = 300000000 } }
 flags = ["shared"]
 affinity = "any"
 resources = ["processor"]
@@ -123,6 +124,7 @@ numeric_id = 65537
 instance = 0
 version = "0.1.0"
 feature_bits = {}
+limits = {}
 flags = ["shared"]
 affinity = "any"
 resources = ["processor"]
@@ -219,10 +221,16 @@ max_leases = 1
         apps = set(generator.load_app_requirements())
         runtime = generator.compose(self.runtime, apps, set(), set(), set())
         cube = generator.compose(self.cube, apps, set(), set(), set())
-        self.assertEqual(runtime.capabilities, ())
-        self.assertEqual(cube.capabilities, ())
-        self.assertTrue(generator.capabilities_document(runtime)["runtime_qualified"])
-        self.assertFalse(generator.capabilities_document(cube)["runtime_qualified"])
+        self.assertEqual(
+            [item.id for item in runtime.capabilities],
+            ["hackylens.cap.time"],
+        )
+        self.assertEqual(
+            [item.id for item in cube.capabilities],
+            ["hackylens.cap.time"],
+        )
+        self.assertTrue(generator.capabilities_document(runtime)["runtime_supported"])
+        self.assertFalse(generator.capabilities_document(cube)["runtime_supported"])
         self.assertTrue(all(item["code"] in generator.ABSENCE_CODES
                             for item in cube.absences))
 

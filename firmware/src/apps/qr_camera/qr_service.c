@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include <hackylens/capability/time.h>
+
 #include "../../services/camera_frame.h"
 #include "qr_camera_frame_adapter.h"
 
@@ -13,11 +15,35 @@
 #include "../../config/settings_config.h"
 #include "../../services/settings_persistence.h"
 #include "../../services/settings_service.h"
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 
 static uint64_t g_qr_last_decode_us;
 static uint64_t g_qr_last_status_log_us;
 static int g_qr_last_code_count = -1;
+static hk_time_t s_qr_time;
+static hk_owner_t s_qr_time_owner;
+
+static uint64_t qr_time_now_us(void)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_owner_t owner = capability_client_current_owner();
+    uint64_t value = 0U;
+
+    if(hk_owner_is_zero(owner))
+        return 0U;
+    if(owner.slot != s_qr_time_owner.slot ||
+       owner.generation != s_qr_time_owner.generation ||
+       hk_lease_is_zero(&s_qr_time.lease))
+    {
+        s_qr_time.lease = HK_LEASE_NONE;
+        s_qr_time_owner = owner;
+        if(hk_time_acquire(owner, &request, &s_qr_time) != HK_OK)
+            return 0U;
+    }
+    if(hk_time_now_us(owner, &s_qr_time, &value) != HK_OK)
+        return 0U;
+    return value;
+}
 
 void qr_service_enter(void)
 {
@@ -31,7 +57,7 @@ void qr_service_enter(void)
 static void qr_log_info(uint8_t force)
 {
     qr_engine_stats_t stats;
-    uint64_t now = time_internal_us();
+    uint64_t now = qr_time_now_us();
 
     if(!force && g_qr_last_status_log_us != 0 && now - g_qr_last_status_log_us < QR_STATUS_LOG_INTERVAL_US)
         return;
@@ -110,7 +136,7 @@ static qr_decode_result_t qr_decode_current_frame(uint8_t force)
 
 qr_decode_result_t qr_service_decode_maybe(uint8_t force)
 {
-    uint64_t now = time_internal_us();
+    uint64_t now = qr_time_now_us();
     uint64_t interval_us = qr_decode_interval_us();
 
     if(force)

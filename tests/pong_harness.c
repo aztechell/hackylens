@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <hackylens/capability/time.h>
+
 #include "hk_lcd.h"
 #include "input_config.h"
 #include "pong_controller.h"
@@ -25,9 +27,33 @@ static uint16_t g_draw_rect_count;
 static uint16_t g_text_count;
 static uint8_t g_record_lcd;
 
-uint64_t time_internal_us(void)
+hk_owner_t capability_client_current_owner(void)
 {
-    return g_now_us;
+    return (hk_owner_t){1U, 1U};
+}
+
+hk_owner_t capability_client_consumer_owner(const char *consumer_id)
+{
+    (void)consumer_id;
+    return HK_OWNER_NONE;
+}
+
+hk_result_t hk_time_acquire(
+    hk_owner_t owner, const hk_capability_request_t *request,
+    hk_time_t *handle)
+{
+    (void)request;
+    handle->lease = (hk_lease_t){1U, 1U, owner, HK_CAPABILITY_ID_TIME};
+    return HK_OK;
+}
+
+hk_result_t hk_time_now_us(
+    hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
+{
+    (void)owner;
+    (void)handle;
+    *value = g_now_us;
+    return HK_OK;
 }
 
 void hk_screen_set(screen_t screen)

@@ -291,6 +291,8 @@ Schema/generator можно откатить целиком до начала co
 
 ## 2.4 — Error/deadline/cancellation model и Time capability
 
+Статус пакета: `in_progress` (2026-08-20); implementation and CI pending.
+
 ### Depends on
 
 `2.3`.

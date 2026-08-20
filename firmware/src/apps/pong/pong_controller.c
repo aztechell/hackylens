@@ -2,12 +2,14 @@
 
 #include <stdio.h>
 
+#include <hackylens/capability/time.h>
+
 #include "../../config/display_config.h"
 #include "../../config/input_config.h"
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 #include "pong_config.h"
 #include "pong_view.h"
 
@@ -36,6 +38,30 @@ static uint8_t g_pong_ai_noise;
 static int8_t g_pong_serve_direction;
 static uint64_t g_pong_last_tick_us;
 static uint64_t g_pong_accumulator_us;
+static hk_time_t s_pong_time;
+static hk_owner_t s_pong_time_owner;
+
+static uint64_t pong_time_now_us(void)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_owner_t owner = capability_client_current_owner();
+    uint64_t value = 0U;
+
+    if(hk_owner_is_zero(owner))
+        return 0U;
+    if(owner.slot != s_pong_time_owner.slot ||
+       owner.generation != s_pong_time_owner.generation ||
+       hk_lease_is_zero(&s_pong_time.lease))
+    {
+        s_pong_time.lease = HK_LEASE_NONE;
+        s_pong_time_owner = owner;
+        if(hk_time_acquire(owner, &request, &s_pong_time) != HK_OK)
+            return 0U;
+    }
+    if(hk_time_now_us(owner, &s_pong_time, &value) != HK_OK)
+        return 0U;
+    return value;
+}
 
 static int16_t pong_clamp(int16_t value, int16_t minimum, int16_t maximum)
 {
@@ -138,7 +164,7 @@ static void pong_reset(void)
     g_pong_ai_score = 0;
     g_pong_serve_index = 0;
     g_pong_ai_noise = 0xA5;
-    g_pong_last_tick_us = time_internal_us();
+    g_pong_last_tick_us = pong_time_now_us();
     g_pong_accumulator_us = 0;
     pong_begin_serve(1);
 }
@@ -370,7 +396,7 @@ void pong_controller_tick(const hk_input_snapshot_t *input)
         PONG_FIXED_STEP_US * PONG_MAX_CATCH_UP_STEPS;
     pong_view_state_t previous;
     pong_view_state_t current;
-    uint64_t now_us = time_internal_us();
+    uint64_t now_us = pong_time_now_us();
     uint64_t elapsed_us;
     uint8_t score_changed = 0;
     uint8_t steps = 0;

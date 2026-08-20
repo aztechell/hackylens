@@ -425,6 +425,8 @@ def layer_violation(path: str, include: str, target: str | None) -> str | None:
             include_name in PRIVATE_BOARD_HEADERS or
             re.fullmatch(r"hal_[a-z0-9_]+\.h", include_name)):
         return "apps must use private runtime facades, not board/BSP or platform HAL"
+    if (path.startswith("apps/") and target == "internal/time_internal.h"):
+        return "apps must use the public Time capability"
     if not path.startswith("runtime/") and target and target.startswith("runtime/"):
         return "only runtime may include runtime"
     if path.startswith("drivers/") and target and target.startswith(
@@ -532,8 +534,10 @@ def layout_failures() -> list[str]:
     for required in (
         ROOT / "platforms" / "k210" / "hal",
         ROOT / "platforms" / "k210" / "startup",
-        ROOT / "firmware" / "src" / "internal" / "time_internal.h",
         ROOT / "firmware" / "src" / "internal" / "boot_internal.h",
+        ROOT / "firmware" / "include" / "hackylens" / "capability" / "time.h",
+        ROOT / "firmware" / "src" / "capabilities" / "time.c",
+        ROOT / "platforms" / "k210" / "capabilities" / "time_adapter.c",
         ROOT / "firmware" / "app_requirements.toml",
         ROOT / "firmware" / "capability_consumers.toml",
         ROOT / "platforms" / "k210" / "capabilities.toml",
@@ -542,6 +546,24 @@ def layout_failures() -> list[str]:
     ):
         if not required.exists():
             failures.append(f"{required.relative_to(ROOT).as_posix()}: required Phase 1 path is missing")
+    for removed in (
+        ROOT / "firmware" / "src" / "internal" / "time_internal.c",
+        ROOT / "firmware" / "src" / "internal" / "time_internal.h",
+    ):
+        if removed.exists():
+            failures.append(
+                f"{removed.relative_to(ROOT).as_posix()}: replaced Time facade must not exist"
+            )
+    for app_source in sorted((SRC / "apps").rglob("*")):
+        if app_source.suffix not in {".c", ".h"}:
+            continue
+        app_text = app_source.read_text(encoding="utf-8")
+        for forbidden_time_call in ("time_internal", "hal_time_us", "hal_sleep"):
+            if forbidden_time_call in app_text:
+                failures.append(
+                    f"{relative(app_source)}: app time must use the public Time capability; "
+                    f"found {forbidden_time_call}"
+                )
     for path in sorted(LEGACY_PATHS | FORBIDDEN_FILES):
         if (SRC / path).exists():
             failures.append(f"{path}: legacy/forbidden path must not exist")

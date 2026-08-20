@@ -1,12 +1,49 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <hackylens/capability/time.h>
+
 #include "py/runtime.h"
 
 #include "../../config/input_config.h"
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 #include "../../services/micropython_binding_service.h"
 #include "../../services/micropython_runtime.h"
+
+static hk_time_t s_binding_time;
+static hk_owner_t s_binding_time_owner;
+
+static hk_result_t binding_time_prepare(hk_owner_t *owner)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+
+    *owner = capability_client_consumer_owner(
+        "consumer:micropython-adapter");
+    if(hk_owner_is_zero(*owner))
+        return HK_ERR_STALE_HANDLE;
+    if(owner->slot != s_binding_time_owner.slot ||
+       owner->generation != s_binding_time_owner.generation ||
+       hk_lease_is_zero(&s_binding_time.lease))
+    {
+        s_binding_time.lease = HK_LEASE_NONE;
+        s_binding_time_owner = *owner;
+        return hk_time_acquire(*owner, &request, &s_binding_time);
+    }
+    return HK_OK;
+}
+
+static void binding_time_raise(hk_result_t result)
+{
+    if(result == HK_ERR_LIMIT || result == HK_ERR_INVALID_ARGUMENT)
+        mp_raise_ValueError(MP_ERROR_TEXT("time limit invalid"));
+    mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("time capability error"));
+}
+
+static uint8_t binding_time_cancel(const void *context)
+{
+    (void)context;
+    return micropython_runtime_interrupt_pending();
+}
 
 static void binding_raise(micropython_binding_result_t result)
 {
@@ -73,7 +110,15 @@ static MP_DEFINE_CONST_FUN_OBJ_1(binding_button_obj, binding_button);
 
 static mp_obj_t binding_ticks_ms(void)
 {
-    return mp_obj_new_int_from_ull(time_internal_us() / 1000ULL);
+    hk_owner_t owner;
+    uint64_t now = 0U;
+    hk_result_t result = binding_time_prepare(&owner);
+
+    if(result == HK_OK)
+        result = hk_time_now_us(owner, &s_binding_time, &now);
+    if(result != HK_OK)
+        binding_time_raise(result);
+    return mp_obj_new_int_from_ull(now / 1000ULL);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_ticks_ms_obj, binding_ticks_ms);
 
@@ -81,21 +126,22 @@ static mp_obj_t binding_sleep_ms(mp_obj_t duration_object)
 {
     uint32_t duration = binding_uint(
         duration_object, MICROPYTHON_RUNTIME_MAX_LIMIT_MS);
-    uint64_t deadline = time_internal_us() + (uint64_t)duration * 1000ULL;
+    hk_owner_t owner;
+    hk_deadline_t wake;
+    const hk_cancel_t cancel = {binding_time_cancel, NULL};
+    hk_result_t result = binding_time_prepare(&owner);
 
-    while(time_internal_us() < deadline)
-    {
-        uint64_t remaining;
-        uint32_t slice;
-
+    if(result == HK_OK)
+        result = hk_time_deadline_after_us(
+            owner, &s_binding_time, (uint64_t)duration * 1000ULL,
+            &wake);
+    if(result == HK_OK)
+        result = hk_time_sleep_until(
+            owner, &s_binding_time, wake, wake, &cancel);
+    if(result == HK_ERR_CANCELLED)
         micropython_runtime_vm_hook();
-        remaining = deadline - time_internal_us();
-        slice = (uint32_t)((remaining + 999ULL) / 1000ULL);
-        if(slice > 5U)
-            slice = 5U;
-        if(slice)
-            time_internal_sleep_ms(slice);
-    }
+    if(result != HK_OK)
+        binding_time_raise(result);
     micropython_runtime_vm_hook();
     return mp_const_none;
 }

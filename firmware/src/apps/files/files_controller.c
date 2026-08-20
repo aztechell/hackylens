@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include <hackylens/capability/time.h>
+
 #include "../../core/hk_app.h"
 
 #include "../../config/input_config.h"
@@ -10,7 +12,7 @@
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 #include "file_browser_mode.h"
 #include "files_actions.h"
 #include "files_presenter.h"
@@ -19,6 +21,30 @@ static uint32_t g_files_repeat_button;
 static uint8_t g_files_repeat_ticks;
 static uint64_t g_files_ok_press_us;
 static uint8_t g_files_ok_hold_fired;
+static hk_time_t s_files_time;
+static hk_owner_t s_files_time_owner;
+
+static uint64_t files_time_now_us(void)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_owner_t owner = capability_client_current_owner();
+    uint64_t value = 0U;
+
+    if(hk_owner_is_zero(owner))
+        return 0U;
+    if(owner.slot != s_files_time_owner.slot ||
+       owner.generation != s_files_time_owner.generation ||
+       hk_lease_is_zero(&s_files_time.lease))
+    {
+        s_files_time.lease = HK_LEASE_NONE;
+        s_files_time_owner = owner;
+        if(hk_time_acquire(owner, &request, &s_files_time) != HK_OK)
+            return 0U;
+    }
+    if(hk_time_now_us(owner, &s_files_time, &value) != HK_OK)
+        return 0U;
+    return value;
+}
 
 void files_controller_reset_input(void)
 {
@@ -240,7 +266,7 @@ void files_controller_tick(const hk_input_snapshot_t *input)
         return;
     }
 
-    now_us = time_internal_us();
+    now_us = files_time_now_us();
     files_controller_tick_delete(input->state, now_us);
     if(files_mode() == FILES_MODE_IMAGE)
         files_presenter_tick_image(now_us);
@@ -256,7 +282,9 @@ void files_controller_handle_buttons(const hk_input_snapshot_t *input)
             return;
         }
 
-        files_controller_handle_preview_buttons(input->pressed, input->changed, input->state, time_internal_us());
+        files_controller_handle_preview_buttons(
+            input->pressed, input->changed, input->state,
+            files_time_now_us());
         return;
     }
 
@@ -267,5 +295,7 @@ void files_controller_handle_buttons(const hk_input_snapshot_t *input)
         return;
     }
 
-    files_controller_handle_list_buttons(input->pressed, input->changed, input->state, time_internal_us());
+    files_controller_handle_list_buttons(
+        input->pressed, input->changed, input->state,
+        files_time_now_us());
 }

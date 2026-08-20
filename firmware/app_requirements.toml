@@ -7,12 +7,16 @@ optional_capabilities = []
 
 [apps.camera]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+]
 optional_capabilities = []
 
 [apps.qr-camera]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [apps.face-detect]
@@ -22,17 +26,23 @@ optional_capabilities = []
 
 [apps.apriltag]
 requires = ["display", "camera", "buttons", "lights"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+]
 optional_capabilities = []
 
 [apps.object-detect]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [apps.files]
 requires = ["display", "buttons", "sd-card"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [apps.buttons]
@@ -42,7 +52,9 @@ optional_capabilities = []
 
 [apps.pong]
 requires = ["display", "buttons"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [apps.settings]
@@ -52,7 +64,9 @@ optional_capabilities = []
 
 [apps.sleep]
 requires = ["display", "buttons", "lights"]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [apps.micropython]
@@ -64,5 +78,7 @@ requires = [
   "external-uart",
   "external-i2c",
 ]
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+]
 optional_capabilities = []

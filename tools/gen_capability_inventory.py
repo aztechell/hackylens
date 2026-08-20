@@ -84,6 +84,7 @@ class Capability:
     instance: int
     version: Version
     feature_bits: tuple[tuple[str, int], ...]
+    limits: tuple[tuple[str, int, int], ...]
     flag: str
     affinity: int | None
     resources: tuple[str, ...]
@@ -318,7 +319,7 @@ def load_catalog(path: Path = CATALOG_PATH, *, root: Path = ROOT) -> tuple[Capab
         raise CapabilityError("capability catalog.capabilities: expected non-empty array")
     result: list[Capability] = []
     exact_fields = {
-        "id", "numeric_id", "instance", "version", "feature_bits", "flags",
+        "id", "numeric_id", "instance", "version", "feature_bits", "limits", "flags",
         "affinity", "resources", "routes", "provider_source", "provider_symbol",
         "max_leases",
     }
@@ -338,6 +339,26 @@ def load_catalog(path: Path = CATALOG_PATH, *, root: Path = ROOT) -> tuple[Capab
             ))
         if len({bit for _, bit in normalized_bits}) != len(normalized_bits):
             raise CapabilityError(f"{label}.feature_bits: duplicate bit")
+        limits = entry["limits"]
+        if not isinstance(limits, dict):
+            raise CapabilityError(f"{label}.limits: expected table")
+        normalized_limits: list[tuple[str, int, int]] = []
+        for name, limit in limits.items():
+            limit_label = f"{label}.limits.{name}"
+            _string(name, f"{label}.limits key", IDENTIFIER_RE)
+            if not isinstance(limit, dict):
+                raise CapabilityError(f"{limit_label}: expected table")
+            _strict(limit, {"key", "value"}, limit_label)
+            normalized_limits.append((
+                name,
+                _integer(limit["key"], f"{limit_label}.key", 1, 0xFFFFFFFF),
+                _integer(
+                    limit["value"], f"{limit_label}.value",
+                    0, 0xFFFFFFFFFFFFFFFF,
+                ),
+            ))
+        if len({item[1] for item in normalized_limits}) != len(normalized_limits):
+            raise CapabilityError(f"{label}.limits: duplicate numeric key")
         flags = _string_array(entry["flags"], f"{label}.flags", IDENTIFIER_RE)
         if len(flags) != 1 or flags[0] not in {"shared", "exclusive"}:
             raise CapabilityError(f"{label}.flags: expected exactly shared or exclusive")
@@ -356,6 +377,7 @@ def load_catalog(path: Path = CATALOG_PATH, *, root: Path = ROOT) -> tuple[Capab
             instance=_integer(entry["instance"], f"{label}.instance", 0, 0xFFFF),
             version=parse_version(entry["version"], f"{label}.version"),
             feature_bits=tuple(sorted(normalized_bits, key=lambda item: item[1])),
+            limits=tuple(sorted(normalized_limits, key=lambda item: item[1])),
             flag=flags[0],
             affinity=affinity,
             resources=_string_array(entry["resources"], f"{label}.resources", IDENTIFIER_RE),
@@ -618,13 +640,17 @@ def capabilities_document(composition: Composition) -> dict[str, object]:
             "affinity": "any" if item.affinity is None else item.affinity,
             "provider_symbol": item.provider_symbol,
             "max_leases": item.max_leases,
+            "limits": [
+                {"name": name, "key": key, "value": value}
+                for name, key, value in item.limits
+            ],
         })
     return {
         "schema": 1,
         "board": composition.board.id,
         "platform": composition.board.registry.platform,
         "support": composition.board.support,
-        "runtime_qualified": composition.board.support == "runtime",
+        "runtime_supported": composition.board.support == "runtime",
         "entries": entries,
         "absences": list(composition.absences),
     }
@@ -636,7 +662,7 @@ def composition_document(composition: Composition, capabilities_sha256: str) -> 
         "board": composition.board.id,
         "platform": composition.board.registry.platform,
         "support": composition.board.support,
-        "runtime_qualified": composition.board.support == "runtime",
+        "runtime_supported": composition.board.support == "runtime",
         "disabled_apps": sorted(composition.disabled_apps),
         "disabled_capabilities": sorted(composition.disabled_capabilities),
         "exclusions": list(composition.exclusions),
@@ -692,15 +718,27 @@ def generated_c(composition: Composition) -> str:
     if composition.capabilities:
         for item in composition.capabilities:
             lines.append(f"extern const hk_capability_provider_t {item.provider_symbol};")
-        lines.extend(["", "static const hk_capability_info_t s_inventory[] = {"])
-        for item in composition.capabilities:
+        lines.append("")
+        for index, item in enumerate(composition.capabilities):
+            if not item.limits:
+                continue
+            lines.append(f"static const hk_capability_limit_t s_limits_{index}[] = {{")
+            for _, key, value in item.limits:
+                lines.append(
+                    "    {sizeof(hk_capability_limit_t), "
+                    f"HK_CAPABILITY_LIMIT_VERSION, {key}U, UINT64_C({value})}},"
+                )
+            lines.extend(["};", ""])
+        lines.append("static const hk_capability_info_t s_inventory[] = {")
+        for index, item in enumerate(composition.capabilities):
             flag = "HK_CAPABILITY_FLAG_SHARED" if item.flag == "shared" else "HK_CAPABILITY_FLAG_EXCLUSIVE"
             affinity = "HK_CAPABILITY_CORE_ANY" if item.affinity is None else f"{item.affinity}U"
+            limits = f"s_limits_{index}" if item.limits else "NULL"
             lines.append(
                 "    {sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION, "
                 f"0x{item.numeric_id:08X}U, {item.version.c_fields()}, "
                 f"UINT64_C(0x{item.feature_mask:016X}), {flag}, {item.instance}U, "
-                f"{affinity}, NULL, 0U, 0U}},"
+                f"{affinity}, {limits}, {len(item.limits)}U, 0U}},"
             )
         lines.extend(["};", "", "static const hk_capability_provider_t *const s_providers[] = {"])
         lines.extend(f"    &{item.provider_symbol}," for item in composition.capabilities)

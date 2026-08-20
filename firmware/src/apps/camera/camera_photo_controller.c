@@ -2,11 +2,13 @@
 
 #include <stdio.h>
 
+#include <hackylens/capability/time.h>
+
 #include "../../services/camera_frame.h"
 #include "../../services/camera_persist_settings.h"
 
 #include "camera_config.h"
-#include "../../internal/time_internal.h"
+#include "../../capabilities/capability_client_binding.h"
 #include "camera_photo_service.h"
 #include "../../storage/file_mount.h"
 #include "../../storage/file_write_error.h"
@@ -14,6 +16,40 @@
 #include "../../ui/camera_view.h"
 #include "camera_photo_format.h"
 #include "camera_photo_capture.h"
+
+static hk_time_t s_camera_time;
+static hk_owner_t s_camera_time_owner;
+
+static hk_result_t camera_time_prepare(hk_owner_t *owner)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+
+    *owner = capability_client_current_owner();
+    if(hk_owner_is_zero(*owner))
+        return HK_ERR_STALE_HANDLE;
+    if(owner->slot != s_camera_time_owner.slot ||
+       owner->generation != s_camera_time_owner.generation ||
+       hk_lease_is_zero(&s_camera_time.lease))
+    {
+        s_camera_time.lease = HK_LEASE_NONE;
+        s_camera_time_owner = *owner;
+        return hk_time_acquire(*owner, &request, &s_camera_time);
+    }
+    return HK_OK;
+}
+
+static void camera_time_sleep_ms(uint32_t duration_ms)
+{
+    hk_owner_t owner;
+    hk_deadline_t wake;
+
+    if(camera_time_prepare(&owner) != HK_OK ||
+       hk_time_deadline_after_us(
+           owner, &s_camera_time, (uint64_t)duration_ms * 1000U,
+           &wake) != HK_OK)
+        return;
+    (void)hk_time_sleep_until(owner, &s_camera_time, wake, wake, NULL);
+}
 
 void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
 {
@@ -28,7 +64,7 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
     {
         printf("[PHOTO] save fail no frame\r\n");
         camera_status_view_draw("SAVE FAIL", "NO FRAME");
-        time_internal_sleep_ms(550);
+        camera_time_sleep_ms(550);
         camera_view_clear();
         return;
     }
@@ -50,21 +86,21 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
     {
         printf("[PHOTO] save fail no sd\r\n");
         camera_status_view_draw("NO SD", "SAVE FAIL");
-        time_internal_sleep_ms(750);
+        camera_time_sleep_ms(750);
     }
     else if(photo_service_save_current_frame(saved_name, sizeof(saved_name)))
     {
         camera_status_view_draw("PHOTO SAVED", saved_name);
         if(camera_service_review_after_shot())
         {
-            time_internal_sleep_ms(450);
+            camera_time_sleep_ms(450);
             if(redraw_preview)
                 redraw_preview();
-            time_internal_sleep_ms(CAMERA_REVIEW_MS);
+            camera_time_sleep_ms(CAMERA_REVIEW_MS);
         }
         else
         {
-            time_internal_sleep_ms(650);
+            camera_time_sleep_ms(650);
         }
     }
     else
@@ -72,7 +108,7 @@ void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)
         const char *error = file_write_last_error() ? file_write_last_error() : "UNKNOWN";
         printf("[PHOTO] save fail %s\r\n", error);
         camera_status_view_draw("SAVE FAIL", error);
-        time_internal_sleep_ms(750);
+        camera_time_sleep_ms(750);
     }
 
     camera_photo_capture_end();

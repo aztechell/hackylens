@@ -437,6 +437,24 @@ hk_result_t hk_capability_core_validate_lease(
         core, owner, lease, expected_type, current_core, 0U, provider_context);
 }
 
+hk_result_t hk_capability_core_quarantine_lease(
+    hk_capability_core_t *core,
+    hk_owner_t owner,
+    const hk_lease_t *lease,
+    hk_capability_id_t expected_type,
+    uint16_t current_core)
+{
+    hk_capability_lease_slot_t *slot;
+    hk_result_t result = validate_lease(
+        core, owner, lease, expected_type, current_core, 1U, NULL);
+
+    if(result != HK_OK)
+        return result;
+    slot = &core->leases[lease->slot];
+    core->provider_state[slot->provider_index].quarantined = 1U;
+    return HK_OK;
+}
+
 hk_result_t hk_capability_core_release(
     hk_capability_core_t *core,
     hk_owner_t owner,

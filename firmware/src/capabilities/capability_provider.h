@@ -119,6 +119,12 @@ hk_result_t hk_capability_core_validate_lease(
     hk_capability_id_t expected_type,
     uint16_t current_core,
     void **provider_context);
+hk_result_t hk_capability_core_quarantine_lease(
+    hk_capability_core_t *core,
+    hk_owner_t owner,
+    const hk_lease_t *lease,
+    hk_capability_id_t expected_type,
+    uint16_t current_core);
 hk_result_t hk_capability_core_recover(
     hk_capability_core_t *core,
     hk_capability_id_t capability_id,

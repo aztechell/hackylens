@@ -21,6 +21,12 @@ Feature bits:
 
 Version `0.1.0` requires both features.
 
+Public limits:
+
+| Key | Name | Meaning |
+|---:|---|---|
+| `1` | `HK_TIME_LIMIT_MAX_SLEEP_US` | Maximum relative deadline or sleep interval, in microseconds |
+
 ## Public operations
 
 - `hk_time_acquire(owner, request, handle)` obtains a shared lease.

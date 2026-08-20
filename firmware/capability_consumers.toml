@@ -2,7 +2,9 @@ schema = 1
 
 [consumers.firmware-runtime]
 kind = "runtime"
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
 optional_capabilities = []
 
 [consumers.hmpy-service]
@@ -11,8 +13,26 @@ enabled_by_app = "micropython"
 required_capabilities = []
 optional_capabilities = []
 
+[consumers.apriltag-detector]
+kind = "service"
+enabled_by_app = "apriltag"
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+]
+optional_capabilities = []
+
+[consumers.object-detect-detector]
+kind = "service"
+enabled_by_app = "object-detect"
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
+optional_capabilities = []
+
 [consumers.micropython-adapter]
 kind = "adapter"
 enabled_by_app = "micropython"
-required_capabilities = []
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+]
 optional_capabilities = []
