@@ -291,8 +291,8 @@ Schema/generator можно откатить целиком до начала co
 
 ## 2.4 — Error/deadline/cancellation model и Time capability
 
-Статус пакета: `corrective_in_progress` (2026-08-20); correcting an `ANY_CORE`
-K210 observation-order race found after the initial green CI.
+Статус пакета: `completed` (2026-08-20); corrective `ANY_CORE` ordering CI
+passed in [`Release firmware` run 32343616128](https://github.com/aztechell/hackylens/actions/runs/32343616128).
 
 ### Depends on
 
