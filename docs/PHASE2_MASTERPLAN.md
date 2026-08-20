@@ -597,9 +597,11 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ## 2.9 — External-link contract и fake
 
-Статус пакета: `in_progress`; corrective release lifecycle и I2C-target preload
-semantics реализуются и повторно проходят полный CI gate. Предыдущий successful
-run не закрывает исправленный пакет.
+Статус пакета: `completed` (2026-08-21); corrective release lifecycle,
+I2C-target preload semantics, both firmware profiles, and resource evidence
+passed in
+[`Release firmware` run 32414243642](https://github.com/aztechell/hackylens/actions/runs/32414243642).
+K210 provider и consumer migration остаются границей `2.10`.
 
 ### Depends on
 
@@ -612,21 +614,21 @@ run не закрывает исправленный пакет.
 
 ### Scope
 
-- [~] Добавить `hackylens.cap.external-link` version `0.1.0`.
-- [~] Features: UART, I2C controller, I2C target.
-- [~] Один exclusive connector lease для shared physical routing.
-- [~] Определить mode configuration и validation без board ID.
-- [~] Определить async operation token: begin, poll, cancel, terminal result.
-- [~] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
+- [x] Добавить `hackylens.cap.external-link` version `0.1.0`.
+- [x] Features: UART, I2C controller, I2C target.
+- [x] Один exclusive connector lease для shared physical routing.
+- [x] Определить mode configuration и validation без board ID.
+- [x] Определить async operation token: begin, poll, cancel, terminal result.
+- [x] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
   bytes.
-- [~] UART completion требует empty FIFO и idle shift register.
-- [~] I2C transfer использует один deadline на весь transaction и возвращает
+- [x] UART completion требует empty FIFO и idle shift register.
+- [x] I2C transfer использует один deadline на весь transaction и возвращает
   определённые NACK/timeout/cancel results.
-- [~] I2C target использует one-shot preload следующего READ с deterministic
+- [x] I2C target использует one-shot preload следующего READ с deterministic
   truncation/zero-fill/replacement/cleanup semantics.
-- [~] TX/RX buffer ownership действует до terminal result.
-- [~] Реализовать deterministic fake с routing/mode/buffer/event log.
-- [~] Production external service и Python implementation пока не менять.
+- [x] TX/RX buffer ownership действует до terminal result.
+- [x] Реализовать deterministic fake с routing/mode/buffer/event log.
+- [x] Production external service и Python implementation пока не менять.
 
 ### Основные файлы
 
