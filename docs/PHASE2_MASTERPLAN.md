@@ -469,8 +469,8 @@ channels без определённого cleanup owner.
 
 ## 2.7 — Display contract и fake
 
-Статус пакета: `in_progress` (2026-08-20); public contract and deterministic
-host fake are under implementation, CI pending.
+Статус пакета: `completed` (2026-08-20); public contract, deterministic fake,
+and both firmware profiles passed in [`Release firmware` run 32381855169](https://github.com/aztechell/hackylens/actions/runs/32381855169).
 
 ### Depends on
 
@@ -482,17 +482,17 @@ host fake are under implementation, CI pending.
 
 ### Scope
 
-- [ ] Добавить `hackylens.cap.display` version `0.1.0`.
-- [ ] Зафиксировать runtime info: dimensions, formats, planes, limits, alignment,
+- [x] Добавить `hackylens.cap.display` version `0.1.0`.
+- [x] Зафиксировать runtime info: dimensions, formats, planes, limits, alignment,
   maximum present duration.
-- [ ] Определить exclusive `BASE` и optional `OVERLAY` plane leases.
-- [ ] Определить batch lifecycle: begin, clip, primitive/text/blit, present,
+- [x] Определить exclusive `BASE` и optional `OVERLAY` plane leases.
+- [x] Определить batch lifecycle: begin, clip, primitive/text/blit, present,
   retry, abort.
-- [ ] Определить borrowed full-frame surface и dirty rect marking.
-- [ ] Зафиксировать top-left, half-open rectangles и overflow-safe clipping.
-- [ ] Зафиксировать staged/committed state, partial-transfer repair и cleanup.
-- [ ] Реализовать deterministic display fake, command log и byte/region counters.
-- [ ] Реальный LCD driver и production consumers в этом пакете не менять.
+- [x] Определить borrowed full-frame surface и dirty rect marking.
+- [x] Зафиксировать top-left, half-open rectangles и overflow-safe clipping.
+- [x] Зафиксировать staged/committed state, partial-transfer repair и cleanup.
+- [x] Реализовать deterministic display fake, command log и byte/region counters.
+- [x] Реальный LCD driver и production consumers в этом пакете не менять.
 
 ### Основные файлы
 
