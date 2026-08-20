@@ -49,6 +49,12 @@ static void safe_off(uint32_t channels)
         lights_rgb_set(0U, 0U, 0U, 0U);
 }
 
+static uint8_t deadline_expired(hk_deadline_t deadline)
+{
+    return (uint8_t)(deadline.at_us != 0U &&
+                     hal_time_us() >= deadline.at_us);
+}
+
 static k210_lights_lease_t *find_lease(
     k210_lights_state_t *state, const hk_lease_t *lease)
 {
@@ -99,13 +105,15 @@ static hk_result_t k210_lights_open(
 }
 
 static hk_result_t k210_lights_close(
-    void *context, const hk_lease_t *lease)
+    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
 {
     k210_lights_state_t *state = (k210_lights_state_t *)context;
     k210_lights_lease_t *slot = find_lease(state, lease);
 
     if(!slot)
         return HK_ERR_INTERNAL;
+    if(deadline_expired(deadline))
+        return HK_ERR_DEADLINE_EXCEEDED;
     safe_off(slot->channels);
     slot->lease = HK_LEASE_NONE;
     slot->channels = 0U;
@@ -196,10 +204,20 @@ static hk_result_t k210_lights_cleanup(
     hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
     k210_lights_state_t *state;
 
-    (void)deadline;
     if(!provider || !provider->context)
         return HK_ERR_INTERNAL;
     state = (k210_lights_state_t *)provider->context;
+    for(uint16_t index = 0U; index < K210_LIGHTS_MAX_LEASES; index++)
+    {
+        k210_lights_lease_t *slot = &state->leases[index];
+
+        if(slot->active && owner_equal(slot->lease.owner, owner))
+        {
+            if(deadline_expired(deadline))
+                return HK_ERR_DEADLINE_EXCEEDED;
+            break;
+        }
+    }
     for(uint16_t index = 0U; index < K210_LIGHTS_MAX_LEASES; index++)
     {
         k210_lights_lease_t *slot = &state->leases[index];
@@ -220,13 +238,12 @@ static hk_result_t k210_lights_cleanup_lease(
     hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
     k210_lights_state_t *state;
 
-    (void)deadline;
     if(!provider || !provider->context)
         return HK_ERR_INTERNAL;
     state = (k210_lights_state_t *)provider->context;
     if(!find_lease(state, lease))
         return HK_OK;
-    return k210_lights_close(state, lease);
+    return k210_lights_close(state, lease, deadline);
 }
 
 static hk_result_t k210_lights_cleanup_dispatch(

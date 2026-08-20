@@ -47,9 +47,13 @@ Cancellation after a completed synchronous write does not roll back that write.
 ## Cleanup and policy
 
 Release drives every owned channel to provider-defined safe-off and invalidates
-the lease. It does not read or restore persisted product settings. The settings
-service may reacquire and reapply the latest persisted state after a temporary
-owner such as MicroPython releases its channels.
+the lease. A finite release or owner-cleanup deadline is checked before the
+first safe-off hardware effect. An already-expired ordinary release preserves
+the lease for a bounded retry; an owner-close cleanup failure follows the common
+invalidation and provider-quarantine rules. Cleanup does not read or restore
+persisted product settings. The settings service may reacquire and reapply the
+latest persisted state after a temporary owner such as MicroPython releases its
+channels.
 
 This separation keeps safe hardware cleanup in the capability provider and
 product preference policy in the service layer.

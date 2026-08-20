@@ -412,8 +412,8 @@ layer и runtime adapter откатываются одним изменение�
 
 ## 2.6 — Lights capability
 
-Статус пакета: `completed` (2026-08-20); implementation and both firmware
-profiles passed in [`Release firmware` run 32354601883](https://github.com/aztechell/hackylens/actions/runs/32354601883).
+Статус пакета: `in_progress` (2026-08-20); cleanup deadline corrective fix and
+CI are pending after implementation run `32354601883`.
 
 ### Depends on
 

@@ -6,7 +6,7 @@
 typedef hk_result_t (*hk_lights_provider_open_fn)(
     void *context, const hk_lease_t *lease, uint32_t channels);
 typedef hk_result_t (*hk_lights_provider_close_fn)(
-    void *context, const hk_lease_t *lease);
+    void *context, const hk_lease_t *lease, hk_deadline_t deadline);
 typedef hk_result_t (*hk_lights_provider_info_fn)(
     void *context, hk_lights_info_t *info);
 typedef hk_result_t (*hk_lights_provider_level_fn)(

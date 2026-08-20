@@ -91,6 +91,7 @@ int main(void)
     hk_lights_info_t info;
     uint8_t cancel_flag = 1U;
     hk_cancel_t cancel = {cancelled, &cancel_flag};
+    uint32_t writes_before_cleanup;
 
     CHECK(provider && hk_k210_lights_provider.max_leases == 16U);
     CHECK(provider->get_info(provider->context, &info) == HK_OK);
@@ -131,9 +132,20 @@ int main(void)
         HK_LIGHTS_CHANNEL_BACKLIGHT, 500U,
         HK_DEADLINE_IMMEDIATE, NULL) == HK_ERR_WRONG_OWNER);
 
+    writes_before_cleanup = s_writes;
     CHECK(provider->close_channels(
-        provider->context, &illumination) == HK_OK);
+        provider->context, &illumination, (hk_deadline_t){100U}) ==
+          HK_ERR_DEADLINE_EXCEEDED);
+    CHECK(s_writes == writes_before_cleanup && s_illum_enabled == 1U);
+    CHECK(provider->close_channels(
+        provider->context, &illumination, HK_DEADLINE_IMMEDIATE) == HK_OK);
     CHECK(s_illum_enabled == 0U && s_illum_percent == 0U);
+    writes_before_cleanup = s_writes;
+    CHECK(hk_k210_lights_provider.cleanup(
+        hk_k210_lights_provider.context, owner_b,
+        (hk_deadline_t){100U}) == HK_ERR_DEADLINE_EXCEEDED);
+    CHECK(s_writes == writes_before_cleanup && s_red == 100U &&
+          s_green == 50U && s_blue == 0U);
     CHECK(hk_k210_lights_provider.cleanup(
         hk_k210_lights_provider.context, owner_b,
         HK_DEADLINE_IMMEDIATE) == HK_OK);

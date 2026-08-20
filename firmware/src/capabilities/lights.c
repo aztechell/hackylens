@@ -99,7 +99,8 @@ hk_result_t hk_lights_release(
     result = lights_provider_for(owner, handle, &provider);
     if(result != HK_OK)
         return result;
-    result = provider->close_channels(provider->context, &handle->lease);
+    result = provider->close_channels(
+        provider->context, &handle->lease, deadline);
     if(result != HK_OK)
         return quarantine_internal(owner, handle, result);
     return capability_owner_runtime_release(

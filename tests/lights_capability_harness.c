@@ -29,6 +29,7 @@ typedef struct
     uint64_t now_us;
     uint32_t write_count;
     uint32_t safe_off_mask;
+    uint32_t safe_off_count;
     uint16_t backlight;
     uint16_t illumination;
     uint16_t red;
@@ -67,6 +68,7 @@ static fake_slot_t *fake_find(fake_lights_t *fake, const hk_lease_t *lease)
 static void fake_safe_off(fake_lights_t *fake, uint32_t channels)
 {
     fake->safe_off_mask |= channels;
+    fake->safe_off_count++;
     if(channels & HK_LIGHTS_CHANNEL_BACKLIGHT)
         fake->backlight = 0U;
     if(channels & HK_LIGHTS_CHANNEL_ILLUMINATION)
@@ -102,13 +104,16 @@ static hk_result_t fake_open(
     return HK_OK;
 }
 
-static hk_result_t fake_close(void *context, const hk_lease_t *lease)
+static hk_result_t fake_close(
+    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
 {
     fake_lights_t *fake = (fake_lights_t *)context;
     fake_slot_t *slot = fake_find(fake, lease);
 
     if(!slot)
         return HK_ERR_INTERNAL;
+    if(deadline.at_us != 0U && fake->now_us >= deadline.at_us)
+        return HK_ERR_DEADLINE_EXCEEDED;
     fake_safe_off(fake, slot->channels);
     memset(slot, 0, sizeof(*slot));
     return HK_OK;
@@ -196,7 +201,17 @@ static hk_result_t fake_cleanup(
     hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
     fake_lights_t *fake = (fake_lights_t *)provider->context;
 
-    (void)deadline;
+    for(uint16_t index = 0U; index < 8U; index++)
+    {
+        fake_slot_t *slot = &fake->slots[index];
+
+        if(slot->active && owner_equal(slot->lease.owner, owner))
+        {
+            if(deadline.at_us != 0U && fake->now_us >= deadline.at_us)
+                return HK_ERR_DEADLINE_EXCEEDED;
+            break;
+        }
+    }
     for(uint16_t index = 0U; index < 8U; index++)
     {
         fake_slot_t *slot = &fake->slots[index];
@@ -215,10 +230,9 @@ static hk_result_t fake_cleanup_lease(
     hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
     fake_lights_t *fake = (fake_lights_t *)provider->context;
 
-    (void)deadline;
     if(!fake_find(fake, lease))
         return HK_OK;
-    return fake_close(fake, lease);
+    return fake_close(fake, lease, deadline);
 }
 
 static hk_result_t fake_cleanup_dispatch(
@@ -303,6 +317,7 @@ int main(void)
     hk_capability_grant_t illumination_grant = s_grant;
     hk_capability_request_t illumination_request = request;
     hk_capability_request_t short_request = request;
+    uint32_t safe_off_count;
 
     memset(&s_fake, 0, sizeof(s_fake));
     s_fake.now_us = 100U;
@@ -373,8 +388,16 @@ int main(void)
           s_fake.red == 1000U && s_fake.green == 500U &&
           s_fake.blue == 1U && s_fake.backlight == 900U);
 
+    safe_off_count = s_fake.safe_off_count;
+    CHECK(hk_lights_release(
+        owner_c, (hk_deadline_t){100U}, &backlight) ==
+          HK_ERR_DEADLINE_EXCEEDED);
+    CHECK(s_fake.safe_off_count == safe_off_count &&
+          s_fake.backlight == 900U && !hk_lease_is_zero(&backlight.lease));
     CHECK(hk_lights_release(
         owner_c, HK_DEADLINE_IMMEDIATE, &backlight) == HK_OK);
+    CHECK(s_fake.safe_off_count == safe_off_count + 1U &&
+          hk_lease_is_zero(&backlight.lease));
     CHECK(hk_lights_acquire(
         owner_a, &request, HK_LIGHTS_CHANNEL_BACKLIGHT,
         &same_owner_backlight) == HK_OK);
@@ -410,6 +433,20 @@ int main(void)
     CHECK(hk_lights_acquire(
         owner_d, &short_request, HK_LIGHTS_CHANNEL_RGB,
         &replacement) == HK_ERR_INVALID_ARGUMENT);
+
+    CHECK(hk_lights_acquire(
+        owner_e, &illumination_request, HK_LIGHTS_CHANNEL_ILLUMINATION,
+        &illumination) == HK_OK);
+    safe_off_count = s_fake.safe_off_count;
+    CHECK(hk_capability_core_owner_close(
+        &s_core, owner_e, 0U, (hk_deadline_t){100U}) == HK_ERR_INTERNAL);
+    CHECK(s_fake.safe_off_count == safe_off_count);
+    CHECK(hk_lights_set_level(
+        owner_e, &illumination, HK_LIGHTS_CHANNEL_ILLUMINATION, 1U,
+        HK_DEADLINE_IMMEDIATE, NULL) == HK_ERR_STALE_HANDLE);
+    CHECK(hk_lights_acquire(
+        owner_c, &request, HK_LIGHTS_CHANNEL_BACKLIGHT,
+        &replacement) == HK_ERR_INVALID_STATE);
 
     printf("LIGHTS_CAPABILITY_OK writes=%u safe_off_mask=0x%X level_max=%u\n",
            (unsigned)s_fake.write_count, (unsigned)s_fake.safe_off_mask,
