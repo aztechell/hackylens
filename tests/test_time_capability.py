@@ -58,6 +58,30 @@ class TimeCapabilityTests(unittest.TestCase):
 
         self.assertIn("TIME_CAPABILITY_OK cases=10 max_slice_us=5000", result.stdout)
 
+    def test_k210_any_core_clock_read_is_inside_provider_lock(self) -> None:
+        compiler = self.compiler()
+        with tempfile.TemporaryDirectory(prefix="hackylens-k210-time-") as temp:
+            executable = Path(temp) / (
+                "k210_time_adapter.exe" if os.name == "nt" else "k210_time_adapter"
+            )
+            subprocess.run([
+                compiler,
+                "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'tests' / 'k210_time_adapter_stubs'}",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                str(ROOT / "tests" / "k210_time_adapter_harness.c"),
+                str(ROOT / "platforms" / "k210" / "capabilities" / "time_adapter.c"),
+                "-o", str(executable),
+            ], check=True, cwd=ROOT)
+            result = subprocess.run(
+                [str(executable)], check=True, cwd=ROOT,
+                text=True, capture_output=True, timeout=30,
+            )
+
+        self.assertIn(
+            "K210_TIME_ANY_CORE_ORDER_OK reads=2 locks=2", result.stdout,
+        )
+
     def test_all_application_time_calls_use_the_public_provider(self) -> None:
         apps = ROOT / "firmware" / "src" / "apps"
         sources = "\n".join(

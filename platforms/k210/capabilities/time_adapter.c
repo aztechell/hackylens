@@ -25,8 +25,8 @@ static hk_result_t k210_time_now(void *context, uint64_t *value)
 
     if(!state || !value)
         return HK_ERR_INVALID_ARGUMENT;
-    now = hal_time_us();
     spinlock_lock(&state->lock);
+    now = hal_time_us();
     if(state->observed && now < state->last_us)
     {
         spinlock_unlock(&state->lock);
