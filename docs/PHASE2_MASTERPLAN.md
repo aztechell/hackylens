@@ -524,8 +524,10 @@ buffers, dirty regions или cancel не переносится в K210 impleme
 
 ## 2.8 — K210 display implementation и consumer migration
 
-Статус пакета: `in_progress`; closure повторно открыта для согласования
-in-place borrowed-surface contract и общего fake/K210 normative suite.
+Статус пакета: `completed` (2026-08-20); corrected in-place surface contract,
+shared fake/K210 public-API suite, both firmware profiles, and resource evidence
+passed in [`Release firmware` run 32405344851](https://github.com/aztechell/hackylens/actions/runs/32405344851).
+Physical display timing qualification remains explicitly deferred to `2.13`.
 
 ### Depends on
 
@@ -538,21 +540,21 @@ dirty rendering и без второго framebuffer.
 
 ### Scope
 
-- [ ] Добавить K210 display adapter поверх private ST7789 transport.
-- [ ] Разделить raw panel transport и capability state/ownership.
-- [ ] Удалить Python-specific `HK_ENABLE_APP_MICROPYTHON`, `lcd_overlay_*` и
+- [x] Добавить K210 display adapter поверх private ST7789 transport.
+- [x] Разделить raw panel transport и capability state/ownership.
+- [x] Удалить Python-specific `HK_ENABLE_APP_MICROPYTHON`, `lcd_overlay_*` и
   run-ID ownership из driver.
-- [ ] Переиспользовать existing shadow framebuffer и bounded overlay
+- [x] Переиспользовать existing shadow framebuffer и bounded overlay
   command/text storage; второй 320x240 framebuffer запрещён.
-- [ ] Мигрировать 13 current app views с `hk_lcd.h` на typed display handle.
-- [ ] Передавать handle через private app registry/module binding, не через global
+- [x] Мигрировать 13 current app views с `hk_lcd.h` на typed display handle.
+- [x] Передавать handle через private app registry/module binding, не через global
   public facade.
-- [ ] Заменить app `display_config.h` assumptions на `hk_display_info_t` или
+- [x] Заменить app `display_config.h` assumptions на `hk_display_info_t` или
   explicit capability limits (`min_width`, `min_height`, format features).
-- [ ] Мигрировать MicroPython clear/text/rect/present на `OVERLAY` plane.
-- [ ] Сохранить camera/files full-frame behavior.
-- [ ] Сохранить Pong 20 ms fixed-step, catch-up limit и bounded dirty regions.
-- [ ] Перевести display requirements на public capability features/limits.
+- [x] Мигрировать MicroPython clear/text/rect/present на `OVERLAY` plane.
+- [x] Сохранить camera/files full-frame behavior.
+- [x] Сохранить Pong 20 ms fixed-step, catch-up limit и bounded dirty regions.
+- [x] Перевести display requirements на public capability features/limits.
 
 ### Основные файлы
 
