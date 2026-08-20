@@ -30,6 +30,9 @@ typedef struct
     uint32_t payload_bytes;
     uint32_t pixel_format;
     const void *borrowed_data;
+    uint32_t source_x;
+    uint32_t source_y;
+    uint32_t source_stride_bytes;
 } hk_fake_display_command_t;
 
 typedef struct

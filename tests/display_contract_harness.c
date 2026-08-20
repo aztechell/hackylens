@@ -311,6 +311,78 @@ static int test_surface_blit_and_incremental_bytes(void)
     return 0;
 }
 
+static int test_clipped_blit_source_mapping(void)
+{
+    hk_capability_request_t wanted = request();
+    hk_owner_t owner = {8U, 1U};
+    hk_display_t base;
+    hk_display_rect_t destination = {-2, -1, 6U, 4U};
+    uint16_t pixels[32] = {0U};
+    hk_buffer_view_t view = {
+        pixels, 60U, 16U, HK_BUFFER_ACCESS_READABLE,
+    };
+    const hk_fake_display_command_t *logged;
+
+    hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
+    CHECK(hk_display_acquire(
+        owner, &wanted, HK_DISPLAY_PLANE_BASE, &base) == HK_OK);
+    CHECK(hk_display_begin_batch(owner, &base) == HK_OK);
+    CHECK(hk_display_blit(
+        owner, &base, &destination, &view,
+        HK_DISPLAY_FORMAT_RGB565_BE) == HK_OK);
+    logged = hk_fake_display_command(0U);
+    CHECK(logged && logged->type == HK_FAKE_DISPLAY_COMMAND_BLIT &&
+          logged->rect.x == 0 && logged->rect.y == 0 &&
+          logged->rect.width == 4U && logged->rect.height == 3U &&
+          logged->source_x == 2U && logged->source_y == 1U &&
+          logged->source_stride_bytes == 16U &&
+          logged->borrowed_data == (const uint8_t *)pixels + 20U);
+    CHECK(hk_display_present(
+        owner, &base, (hk_deadline_t){500000U}, NULL) == HK_OK);
+    CHECK(hk_fake_display_metrics()->transferred_bytes == 24U);
+    CHECK(hk_display_release(
+        owner, HK_DEADLINE_IMMEDIATE, &base) == HK_OK);
+    return 0;
+}
+
+static int test_disjoint_damage_stays_bounded_during_repair(void)
+{
+    hk_capability_request_t wanted = request();
+    hk_owner_t owner = {9U, 1U};
+    hk_display_t base;
+    hk_display_rect_t first = {0, 0, 1U, 1U};
+    hk_display_rect_t last = {
+        HK_FAKE_DISPLAY_WIDTH - 1, HK_FAKE_DISPLAY_HEIGHT - 1, 1U, 1U,
+    };
+    uint64_t before;
+
+    hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
+    CHECK(hk_display_acquire(
+        owner, &wanted, HK_DISPLAY_PLANE_BASE, &base) == HK_OK);
+    CHECK(hk_display_begin_batch(owner, &base) == HK_OK);
+    CHECK(hk_display_fill_rect(owner, &base, &first, 0U) == HK_OK);
+    CHECK(hk_display_fill_rect(owner, &base, &last, 0U) == HK_OK);
+    CHECK(hk_fake_display_metrics()->staged_dirty_rects == 2U);
+    hk_fake_display_fail_next_present(HK_ERR_IO, 1U);
+    CHECK(hk_display_present(
+        owner, &base, (hk_deadline_t){500000U}, NULL) == HK_ERR_IO);
+    CHECK(hk_fake_display_metrics()->transferred_bytes == 2U &&
+          hk_fake_display_metrics()->needs_repair_planes ==
+              HK_DISPLAY_PLANE_BASE);
+    before = hk_fake_display_metrics()->transferred_bytes;
+    CHECK(hk_display_present(
+        owner, &base, (hk_deadline_t){500000U}, NULL) == HK_OK);
+    CHECK(hk_fake_display_metrics()->transferred_bytes - before == 8U &&
+          hk_fake_display_metrics()->repair_bytes == 4U &&
+          hk_fake_display_metrics()->needs_repair_planes == 0U &&
+          hk_fake_display_metrics()->committed_base_generation == 1U);
+    CHECK(hk_fake_display_metrics()->repair_bytes <
+          HK_FAKE_DISPLAY_WIDTH * HK_FAKE_DISPLAY_HEIGHT * 2U);
+    CHECK(hk_display_release(
+        owner, HK_DEADLINE_IMMEDIATE, &base) == HK_OK);
+    return 0;
+}
+
 static int test_partial_failure_abort_cleanup(void)
 {
     hk_capability_request_t wanted = request();
@@ -369,7 +441,9 @@ int main(void)
     CHECK(test_transactional_limits() == 0);
     CHECK(test_cancel_retry_and_deadline() == 0);
     CHECK(test_surface_blit_and_incremental_bytes() == 0);
+    CHECK(test_clipped_blit_source_mapping() == 0);
+    CHECK(test_disjoint_damage_stays_bounded_during_repair() == 0);
     CHECK(test_partial_failure_abort_cleanup() == 0);
-    puts("DISPLAY_CONTRACT_OK cases=6 full_bytes=384 slice_bytes=8");
+    puts("DISPLAY_CONTRACT_OK cases=8 full_bytes=384 slice_bytes=8");
     return 0;
 }

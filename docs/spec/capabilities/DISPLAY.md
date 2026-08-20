@@ -41,6 +41,14 @@ views are clipped to the intersection. `x + width` and `y + height` MUST fit in
 the signed 32-bit coordinate domain. A zero-area rectangle is a successful
 no-op and consumes no command, text, borrowed-view, or dirty-list capacity.
 
+For `blit`, the pixel buffer describes the original, unclipped destination
+rectangle. After destination clipping, the source origin is
+`source_x = clipped.x - destination.x` and
+`source_y = clipped.y - destination.y`. The first transferred source byte is
+`pixels.data + source_y * pixels.stride_bytes + source_x * bytes_per_pixel`.
+Clipping MUST preserve the original stride and MUST NOT reinterpret the visible
+intersection as starting at the first byte of the buffer.
+
 `set_clip(NULL)` selects the full logical display. A non-null clip replaces the
 current clip and is intersected with the display bounds; it is not relative to
 the previous clip. The fake command log records post-clip rectangles.
@@ -124,16 +132,19 @@ cancelled or fails after physical progress:
 
 - the staged batch remains available for retry or abort;
 - the previous logical committed state remains identified;
-- the provider records the affected damage as `needs_repair`;
+- the provider records the affected damage as a bounded `needs_repair` region
+  list;
 - no late panel writes occur after the terminal result;
 - the next successful present or bounded release cleanup repairs the affected
-  region before claiming a consistent committed display.
+  regions before claiming a consistent committed display.
 
 Failure before physical progress leaves `needs_repair` unchanged. Failure after
-any physical progress records the complete affected staged damage, not merely
-the last completed slice. Retry repairs previous committed content first, then
-replays the unchanged staged operation. Only complete success advances logical
-committed generation.
+any physical progress records the complete affected staged dirty-region list,
+not merely the last completed slice. Repair retains disjoint regions and may
+merge only overlapping regions under the same rules as ordinary dirty damage;
+it MUST NOT replace disjoint damage with one bounding rectangle. Retry repairs
+previous committed content first, then replays the unchanged staged operation.
+Only complete success advances logical committed generation.
 
 Overlay release discards its staged/committed overlay and restores the current
 base content. Base release repairs any outstanding physical damage before

@@ -37,7 +37,7 @@ class DisplayContractTests(unittest.TestCase):
                 text=True, capture_output=True, timeout=30,
             )
         self.assertIn(
-            "DISPLAY_CONTRACT_OK cases=6 full_bytes=384 slice_bytes=8",
+            "DISPLAY_CONTRACT_OK cases=8 full_bytes=384 slice_bytes=8",
             result.stdout,
         )
 
@@ -103,6 +103,8 @@ class DisplayContractTests(unittest.TestCase):
             "HK_ERR_LIMIT",
             "HK_ERR_DEADLINE_EXCEEDED",
             "MUST NOT silently promote",
+            "source_x = clipped.x - destination.x",
+            "MUST NOT replace disjoint damage with one bounding rectangle",
         ):
             self.assertIn(required, contract)
 

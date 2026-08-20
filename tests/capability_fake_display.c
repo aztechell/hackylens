@@ -22,15 +22,14 @@ typedef struct
     uint8_t active;
     uint8_t retired;
     uint8_t stage;
-    uint8_t needs_repair;
     uint8_t has_committed;
-    uint8_t reserved[3];
+    uint8_t reserved[4];
     uint32_t plane;
     uint32_t generation;
     uint32_t committed_generation;
     hk_owner_t owner;
     hk_display_rect_t clip;
-    hk_display_rect_t repair_rect;
+    hk_display_rect_t repair[HK_FAKE_DISPLAY_MAX_DIRTY_RECTS];
     hk_fake_display_command_t commands[HK_FAKE_DISPLAY_MAX_COMMANDS];
     hk_display_rect_t dirty[HK_FAKE_DISPLAY_MAX_DIRTY_RECTS];
     char text[HK_FAKE_DISPLAY_MAX_TEXT_BYTES];
@@ -38,6 +37,7 @@ typedef struct
     uint16_t dirty_count;
     uint16_t text_bytes;
     uint16_t borrowed_views;
+    uint16_t repair_count;
 } fake_plane_t;
 
 typedef struct
@@ -102,7 +102,7 @@ static void refresh_metrics(void)
         staged_text += plane->text_bytes;
         staged_dirty += plane->dirty_count;
         borrowed += plane->borrowed_views;
-        if(plane->needs_repair)
+        if(plane->repair_count > 0U)
             repair |= plane->plane;
     }
     s_display.metrics.command_log_count = s_display.command_log_count;
@@ -511,7 +511,7 @@ hk_result_t hk_display_clear(
         return HK_ERR_INVALID_STATE;
     command = (hk_fake_display_command_t){
         HK_FAKE_DISPLAY_COMMAND_CLEAR, plane->clip, rgb565,
-        0U, 0U, 0U, NULL,
+        0U, 0U, 0U, NULL, 0U, 0U, 0U,
     };
     return append_command(plane, &command);
 }
@@ -537,7 +537,7 @@ static hk_result_t rect_command(
         return result;
     clipped = rect_intersection(rect, &plane->clip);
     command = (hk_fake_display_command_t){
-        type, clipped, color, 0U, 0U, 0U, NULL,
+        type, clipped, color, 0U, 0U, 0U, NULL, 0U, 0U, 0U,
     };
     return append_command(plane, &command);
 }
@@ -592,7 +592,7 @@ hk_result_t hk_display_text(
         return HK_OK;
     command = (hk_fake_display_command_t){
         HK_FAKE_DISPLAY_COMMAND_TEXT, clipped, rgb565, 0U,
-        size_bytes, 0U, NULL,
+        size_bytes, 0U, NULL, 0U, 0U, 0U,
     };
     result = append_command(plane, &command);
     if(result != HK_OK)
@@ -638,6 +638,9 @@ hk_result_t hk_display_blit(
     fake_plane_t *plane;
     hk_display_rect_t clipped;
     hk_fake_display_command_t command;
+    uint32_t source_x;
+    uint32_t source_y;
+    uint64_t source_offset;
     hk_result_t result = validate_handle(owner, handle, 0U, &plane);
 
     if(result != HK_OK)
@@ -657,9 +660,15 @@ hk_result_t hk_display_blit(
     clipped = rect_intersection(destination, &plane->clip);
     if(rect_empty(&clipped))
         return HK_OK;
+    source_x = (uint32_t)((int64_t)clipped.x - destination->x);
+    source_y = (uint32_t)((int64_t)clipped.y - destination->y);
+    source_offset = (uint64_t)source_y * pixels->stride_bytes +
+                    (uint64_t)source_x * 2U;
     command = (hk_fake_display_command_t){
         HK_FAKE_DISPLAY_COMMAND_BLIT, clipped, 0U, 0U,
-        pixels->size_bytes, pixel_format, pixels->data,
+        pixels->size_bytes, pixel_format,
+        (const uint8_t *)pixels->data + source_offset,
+        source_x, source_y, pixels->stride_bytes,
     };
     result = append_command(plane, &command);
     if(result != HK_OK)
@@ -805,23 +814,12 @@ static hk_result_t transfer_rect(
     return HK_OK;
 }
 
-static hk_display_rect_t dirty_union(const fake_plane_t *plane)
-{
-    hk_display_rect_t result = {0, 0, 0U, 0U};
-
-    for(uint16_t index = 0U; index < plane->dirty_count; index++)
-    {
-        result = rect_empty(&result) ? plane->dirty[index] :
-                 rect_union(&result, &plane->dirty[index]);
-    }
-    return result;
-}
-
 static uint8_t present_exceeds_limit(const fake_plane_t *plane)
 {
-    uint64_t slices = plane->needs_repair ?
-        rect_slices(&plane->repair_rect) : 0U;
+    uint64_t slices = 0U;
 
+    for(uint16_t index = 0U; index < plane->repair_count; index++)
+        slices += rect_slices(&plane->repair[index]);
     for(uint16_t index = 0U; index < plane->dirty_count; index++)
         slices += rect_slices(&plane->dirty[index]);
     return (uint8_t)(slices * s_display.slice_duration_us >
@@ -835,7 +833,6 @@ hk_result_t hk_display_present(
     const hk_cancel_t *cancel)
 {
     fake_plane_t *plane;
-    hk_display_rect_t staged_damage;
     uint64_t staged_start_bytes;
     uint32_t invocation_slices = 0U;
     hk_result_t result;
@@ -859,10 +856,10 @@ hk_result_t hk_display_present(
         s_display.metrics.last_result = result;
         return result;
     }
-    if(plane->needs_repair)
+    for(uint16_t index = 0U; index < plane->repair_count; index++)
     {
         result = transfer_rect(
-            &plane->repair_rect, deadline, cancel, 1U, 0U, 1U,
+            &plane->repair[index], deadline, cancel, 1U, 0U, 1U,
             &invocation_slices);
         if(result != HK_OK)
         {
@@ -870,9 +867,8 @@ hk_result_t hk_display_present(
             refresh_metrics();
             return result;
         }
-        plane->needs_repair = 0U;
     }
-    staged_damage = dirty_union(plane);
+    plane->repair_count = 0U;
     staged_start_bytes = s_display.metrics.transferred_bytes;
     for(uint16_t index = 0U; index < plane->dirty_count; index++)
     {
@@ -883,8 +879,8 @@ hk_result_t hk_display_present(
         {
             if(s_display.metrics.transferred_bytes > staged_start_bytes)
             {
-                plane->needs_repair = 1U;
-                plane->repair_rect = staged_damage;
+                memcpy(plane->repair, plane->dirty, sizeof(plane->repair));
+                plane->repair_count = plane->dirty_count;
             }
             s_display.metrics.last_result = result;
             refresh_metrics();
@@ -920,7 +916,7 @@ static void retire_plane(fake_plane_t *plane, hk_display_t *handle)
     plane->active = 0U;
     plane->owner = HK_OWNER_NONE;
     clear_staged(plane);
-    plane->needs_repair = 0U;
+    plane->repair_count = 0U;
     plane->has_committed = 0U;
     if(plane->generation == UINT32_MAX)
         plane->retired = 1U;
@@ -933,7 +929,9 @@ hk_result_t hk_display_release(
     hk_owner_t owner, hk_deadline_t deadline, hk_display_t *handle)
 {
     fake_plane_t *plane;
-    hk_display_rect_t cleanup_rect = {0, 0, 0U, 0U};
+    hk_display_rect_t overlay_cleanup;
+    const hk_display_rect_t *cleanup_rects;
+    uint16_t cleanup_count;
     uint64_t before_bytes;
     uint32_t invocation_slices = 0U;
     hk_result_t result;
@@ -946,13 +944,17 @@ hk_result_t hk_display_release(
     result = validate_handle(owner, handle, 1U, &plane);
     if(result != HK_OK)
         return result;
+    cleanup_rects = plane->repair;
+    cleanup_count = plane->repair_count;
     if(plane->plane == HK_DISPLAY_PLANE_OVERLAY &&
-       (plane->has_committed || plane->needs_repair))
-        cleanup_rect = screen_rect();
-    else if(plane->needs_repair)
-        cleanup_rect = plane->repair_rect;
+       (plane->has_committed || plane->repair_count > 0U))
+    {
+        overlay_cleanup = screen_rect();
+        cleanup_rects = &overlay_cleanup;
+        cleanup_count = 1U;
+    }
     s_display.metrics.last_deadline = deadline;
-    if(!rect_empty(&cleanup_rect))
+    if(cleanup_count > 0U)
     {
         result = terminal_before_effect(deadline, NULL);
         if(result != HK_OK)
@@ -961,11 +963,13 @@ hk_result_t hk_display_release(
             return result;
         }
         before_bytes = s_display.metrics.transferred_bytes;
-        result = transfer_rect(
-            &cleanup_rect, deadline, NULL, 1U, 1U, 0U,
-            &invocation_slices);
-        if(result != HK_OK)
+        for(uint16_t index = 0U; index < cleanup_count; index++)
         {
+            result = transfer_rect(
+                &cleanup_rects[index], deadline, NULL, 1U, 1U, 0U,
+                &invocation_slices);
+            if(result == HK_OK)
+                continue;
             if(s_display.metrics.transferred_bytes == before_bytes)
             {
                 s_display.metrics.last_result = result;
