@@ -70,8 +70,10 @@ UART/I2C protocol or routed-peripheral semantics.
   transfer accounting, retry, repair, and cleanup. Phase 2.8 adds the K210
   provider, splits the raw ST7789 transport from plane state, migrates native
   views through a private typed BASE binding, and moves MicroPython drawing to
-  OVERLAY. Both planes reuse the single shadow framebuffer. External-link
-  remains absent from runtime inventory.
+  OVERLAY. Both planes reuse the single shadow framebuffer. Phase 2.9 freezes
+  the public External Link 0.1 connector/async contract with a deterministic
+  fixed-capacity fake; its K210 provider and native/MicroPython migration remain
+  Phase 2.10 work, so external-link remains absent from runtime inventory.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -87,7 +89,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.8 implementation; Time + Input + Display + Lights runtime providers, external-link absent |
+| Capability build composition | Phase 2.9 contract; Time + Input + Display + Lights runtime providers, external-link runtime provider absent |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
@@ -152,8 +154,8 @@ hardware qualification is a separate future gate.
 
 ## Remaining architecture work
 
-Later Phase 2 packages add the remaining mapped providers to the generated
-inventory and migrate external-link. Display is runtime-composed; its borrowed
+Later Phase 2 packages add the external-link provider to the generated
+inventory and migrate its native and MicroPython consumers. Display is runtime-composed; its borrowed
 BASE surface is explicitly an in-place backing store, while retained command
 batches remain transactional. Host timing checks do not constitute physical
 hardware qualification; real display latency is deferred to Phase 2.13. Later

@@ -597,6 +597,9 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ## 2.9 — External-link contract и fake
 
+Статус пакета: `in_progress`; public contract и deterministic fake реализованы,
+полный CI gate ещё не закрыт.
+
 ### Depends on
 
 `2.8`.
@@ -608,19 +611,19 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ### Scope
 
-- [ ] Добавить `hackylens.cap.external-link` version `0.1.0`.
-- [ ] Features: UART, I2C controller, I2C target.
-- [ ] Один exclusive connector lease для shared physical routing.
-- [ ] Определить mode configuration и validation без board ID.
-- [ ] Определить async operation token: begin, poll, cancel, terminal result.
-- [ ] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
+- [~] Добавить `hackylens.cap.external-link` version `0.1.0`.
+- [~] Features: UART, I2C controller, I2C target.
+- [~] Один exclusive connector lease для shared physical routing.
+- [~] Определить mode configuration и validation без board ID.
+- [~] Определить async operation token: begin, poll, cancel, terminal result.
+- [~] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
   bytes.
-- [ ] UART completion требует empty FIFO и idle shift register.
-- [ ] I2C transfer использует один deadline на весь transaction и возвращает
+- [~] UART completion требует empty FIFO и idle shift register.
+- [~] I2C transfer использует один deadline на весь transaction и возвращает
   определённые NACK/timeout/cancel results.
-- [ ] TX/RX buffer ownership действует до terminal result.
-- [ ] Реализовать deterministic fake с routing/mode/buffer/event log.
-- [ ] Production external service и Python implementation пока не менять.
+- [~] TX/RX buffer ownership действует до terminal result.
+- [~] Реализовать deterministic fake с routing/mode/buffer/event log.
+- [~] Production external service и Python implementation пока не менять.
 
 ### Основные файлы
 
