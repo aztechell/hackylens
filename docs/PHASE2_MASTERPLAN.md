@@ -469,8 +469,8 @@ channels без определённого cleanup owner.
 
 ## 2.7 — Display contract и fake
 
-Статус пакета: `in_progress` (2026-08-20); clipped-blit source mapping and
-bounded repair-region corrective work are pending CI after run `32381855169`.
+Статус пакета: `completed` (2026-08-20); clipped-blit source mapping, bounded
+repair regions, and both firmware profiles passed in [`Release firmware` run 32393480686](https://github.com/aztechell/hackylens/actions/runs/32393480686).
 
 ### Depends on
 
