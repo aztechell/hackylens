@@ -90,7 +90,9 @@ required_capabilities = [
   { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
   { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["backlight", "illumination", "rgb"] },
 ]
-optional_capabilities = []
+optional_capabilities = [
+  { id = "hackylens.cap.external-link", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["uart", "i2c-target"], fallback = "hide-external-link-menu" },
+]
 
 [apps.sleep]
 requires = []
@@ -105,13 +107,12 @@ optional_capabilities = []
 [apps.micropython]
 requires = [
   "internal-flash",
-  "external-uart",
-  "external-i2c",
 ]
 required_capabilities = [
   { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
   { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
   { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
   { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
+  { id = "hackylens.cap.external-link", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["uart", "i2c-controller"] },
 ]
 optional_capabilities = []

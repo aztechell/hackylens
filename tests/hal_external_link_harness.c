@@ -92,7 +92,19 @@ void i2c_init_as_slave(int device, uint32_t address, uint32_t address_width,
     (void)device; (void)address; (void)address_width; (void)handler;
 }
 
+void i2c_init(int device, uint32_t address, uint32_t address_width,
+              uint32_t frequency)
+{
+    (void)device; (void)address; (void)address_width; (void)frequency;
+}
+
 int plic_irq_disable(int interrupt)
+{
+    (void)interrupt;
+    return 0;
+}
+
+int plic_irq_enable(int interrupt)
 {
     (void)interrupt;
     return 0;

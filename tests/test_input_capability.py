@@ -105,7 +105,8 @@ class InputCapabilityTests(unittest.TestCase):
         self.assertEqual(
             [item.id for item in runtime.capabilities],
             ["hackylens.cap.time", "hackylens.cap.input",
-             "hackylens.cap.display", "hackylens.cap.lights"],
+             "hackylens.cap.display", "hackylens.cap.external-link",
+             "hackylens.cap.lights"],
         )
         self.assertEqual(
             [item.id for item in conformance.capabilities],
@@ -126,7 +127,12 @@ class InputCapabilityTests(unittest.TestCase):
             encoding="utf-8"
         )
         service = (
-            ROOT / "firmware" / "src" / "services" / "micropython_binding_service.c"
+            ROOT
+            / "firmware"
+            / "src"
+            / "adapters"
+            / "micropython"
+            / "micropython_capability_bridge.c"
         ).read_text(encoding="utf-8")
         driver = (
             ROOT / "firmware" / "src" / "drivers" / "board_buttons.c"

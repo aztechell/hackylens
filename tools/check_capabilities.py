@@ -99,10 +99,11 @@ def validate(root: Path = ROOT) -> list[str]:
             )
         if [item.id for item in composed_by_board["huskylens-sen0305"].capabilities] != [
             "hackylens.cap.time", "hackylens.cap.input",
-            "hackylens.cap.display", "hackylens.cap.lights"
+            "hackylens.cap.display", "hackylens.cap.external-link",
+            "hackylens.cap.lights"
         ]:
             failures.append(
-                "SEN0305 inventory must contain exactly Time, Input, Display, and Lights"
+                "SEN0305 inventory must contain exactly the five initial capabilities"
             )
         if [item.id for item in composed_by_board["sipeed-maix-cube"].capabilities] != [
             "hackylens.cap.time"

@@ -1,4 +1,5 @@
 #include "capability_fake_external_link.h"
+#include "external_link_normative_suite.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -21,6 +22,50 @@ static uint8_t cancel_probe(const void *context)
 {
     return *(const uint8_t *)context;
 }
+
+static void normative_reset(void)
+{
+    hk_fake_external_link_reset(HK_EXTERNAL_LINK_FEATURES_0_1);
+}
+
+static void normative_set_i2c_rx(
+    const uint8_t *bytes, uint32_t size_bytes)
+{
+    (void)hk_fake_external_link_set_i2c_rx(bytes, size_bytes);
+}
+
+static void normative_target_write(
+    const uint8_t *bytes, uint32_t size_bytes)
+{
+    (void)hk_fake_external_link_push_target_event(
+        HK_EXTERNAL_LINK_TARGET_EVENT_WRITE, bytes, size_bytes, 0U);
+}
+
+static void normative_target_read(uint8_t *bytes, uint32_t size_bytes)
+{
+    const uint8_t *observed;
+    uint32_t observed_size = 0U;
+
+    (void)hk_fake_external_link_push_target_event(
+        HK_EXTERNAL_LINK_TARGET_EVENT_READ, NULL, 0U, size_bytes);
+    observed = hk_fake_external_link_target_read(&observed_size);
+    if(observed_size == size_bytes)
+        memcpy(bytes, observed, size_bytes);
+}
+
+static uint32_t normative_uart_tx_bytes(void)
+{
+    return hk_fake_external_link_metrics()->uart_tx_bytes;
+}
+
+static const external_link_normative_backend_t NORMATIVE_BACKEND = {
+    normative_reset,
+    hk_fake_external_link_set_now_us,
+    normative_set_i2c_rx,
+    normative_target_write,
+    normative_target_read,
+    normative_uart_tx_bytes,
+};
 
 static hk_external_link_uart_config_t uart_config(uint32_t baud)
 {
@@ -608,6 +653,7 @@ int main(void)
     CHECK(case_i2c_whole_transaction_semantics() == 0);
     CHECK(case_i2c_target_preload_state_machine() == 0);
     CHECK(case_release_quiesces_active_operation() == 0);
-    puts("EXTERNAL_LINK_CONTRACT_OK cases=6 burst=32 fixed_capacity=256");
+    CHECK(external_link_normative_suite_run(&NORMATIVE_BACKEND) == 0);
+    puts("EXTERNAL_LINK_CONTRACT_OK cases=6 normative=1 burst=32 fixed_capacity=256");
     return 0;
 }

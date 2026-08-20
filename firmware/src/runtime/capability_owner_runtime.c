@@ -18,6 +18,7 @@ static capability_consumer_owner_t s_consumer_owners[] = {
     {"consumer:apriltag-detector", HK_OWNER_NONE},
     {"consumer:object-detect-detector", HK_OWNER_NONE},
     {"consumer:hmpy-service", HK_OWNER_NONE},
+    {"consumer:external-link-service", HK_OWNER_NONE},
     {"consumer:micropython-adapter", HK_OWNER_NONE},
     {"consumer:settings-lights", HK_OWNER_NONE},
 };

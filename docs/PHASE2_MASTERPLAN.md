@@ -664,6 +664,10 @@ register behavior не протёк в public contract.
 
 ## 2.10 — External-link implementation и MicroPython convergence
 
+Статус пакета: `in_progress`; common provider boundary, native service и
+MicroPython convergence реализуются как одна rollback unit. Phase `2.11` не
+начата.
+
 ### Depends on
 
 `2.9`.

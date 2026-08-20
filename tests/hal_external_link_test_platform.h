@@ -12,6 +12,11 @@
 #define IRQN_I2C0_INTERRUPT 1
 #define I2C_INTR_STAT_RX_FULL 0x01U
 #define I2C_RXFLR_VALUE_MASK 0xffU
+#define I2C_STATUS_TFNF 0x01U
+#define I2C_STATUS_ACTIVITY 0x02U
+#define I2C_STATUS_TFE 0x04U
+#define I2C_DATA_CMD_DATA(value) ((uint32_t)(value))
+#define I2C_DATA_CMD_CMD 0x100U
 
 typedef struct
 {
@@ -27,6 +32,10 @@ typedef struct
     volatile uint32_t data_cmd;
     volatile uint32_t intr_mask;
     volatile uint32_t enable;
+    volatile uint32_t clr_tx_abrt;
+    volatile uint32_t tx_abrt_source;
+    volatile uint32_t status;
+    volatile uint32_t txflr;
 } i2c_t;
 
 typedef enum
@@ -54,6 +63,9 @@ int uart_receive_data(int device, char *data, size_t length);
 int uart_send_data(int device, const char *data, size_t length);
 void i2c_init_as_slave(int device, uint32_t address, uint32_t address_width,
                        const i2c_slave_handler_t *handler);
+void i2c_init(int device, uint32_t address, uint32_t address_width,
+              uint32_t frequency);
 int plic_irq_disable(int interrupt);
+int plic_irq_enable(int interrupt);
 
 #endif

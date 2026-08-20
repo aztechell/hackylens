@@ -30,6 +30,7 @@ class ExternalLinkContractTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'tests'}",
                 str(ROOT / "tests" / "external_link_contract_harness.c"),
+                str(ROOT / "tests" / "external_link_normative_suite.c"),
                 str(ROOT / "tests" / "capability_fake_external_link.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
@@ -38,7 +39,39 @@ class ExternalLinkContractTests(unittest.TestCase):
                 text=True, capture_output=True, timeout=30,
             )
         self.assertIn(
-            "EXTERNAL_LINK_CONTRACT_OK cases=6 burst=32 fixed_capacity=256",
+            "EXTERNAL_LINK_CONTRACT_OK cases=6 normative=1 burst=32 "
+            "fixed_capacity=256",
+            result.stdout,
+        )
+
+    def test_k210_adapter_passes_the_same_normative_suite(self) -> None:
+        compiler = self.compiler()
+        with tempfile.TemporaryDirectory(prefix="hackylens-k210-external-") as temp:
+            executable = Path(temp) / (
+                "k210_external_link.exe" if os.name == "nt"
+                else "k210_external_link"
+            )
+            subprocess.run([
+                compiler,
+                "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
+                f"-I{ROOT / 'tests'}",
+                str(ROOT / "tests" / "k210_external_link_harness.c"),
+                str(ROOT / "tests" / "external_link_normative_suite.c"),
+                str(ROOT / "firmware" / "src" / "capabilities" /
+                    "external_link.c"),
+                str(ROOT / "platforms" / "k210" / "capabilities" /
+                    "external_link_adapter.c"),
+                "-o", str(executable),
+            ], check=True, cwd=ROOT)
+            result = subprocess.run(
+                [str(executable)], check=True, cwd=ROOT,
+                text=True, capture_output=True, timeout=30,
+            )
+        self.assertIn(
+            "K210_EXTERNAL_LINK_OK normative=1 uart=102 i2c_tx=20",
             result.stdout,
         )
 

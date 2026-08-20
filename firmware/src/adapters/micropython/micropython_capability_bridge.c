@@ -1,34 +1,24 @@
-#include "micropython_binding_service.h"
+#include "micropython_capability_bridge.h"
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
-#include <hackylens/capability/lights.h>
 #include <hackylens/capability/display.h>
+#include <hackylens/capability/external_link.h>
+#include <hackylens/capability/input.h>
+#include <hackylens/capability/lights.h>
+#include <hackylens/capability/time.h>
 
-#include "../capabilities/display_stage_private.h"
-#include "../config/display_config.h"
+#include "../../capabilities/capability_client_binding.h"
+#include "../../capabilities/display_stage_private.h"
+#include "../../config/display_config.h"
+#include "../../services/external_link_service.h"
+#include "../../services/micropython_runtime.h"
+#include "../../services/settings_lights.h"
 
 #if defined(MICROPYTHON_BINDING_TESTING)
 #include "micropython_binding_test_platform.h"
-#else
-#include <hackylens/capability/input.h>
-#include <i2c.h>
-#include <plic.h>
-
-#include "external_link_service.h"
-#include "micropython_runtime.h"
-#include "settings_lights.h"
-#include "../capabilities/capability_client_binding.h"
-#include "../internal/hk_board_port.h"
-#include "hal_external_link.h"
-#include "hal_time.h"
-#endif
-
-#if defined(MICROPYTHON_BINDING_TESTING)
-#define BINDING_PREPARE_EXTERNAL_I2C() board_external_link_i2c_pins()
-#else
-#define BINDING_PREPARE_EXTERNAL_I2C() hk_board_ops.external_i2c_prepare()
 #endif
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
@@ -92,11 +82,10 @@ typedef struct
 {
     uint32_t ticket;
     uint32_t run_id;
-    size_t length;
-    size_t position;
-    uint8_t data[MICROPYTHON_BINDING_DATA_MAX];
+    hk_external_link_op_t operation;
+    uint32_t binding_operation;
     uint8_t active;
-} binding_uart_write_t;
+} binding_external_operation_t;
 
 typedef struct
 {
@@ -117,6 +106,8 @@ typedef struct
 static micropython_binding_control_t g_control_storage
     __attribute__((aligned(64)));
 static uint8_t g_external_owned;
+static hk_external_link_t g_external;
+static hk_owner_t g_external_owner;
 static uint32_t g_lights_owned;
 static hk_lights_t g_illumination_lights;
 static hk_owner_t g_illumination_owner;
@@ -124,7 +115,9 @@ static hk_lights_t g_rgb_lights;
 static hk_owner_t g_rgb_owner;
 static binding_external_mode_t g_external_mode;
 static uint32_t g_uart_baud = 115200U;
-static binding_uart_write_t g_uart_write;
+static binding_external_operation_t g_external_operation;
+static hk_time_t g_bridge_time;
+static hk_owner_t g_bridge_time_owner;
 static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
 static hk_owner_t g_display_owner;
@@ -158,13 +151,55 @@ static uint8_t binding_display_cancelled(const void *context)
         cancel_context->run_id);
 }
 
+static hk_result_t binding_time_prepare(void)
+{
+    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+
+    if(!hk_lease_is_zero(&g_bridge_time.lease))
+        return HK_OK;
+    g_bridge_time_owner = capability_client_consumer_owner(
+        "consumer:micropython-adapter");
+    if(hk_owner_is_zero(g_bridge_time_owner))
+        return HK_ERR_STALE_HANDLE;
+    return hk_time_acquire(
+        g_bridge_time_owner, &request, &g_bridge_time);
+}
+
+static uint64_t binding_now_us(void)
+{
+    uint64_t now = 0U;
+
+    if(binding_time_prepare() == HK_OK)
+        (void)hk_time_now_us(g_bridge_time_owner, &g_bridge_time, &now);
+    return now;
+}
+
+static hk_result_t binding_deadline_after(
+    uint64_t duration_us, hk_deadline_t *deadline)
+{
+    hk_result_t result = binding_time_prepare();
+
+    if(result != HK_OK)
+        return result;
+    return hk_time_deadline_after_us(
+        g_bridge_time_owner, &g_bridge_time, duration_us, deadline);
+}
+
+static void binding_sleep_ms(uint32_t duration_ms)
+{
+    hk_deadline_t wake;
+
+    if(binding_deadline_after((uint64_t)duration_ms * 1000U, &wake) == HK_OK)
+        (void)hk_time_sleep_until(
+            g_bridge_time_owner, &g_bridge_time, wake, wake, NULL);
+}
+
 static hk_deadline_t binding_display_deadline(void)
 {
-    uint64_t now = hal_time_us();
-    hk_deadline_t deadline = {
-        UINT64_MAX - now <= MICROPYTHON_BINDING_RPC_TIMEOUT_US ?
-            UINT64_MAX - 1U : now + MICROPYTHON_BINDING_RPC_TIMEOUT_US,
-    };
+    hk_deadline_t deadline = HK_DEADLINE_IMMEDIATE;
+
+    (void)binding_deadline_after(
+        MICROPYTHON_BINDING_RPC_TIMEOUT_US, &deadline);
     return deadline;
 }
 
@@ -337,152 +372,94 @@ static void binding_cancel_and_wait(
     control->cancel_ticket = ticket;
     __sync_synchronize();
     while(control->complete_ticket != ticket)
-        hal_sleep_ms(1U);
+        binding_sleep_ms(1U);
     __sync_synchronize();
 }
 
-static void binding_i2c_stop(void)
+static micropython_binding_result_t binding_external_result(hk_result_t result)
 {
-    volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
-
-    adapter->intr_mask = 0U;
-    adapter->enable = 0U;
-    plic_irq_disable(IRQN_I2C0_INTERRUPT);
+    if(result == HK_OK)
+        return MICROPYTHON_BINDING_OK;
+    if(result == HK_ERR_INVALID_ARGUMENT ||
+       result == HK_ERR_INVALID_STATE || result == HK_ERR_NOT_DECLARED ||
+       result == HK_ERR_FEATURE_UNAVAILABLE)
+        return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+    if(result == HK_ERR_LIMIT)
+        return MICROPYTHON_BINDING_ERROR_LIMIT;
+    if(result == HK_ERR_BUSY)
+        return MICROPYTHON_BINDING_ERROR_BUSY;
+    if(result == HK_ERR_CANCELLED || result == HK_ERR_DEADLINE_EXCEEDED)
+        return MICROPYTHON_BINDING_ERROR_TIMEOUT;
+    return MICROPYTHON_BINDING_ERROR_IO;
 }
 
-static void binding_claim_external(void)
+static hk_result_t binding_claim_external(void)
 {
+    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    hk_result_t result;
+
     if(g_external_owned)
-        return;
+        return HK_OK;
     external_link_service_suspend();
+    g_external_owner = capability_client_consumer_owner(
+        "consumer:micropython-adapter");
+    if(hk_owner_is_zero(g_external_owner))
+    {
+        external_link_service_resume();
+        return HK_ERR_STALE_HANDLE;
+    }
+    request.required_features =
+        HK_EXTERNAL_LINK_FEATURE_UART |
+        HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
+    result = hk_external_link_acquire(
+        g_external_owner, &request, request.required_features, &g_external);
+    if(result != HK_OK)
+    {
+        external_link_service_resume();
+        return result;
+    }
     g_external_owned = 1U;
+    return HK_OK;
 }
 
-static void binding_select_uart(uint32_t baud)
+static hk_result_t binding_select_uart(uint32_t baud)
 {
-    binding_claim_external();
-    if(g_external_mode == BINDING_EXTERNAL_I2C)
-        binding_i2c_stop();
+    const hk_external_link_uart_config_t config = {
+        sizeof(hk_external_link_uart_config_t),
+        HK_EXTERNAL_LINK_UART_CONFIG_VERSION, baud, 0U,
+    };
+    hk_result_t result = binding_claim_external();
+
+    if(result != HK_OK)
+        return result;
     if(g_external_mode != BINDING_EXTERNAL_UART || g_uart_baud != baud)
-        hal_external_uart_init(baud);
+        result = hk_external_link_configure_uart(
+            g_external_owner, &g_external, &config);
+    if(result != HK_OK)
+        return result;
     g_uart_baud = baud;
     g_external_mode = BINDING_EXTERNAL_UART;
+    return HK_OK;
 }
 
-static void binding_select_i2c(uint8_t address)
+static hk_result_t binding_select_i2c(void)
 {
-    binding_claim_external();
-    if(g_external_mode == BINDING_EXTERNAL_I2C)
-        binding_i2c_stop();
-    BINDING_PREPARE_EXTERNAL_I2C();
-    i2c_init(I2C_DEVICE_0, address, 7U, MICROPYTHON_BINDING_I2C_HZ);
+    const hk_external_link_i2c_controller_config_t config = {
+        sizeof(hk_external_link_i2c_controller_config_t),
+        HK_EXTERNAL_LINK_I2C_CONTROLLER_CONFIG_VERSION,
+        MICROPYTHON_BINDING_I2C_HZ, 0U,
+    };
+    hk_result_t result = binding_claim_external();
+
+    if(result != HK_OK)
+        return result;
+    if(g_external_mode != BINDING_EXTERNAL_I2C)
+        result = hk_external_link_configure_i2c_controller(
+            g_external_owner, &g_external, &config);
+    if(result != HK_OK)
+        return result;
     g_external_mode = BINDING_EXTERNAL_I2C;
-}
-
-static uint8_t binding_i2c_timed_out(uint64_t deadline)
-{
-    return hal_time_us() >= deadline;
-}
-
-static int binding_i2c_write(micropython_binding_control_t *control,
-                             uint32_t ticket, uint32_t run_id,
-                             uint8_t address, const uint8_t *data,
-                             size_t length)
-{
-    volatile i2c_t *adapter;
-    uint64_t deadline = hal_time_us() + MICROPYTHON_BINDING_I2C_TIMEOUT_US;
-    size_t position = 0U;
-
-    if(binding_request_cancelled(control, ticket, run_id))
-        return -3;
-    binding_select_i2c(address);
-    adapter = i2c[I2C_DEVICE_0];
-    (void)adapter->clr_tx_abrt;
-    while(position < length)
-    {
-        if(binding_request_cancelled(control, ticket, run_id))
-            return -3;
-        if(adapter->tx_abrt_source)
-            return -1;
-        if(adapter->status & I2C_STATUS_TFNF)
-        {
-            adapter->data_cmd = I2C_DATA_CMD_DATA(data[position++]);
-            continue;
-        }
-        if(binding_i2c_timed_out(deadline))
-            return -2;
-    }
-    while((adapter->status & I2C_STATUS_ACTIVITY) ||
-          !(adapter->status & I2C_STATUS_TFE))
-    {
-        if(binding_request_cancelled(control, ticket, run_id))
-            return -3;
-        if(adapter->tx_abrt_source)
-            return -1;
-        if(binding_i2c_timed_out(deadline))
-            return -2;
-    }
-    return adapter->tx_abrt_source ? -1 : 0;
-}
-
-static int binding_i2c_read(micropython_binding_control_t *control,
-                            uint32_t ticket, uint32_t run_id,
-                            uint8_t address, const uint8_t *prefix,
-                            size_t prefix_length, uint8_t *data,
-                            size_t length)
-{
-    volatile i2c_t *adapter;
-    uint64_t deadline = hal_time_us() + MICROPYTHON_BINDING_I2C_TIMEOUT_US;
-    size_t prefix_position = 0U;
-    size_t commands = 0U;
-    size_t received = 0U;
-
-    if(binding_request_cancelled(control, ticket, run_id))
-        return -3;
-    binding_select_i2c(address);
-    adapter = i2c[I2C_DEVICE_0];
-    (void)adapter->clr_tx_abrt;
-    while(prefix_position < prefix_length)
-    {
-        if(binding_request_cancelled(control, ticket, run_id))
-            return -3;
-        if(adapter->tx_abrt_source)
-            return -1;
-        if(adapter->status & I2C_STATUS_TFNF)
-        {
-            adapter->data_cmd = I2C_DATA_CMD_DATA(prefix[prefix_position++]);
-            continue;
-        }
-        if(binding_i2c_timed_out(deadline))
-            return -2;
-    }
-    while(received < length)
-    {
-        if(binding_request_cancelled(control, ticket, run_id))
-            return -3;
-        while(commands < length && adapter->txflr < 8U)
-        {
-            adapter->data_cmd = I2C_DATA_CMD_CMD;
-            commands++;
-        }
-        while(received < length && adapter->rxflr)
-            data[received++] = (uint8_t)adapter->data_cmd;
-        if(adapter->tx_abrt_source)
-            return -1;
-        if(binding_i2c_timed_out(deadline))
-            return -2;
-    }
-    while((adapter->status & I2C_STATUS_ACTIVITY) ||
-          !(adapter->status & I2C_STATUS_TFE))
-    {
-        if(binding_request_cancelled(control, ticket, run_id))
-            return -3;
-        if(adapter->tx_abrt_source)
-            return -1;
-        if(binding_i2c_timed_out(deadline))
-            return -2;
-    }
-    return adapter->tx_abrt_source ? -1 : 0;
+    return HK_OK;
 }
 
 static micropython_binding_result_t binding_execute(
@@ -684,123 +661,161 @@ static micropython_binding_result_t binding_execute(
     case MICROPYTHON_BINDING_OP_UART_INIT:
         if(a[0] < 1200U || a[0] > 2000000U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        binding_select_uart(a[0]);
-        return MICROPYTHON_BINDING_OK;
+        return binding_external_result(binding_select_uart(a[0]));
     case MICROPYTHON_BINDING_OP_UART_WRITE:
         /* UART writes are started and advanced incrementally by the service
          * tick so the core-0 main loop never waits for TX FIFO space. */
         return MICROPYTHON_BINDING_ERROR_BUSY;
     case MICROPYTHON_BINDING_OP_UART_READ:
     {
-        size_t capacity = a[0];
+        hk_buffer_view_t rx;
+        uint32_t received = 0U;
+        hk_result_t result;
+
+        uint32_t capacity = a[0];
         if(capacity > MICROPYTHON_BINDING_DATA_MAX)
             return MICROPYTHON_BINDING_ERROR_LIMIT;
-        binding_select_uart(g_uart_baud);
-        control->output_length = (uint32_t)hal_external_uart_receive(
-            (uint8_t *)control->data, capacity);
-        return MICROPYTHON_BINDING_OK;
+        result = binding_select_uart(g_uart_baud);
+        rx = (hk_buffer_view_t){
+            (void *)control->data, capacity, 0U, HK_BUFFER_ACCESS_WRITABLE,
+        };
+        if(result == HK_OK)
+            result = hk_external_link_uart_read(
+                g_external_owner, &g_external, &rx, &received);
+        control->output_length = received;
+        return binding_external_result(result);
     }
     case MICROPYTHON_BINDING_OP_I2C_WRITE:
-    {
-        int result;
-        if(a[0] == 0U || a[0] > 0x7FU)
-            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        result = binding_i2c_write(control, ticket, run_id, (uint8_t)a[0],
-                                   (const uint8_t *)control->data,
-                                   input_length);
-        if(result != 0)
-            binding_i2c_stop();
-        return result == 0 ? MICROPYTHON_BINDING_OK :
-               (result == -2 || result == -3) ?
-                               MICROPYTHON_BINDING_ERROR_TIMEOUT :
-                               MICROPYTHON_BINDING_ERROR_IO;
-    }
     case MICROPYTHON_BINDING_OP_I2C_READ:
-    {
-        uint8_t output[MICROPYTHON_BINDING_DATA_MAX];
-        int result;
-        if(a[0] == 0U || a[0] > 0x7FU ||
-           a[1] > MICROPYTHON_BINDING_DATA_MAX)
-            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        result = binding_i2c_read(control, ticket, run_id, (uint8_t)a[0],
-                                  (const uint8_t *)control->data,
-                                  input_length, output, a[1]);
-        if(result != 0)
-        {
-            binding_i2c_stop();
-            return (result == -2 || result == -3) ?
-                                  MICROPYTHON_BINDING_ERROR_TIMEOUT :
-                                  MICROPYTHON_BINDING_ERROR_IO;
-        }
-        for(uint32_t i = 0U; i < a[1]; i++)
-            control->data[i] = output[i];
-        control->output_length = a[1];
-        return MICROPYTHON_BINDING_OK;
-    }
+        return MICROPYTHON_BINDING_ERROR_BUSY;
     default:
         return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
     }
 }
 
-static void binding_uart_write_reset(void)
+static void binding_external_operation_reset(void)
 {
-    g_uart_write.ticket = 0U;
-    g_uart_write.run_id = 0U;
-    g_uart_write.length = 0U;
-    g_uart_write.position = 0U;
-    g_uart_write.active = 0U;
+    memset(&g_external_operation, 0, sizeof(g_external_operation));
 }
 
-static void binding_uart_write_progress(
-    micropython_binding_control_t *control)
-{
-    size_t written;
-    uint32_t ticket = g_uart_write.ticket;
-
-    if(!g_uart_write.active)
-        return;
-    if(binding_request_cancelled(control, ticket, g_uart_write.run_id))
-    {
-        binding_uart_write_reset();
-        /* Reset the owned UART before acknowledging cancellation so bytes
-         * already queued in hardware cannot leak out after caller unwind. */
-        hal_external_uart_init(g_uart_baud);
-        binding_complete_request(control, ticket,
-                                 MICROPYTHON_BINDING_ERROR_TIMEOUT, 1U);
-        return;
-    }
-    if(g_uart_write.position < g_uart_write.length)
-    {
-        written = hal_external_uart_send_ready(
-            g_uart_write.data + g_uart_write.position,
-            g_uart_write.length - g_uart_write.position);
-        g_uart_write.position += written;
-    }
-    /* Queue completion is not transmission completion.  Keep the connector
-     * lease until the hardware FIFO and shift register have both drained. */
-    if(g_uart_write.position == g_uart_write.length &&
-       hal_external_uart_tx_idle())
-    {
-        binding_uart_write_reset();
-        binding_complete_request(control, ticket, MICROPYTHON_BINDING_OK, 0U);
-    }
-}
-
-static void binding_uart_write_start(
+static micropython_binding_result_t binding_external_operation_start(
     micropython_binding_control_t *control, uint32_t ticket, uint32_t run_id)
 {
-    binding_select_uart(g_uart_baud);
-    g_uart_write.ticket = ticket;
-    g_uart_write.run_id = run_id;
-    g_uart_write.length = control->input_length;
-    g_uart_write.position = 0U;
-    for(size_t i = 0U; i < g_uart_write.length; i++)
-        g_uart_write.data[i] = control->data[i];
-    g_uart_write.active = 1U;
-    binding_uart_write_progress(control);
+    hk_external_link_i2c_transfer_t transfer = {
+        sizeof(hk_external_link_i2c_transfer_t),
+        HK_EXTERNAL_LINK_I2C_TRANSFER_VERSION,
+        0U, 0U,
+        {NULL, 0U, 0U, HK_BUFFER_ACCESS_READABLE},
+        {NULL, 0U, 0U, HK_BUFFER_ACCESS_WRITABLE},
+        0U,
+    };
+    hk_buffer_view_t tx = {
+        (void *)control->data, control->input_length, 0U,
+        HK_BUFFER_ACCESS_READABLE,
+    };
+    hk_deadline_t deadline;
+    hk_result_t result;
+    uint32_t binding_operation = control->operation;
+    uint32_t address = control->arguments[0];
+
+    if(binding_operation == MICROPYTHON_BINDING_OP_UART_WRITE)
+    {
+        if(control->input_length == 0U)
+            return MICROPYTHON_BINDING_OK;
+        result = binding_select_uart(g_uart_baud);
+        if(result == HK_OK)
+            result = binding_deadline_after(
+                binding_rpc_timeout_us(
+                    MICROPYTHON_BINDING_OP_UART_WRITE,
+                    control->input_length),
+                &deadline);
+        if(result == HK_OK)
+            result = hk_external_link_uart_write_begin(
+                g_external_owner, &g_external, &tx, deadline, NULL,
+                &g_external_operation.operation);
+    }
+    else
+    {
+        uint32_t read_size = binding_operation ==
+            MICROPYTHON_BINDING_OP_I2C_READ ? control->arguments[1] : 0U;
+
+        if(address == 0U || address > 0x7fU ||
+           read_size > MICROPYTHON_BINDING_DATA_MAX)
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        if(control->input_length == 0U && read_size == 0U)
+            return MICROPYTHON_BINDING_OK;
+        result = binding_select_i2c();
+        if(result == HK_OK)
+            result = binding_deadline_after(
+                MICROPYTHON_BINDING_I2C_TIMEOUT_US, &deadline);
+        transfer.address = (uint16_t)address;
+        transfer.tx = tx;
+        transfer.rx = (hk_buffer_view_t){
+            (void *)control->data, read_size, 0U,
+            HK_BUFFER_ACCESS_WRITABLE,
+        };
+        if(result == HK_OK)
+            result = hk_external_link_i2c_transfer_begin(
+                g_external_owner, &g_external, &transfer, deadline, NULL,
+                &g_external_operation.operation);
+    }
+    if(result != HK_PENDING)
+        return binding_external_result(result);
+    g_external_operation.ticket = ticket;
+    g_external_operation.run_id = run_id;
+    g_external_operation.binding_operation = binding_operation;
+    g_external_operation.active = 1U;
+    return MICROPYTHON_BINDING_ERROR_BUSY;
 }
 
-void micropython_binding_service_prepare(uint32_t run_id)
+static void binding_external_operation_progress(
+    micropython_binding_control_t *control)
+{
+    hk_external_link_op_progress_t progress;
+    uint32_t ticket = g_external_operation.ticket;
+    uint8_t cancelled;
+    hk_result_t result;
+    micropython_binding_result_t binding_result;
+
+    if(!g_external_operation.active)
+        return;
+    cancelled = binding_request_cancelled(
+        control, ticket, g_external_operation.run_id);
+    result = cancelled ?
+        hk_external_link_cancel(
+            g_external_owner, &g_external,
+            &g_external_operation.operation, &progress) :
+        hk_external_link_poll(
+            g_external_owner, &g_external,
+            &g_external_operation.operation, &progress);
+    if(result == HK_PENDING)
+        return;
+    if(result == HK_OK &&
+       g_external_operation.binding_operation ==
+           MICROPYTHON_BINDING_OP_I2C_READ)
+        control->output_length = progress.rx_completed_bytes;
+    binding_result = binding_external_result(result);
+    if(cancelled)
+        binding_result = MICROPYTHON_BINDING_ERROR_TIMEOUT;
+    binding_external_operation_reset();
+    binding_complete_request(
+        control, ticket, binding_result, cancelled);
+}
+
+static void binding_external_operation_cancel(void)
+{
+    hk_external_link_op_progress_t progress;
+
+    if(g_external_operation.active && g_external_owned)
+    {
+        (void)hk_external_link_cancel(
+            g_external_owner, &g_external,
+            &g_external_operation.operation, &progress);
+    }
+    binding_external_operation_reset();
+}
+
+void micropython_capability_bridge_prepare(uint32_t run_id)
 {
     micropython_binding_control_t *control = binding_control();
     hk_capability_request_t display_request = HK_DISPLAY_REQUEST_0_1_INIT;
@@ -818,10 +833,13 @@ void micropython_binding_service_prepare(uint32_t run_id)
     control->output_length = 0U;
     control->result = MICROPYTHON_BINDING_OK;
     g_external_owned = 0U;
+    g_external.lease = HK_LEASE_NONE;
+    g_external_owner = HK_OWNER_NONE;
     g_lights_owned = 0U;
     g_external_mode = BINDING_EXTERNAL_NONE;
     g_uart_baud = 115200U;
-    binding_uart_write_reset();
+    binding_external_operation_reset();
+    (void)binding_time_prepare();
     binding_display_stage_reset(run_id);
     g_display.lease = HK_LEASE_NONE;
     g_display_owner = capability_client_consumer_owner(
@@ -846,7 +864,7 @@ void micropython_binding_service_prepare(uint32_t run_id)
     control->run_active = 1U;
 }
 
-void micropython_binding_service_tick(void)
+void micropython_capability_bridge_tick(void)
 {
     micropython_binding_control_t *control = binding_control();
     uint32_t ticket;
@@ -856,9 +874,9 @@ void micropython_binding_service_tick(void)
 
     if(!control->run_active)
         return;
-    if(g_uart_write.active)
+    if(g_external_operation.active)
     {
-        binding_uart_write_progress(control);
+        binding_external_operation_progress(control);
         return;
     }
     ticket = control->request_ticket;
@@ -880,9 +898,17 @@ void micropython_binding_service_tick(void)
                                  MICROPYTHON_BINDING_ERROR_LIMIT, 0U);
         return;
     }
-    if(control->operation == MICROPYTHON_BINDING_OP_UART_WRITE)
+    if(control->operation == MICROPYTHON_BINDING_OP_UART_WRITE ||
+       control->operation == MICROPYTHON_BINDING_OP_I2C_WRITE ||
+       control->operation == MICROPYTHON_BINDING_OP_I2C_READ)
     {
-        binding_uart_write_start(control, ticket, run_id);
+        result = binding_external_operation_start(control, ticket, run_id);
+        if(g_external_operation.active)
+        {
+            binding_external_operation_progress(control);
+            return;
+        }
+        binding_complete_request(control, ticket, result, 0U);
         return;
     }
     result = binding_execute(control, ticket, run_id);
@@ -895,7 +921,7 @@ void micropython_binding_service_tick(void)
     binding_complete_request(control, ticket, result, cancelled);
 }
 
-void micropython_binding_service_cleanup(void)
+void micropython_capability_bridge_cleanup(void)
 {
     micropython_binding_control_t *control = binding_control();
 
@@ -905,18 +931,18 @@ void micropython_binding_service_cleanup(void)
     {
         uint32_t ticket = control->request_ticket;
         control->cancel_ticket = ticket;
-        binding_uart_write_reset();
+        binding_external_operation_cancel();
         binding_complete_request(control, ticket,
                                  MICROPYTHON_BINDING_ERROR_NOT_ACTIVE, 1U);
     }
     else
-    {
-        binding_uart_write_reset();
-    }
-    if(g_external_mode == BINDING_EXTERNAL_I2C)
-        binding_i2c_stop();
+        binding_external_operation_cancel();
     if(g_external_owned)
+    {
+        (void)hk_external_link_release(
+            g_external_owner, HK_DEADLINE_IMMEDIATE, &g_external);
         external_link_service_resume();
+    }
     if(g_lights_owned & HK_LIGHTS_CHANNEL_ILLUMINATION)
         (void)hk_lights_release(
             g_illumination_owner, HK_DEADLINE_IMMEDIATE,
@@ -932,6 +958,7 @@ void micropython_binding_service_cleanup(void)
             g_display_owner, deadline, &g_display);
     }
     g_external_owned = 0U;
+    g_external_owner = HK_OWNER_NONE;
     g_lights_owned = 0U;
     g_display_owned = 0U;
     g_display_owner = HK_OWNER_NONE;
@@ -977,7 +1004,8 @@ micropython_binding_result_t micropython_binding_call(
     __sync_synchronize();
     control->request_ticket = ticket;
 
-    deadline = hal_time_us() + binding_rpc_timeout_us(operation, input_length);
+    deadline = binding_now_us() +
+        binding_rpc_timeout_us(operation, input_length);
     while(control->complete_ticket != ticket)
     {
         if(micropython_runtime_interrupt_pending())
@@ -988,12 +1016,12 @@ micropython_binding_result_t micropython_binding_call(
             micropython_runtime_vm_hook();
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
         }
-        if(hal_time_us() >= deadline)
+        if(binding_now_us() >= deadline)
         {
             binding_cancel_and_wait(control, ticket);
             return MICROPYTHON_BINDING_ERROR_TIMEOUT;
         }
-        hal_sleep_ms(1U);
+        binding_sleep_ms(1U);
     }
     __sync_synchronize();
     result = (micropython_binding_result_t)control->result;
@@ -1023,20 +1051,21 @@ const char *micropython_binding_result_name(
 }
 
 #if defined(MICROPYTHON_BINDING_TESTING)
-uint8_t micropython_binding_service_test_cancel_acknowledged(void)
+uint8_t micropython_capability_bridge_test_cancel_acknowledged(void)
 {
     micropython_binding_control_t *control = binding_control();
     uint32_t ticket = control->cancel_ticket;
 
     return ticket != 0U && control->cancel_ack_ticket == ticket &&
-           control->complete_ticket == ticket && !g_uart_write.active;
+           control->complete_ticket == ticket &&
+           !g_external_operation.active;
 }
 
-uint8_t micropython_binding_service_test_request_pending(void)
+uint8_t micropython_capability_bridge_test_request_pending(void)
 {
     micropython_binding_control_t *control = binding_control();
 
     return control->request_ticket != control->complete_ticket &&
-           g_uart_write.active;
+           g_external_operation.active;
 }
 #endif

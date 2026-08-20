@@ -11,13 +11,13 @@
 #include "../services/sd_service.h"
 #include "hk_config.h"
 #if HK_ENABLE_APP_MICROPYTHON
-#include "../services/micropython_binding_service.h"
+#include "../adapters/micropython/micropython_capability_bridge.h"
 #include "../services/micropython_runtime.h"
 #endif
 void system_tick_controller_tick(const hk_input_snapshot_t *input)
 {
 #if HK_ENABLE_APP_MICROPYTHON
-    micropython_binding_service_tick();
+    micropython_capability_bridge_tick();
     micropython_runtime_poll();
 #endif
     external_link_service_tick();

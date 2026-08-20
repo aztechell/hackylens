@@ -661,8 +661,12 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             for request in capability_requirements["micropython"].required
         ))
         binding_service = (
-            ROOT / "firmware" / "src" / "services" /
-            "micropython_binding_service.c"
+            ROOT
+            / "firmware"
+            / "src"
+            / "adapters"
+            / "micropython"
+            / "micropython_capability_bridge.c"
         ).read_text(encoding="utf-8")
         for token in ("hk_lights_set_level", "hk_lights_set_rgb"):
             self.assertIn(token, binding_service)

@@ -132,6 +132,65 @@ void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *
     g_i2c_active = 1U;
 }
 
+void hal_external_i2c_controller_init(uint8_t address, uint32_t frequency_hz)
+{
+    hal_external_i2c_stop();
+    PREPARE_EXTERNAL_I2C();
+    i2c_init(I2C_DEVICE_0, address, 7U, frequency_hz);
+    (void)i2c[I2C_DEVICE_0]->clr_tx_abrt;
+    g_i2c_active = 1U;
+}
+
+uint8_t hal_external_i2c_controller_aborted(void)
+{
+    return (uint8_t)(i2c[I2C_DEVICE_0]->tx_abrt_source != 0U);
+}
+
+uint8_t hal_external_i2c_controller_tx_ready(void)
+{
+    return (uint8_t)((i2c[I2C_DEVICE_0]->status & I2C_STATUS_TFNF) != 0U);
+}
+
+uint8_t hal_external_i2c_controller_rx_ready(void)
+{
+    return (uint8_t)(i2c[I2C_DEVICE_0]->rxflr != 0U);
+}
+
+uint8_t hal_external_i2c_controller_idle(void)
+{
+    volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
+
+    return (uint8_t)((adapter->status & I2C_STATUS_ACTIVITY) == 0U &&
+                     (adapter->status & I2C_STATUS_TFE) != 0U);
+}
+
+void hal_external_i2c_controller_write(uint8_t byte)
+{
+    i2c[I2C_DEVICE_0]->data_cmd = I2C_DATA_CMD_DATA(byte);
+}
+
+void hal_external_i2c_controller_request_read(void)
+{
+    i2c[I2C_DEVICE_0]->data_cmd = I2C_DATA_CMD_CMD;
+}
+
+uint8_t hal_external_i2c_controller_read(void)
+{
+    return (uint8_t)i2c[I2C_DEVICE_0]->data_cmd;
+}
+
+uint32_t hal_external_i2c_target_lock(void)
+{
+    plic_irq_disable(IRQN_I2C0_INTERRUPT);
+    return g_i2c_active;
+}
+
+void hal_external_i2c_target_unlock(uint32_t state)
+{
+    if(state)
+        plic_irq_enable(IRQN_I2C0_INTERRUPT);
+}
+
 void hal_external_i2c_stop(void)
 {
     volatile i2c_t *adapter;

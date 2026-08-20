@@ -1,5 +1,5 @@
-#ifndef HK_MICROPYTHON_BINDING_SERVICE_H
-#define HK_MICROPYTHON_BINDING_SERVICE_H
+#ifndef HK_MICROPYTHON_CAPABILITY_BRIDGE_H
+#define HK_MICROPYTHON_CAPABILITY_BRIDGE_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -34,9 +34,9 @@ typedef enum
 } micropython_binding_result_t;
 
 /* Core-0 lifecycle and dispatcher. */
-void micropython_binding_service_prepare(uint32_t run_id);
-void micropython_binding_service_tick(void);
-void micropython_binding_service_cleanup(void);
+void micropython_capability_bridge_prepare(uint32_t run_id);
+void micropython_capability_bridge_tick(void);
+void micropython_capability_bridge_cleanup(void);
 
 /* Core-1 synchronous RPC. VM stop/deadline hooks remain live while waiting. */
 micropython_binding_result_t micropython_binding_call(
@@ -48,8 +48,8 @@ const char *micropython_binding_result_name(
     micropython_binding_result_t result);
 
 #if defined(MICROPYTHON_BINDING_TESTING)
-uint8_t micropython_binding_service_test_cancel_acknowledged(void);
-uint8_t micropython_binding_service_test_request_pending(void);
+uint8_t micropython_capability_bridge_test_cancel_acknowledged(void);
+uint8_t micropython_capability_bridge_test_request_pending(void);
 #endif
 
 #endif

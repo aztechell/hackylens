@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <hackylens/capability/external_link.h>
+#include <hackylens/capability/time.h>
+
 #include "pins.h"
+#include "../capabilities/capability_client_binding.h"
 #include "../core/hk_string.h"
-#include "hal_external_link.h"
-#include "hal_time.h"
 #include "debug_console_service.h"
 #include "external_link_protocol.h"
 #include "settings_persistence.h"
@@ -17,22 +19,28 @@
 #define LINK_ITEM_WIRE_SIZE 16U
 
 static external_link_transport_t g_transport = EXTERNAL_LINK_UART;
-static hk_link_stream_parser_t g_uart_parser;
-static uint8_t g_i2c_rx[HK_LINK_MAX_FRAME];
-static volatile uint16_t g_i2c_rx_length;
-static volatile uint8_t g_i2c_stop_seen;
-static uint8_t g_i2c_pending[HK_LINK_MAX_FRAME];
-static volatile uint16_t g_i2c_pending_length;
-static volatile uint8_t g_i2c_pending_ready;
-static uint8_t g_i2c_tx[HK_LINK_MAX_FRAME];
-static volatile uint16_t g_i2c_tx_length;
-static volatile uint16_t g_i2c_tx_index;
+typedef union
+{
+    hk_link_stream_parser_t parser;
+    uint8_t response[HK_LINK_MAX_FRAME];
+} external_link_uart_storage_t;
+
+static external_link_uart_storage_t g_uart_storage;
+static hk_owner_t g_owner;
+static hk_external_link_t g_link;
+static hk_time_t g_time;
+static hk_external_link_op_t g_uart_operation;
+static uint16_t g_uart_response_length;
+static uint64_t g_uart_response_not_before;
 static uint32_t g_rx_frames;
 static uint32_t g_tx_frames;
 static uint32_t g_bad_frames;
 static uint32_t g_rx_bytes;
 static uint32_t g_uart_baud = 115200U;
 static uint8_t g_suspended;
+
+#define EXTERNAL_LINK_SERVICE_UART_RESPONSE_TIMEOUT_US UINT64_C(1000000)
+#define EXTERNAL_LINK_SERVICE_UART_TURNAROUND_US UINT64_C(1000)
 
 static void write_u16(uint8_t *data, uint16_t value)
 {
@@ -118,99 +126,114 @@ static uint16_t make_response(const hk_link_message_t *request, uint8_t *frame, 
 
 static void handle_uart_message(const hk_link_message_t *message)
 {
-    uint8_t response[HK_LINK_MAX_FRAME];
-    uint16_t length = make_response(message, response, sizeof(response));
+    uint64_t now = 0U;
+
     g_rx_frames++;
-    if(length)
-    {
-        /* Give half-duplex and software UART masters time to return from TX
-           to RX before the first response byte. */
-        hal_sleep_ms(1U);
-        hal_external_uart_send(response, length);
-        g_tx_frames++;
-    }
-}
-
-static void i2c_receive(uint8_t byte)
-{
-    if(g_i2c_rx_length < sizeof(g_i2c_rx))
-        g_i2c_rx[g_i2c_rx_length++] = byte;
-}
-
-static uint8_t i2c_transmit(void)
-{
-    uint16_t index = g_i2c_tx_index;
-    if(index >= g_i2c_tx_length)
-        return 0U;
-    g_i2c_tx_index = (uint16_t)(index + 1U);
-    return g_i2c_tx[index];
-}
-
-static void i2c_finish_write(void)
-{
-    uint16_t length = g_i2c_rx_length;
-    if(g_i2c_stop_seen && length && !g_i2c_pending_ready)
-    {
-        memcpy(g_i2c_pending, g_i2c_rx, length);
-        g_i2c_pending_length = length;
-        g_i2c_pending_ready = 1U;
-    }
-    g_i2c_stop_seen = 0U;
-    g_i2c_rx_length = 0U;
-}
-
-static void i2c_event(hal_external_i2c_event_t event)
-{
-    if(event == HAL_EXTERNAL_I2C_EVENT_START)
-    {
-        /* The SDK reports STOP before draining RX_FULL in the same IRQ.  A
-           following START is therefore the first safe interrupt-side point
-           at which the completed write contains its final byte. */
-        i2c_finish_write();
-        g_i2c_rx_length = 0U;
+    g_uart_response_length = make_response(
+        message, g_uart_storage.response, sizeof(g_uart_storage.response));
+    if(g_uart_response_length == 0U)
         return;
-    }
-    g_i2c_stop_seen = 1U;
+    if(!hk_lease_is_zero(&g_time.lease))
+        (void)hk_time_now_us(g_owner, &g_time, &now);
+    /* Preserve the existing half-duplex turnaround without blocking core 0. */
+    g_uart_response_not_before = now +
+        EXTERNAL_LINK_SERVICE_UART_TURNAROUND_US;
 }
 
-static const hal_external_i2c_callbacks_t g_i2c_callbacks = {
-    .receive = i2c_receive,
-    .transmit = i2c_transmit,
-    .event = i2c_event,
-};
+static hk_result_t service_configure(void)
+{
+    if(hk_lease_is_zero(&g_link.lease))
+        return HK_ERR_STALE_HANDLE;
+    if(g_transport == EXTERNAL_LINK_I2C)
+    {
+        const hk_external_link_i2c_target_config_t config = {
+            sizeof(hk_external_link_i2c_target_config_t),
+            HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION,
+            EXTERNAL_LINK_I2C_ADDRESS, 0U, 0U,
+        };
+        return hk_external_link_configure_i2c_target(
+            g_owner, &g_link, &config);
+    }
+    else
+    {
+        const hk_external_link_uart_config_t config = {
+            sizeof(hk_external_link_uart_config_t),
+            HK_EXTERNAL_LINK_UART_CONFIG_VERSION,
+            g_uart_baud, 0U,
+        };
+        return hk_external_link_configure_uart(g_owner, &g_link, &config);
+    }
+}
+
+static hk_result_t service_acquire(void)
+{
+    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    hk_result_t result;
+
+    if(!hk_lease_is_zero(&g_link.lease))
+        return HK_OK;
+    request.required_features =
+        HK_EXTERNAL_LINK_FEATURE_UART |
+        HK_EXTERNAL_LINK_FEATURE_I2C_TARGET;
+    result = hk_external_link_acquire(
+        g_owner, &request, request.required_features, &g_link);
+    if(result == HK_OK)
+        result = service_configure();
+    if(result != HK_OK && !hk_lease_is_zero(&g_link.lease))
+    {
+        (void)hk_external_link_release(
+            g_owner, HK_DEADLINE_IMMEDIATE, &g_link);
+    }
+    return result;
+}
+
+static void service_cancel_uart(void)
+{
+    hk_external_link_op_progress_t progress;
+
+    if(g_uart_operation.generation != 0U &&
+       !hk_lease_is_zero(&g_link.lease))
+        (void)hk_external_link_cancel(
+            g_owner, &g_link, &g_uart_operation, &progress);
+    g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
+    g_uart_response_length = 0U;
+    g_uart_response_not_before = 0U;
+}
 
 void external_link_service_init(external_link_transport_t transport)
 {
-    memset(g_i2c_rx, 0, sizeof(g_i2c_rx));
-    memset(g_i2c_pending, 0, sizeof(g_i2c_pending));
-    memset(g_i2c_tx, 0, sizeof(g_i2c_tx));
-    g_i2c_rx_length = 0U;
-    g_i2c_stop_seen = 0U;
-    g_i2c_pending_length = 0U;
-    g_i2c_pending_ready = 0U;
-    g_i2c_tx_length = 0U;
-    g_i2c_tx_index = 0U;
+    hk_capability_request_t time_request = HK_TIME_REQUEST_0_1_INIT;
+
+    memset(&g_uart_storage, 0, sizeof(g_uart_storage));
+    g_link.lease = HK_LEASE_NONE;
+    g_time.lease = HK_LEASE_NONE;
+    g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
+    g_uart_response_length = 0U;
+    g_uart_response_not_before = 0U;
     g_uart_baud = settings_external_link_uart_baud();
     g_suspended = 0U;
-    hk_link_stream_reset(&g_uart_parser);
+    g_owner = capability_client_consumer_owner(
+        "consumer:external-link-service");
+    time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
+    if(!hk_owner_is_zero(g_owner))
+        (void)hk_time_acquire(g_owner, &time_request, &g_time);
+    hk_link_stream_reset(&g_uart_storage.parser);
     external_link_service_set_transport(transport);
 }
 
 void external_link_service_set_transport(external_link_transport_t transport)
 {
-    g_transport = transport == EXTERNAL_LINK_I2C ? EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
-    hk_link_stream_reset(&g_uart_parser);
-    g_i2c_pending_ready = 0U;
-    g_i2c_rx_length = 0U;
-    g_i2c_stop_seen = 0U;
-    g_i2c_tx_length = 0U;
-    g_i2c_tx_index = 0U;
+    uint8_t already_acquired = !hk_lease_is_zero(&g_link.lease);
+
+    g_transport = transport == EXTERNAL_LINK_I2C ?
+        EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
+    service_cancel_uart();
+    hk_link_stream_reset(&g_uart_storage.parser);
     if(g_suspended)
         return;
-    if(g_transport == EXTERNAL_LINK_I2C)
-        hal_external_i2c_init(EXTERNAL_LINK_I2C_ADDRESS, &g_i2c_callbacks);
-    else
-        hal_external_uart_init(g_uart_baud);
+    if(service_acquire() != HK_OK ||
+       (already_acquired && service_configure() != HK_OK))
+        return;
     if(g_transport == EXTERNAL_LINK_I2C)
         printf("[LINK] I2C slave 0x32 " IO_EXTERNAL_I2C_R_LABEL "/"
                IO_EXTERNAL_I2C_T_LABEL "\r\n");
@@ -229,9 +252,10 @@ void external_link_service_set_uart_baud(uint32_t baud)
     if(baud != 9600U && baud != 115200U && baud != 1000000U)
         baud = 115200U;
     g_uart_baud = baud;
-    hk_link_stream_reset(&g_uart_parser);
-    if(g_transport == EXTERNAL_LINK_UART && !g_suspended)
-        hal_external_uart_init(g_uart_baud);
+    hk_link_stream_reset(&g_uart_storage.parser);
+    if(g_transport == EXTERNAL_LINK_UART && !g_suspended &&
+       !hk_lease_is_zero(&g_link.lease))
+        (void)service_configure();
 }
 
 uint32_t external_link_service_uart_baud(void)
@@ -243,20 +267,19 @@ void external_link_service_suspend(void)
 {
     if(g_suspended)
         return;
-    if(g_transport == EXTERNAL_LINK_I2C)
-        hal_external_i2c_stop();
+    service_cancel_uart();
+    if(!hk_lease_is_zero(&g_link.lease))
+        (void)hk_external_link_release(
+            g_owner, HK_DEADLINE_IMMEDIATE, &g_link);
     g_suspended = 1U;
 }
 
 void external_link_service_resume(void)
 {
-    external_link_transport_t transport;
-
     if(!g_suspended)
         return;
-    transport = g_transport;
     g_suspended = 0U;
-    external_link_service_set_transport(transport);
+    (void)service_acquire();
 }
 
 uint8_t external_link_service_suspended(void)
@@ -266,42 +289,136 @@ uint8_t external_link_service_suspended(void)
 
 void external_link_service_tick(void)
 {
+    hk_result_t result;
+
     if(g_suspended)
+        return;
+    if(service_acquire() != HK_OK)
         return;
     if(g_transport == EXTERNAL_LINK_UART)
     {
         uint8_t data[32];
-        size_t count;
+        hk_buffer_view_t view = {
+            data, sizeof(data), 0U, HK_BUFFER_ACCESS_WRITABLE,
+        };
         hk_link_message_t message;
-        do
+        uint32_t count = 0U;
+
+        if(g_uart_operation.generation != 0U)
         {
-            count = hal_external_uart_receive(data, sizeof(data));
-            g_rx_bytes += (uint32_t)count;
-            for(size_t i = 0; i < count; i++)
-                if(hk_link_stream_feed(&g_uart_parser, data[i], &message))
-                    handle_uart_message(&message);
-        } while(count == sizeof(data));
+            hk_external_link_op_progress_t progress;
+
+            result = hk_external_link_poll(
+                g_owner, &g_link, &g_uart_operation, &progress);
+            if(result == HK_PENDING)
+                return;
+            if(result == HK_OK)
+                g_tx_frames++;
+            else
+                g_bad_frames++;
+            g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
+            g_uart_response_length = 0U;
+        }
+        if(g_uart_response_length != 0U)
+        {
+            uint64_t now;
+            hk_deadline_t deadline;
+            hk_buffer_view_t response = {
+                g_uart_storage.response, g_uart_response_length, 0U,
+                HK_BUFFER_ACCESS_READABLE,
+            };
+
+            if(hk_time_now_us(g_owner, &g_time, &now) != HK_OK ||
+               now < g_uart_response_not_before)
+                return;
+            if(hk_time_deadline_after_us(
+                   g_owner, &g_time,
+                   EXTERNAL_LINK_SERVICE_UART_RESPONSE_TIMEOUT_US,
+                   &deadline) != HK_OK)
+            {
+                g_bad_frames++;
+                g_uart_response_length = 0U;
+                return;
+            }
+            result = hk_external_link_uart_write_begin(
+                g_owner, &g_link, &response, deadline, NULL,
+                &g_uart_operation);
+            if(result != HK_PENDING)
+            {
+                g_bad_frames++;
+                g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
+                g_uart_response_length = 0U;
+            }
+            return;
+        }
+        result = hk_external_link_uart_read(
+            g_owner, &g_link, &view, &count);
+        if(result != HK_OK)
+        {
+            g_bad_frames++;
+            return;
+        }
+        g_rx_bytes += count;
+        for(uint32_t i = 0U; i < count; i++)
+        {
+            if(hk_link_stream_feed(
+                   &g_uart_storage.parser, data[i], &message))
+            {
+                handle_uart_message(&message);
+                /* One borrowed response buffer backs the asynchronous write.
+                 * Leave any later frame in the hardware FIFO until that
+                 * response reaches a terminal state. */
+                break;
+            }
+        }
         return;
     }
 
-    if(g_i2c_stop_seen)
-        i2c_finish_write();
-    if(g_i2c_pending_ready)
     {
-        hk_link_message_t message;
-        uint16_t length = g_i2c_pending_length;
-        if(hk_link_frame_decode(g_i2c_pending, length, &message))
+        uint8_t i2c_frame[HK_LINK_MAX_FRAME];
+        hk_buffer_view_t rx = {
+            i2c_frame, sizeof(i2c_frame), 0U,
+            HK_BUFFER_ACCESS_WRITABLE,
+        };
+        hk_external_link_target_event_t event;
+
+        result = hk_external_link_i2c_target_poll(
+            g_owner, &g_link, &rx, &event);
+        if(result == HK_PENDING)
+            return;
+        if(result != HK_OK)
         {
-            g_rx_frames++;
-            g_i2c_tx_length = 0U;
-            g_i2c_tx_index = 0U;
-            g_i2c_tx_length = make_response(&message, g_i2c_tx, sizeof(g_i2c_tx));
-            if(g_i2c_tx_length)
-                g_tx_frames++;
-        }
-        else
             g_bad_frames++;
-        g_i2c_pending_ready = 0U;
+            (void)service_configure();
+            return;
+        }
+        if(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE)
+        {
+            hk_link_message_t message;
+
+            g_rx_bytes += event.received_bytes;
+            if(hk_link_frame_decode(
+                   i2c_frame, event.received_bytes, &message))
+            {
+                uint16_t length;
+                hk_buffer_view_t tx;
+
+                g_rx_frames++;
+                length = make_response(
+                    &message, i2c_frame, sizeof(i2c_frame));
+                tx = (hk_buffer_view_t){
+                    i2c_frame, length, 0U, HK_BUFFER_ACCESS_READABLE,
+                };
+                if(length != 0U &&
+                   hk_external_link_i2c_target_preload_response(
+                       g_owner, &g_link, &tx) == HK_OK)
+                    g_tx_frames++;
+                else
+                    g_bad_frames++;
+            }
+            else
+                g_bad_frames++;
+        }
     }
 }
 

@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "micropython_binding_test_platform.h"
-#include "micropython_binding_service.h"
+#include "micropython_capability_bridge.h"
 #include "display_stage_private.h"
 
 #define LCD_OVERLAY_COMMAND_MAX 32U
@@ -35,9 +35,6 @@ typedef enum
     SCHEDULE_UART_TICK_THEN_TIMEOUT,
     SCHEDULE_UART_DRAIN,
 } test_schedule_t;
-
-static i2c_t g_i2c;
-volatile i2c_t *i2c[1] = {&g_i2c};
 
 static uint64_t g_now_us;
 static uint32_t g_run_id;
@@ -71,6 +68,17 @@ static uint8_t g_queued_pending_observed;
 static uint8_t g_uart_bytes[1024];
 static size_t g_uart_length;
 static test_schedule_t g_schedule;
+static const uint8_t *g_external_tx;
+static uint8_t *g_external_rx;
+static uint32_t g_external_tx_size;
+static uint32_t g_external_rx_size;
+static uint32_t g_external_tx_done;
+static uint32_t g_external_rx_done;
+static uint32_t g_external_operation_generation;
+static uint32_t g_external_operation_kind;
+static uint8_t g_external_operation_active;
+static uint32_t g_external_request_id;
+static uint64_t g_external_requested_features;
 
 static void require_true(uint8_t condition, const char *message)
 {
@@ -82,9 +90,7 @@ static void require_true(uint8_t condition, const char *message)
 
 static void reset_run(void)
 {
-    micropython_binding_service_cleanup();
-    memset(&g_i2c, 0, sizeof(g_i2c));
-    g_i2c.status = I2C_STATUS_TFNF | I2C_STATUS_TFE;
+    micropython_capability_bridge_cleanup();
     g_now_us = 0U;
     g_sleep_calls = 0U;
     g_interrupt_poll = 0U;
@@ -113,9 +119,20 @@ static void reset_run(void)
     g_uart_idle = 1U;
     g_queued_pending_observed = 0U;
     g_uart_length = 0U;
+    g_external_tx = NULL;
+    g_external_rx = NULL;
+    g_external_tx_size = 0U;
+    g_external_rx_size = 0U;
+    g_external_tx_done = 0U;
+    g_external_rx_done = 0U;
+    g_external_operation_generation = 0U;
+    g_external_operation_kind = 0U;
+    g_external_operation_active = 0U;
+    g_external_request_id = 0U;
+    g_external_requested_features = 0U;
     g_schedule = SCHEDULE_TICK_EACH_SLEEP;
     g_run_id++;
-    micropython_binding_service_prepare(g_run_id);
+    micropython_capability_bridge_prepare(g_run_id);
 }
 
 static micropython_binding_result_t call_binding(
@@ -127,6 +144,16 @@ static micropython_binding_result_t call_binding(
     return micropython_binding_call(operation, arguments,
                                     input, input_length,
                                     NULL, 0U, &output_length);
+}
+
+static micropython_binding_result_t call_binding_with_output(
+    micropython_binding_op_t operation, const uint32_t arguments[6],
+    const uint8_t *input, size_t input_length,
+    uint8_t *output, size_t output_capacity, size_t *output_length)
+{
+    return micropython_binding_call(
+        operation, arguments, input, input_length,
+        output, output_capacity, output_length);
 }
 
 static void test_timeout_cancels_before_dispatch(void)
@@ -142,10 +169,10 @@ static void test_timeout_cancels_before_dispatch(void)
                  "RPC deadline must report timeout");
     require_true(g_light_writes == 0U,
                  "cancelled request must not dispatch a late light write");
-    require_true(micropython_binding_service_test_cancel_acknowledged(),
+    require_true(micropython_capability_bridge_test_cancel_acknowledged(),
                  "timeout must wait for a core-0 cancel acknowledgement");
-    micropython_binding_service_tick();
-    micropython_binding_service_tick();
+    micropython_capability_bridge_tick();
+    micropython_capability_bridge_tick();
     require_true(g_light_writes == 0U,
                  "acknowledged request must stay quiescent on later ticks");
 }
@@ -171,7 +198,7 @@ static void test_stop_acknowledged_before_vm_unwind(void)
     require_true(g_uart_length == 1U,
                  "stop fixture must interrupt an accepted UART request");
     stopped_length = g_uart_length;
-    micropython_binding_service_tick();
+    micropython_capability_bridge_tick();
     require_true(g_uart_length == stopped_length,
                  "stopped UART request must not progress after VM unwind");
 }
@@ -193,11 +220,11 @@ static void test_uart_timeout_prevents_late_completion(void)
                  "in-flight UART request must time out");
     require_true(g_uart_length == 1U && g_uart_bytes[0] == 'A',
                  "UART tick must make bounded partial progress");
-    require_true(micropython_binding_service_test_cancel_acknowledged(),
+    require_true(micropython_capability_bridge_test_cancel_acknowledged(),
                  "in-flight UART cancel must be acknowledged");
     stopped_length = g_uart_length;
-    micropython_binding_service_tick();
-    micropython_binding_service_tick();
+    micropython_capability_bridge_tick();
+    micropython_capability_bridge_tick();
     require_true(g_uart_length == stopped_length,
                  "UART must not write after cancellation completion");
 
@@ -227,8 +254,8 @@ static void test_cleanup_is_idempotent(void)
                               led_arguments, NULL, 0U) ==
                      MICROPYTHON_BINDING_OK,
                  "LED fixture must succeed");
-    micropython_binding_service_cleanup();
-    micropython_binding_service_cleanup();
+    micropython_capability_bridge_cleanup();
+    micropython_capability_bridge_cleanup();
     require_true(g_external_suspend_calls == 1U &&
                  g_external_resume_calls == 1U,
                  "external connector lease must be restored exactly once");
@@ -257,6 +284,38 @@ static void test_uart_completion_waits_for_transmitter_drain(void)
                  "drain fixture must queue every byte");
     require_true(g_queued_pending_observed,
                  "queue completion must remain pending until TX idle");
+}
+
+static void test_i2c_controller_binding_uses_public_provider(void)
+{
+    static const uint8_t prefix[20] = {
+        0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U,
+        10U, 11U, 12U, 13U, 14U, 15U, 16U, 17U, 18U, 19U,
+    };
+    uint32_t arguments[6] = {0x50U, 40U, 0U, 0U, 0U, 0U};
+    uint8_t output[40] = {0};
+    size_t output_length = 0U;
+
+    reset_run();
+    require_true(call_binding_with_output(
+                     MICROPYTHON_BINDING_OP_I2C_READ,
+                     arguments, prefix, sizeof(prefix),
+                     output, sizeof(output), &output_length) ==
+                     MICROPYTHON_BINDING_OK,
+                 "I2C combined write/read fixture must succeed");
+    require_true(output_length == sizeof(output),
+                 "I2C read must publish the complete provider RX prefix");
+    for(uint32_t index = 0U; index < sizeof(output); ++index)
+        require_true(output[index] == (uint8_t)(0x80U + index),
+                     "I2C binding output must come from provider progress");
+    require_true(g_external_request_id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
+                 g_external_requested_features ==
+                     (HK_EXTERNAL_LINK_FEATURE_UART |
+                      HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER),
+                 "MicroPython must acquire the public external-link provider ID");
+    require_true(g_external_tx_done == sizeof(prefix) &&
+                 g_external_rx_done == sizeof(output),
+                 "one provider operation must own the whole I2C transaction");
 }
 
 static void test_display_stages_until_present(void)
@@ -387,8 +446,8 @@ static void test_display_limit_clear_recovery_and_cleanup(void)
                  g_overlay_command_count == 1U &&
                  g_overlay_commands[0].type == LCD_OVERLAY_COMMAND_CLEAR,
                  "recovered frame must contain only the new clear command");
-    micropython_binding_service_cleanup();
-    micropython_binding_service_cleanup();
+    micropython_capability_bridge_cleanup();
+    micropython_capability_bridge_cleanup();
     require_true(g_overlay_release_calls == 1U &&
                  g_overlay_released_run_id == g_run_id,
                  "display lease must be released exactly once for its run");
@@ -401,26 +460,12 @@ int main(void)
     test_uart_timeout_prevents_late_completion();
     test_cleanup_is_idempotent();
     test_uart_completion_waits_for_transmitter_drain();
+    test_i2c_controller_binding_uses_public_provider();
     test_display_stages_until_present();
     test_display_cancel_preserves_stage_for_retry();
     test_display_limit_clear_recovery_and_cleanup();
-    micropython_binding_service_cleanup();
-    puts("MICROPYTHON_BINDINGS_OK cases=8");
-    return 0;
-}
-
-void i2c_init(int device, uint32_t address, uint32_t address_width,
-              uint32_t frequency)
-{
-    (void)device;
-    (void)address;
-    (void)address_width;
-    (void)frequency;
-}
-
-int plic_irq_disable(int interrupt)
-{
-    (void)interrupt;
+    micropython_capability_bridge_cleanup();
+    puts("MICROPYTHON_BINDINGS_OK cases=9");
     return 0;
 }
 
@@ -455,7 +500,6 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
         owner.slot = 2U;
     return owner;
 }
-void board_external_link_i2c_pins(void) {}
 uint32_t hk_input_state(void) { return 0x0aU; }
 
 hk_result_t hk_display_acquire(
@@ -666,37 +710,220 @@ hk_result_t hk_lights_set_rgb(
     return HK_OK;
 }
 
-void hal_external_uart_init(uint32_t baud)
+hk_result_t hk_external_link_acquire(
+    hk_owner_t owner, const hk_capability_request_t *request,
+    uint64_t mode_features, hk_external_link_t *handle)
 {
-    (void)baud;
+    if(!request || !handle)
+        return HK_ERR_INVALID_ARGUMENT;
+    g_external_request_id = request->id;
+    g_external_requested_features = mode_features;
+    handle->lease = (hk_lease_t){
+        9U, 1U, owner, HK_CAPABILITY_ID_EXTERNAL_LINK,
+    };
+    return HK_OK;
+}
+
+hk_result_t hk_external_link_release(
+    hk_owner_t owner, hk_deadline_t deadline, hk_external_link_t *handle)
+{
+    (void)owner;
+    (void)deadline;
+    if(!handle)
+        return HK_ERR_INVALID_ARGUMENT;
+    g_external_operation_active = 0U;
+    handle->lease = HK_LEASE_NONE;
+    return HK_OK;
+}
+
+hk_result_t hk_external_link_configure_uart(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_uart_config_t *config)
+{
+    (void)owner;
+    if(!handle || !config)
+        return HK_ERR_INVALID_ARGUMENT;
     g_uart_init_calls++;
+    return HK_OK;
 }
 
-size_t hal_external_uart_receive(uint8_t *data, size_t length)
+hk_result_t hk_external_link_configure_i2c_controller(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_i2c_controller_config_t *config)
 {
-    (void)data;
-    (void)length;
-    return 0U;
+    (void)owner;
+    return handle && config ? HK_OK : HK_ERR_INVALID_ARGUMENT;
 }
 
-size_t hal_external_uart_send_ready(const uint8_t *data, size_t length)
+hk_result_t hk_external_link_uart_write_begin(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_buffer_view_t *tx, hk_deadline_t deadline,
+    const hk_cancel_t *cancel, hk_external_link_op_t *operation)
 {
-    size_t count = length;
-
-    if(count > g_uart_budget)
-        count = g_uart_budget;
-    if(count > sizeof(g_uart_bytes) - g_uart_length)
-        count = sizeof(g_uart_bytes) - g_uart_length;
-    memcpy(g_uart_bytes + g_uart_length, data, count);
-    g_uart_length += count;
-    return count;
+    (void)owner;
+    (void)deadline;
+    (void)cancel;
+    if(!handle || !tx || !operation)
+        return HK_ERR_INVALID_ARGUMENT;
+    g_external_tx = (const uint8_t *)tx->data;
+    g_external_rx = NULL;
+    g_external_tx_size = tx->size_bytes;
+    g_external_rx_size = 0U;
+    g_external_tx_done = 0U;
+    g_external_rx_done = 0U;
+    g_external_operation_kind = HK_EXTERNAL_LINK_OP_UART_WRITE;
+    g_external_operation_active = 1U;
+    operation->slot = 1U;
+    operation->generation = ++g_external_operation_generation;
+    return HK_PENDING;
 }
 
-uint8_t hal_external_uart_tx_idle(void) { return g_uart_idle; }
+hk_result_t hk_external_link_uart_read(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    hk_buffer_view_t *rx, uint32_t *received_bytes)
+{
+    (void)owner;
+    (void)handle;
+    (void)rx;
+    *received_bytes = 0U;
+    return HK_OK;
+}
 
-uint64_t hal_time_us(void) { return g_now_us; }
+hk_result_t hk_external_link_i2c_transfer_begin(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_i2c_transfer_t *transfer,
+    hk_deadline_t deadline, const hk_cancel_t *cancel,
+    hk_external_link_op_t *operation)
+{
+    (void)owner;
+    (void)handle;
+    (void)deadline;
+    (void)cancel;
+    if(!transfer || !operation)
+        return HK_ERR_INVALID_ARGUMENT;
+    g_external_tx = (const uint8_t *)transfer->tx.data;
+    g_external_rx = (uint8_t *)transfer->rx.data;
+    g_external_tx_size = transfer->tx.size_bytes;
+    g_external_rx_size = transfer->rx.size_bytes;
+    g_external_tx_done = 0U;
+    g_external_rx_done = 0U;
+    g_external_operation_kind = HK_EXTERNAL_LINK_OP_I2C_TRANSFER;
+    g_external_operation_active = 1U;
+    operation->slot = 1U;
+    operation->generation = ++g_external_operation_generation;
+    return HK_PENDING;
+}
 
-void hal_sleep_ms(uint32_t duration_ms)
+static void external_progress(hk_external_link_op_progress_t *progress)
+{
+    uint32_t flags = g_external_operation_active ? 0U :
+        HK_EXTERNAL_LINK_PROGRESS_TERMINAL;
+
+    *progress = (hk_external_link_op_progress_t){
+        sizeof(*progress), HK_EXTERNAL_LINK_OP_PROGRESS_VERSION,
+        g_external_operation_kind, g_external_tx_done, g_external_rx_done,
+        flags, g_external_operation_active ? HK_PENDING : HK_OK, 0U,
+    };
+}
+
+hk_result_t hk_external_link_poll(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_op_t *operation,
+    hk_external_link_op_progress_t *progress)
+{
+    uint32_t budget = 32U;
+
+    (void)owner;
+    (void)handle;
+    (void)operation;
+    if(!g_external_operation_active)
+    {
+        external_progress(progress);
+        return HK_OK;
+    }
+    if(g_external_operation_kind == HK_EXTERNAL_LINK_OP_UART_WRITE)
+    {
+        uint32_t count = g_external_tx_size - g_external_tx_done;
+
+        if(count > budget)
+            count = budget;
+        if(count > g_uart_budget)
+            count = (uint32_t)g_uart_budget;
+        if(count > sizeof(g_uart_bytes) - g_uart_length)
+            count = (uint32_t)(sizeof(g_uart_bytes) - g_uart_length);
+        memcpy(g_uart_bytes + g_uart_length,
+               g_external_tx + g_external_tx_done, count);
+        g_uart_length += count;
+        g_external_tx_done += count;
+        if(g_external_tx_done == g_external_tx_size && g_uart_idle)
+            g_external_operation_active = 0U;
+    }
+    else
+    {
+        uint32_t count = g_external_tx_size - g_external_tx_done;
+
+        if(count > budget)
+            count = budget;
+        g_external_tx_done += count;
+        budget -= count;
+        count = g_external_rx_size - g_external_rx_done;
+        if(count > budget)
+            count = budget;
+        for(uint32_t index = 0U; index < count; index++)
+            g_external_rx[g_external_rx_done + index] =
+                (uint8_t)(0x80U + g_external_rx_done + index);
+        g_external_rx_done += count;
+        if(g_external_tx_done == g_external_tx_size &&
+           g_external_rx_done == g_external_rx_size)
+            g_external_operation_active = 0U;
+    }
+    external_progress(progress);
+    return g_external_operation_active ? HK_PENDING : HK_OK;
+}
+
+hk_result_t hk_external_link_cancel(
+    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_op_t *operation,
+    hk_external_link_op_progress_t *progress)
+{
+    (void)owner;
+    (void)handle;
+    (void)operation;
+    g_external_operation_active = 0U;
+    external_progress(progress);
+    progress->terminal_result = HK_ERR_CANCELLED;
+    return HK_ERR_CANCELLED;
+}
+
+hk_result_t hk_time_acquire(
+    hk_owner_t owner, const hk_capability_request_t *request,
+    hk_time_t *handle)
+{
+    (void)request;
+    handle->lease = (hk_lease_t){5U, 1U, owner, HK_CAPABILITY_ID_TIME};
+    return HK_OK;
+}
+
+hk_result_t hk_time_now_us(
+    hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
+{
+    (void)owner;
+    (void)handle;
+    *value = g_now_us;
+    return HK_OK;
+}
+
+hk_result_t hk_time_deadline_after_us(
+    hk_owner_t owner, const hk_time_t *handle,
+    uint64_t duration_us, hk_deadline_t *deadline)
+{
+    (void)owner;
+    (void)handle;
+    deadline->at_us = g_now_us + duration_us;
+    return HK_OK;
+}
+
+static void test_sleep_ms(uint32_t duration_ms)
 {
     g_sleep_calls++;
     if(g_schedule == SCHEDULE_TIMEOUT_BEFORE_TICK && g_sleep_calls == 1U)
@@ -706,7 +933,7 @@ void hal_sleep_ms(uint32_t duration_ms)
     }
     if(g_schedule == SCHEDULE_UART_TICK_THEN_TIMEOUT && g_sleep_calls == 1U)
     {
-        micropython_binding_service_tick();
+        micropython_capability_bridge_tick();
         g_now_us += 4000000ULL;
         return;
     }
@@ -714,21 +941,39 @@ void hal_sleep_ms(uint32_t duration_ms)
     {
         if(g_sleep_calls == 1U)
         {
-            micropython_binding_service_tick();
+            micropython_capability_bridge_tick();
             if(g_uart_length != 0U &&
-               micropython_binding_service_test_request_pending())
+               micropython_capability_bridge_test_request_pending())
                 g_queued_pending_observed = 1U;
         }
         else
         {
             g_uart_idle = 1U;
-            micropython_binding_service_tick();
+            micropython_capability_bridge_tick();
         }
         g_now_us += (uint64_t)duration_ms * 1000ULL;
         return;
     }
-    micropython_binding_service_tick();
+    micropython_capability_bridge_tick();
     g_now_us += (uint64_t)duration_ms * 1000ULL;
+}
+
+hk_result_t hk_time_sleep_until(
+    hk_owner_t owner, const hk_time_t *handle,
+    hk_deadline_t wake_target, hk_deadline_t operation_deadline,
+    const hk_cancel_t *cancel)
+{
+    uint64_t remaining;
+
+    (void)owner;
+    (void)handle;
+    (void)operation_deadline;
+    if(cancel && cancel->probe && cancel->probe(cancel->context))
+        return HK_ERR_CANCELLED;
+    remaining = wake_target.at_us > g_now_us ?
+        wake_target.at_us - g_now_us : 0U;
+    test_sleep_ms((uint32_t)((remaining + 999U) / 1000U));
+    return HK_OK;
 }
 
 uint8_t micropython_runtime_interrupt_pending(void)
@@ -741,6 +986,6 @@ uint8_t micropython_runtime_interrupt_pending(void)
 void micropython_runtime_vm_hook(void)
 {
     g_vm_hook_calls++;
-    if(!micropython_binding_service_test_cancel_acknowledged())
+    if(!micropython_capability_bridge_test_cancel_acknowledged())
         g_unwind_before_ack++;
 }

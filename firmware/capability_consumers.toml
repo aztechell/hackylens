@@ -16,6 +16,15 @@ enabled_by_app = "micropython"
 required_capabilities = []
 optional_capabilities = []
 
+[consumers.external-link-service]
+kind = "service"
+required_capabilities = [
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+]
+optional_capabilities = [
+  { id = "hackylens.cap.external-link", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["uart", "i2c-target"], fallback = "disable-external-link-service" },
+]
+
 [consumers.apriltag-detector]
 kind = "service"
 enabled_by_app = "apriltag"
@@ -40,6 +49,7 @@ required_capabilities = [
   { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
   { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
   { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["overlay-plane", "batch", "dirty-regions", "text"] },
+  { id = "hackylens.cap.external-link", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["uart", "i2c-controller"] },
 ]
 optional_capabilities = []
 

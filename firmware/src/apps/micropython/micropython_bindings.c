@@ -7,7 +7,7 @@
 
 #include "../../config/input_config.h"
 #include "../../capabilities/capability_client_binding.h"
-#include "../../services/micropython_binding_service.h"
+#include "../../adapters/micropython/micropython_capability_bridge.h"
 #include "../../services/micropython_runtime.h"
 
 static hk_time_t s_binding_time;

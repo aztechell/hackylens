@@ -130,7 +130,8 @@ class LightsCapabilityTests(unittest.TestCase):
         self.assertEqual(
             [item.id for item in runtime.capabilities],
             ["hackylens.cap.time", "hackylens.cap.input",
-             "hackylens.cap.display", "hackylens.cap.lights"],
+             "hackylens.cap.display", "hackylens.cap.external-link",
+             "hackylens.cap.lights"],
         )
         self.assertEqual(
             [item.id for item in conformance.capabilities],
@@ -157,7 +158,12 @@ class LightsCapabilityTests(unittest.TestCase):
             ROOT / "firmware" / "src" / "services" / "camera_light_apply.c"
         ).read_text(encoding="utf-8")
         micropython = (
-            ROOT / "firmware" / "src" / "services" / "micropython_binding_service.c"
+            ROOT
+            / "firmware"
+            / "src"
+            / "adapters"
+            / "micropython"
+            / "micropython_capability_bridge.c"
         ).read_text(encoding="utf-8")
         sleep = (
             ROOT / "firmware" / "src" / "apps" / "sleep" / "sleep_controller.c"

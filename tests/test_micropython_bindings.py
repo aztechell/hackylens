@@ -37,6 +37,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 f"-I{ROOT / 'tests'}",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'adapters' / 'micropython'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'config'}",
@@ -46,8 +47,9 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                     ROOT
                     / "firmware"
                     / "src"
-                    / "services"
-                    / "micropython_binding_service.c"
+                    / "adapters"
+                    / "micropython"
+                    / "micropython_capability_bridge.c"
                 ),
                 "-o",
                 str(executable),
@@ -62,7 +64,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 timeout=30,
             )
 
-        self.assertIn("MICROPYTHON_BINDINGS_OK cases=8", result.stdout)
+        self.assertIn("MICROPYTHON_BINDINGS_OK cases=9", result.stdout)
 
     def test_uart_fifo_capacity_boundaries(self) -> None:
         compiler = self.compiler()
@@ -107,6 +109,49 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
         self.assertIn(
             "HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3", result.stdout
         )
+
+    def test_bridge_object_has_no_hardware_dependencies(self) -> None:
+        compiler = self.compiler()
+        bridge = (
+            ROOT / "firmware" / "src" / "adapters" / "micropython" /
+            "micropython_capability_bridge.c"
+        )
+        legacy = (
+            ROOT / "firmware" / "src" / "services" /
+            "micropython_binding_service.c"
+        )
+        source = bridge.read_text(encoding="utf-8").lower()
+        self.assertFalse(legacy.exists())
+        for forbidden in (
+            "hal_external", "hal_time", "hk_board", "<i2c.h>",
+            "<uart.h>", "<plic.h>", "../drivers/", "../../drivers/",
+            "i2c_device_", "uart_device_",
+        ):
+            self.assertNotIn(forbidden, source)
+        with tempfile.TemporaryDirectory(prefix="hackylens-mpy-bridge-") as temp:
+            object_file = Path(temp) / "micropython_capability_bridge.o"
+            subprocess.run([
+                compiler,
+                "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'services'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'adapters' / 'micropython'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'config'}",
+                f"-I{ROOT / 'firmware' / 'assets'}",
+                "-c", str(bridge), "-o", str(object_file),
+            ], check=True, cwd=ROOT)
+            nm = shutil.which("nm")
+            if nm:
+                symbols = subprocess.run(
+                    [nm, "-u", str(object_file)], check=True,
+                    text=True, capture_output=True,
+                ).stdout.lower().split()
+                for symbol in symbols:
+                    normalized = symbol.lstrip("_")
+                    self.assertFalse(normalized.startswith(
+                        ("hal_", "hk_board", "i2c_", "uart_", "plic_")
+                    ))
 
     def test_k210_display_adapter_composition_cancel_and_cleanup(self) -> None:
         compiler = self.compiler()

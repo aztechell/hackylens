@@ -5,7 +5,7 @@
 
 #include "../core/hk_screen.h"
 #include "core1_executor.h"
-#include "micropython_binding_service.h"
+#include "../adapters/micropython/micropython_capability_bridge.h"
 #include "hal_time.h"
 #include "hal_watchdog.h"
 #include "hk_config.h"
@@ -228,12 +228,12 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
     shared->state = MICROPYTHON_RUNTIME_STARTING;
     __sync_synchronize();
 
-    micropython_binding_service_prepare(shared->run_id);
+    micropython_capability_bridge_prepare(shared->run_id);
 
     g_ticket = core1_executor_submit(micropython_worker, NULL);
     if(!g_ticket)
     {
-        micropython_binding_service_cleanup();
+        micropython_capability_bridge_cleanup();
         shared->exit_reason = MICROPYTHON_EXIT_CORE1_FAILURE;
         shared->state = MICROPYTHON_RUNTIME_ERROR;
         return 0U;
@@ -264,7 +264,7 @@ void micropython_runtime_poll(void)
     if(g_ticket && core1_executor_complete(g_ticket))
     {
         g_ticket = 0U;
-        micropython_binding_service_cleanup();
+        micropython_capability_bridge_cleanup();
         __sync_synchronize();
         if(shared->state == MICROPYTHON_RUNTIME_STARTING ||
            shared->state == MICROPYTHON_RUNTIME_RUNNING ||
