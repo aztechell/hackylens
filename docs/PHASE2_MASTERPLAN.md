@@ -348,8 +348,8 @@ Time consumer migration и provider откатываются вместе; dual 
 
 ## 2.5 — Input/buttons capability
 
-Статус пакета: `in_progress` (2026-08-20); implementation and local profile
-verification passed, CI pending.
+Статус пакета: `completed` (2026-08-20); implementation and both firmware
+profiles passed in [`Release firmware` run 32345756423](https://github.com/aztechell/hackylens/actions/runs/32345756423).
 
 ### Depends on
 
@@ -362,20 +362,20 @@ app callback ABI.
 
 ### Scope
 
-- [ ] Добавить `hackylens.cap.input` version `0.1.0`.
-- [ ] Переместить logical button IDs/masks в public input contract.
-- [ ] Оставить raw button driver только источником electrical sample.
-- [ ] Sampling period: 10 ms в superloop, без task.
-- [ ] Debounce: transition после 20 ms непрерывно стабильного state.
-- [ ] Event содержит sequence, timestamp, state, changed, pressed, released и
+- [x] Добавить `hackylens.cap.input` version `0.1.0`.
+- [x] Переместить logical button IDs/masks в public input contract.
+- [x] Оставить raw button driver только источником electrical sample.
+- [x] Sampling period: 10 ms в superloop, без task.
+- [x] Debounce: transition после 20 ms непрерывно стабильного state.
+- [x] Event содержит sequence, timestamp, state, changed, pressed, released и
   dropped count.
-- [ ] Добавить explicit fixed ring на 8 events и отдельный cursor на shared lease.
-- [ ] При overflow вернуть latest state, dropped count и resync cursor без replay
+- [x] Добавить explicit fixed ring на 8 events и отдельный cursor на shared lease.
+- [x] При overflow вернуть latest state, dropped count и resync cursor без replay
   устаревших edges.
-- [ ] Runtime input dispatcher использует input handle и адаптирует events в
+- [x] Runtime input dispatcher использует input handle и адаптирует events в
   существующий `hk_input_snapshot_t`.
-- [ ] MicroPython `buttons()` использует тот же provider.
-- [ ] Перевести app requirements с private `buttons` kind на required input
+- [x] MicroPython `buttons()` использует тот же provider.
+- [x] Перевести app requirements с private `buttons` kind на required input
   capability/features.
 
 ### Основные файлы
