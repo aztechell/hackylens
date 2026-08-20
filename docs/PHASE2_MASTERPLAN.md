@@ -221,8 +221,8 @@ migration.
 
 ## 2.3 — Build composition и immutable inventory
 
-Статус пакета: `in_progress` (2026-08-20); implementation and corrective CI
-pending.
+Статус пакета: `completed` (2026-08-20); implementation CI `32336546168`
+прошёл.
 
 ### Depends on
 
@@ -235,25 +235,25 @@ capabilities до миграции production consumers.
 
 ### Scope
 
-- [ ] Повысить private `firmware/app_requirements.toml` до schema 2.
-- [ ] Сохранить `requires` только для ещё не мигрированных private resources
+- [x] Повысить private `firmware/app_requirements.toml` до schema 2.
+- [x] Сохранить `requires` только для ещё не мигрированных private resources
   (`camera`, `sd-card`, `internal-flash` и аналогичных).
-- [ ] Добавить `required_capabilities` и `optional_capabilities`; optional entry
+- [x] Добавить `required_capabilities` и `optional_capabilities`; optional entry
   обязан иметь named fallback.
-- [ ] Добавить `firmware/capability_consumers.toml` для runtime/services/adapters.
-- [ ] Добавить `platforms/k210/capabilities.toml`, который сопоставляет public IDs
+- [x] Добавить `firmware/capability_consumers.toml` для runtime/services/adapters.
+- [x] Добавить `platforms/k210/capabilities.toml`, который сопоставляет public IDs
   descriptor resource predicates и provider symbols, не меняя Board Port schema.
-- [ ] Реализовать `tools/gen_capability_inventory.py`.
-- [ ] Генерировать const C inventory, owner grants, `capabilities.json` и
+- [x] Реализовать `tools/gen_capability_inventory.py`.
+- [x] Генерировать const C inventory, owner grants, `capabilities.json` и
   composition schema 2.
-- [ ] Добавить machine-readable absence reasons: resource absent, driver
+- [x] Добавить machine-readable absence reasons: resource absent, driver
   unsupported, route unavailable, provider excluded, version incompatible,
   feature missing.
-- [ ] Сохранить `--require-app`; required mismatch должен давать deterministic
+- [x] Сохранить `--require-app`; required mismatch должен давать deterministic
   build error.
-- [ ] Добавить recorded diagnostic `--disable-capability`, запрещённый для
+- [x] Добавить recorded diagnostic `--disable-capability`, запрещённый для
   release-qualified build.
-- [ ] Запретить runtime registration и ручное определение inventory symbol.
+- [x] Запретить runtime registration и ручное определение inventory symbol.
 
 ### Основные файлы
 
