@@ -597,8 +597,10 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ## 2.9 — External-link contract и fake
 
-Статус пакета: `in_progress`; public contract и deterministic fake реализованы,
-полный CI gate ещё не закрыт.
+Статус пакета: `completed` (2026-08-21); public ABI, deterministic fake, both
+firmware profiles, and resource evidence passed in
+[`Release firmware` run 32411147831](https://github.com/aztechell/hackylens/actions/runs/32411147831).
+K210 provider и consumer migration остаются границей `2.10`.
 
 ### Depends on
 
@@ -611,19 +613,19 @@ exit gate legacy overlay path не сохраняется как fallback.
 
 ### Scope
 
-- [~] Добавить `hackylens.cap.external-link` version `0.1.0`.
-- [~] Features: UART, I2C controller, I2C target.
-- [~] Один exclusive connector lease для shared physical routing.
-- [~] Определить mode configuration и validation без board ID.
-- [~] Определить async operation token: begin, poll, cancel, terminal result.
-- [~] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
+- [x] Добавить `hackylens.cap.external-link` version `0.1.0`.
+- [x] Features: UART, I2C controller, I2C target.
+- [x] Один exclusive connector lease для shared physical routing.
+- [x] Определить mode configuration и validation без board ID.
+- [x] Определить async operation token: begin, poll, cancel, terminal result.
+- [x] Один in-flight operation на lease; poll выполняет bounded FIFO burst/32
   bytes.
-- [~] UART completion требует empty FIFO и idle shift register.
-- [~] I2C transfer использует один deadline на весь transaction и возвращает
+- [x] UART completion требует empty FIFO и idle shift register.
+- [x] I2C transfer использует один deadline на весь transaction и возвращает
   определённые NACK/timeout/cancel results.
-- [~] TX/RX buffer ownership действует до terminal result.
-- [~] Реализовать deterministic fake с routing/mode/buffer/event log.
-- [~] Production external service и Python implementation пока не менять.
+- [x] TX/RX buffer ownership действует до terminal result.
+- [x] Реализовать deterministic fake с routing/mode/buffer/event log.
+- [x] Production external service и Python implementation пока не менять.
 
 ### Основные файлы
 
