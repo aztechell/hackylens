@@ -26,7 +26,7 @@ static void screenshot_write_u32(uint8_t *dst, uint32_t value)
 
 static void screenshot_make_bmp_header(uint8_t header[SCREENSHOT_BMP_HEADER_SIZE])
 {
-    uint32_t data_size = screenshot_bmp_row_bytes(LCD_W) * LCD_H;
+    uint32_t data_size = screenshot_bmp_row_bytes(HK_DISPLAY_REQUIRED_WIDTH) * HK_DISPLAY_REQUIRED_HEIGHT;
 
     memset(header, 0, SCREENSHOT_BMP_HEADER_SIZE);
     header[0] = 'B';
@@ -34,8 +34,8 @@ static void screenshot_make_bmp_header(uint8_t header[SCREENSHOT_BMP_HEADER_SIZE
     screenshot_write_u32(&header[2], SCREENSHOT_BMP_HEADER_SIZE + data_size);
     screenshot_write_u32(&header[10], SCREENSHOT_BMP_HEADER_SIZE);
     screenshot_write_u32(&header[14], 40U);
-    screenshot_write_u32(&header[18], LCD_W);
-    screenshot_write_u32(&header[22], LCD_H);
+    screenshot_write_u32(&header[18], HK_DISPLAY_REQUIRED_WIDTH);
+    screenshot_write_u32(&header[22], HK_DISPLAY_REQUIRED_HEIGHT);
     screenshot_write_u16(&header[26], 1U);
     screenshot_write_u16(&header[28], 24U);
     screenshot_write_u32(&header[34], data_size);
@@ -43,14 +43,14 @@ static void screenshot_make_bmp_header(uint8_t header[SCREENSHOT_BMP_HEADER_SIZE
 
 uint32_t screenshot_bmp_file_size(void)
 {
-    return SCREENSHOT_BMP_HEADER_SIZE + screenshot_bmp_row_bytes(LCD_W) * LCD_H;
+    return SCREENSHOT_BMP_HEADER_SIZE + screenshot_bmp_row_bytes(HK_DISPLAY_REQUIRED_WIDTH) * HK_DISPLAY_REQUIRED_HEIGHT;
 }
 
 void screenshot_bmp_fill_bytes(const screenshot_pixel_source_t *source, uint32_t offset, uint8_t *dst, uint16_t len)
 {
     uint8_t header[SCREENSHOT_BMP_HEADER_SIZE];
-    uint32_t row_bytes = screenshot_bmp_row_bytes(LCD_W);
-    uint32_t data_size = row_bytes * LCD_H;
+    uint32_t row_bytes = screenshot_bmp_row_bytes(HK_DISPLAY_REQUIRED_WIDTH);
+    uint32_t data_size = row_bytes * HK_DISPLAY_REQUIRED_HEIGHT;
 
     screenshot_make_bmp_header(header);
 
@@ -73,8 +73,8 @@ void screenshot_bmp_fill_bytes(const screenshot_pixel_source_t *source, uint32_t
         uint32_t row = data_pos / row_bytes;
         uint32_t col_byte = data_pos % row_bytes;
         uint32_t x = col_byte / 3U;
-        uint32_t y = LCD_H - 1U - row;
-        if(x >= LCD_W)
+        uint32_t y = HK_DISPLAY_REQUIRED_HEIGHT - 1U - row;
+        if(x >= HK_DISPLAY_REQUIRED_WIDTH)
         {
             dst[i] = 0;
             continue;

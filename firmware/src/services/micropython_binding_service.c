@@ -4,6 +4,10 @@
 #include <stdint.h>
 
 #include <hackylens/capability/lights.h>
+#include <hackylens/capability/display.h>
+
+#include "../capabilities/display_stage_private.h"
+#include "../config/display_config.h"
 
 #if defined(MICROPYTHON_BINDING_TESTING)
 #include "micropython_binding_test_platform.h"
@@ -17,8 +21,6 @@
 #include "settings_lights.h"
 #include "../capabilities/capability_client_binding.h"
 #include "../internal/hk_board_port.h"
-#include "../config/display_config.h"
-#include "../drivers/hk_lcd.h"
 #include "hal_external_link.h"
 #include "hal_time.h"
 #endif
@@ -98,23 +100,10 @@ typedef struct
 
 typedef struct
 {
-    lcd_overlay_command_t commands[LCD_OVERLAY_COMMAND_MAX];
-    uint8_t text[LCD_OVERLAY_TEXT_MAX];
-    size_t command_count;
-    size_t text_length;
-    uint32_t run_id;
-    uint8_t overflowed;
-} binding_display_stage_t;
-
-typedef struct
-{
     uint32_t ticket;
     uint32_t run_id;
-    size_t command_count;
-    size_t text_length;
-    uint8_t overflowed;
-    uint8_t saved_first;
-    lcd_overlay_command_t first_command;
+    uint16_t command_count;
+    uint16_t text_length;
     uint8_t active;
 } binding_display_transaction_t;
 
@@ -136,8 +125,10 @@ static hk_owner_t g_rgb_owner;
 static binding_external_mode_t g_external_mode;
 static uint32_t g_uart_baud = 115200U;
 static binding_uart_write_t g_uart_write;
-static binding_display_stage_t g_display_stage;
 static binding_display_transaction_t g_display_transaction;
+static hk_display_t g_display;
+static hk_owner_t g_display_owner;
+static uint32_t g_display_run_id;
 static uint8_t g_display_owned;
 
 static micropython_binding_control_t *binding_control(void)
@@ -157,7 +148,7 @@ static uint8_t binding_request_cancelled(
            control->cancel_ticket == ticket;
 }
 
-static uint8_t binding_display_cancelled(void *context)
+static uint8_t binding_display_cancelled(const void *context)
 {
     const binding_display_cancel_context_t *cancel_context =
         (const binding_display_cancel_context_t *)context;
@@ -165,6 +156,16 @@ static uint8_t binding_display_cancelled(void *context)
     return !cancel_context || binding_request_cancelled(
         cancel_context->control, cancel_context->ticket,
         cancel_context->run_id);
+}
+
+static hk_deadline_t binding_display_deadline(void)
+{
+    uint64_t now = hal_time_us();
+    hk_deadline_t deadline = {
+        UINT64_MAX - now <= MICROPYTHON_BINDING_RPC_TIMEOUT_US ?
+            UINT64_MAX - 1U : now + MICROPYTHON_BINDING_RPC_TIMEOUT_US,
+    };
+    return deadline;
 }
 
 static uint8_t binding_lights_cancelled(const void *context)
@@ -225,27 +226,20 @@ static uint16_t binding_rgb_level(uint32_t value)
 
 static void binding_display_stage_reset(uint32_t run_id)
 {
-    g_display_stage.command_count = 0U;
-    g_display_stage.text_length = 0U;
-    g_display_stage.run_id = run_id;
-    g_display_stage.overflowed = 0U;
+    g_display_run_id = run_id;
     g_display_transaction.active = 0U;
 }
 
 static void binding_display_transaction_begin(uint32_t ticket,
-                                              uint32_t run_id,
-                                              uint8_t replaces_first)
+                                              uint32_t run_id)
 {
     g_display_transaction.ticket = ticket;
     g_display_transaction.run_id = run_id;
-    g_display_transaction.command_count = g_display_stage.command_count;
-    g_display_transaction.text_length = g_display_stage.text_length;
-    g_display_transaction.overflowed = g_display_stage.overflowed;
-    g_display_transaction.saved_first =
-        replaces_first && g_display_stage.command_count != 0U;
-    if(g_display_transaction.saved_first)
-        g_display_transaction.first_command = g_display_stage.commands[0];
-    g_display_transaction.active = 1U;
+    g_display_transaction.active =
+        hk_display_stage_checkpoint(
+            g_display_owner, &g_display,
+            &g_display_transaction.command_count,
+            &g_display_transaction.text_length) == HK_OK;
 }
 
 static void binding_display_transaction_finish(uint32_t ticket,
@@ -257,43 +251,50 @@ static void binding_display_transaction_finish(uint32_t ticket,
        g_display_transaction.run_id != run_id)
         return;
     if(rollback)
-    {
-        if(g_display_transaction.saved_first)
-            g_display_stage.commands[0] =
-                g_display_transaction.first_command;
-        g_display_stage.command_count =
-            g_display_transaction.command_count;
-        g_display_stage.text_length = g_display_transaction.text_length;
-        g_display_stage.overflowed = g_display_transaction.overflowed;
-    }
+        (void)hk_display_stage_restore(
+            g_display_owner, &g_display,
+            g_display_transaction.command_count,
+            g_display_transaction.text_length);
     g_display_transaction.active = 0U;
 }
 
-static micropython_binding_result_t binding_display_append(
-    const lcd_overlay_command_t *command, const uint8_t *text,
-    size_t text_length)
+static micropython_binding_result_t binding_display_result(hk_result_t result)
 {
-    lcd_overlay_command_t staged;
-
-    if(!command || (text_length && !text))
-        return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-    if(g_display_stage.command_count >= LCD_OVERLAY_COMMAND_MAX ||
-       text_length > LCD_OVERLAY_TEXT_MAX - g_display_stage.text_length)
-    {
-        g_display_stage.overflowed = 1U;
+    if(result == HK_OK)
+        return MICROPYTHON_BINDING_OK;
+    if(result == HK_ERR_LIMIT)
         return MICROPYTHON_BINDING_ERROR_LIMIT;
-    }
-    staged = *command;
-    if(text_length)
+    if(result == HK_ERR_CANCELLED || result == HK_ERR_DEADLINE_EXCEEDED)
+        return MICROPYTHON_BINDING_ERROR_TIMEOUT;
+    if(result == HK_ERR_BUSY)
+        return MICROPYTHON_BINDING_ERROR_BUSY;
+    if(result == HK_ERR_INVALID_ARGUMENT || result == HK_ERR_INVALID_STATE ||
+       result == HK_ERR_FEATURE_UNAVAILABLE)
+        return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+    return MICROPYTHON_BINDING_ERROR_IO;
+}
+
+static uint16_t binding_display_glyph_count(
+    const uint8_t *text, uint32_t size_bytes)
+{
+    uint16_t count = 0U;
+    uint32_t position = 0U;
+
+    while(position < size_bytes)
     {
-        staged.text_offset = (uint16_t)g_display_stage.text_length;
-        staged.text_length = (uint16_t)text_length;
-        for(size_t i = 0U; i < text_length; i++)
-            g_display_stage.text[g_display_stage.text_length + i] = text[i];
-        g_display_stage.text_length += text_length;
+        uint8_t first = text[position++];
+        uint8_t continuation = (first & 0x80U) == 0U ? 0U :
+            (first & 0xE0U) == 0xC0U ? 1U :
+            (first & 0xF0U) == 0xE0U ? 2U : 3U;
+        while(continuation && position < size_bytes &&
+              (text[position] & 0xC0U) == 0x80U)
+        {
+            position++;
+            continuation--;
+        }
+        count++;
     }
-    g_display_stage.commands[g_display_stage.command_count++] = staged;
-    return MICROPYTHON_BINDING_OK;
+    return count;
 }
 
 static void binding_complete_request(
@@ -520,81 +521,98 @@ static micropython_binding_result_t binding_execute(
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_CLEAR:
     {
-        lcd_overlay_command_t command = {0};
+        hk_result_t result;
 
-        if(!g_display_owned || g_display_stage.run_id != run_id ||
+        if(!g_display_owned || g_display_run_id != run_id ||
            a[0] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
-        binding_display_transaction_begin(ticket, run_id, 1U);
+        binding_display_transaction_begin(ticket, run_id);
         /* clear() starts a fresh staged frame.  The currently presented
          * overlay remains visible until an explicit successful present(). */
-        g_display_stage.command_count = 0U;
-        g_display_stage.text_length = 0U;
-        g_display_stage.overflowed = 0U;
-        command.type = LCD_OVERLAY_COMMAND_CLEAR;
-        command.color = (uint16_t)a[0];
-        return binding_display_append(&command, NULL, 0U);
+        result = hk_display_stage_restore(
+            g_display_owner, &g_display, 0U, 0U);
+        if(result == HK_OK)
+            result = hk_display_clear(
+                g_display_owner, &g_display, (uint16_t)a[0]);
+        return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_TEXT:
     {
-        lcd_overlay_command_t command = {0};
+        hk_display_rect_t bounds;
+        hk_result_t result;
+        uint32_t width;
 
-        if(!g_display_owned || g_display_stage.run_id != run_id)
+        if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
-        if(a[0] >= LCD_W || a[1] >= LCD_H ||
+        if(a[0] >= HK_DISPLAY_REQUIRED_WIDTH || a[1] >= HK_DISPLAY_REQUIRED_HEIGHT ||
            a[2] > 0xFFFFU || a[3] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        binding_display_transaction_begin(ticket, run_id, 0U);
-        command.type = LCD_OVERLAY_COMMAND_TEXT;
-        command.x = (uint16_t)a[0];
-        command.y = (uint16_t)a[1];
-        command.color = (uint16_t)a[2];
-        command.background = (uint16_t)a[3];
-        return binding_display_append(
-            &command, (const uint8_t *)control->data, input_length);
+        binding_display_transaction_begin(ticket, run_id);
+        width = (uint32_t)binding_display_glyph_count(
+                    (const uint8_t *)control->data, input_length) *
+                HACKYLENS_FONT_W;
+        if(width > HK_DISPLAY_REQUIRED_WIDTH - a[0])
+            width = HK_DISPLAY_REQUIRED_WIDTH - a[0];
+        bounds = (hk_display_rect_t){
+            (int32_t)a[0], (int32_t)a[1], width,
+            HACKYLENS_FONT_H,
+        };
+        result = hk_display_fill_rect(
+            g_display_owner, &g_display, &bounds, (uint16_t)a[3]);
+        if(result == HK_OK)
+            result = hk_display_text(
+                g_display_owner, &g_display, &bounds,
+                (const char *)control->data, input_length,
+                (uint16_t)a[2]);
+        return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_RECT:
     {
-        lcd_overlay_command_t command = {0};
+        hk_display_rect_t rect;
+        hk_result_t result;
 
-        if(!g_display_owned || g_display_stage.run_id != run_id)
+        if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
-        if(a[0] >= LCD_W || a[1] >= LCD_H || !a[2] || !a[3] ||
+        if(a[0] >= HK_DISPLAY_REQUIRED_WIDTH || a[1] >= HK_DISPLAY_REQUIRED_HEIGHT || !a[2] || !a[3] ||
            a[2] > 0xFFFFU || a[3] > 0xFFFFU || a[4] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        binding_display_transaction_begin(ticket, run_id, 0U);
-        command.type = LCD_OVERLAY_COMMAND_RECT;
-        command.filled = a[5] != 0U;
-        command.x = (uint16_t)a[0];
-        command.y = (uint16_t)a[1];
-        command.width = (uint16_t)a[2];
-        command.height = (uint16_t)a[3];
-        command.color = (uint16_t)a[4];
-        return binding_display_append(&command, NULL, 0U);
+        binding_display_transaction_begin(ticket, run_id);
+        rect = (hk_display_rect_t){
+            (int32_t)a[0], (int32_t)a[1], a[2], a[3],
+        };
+        result = a[5] ?
+            hk_display_fill_rect(
+                g_display_owner, &g_display, &rect, (uint16_t)a[4]) :
+            hk_display_stroke_rect(
+                g_display_owner, &g_display, &rect, (uint16_t)a[4]);
+        return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_PRESENT:
     {
         binding_display_cancel_context_t cancel_context = {
             control, ticket, run_id,
         };
-        lcd_overlay_present_result_t display_result;
+        hk_cancel_t cancel = {
+            binding_display_cancelled, &cancel_context,
+        };
+        uint16_t commands;
+        uint16_t text_bytes;
+        hk_result_t result;
+        hk_deadline_t deadline = binding_display_deadline();
 
-        if(!g_display_owned || g_display_stage.run_id != run_id)
+        if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
-        if(g_display_stage.overflowed)
-            return MICROPYTHON_BINDING_ERROR_LIMIT;
-        display_result = lcd_overlay_present(
-            run_id, g_display_stage.commands,
-            g_display_stage.command_count, g_display_stage.text,
-            g_display_stage.text_length, binding_display_cancelled,
-            &cancel_context);
-        if(display_result == LCD_OVERLAY_PRESENT_OK)
-            return MICROPYTHON_BINDING_OK;
-        if(display_result == LCD_OVERLAY_PRESENT_CANCELLED)
-            return MICROPYTHON_BINDING_ERROR_TIMEOUT;
-        if(display_result == LCD_OVERLAY_PRESENT_INVALID)
-            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-        return MICROPYTHON_BINDING_ERROR_IO;
+        result = hk_display_stage_checkpoint(
+            g_display_owner, &g_display, &commands, &text_bytes);
+        if(result == HK_OK)
+            result = hk_display_present(
+                g_display_owner, &g_display, deadline, &cancel);
+        if(result == HK_OK)
+            result = hk_display_begin_batch(g_display_owner, &g_display);
+        if(result == HK_OK)
+            result = hk_display_stage_restore(
+                g_display_owner, &g_display, commands, text_bytes);
+        return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_LED:
     {
@@ -785,6 +803,8 @@ static void binding_uart_write_start(
 void micropython_binding_service_prepare(uint32_t run_id)
 {
     micropython_binding_control_t *control = binding_control();
+    hk_capability_request_t display_request = HK_DISPLAY_REQUEST_0_1_INIT;
+    hk_result_t display_result = HK_ERR_STALE_HANDLE;
 
     control->run_active = 0U;
     control->run_id = run_id;
@@ -803,7 +823,25 @@ void micropython_binding_service_prepare(uint32_t run_id)
     g_uart_baud = 115200U;
     binding_uart_write_reset();
     binding_display_stage_reset(run_id);
-    g_display_owned = lcd_overlay_acquire(run_id);
+    g_display.lease = HK_LEASE_NONE;
+    g_display_owner = capability_client_consumer_owner(
+        "consumer:micropython-adapter");
+    display_request.required_features =
+        HK_DISPLAY_FEATURE_OVERLAY_PLANE |
+        HK_DISPLAY_FEATURE_BATCH |
+        HK_DISPLAY_FEATURE_DIRTY_REGIONS |
+        HK_DISPLAY_FEATURE_TEXT;
+    if(!hk_owner_is_zero(g_display_owner))
+        display_result = hk_display_acquire(
+            g_display_owner, &display_request,
+            HK_DISPLAY_PLANE_OVERLAY, &g_display);
+    if(display_result == HK_OK)
+        display_result = hk_display_begin_batch(
+            g_display_owner, &g_display);
+    if(display_result != HK_OK && !hk_lease_is_zero(&g_display.lease))
+        (void)hk_display_release(
+            g_display_owner, HK_DEADLINE_IMMEDIATE, &g_display);
+    g_display_owned = display_result == HK_OK;
     __sync_synchronize();
     control->run_active = 1U;
 }
@@ -849,7 +887,9 @@ void micropython_binding_service_tick(void)
     }
     result = binding_execute(control, ticket, run_id);
     cancelled = binding_request_cancelled(control, ticket, run_id);
-    binding_display_transaction_finish(ticket, run_id, cancelled);
+    binding_display_transaction_finish(
+        ticket, run_id,
+        (uint8_t)(cancelled || result != MICROPYTHON_BINDING_OK));
     if(cancelled)
         result = MICROPYTHON_BINDING_ERROR_TIMEOUT;
     binding_complete_request(control, ticket, result, cancelled);
@@ -858,7 +898,6 @@ void micropython_binding_service_tick(void)
 void micropython_binding_service_cleanup(void)
 {
     micropython_binding_control_t *control = binding_control();
-    uint32_t run_id = control->run_id;
 
     control->run_active = 0U;
     __sync_synchronize();
@@ -887,10 +926,15 @@ void micropython_binding_service_cleanup(void)
             g_rgb_owner, HK_DEADLINE_IMMEDIATE, &g_rgb_lights);
     settings_lights_restore(g_lights_owned);
     if(g_display_owned)
-        (void)lcd_overlay_release(run_id);
+    {
+        hk_deadline_t deadline = binding_display_deadline();
+        (void)hk_display_release(
+            g_display_owner, deadline, &g_display);
+    }
     g_external_owned = 0U;
     g_lights_owned = 0U;
     g_display_owned = 0U;
+    g_display_owner = HK_OWNER_NONE;
     g_external_mode = BINDING_EXTERNAL_NONE;
     binding_display_stage_reset(0U);
 }

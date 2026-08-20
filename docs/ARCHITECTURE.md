@@ -55,11 +55,16 @@ cancellation/deadlines before register writes, and performs safe-off cleanup.
 Settings and temporary camera/MicroPython policy remain above that provider;
 only the K210 adapter includes the lights driver interface.
 
-Display 0.1 is currently a public contract plus a deterministic fixed-capacity
-host fake. It fixes plane ownership, batch/surface staging, clipped dirty
-regions, borrowed-buffer lifetime, present retry, repair, and cleanup semantics
-before any production LCD migration. The K210 LCD driver, views, composition,
-and runtime inventory remain unchanged until Phase 2.8.
+Display 0.1 is implemented by the production K210 provider and the deterministic
+fixed-capacity host fake. The provider owns BASE/OVERLAY plane leases, bounded
+batch/surface staging, clipped dirty regions, borrowed-buffer lifetime, present
+retry, repair, and cleanup. A private UI binding holds the typed BASE handle;
+MicroPython holds OVERLAY. Both reuse the one ST7789 shadow framebuffer over a
+raw transport that has no app, run-ID, or Python policy. The provider reports
+composition-specific bounded batch limits: the full profile reserves the
+retained MicroPython canvas, while a MicroPython-disabled composition keeps a
+minimal truthful batch implementation and does not reserve that absent
+consumer's command/text budget.
 
 ## Feature modules
 

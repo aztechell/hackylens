@@ -1,7 +1,7 @@
 #include "face_detect_view.h"
 
 #include "../../config/display_config.h"
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 #include "../../ui/camera_view.h"
 
 void face_detect_view_draw_boxes(uint16_t width, uint16_t height,
@@ -27,8 +27,8 @@ void face_detect_view_draw_boxes(uint16_t width, uint16_t height,
 void face_detect_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)bg;
-    lcd_draw_rect(x + 15, y + 10, 30, 34, 2, color);
-    lcd_fill_rect(x + 23, y + 22, 4, 4, color);
-    lcd_fill_rect(x + 34, y + 22, 4, 4, color);
-    lcd_fill_rect(x + 25, y + 34, 12, 2, color);
+    hk_ui_display_draw_rect(x + 15, y + 10, 30, 34, 2, color);
+    hk_ui_display_fill_rect(x + 23, y + 22, 4, 4, color);
+    hk_ui_display_fill_rect(x + 34, y + 22, 4, 4, color);
+    hk_ui_display_fill_rect(x + 25, y + 34, 12, 2, color);
 }

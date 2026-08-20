@@ -4,7 +4,7 @@
 
 #include <hackylens/capability/time.h>
 
-#include "hk_lcd.h"
+#include "display_binding.h"
 #include "input_config.h"
 #include "pong_controller.h"
 #include "pong_view.h"
@@ -70,8 +70,8 @@ void shell_show_menu(void)
 {
 }
 
-void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                   uint16_t color)
+void hk_ui_display_fill_rect(uint16_t x, uint16_t y,
+                             uint16_t w, uint16_t h, uint16_t color)
 {
     if(!g_record_lcd)
         return;
@@ -79,8 +79,9 @@ void lcd_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
     g_fill_calls[g_fill_call_count++] = (fill_call_t){x, y, w, h, color};
 }
 
-void lcd_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                   uint16_t thickness, uint16_t color)
+void hk_ui_display_draw_rect(uint16_t x, uint16_t y,
+                             uint16_t w, uint16_t h,
+                             uint16_t thickness, uint16_t color)
 {
     (void)x;
     (void)y;
@@ -92,8 +93,8 @@ void lcd_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
         g_draw_rect_count++;
 }
 
-void lcd_draw_text_centered(uint16_t y, const char *text, uint16_t fg,
-                            uint16_t bg)
+void hk_ui_display_draw_text_centered(uint16_t y, const char *text,
+                                      uint16_t fg, uint16_t bg)
 {
     (void)y;
     (void)text;
@@ -183,7 +184,8 @@ static void test_frame_rate_independence(void)
         (PONG_FIELD_W - PONG_BALL_SIZE) / 2;
 
     assert_state_equal(regular, irregular);
-    assert(regular.player_x > (LCD_W - PONG_PADDLE_W) / 2);
+    assert(regular.player_x >
+           (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2);
     assert(regular.ball_x != serve_x);
 }
 

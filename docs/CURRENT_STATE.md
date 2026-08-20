@@ -67,9 +67,11 @@ UART/I2C protocol or routed-peripheral semantics.
   safe-off cleanup, and persisted settings restoration after temporary leases.
   Phase 2.7 freezes Display 0.1 semantics with a deterministic fixed-capacity
   host fake, including planes, clipped batches, borrowed surfaces, dirty-region
-  transfer accounting, retry, repair, and cleanup. It deliberately does not add
-  a K210 Display provider or migrate production consumers. Display and
-  external-link therefore remain honestly absent from runtime inventory.
+  transfer accounting, retry, repair, and cleanup. Phase 2.8 adds the K210
+  provider, splits the raw ST7789 transport from plane state, migrates native
+  views through a private typed BASE binding, and moves MicroPython drawing to
+  OVERLAY. Both planes reuse the single shadow framebuffer. External-link
+  remains absent from runtime inventory.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -85,13 +87,13 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.7 contract; Time + Input + Lights runtime providers, Display + external-link absent |
+| Capability build composition | Phase 2.8 implementation; Time + Input + Display + Lights runtime providers, external-link absent |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
 capabilities from it. Capability discovery returns the generated immutable
-inventory, currently Time, Input, and Lights on SEN0305, and is not an App Runtime or
+inventory, currently Time, Input, Display, and Lights on SEN0305, and is not an App Runtime or
 manifest surface. The private generated `runtime_supported` marker describes
 Board Port runtime eligibility only; it is not physical capability or hardware
 qualification.

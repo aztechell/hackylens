@@ -38,6 +38,9 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'config'}",
+                f"-I{ROOT / 'firmware' / 'assets'}",
                 str(ROOT / "tests" / "micropython_bindings_harness.c"),
                 str(
                     ROOT
@@ -105,12 +108,12 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             "HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3", result.stdout
         )
 
-    def test_lcd_overlay_composition_cancel_and_cleanup(self) -> None:
+    def test_k210_display_adapter_composition_cancel_and_cleanup(self) -> None:
         compiler = self.compiler()
 
-        with tempfile.TemporaryDirectory(prefix="hackylens-lcd-overlay-") as temp:
+        with tempfile.TemporaryDirectory(prefix="hackylens-display-") as temp:
             executable = Path(temp) / (
-                "lcd_overlay_test.exe" if os.name == "nt" else "lcd_overlay_test"
+                "k210_display_test.exe" if os.name == "nt" else "k210_display_test"
             )
             command = [
                 compiler,
@@ -119,16 +122,20 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-Wall",
                 "-Wextra",
                 "-Werror",
-                "-DLCD_ST7789_TESTING",
+                "-DK210_DISPLAY_ADAPTER_TESTING",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'ui'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'config'}",
                 f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'core'}",
                 f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
-                str(ROOT / "tests" / "lcd_overlay_harness.c"),
-                str(ROOT / "firmware" / "src" / "drivers" / "lcd_st7789.c"),
-                str(ROOT / "firmware" / "src" / "core" / "hk_string.c"),
+                str(ROOT / "tests" / "k210_display_harness.c"),
+                str(ROOT / "platforms" / "k210" / "capabilities" /
+                    "display_adapter.c"),
+                str(ROOT / "firmware" / "src" / "ui" / "hk_font.c"),
                 "-o",
                 str(executable),
             ]
@@ -142,7 +149,10 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 timeout=30,
             )
 
-        self.assertIn("LCD_OVERLAY_OK cases=8", result.stdout)
+        self.assertIn(
+            "K210_DISPLAY_ADAPTER_OK cases=8 slice=128 framebuffer=153600",
+            result.stdout,
+        )
 
 
 if __name__ == "__main__":

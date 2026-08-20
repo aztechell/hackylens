@@ -108,16 +108,16 @@ class DisplayContractTests(unittest.TestCase):
         ):
             self.assertIn(required, contract)
 
-    def test_phase_2_7_stays_out_of_production_composition(self) -> None:
+    def test_phase_2_8_enters_production_through_the_capability(self) -> None:
         for manifest in (
             ROOT / "firmware" / "app_requirements.toml",
             ROOT / "firmware" / "capability_consumers.toml",
         ):
-            self.assertNotIn(
+            self.assertIn(
                 "hackylens.cap.display",
                 manifest.read_text(encoding="utf-8"),
             )
-        self.assertFalse(
+        self.assertTrue(
             (ROOT / "platforms" / "k210" / "capabilities" /
              "display_adapter.c").exists()
         )
@@ -134,9 +134,20 @@ class DisplayContractTests(unittest.TestCase):
             for path in sorted((ROOT / "firmware" / "src").rglob("*"))
             if path.suffix in {".c", ".h"}
         )
-        self.assertNotIn("hackylens/capability/display.h", production)
+        self.assertIn("hackylens/capability/display.h", production)
+        self.assertNotIn("hk_lcd.h", production)
+        self.assertNotIn("lcd_overlay_", production)
         self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
                          "lcd_st7789.c").is_file())
+        self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
+                         "lcd_st7789_transport.h").is_file())
+        transport = (ROOT / "firmware" / "src" / "drivers" /
+                     "lcd_st7789.c").read_text(encoding="utf-8")
+        adapter = (ROOT / "platforms" / "k210" / "capabilities" /
+                   "display_adapter.c").read_text(encoding="utf-8")
+        self.assertEqual(transport.count("LCD_W * LCD_H * 2U"), 1)
+        self.assertNotIn("LCD_W * LCD_H * 2U", adapter)
+        self.assertNotIn("HK_ENABLE_APP_MICROPYTHON", transport)
 
 
 if __name__ == "__main__":

@@ -669,11 +669,11 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         for token in ("lights_illum_set", "lights_rgb_set", "hk_lights.h"):
             self.assertNotIn(token, binding_service)
 
-    def test_phase1_allows_app_driver_but_forbids_board_hal_and_sdk(self) -> None:
+    def test_app_binding_still_forbids_board_hal_and_sdk(self) -> None:
         app = "apps/buttons/buttons_view.c"
         self.assertIsNone(
             check_arch.layer_violation(
-                app, "../../drivers/hk_lcd.h", "drivers/hk_lcd.h"
+                app, "../../ui/display_binding.h", "ui/display_binding.h"
             )
         )
         self.assertIsNotNone(
@@ -803,7 +803,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             re.compile(r"IO(?:34|35)\b"),
         )
         self.assertIn("IO_LCD_DC_OR_AUX_LABEL", texts["boot"])
-        self.assertIn("LCD_W_LABEL", texts["terminal"])
+        self.assertIn("HK_DISPLAY_REQUIRED_WIDTH", texts["terminal"])
         self.assertIn("IO_EXTERNAL_UART_R_LABEL", texts["external"])
         camera = (
             ROOT / "firmware" / "src" / "services" / "camera_session.c"

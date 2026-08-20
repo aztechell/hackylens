@@ -5,10 +5,10 @@
 #include "../config/display_config.h"
 
 #include "hk_ui.h"
-#include "../drivers/hk_lcd.h"
+#include "../ui/display_binding.h"
 
-static uint16_t g_camera_map_x[LCD_W];
-static uint16_t g_camera_map_y[LCD_H];
+static uint16_t g_camera_map_x[HK_DISPLAY_REQUIRED_WIDTH];
+static uint16_t g_camera_map_y[HK_DISPLAY_REQUIRED_HEIGHT];
 static uint16_t g_camera_map_logical_w;
 static uint16_t g_camera_map_logical_h;
 static uint16_t g_camera_map_dst_w;
@@ -22,7 +22,7 @@ static inline void camera_view_write_pixel(uint8_t *dst, uint16_t color)
 }
 
 static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
-                                          lcd_frame_surface_t *surface,
+                                          hk_ui_display_surface_t *surface,
                                           uint16_t dst_x,
                                           uint16_t dst_y,
                                           uint16_t dst_w,
@@ -31,7 +31,7 @@ static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
     uint16_t x_step;
     uint16_t y_step;
 
-    if(frame->rotate || dst_x != 0 || dst_y != 0 || dst_w != LCD_W || dst_h != LCD_H)
+    if(frame->rotate || dst_x != 0 || dst_y != 0 || dst_w != HK_DISPLAY_REQUIRED_WIDTH || dst_h != HK_DISPLAY_REQUIRED_HEIGHT)
         return 0;
     if(frame->width == 640U && frame->height == 480U)
     {
@@ -53,13 +53,13 @@ static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
         return 0;
     }
 
-    for(uint16_t y = 0; y < LCD_H; y++)
+    for(uint16_t y = 0; y < HK_DISPLAY_REQUIRED_HEIGHT; y++)
     {
         uint32_t src_y = y_step ? (uint32_t)y * y_step : ((uint32_t)y >> 1U);
         const volatile uint16_t *src = frame->pixels + src_y * frame->width;
         uint8_t *dst = surface->rgb565_be + (uint32_t)y * surface->stride_bytes;
 
-        for(uint16_t x = 0; x < LCD_W; x++)
+        for(uint16_t x = 0; x < HK_DISPLAY_REQUIRED_WIDTH; x++)
         {
             uint32_t src_x = x_step ? (uint32_t)x * x_step : ((uint32_t)x >> 1U);
             camera_view_write_pixel(dst + x * 2U, src[src_x]);
@@ -77,22 +77,22 @@ static void camera_view_prepare_maps(uint16_t logical_w, uint16_t logical_h, uin
 
     for(uint16_t x = 0; x < dst_w; x++)
     {
-        if(logical_w == 640U && dst_w == LCD_W)
+        if(logical_w == 640U && dst_w == HK_DISPLAY_REQUIRED_WIDTH)
             g_camera_map_x[x] = x * 2U;
-        else if(logical_w == 320U && dst_w == LCD_W)
+        else if(logical_w == 320U && dst_w == HK_DISPLAY_REQUIRED_WIDTH)
             g_camera_map_x[x] = x;
-        else if(logical_w == 160U && dst_w == LCD_W)
+        else if(logical_w == 160U && dst_w == HK_DISPLAY_REQUIRED_WIDTH)
             g_camera_map_x[x] = x / 2U;
         else
             g_camera_map_x[x] = (uint16_t)((uint32_t)x * logical_w / dst_w);
     }
     for(uint16_t y = 0; y < dst_h; y++)
     {
-        if(logical_h == 480U && dst_h == LCD_H)
+        if(logical_h == 480U && dst_h == HK_DISPLAY_REQUIRED_HEIGHT)
             g_camera_map_y[y] = y * 2U;
-        else if(logical_h == 240U && dst_h == LCD_H)
+        else if(logical_h == 240U && dst_h == HK_DISPLAY_REQUIRED_HEIGHT)
             g_camera_map_y[y] = y;
-        else if(logical_h == 120U && dst_h == LCD_H)
+        else if(logical_h == 120U && dst_h == HK_DISPLAY_REQUIRED_HEIGHT)
             g_camera_map_y[y] = y / 2U;
         else
             g_camera_map_y[y] = (uint16_t)((uint32_t)y * logical_h / dst_h);
@@ -104,7 +104,7 @@ static void camera_view_prepare_maps(uint16_t logical_w, uint16_t logical_h, uin
     g_camera_map_valid = 1;
 }
 
-static void camera_view_compose_overlay(lcd_frame_surface_t *surface,
+static void camera_view_compose_overlay(hk_ui_display_surface_t *surface,
                                         const char *text,
                                         uint8_t enabled,
                                         uint16_t box_x,
@@ -128,7 +128,7 @@ static void camera_view_compose_overlay(lcd_frame_surface_t *surface,
 
     for(uint16_t index = 0; text[index] && text_x + (index + 1U) * HACKYLENS_FONT_W <= box_x + clipped_w; index++)
     {
-        const uint8_t *glyph = term_glyph(text[index]);
+        const uint8_t *glyph = hk_font_glyph(text[index]);
         uint16_t glyph_x0 = text_x + index * HACKYLENS_FONT_W;
 
         for(uint16_t y = 0; y < HACKYLENS_FONT_H && text_y + y < surface->height; y++)
@@ -149,7 +149,7 @@ static void camera_view_compose_overlay(lcd_frame_surface_t *surface,
 
 static uint16_t camera_view_overlay_width(const char *text)
 {
-    const uint16_t max_width = LCD_W / 2U - 4U;
+    const uint16_t max_width = HK_DISPLAY_REQUIRED_WIDTH / 2U - 4U;
     uint32_t width;
 
     if(!text)
@@ -162,7 +162,7 @@ static uint16_t camera_view_overlay_width(const char *text)
 
 uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_present_t *present)
 {
-    lcd_frame_surface_t surface;
+    hk_ui_display_surface_t surface;
     uint16_t logical_w;
     uint16_t logical_h;
     uint16_t dst_x;
@@ -174,7 +174,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
         memset(present, 0, sizeof(*present));
     if(!frame || !present || !frame->pixels || frame->width == 0 || frame->height == 0)
         return 0;
-    if(!lcd_frame_acquire(&surface))
+    if(!hk_ui_display_frame_acquire(&surface))
         return 0;
 
     logical_w = frame->rotate ? frame->height : frame->width;
@@ -182,7 +182,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
     image_fit_viewport(logical_w, logical_h, &dst_x, &dst_y, &dst_w, &dst_h);
     if(dst_w == 0 || dst_h == 0 || dst_x + dst_w > surface.width || dst_y + dst_h > surface.height)
     {
-        lcd_frame_cancel(surface.lease_id);
+        hk_ui_display_frame_cancel(surface.lease_id);
         return 0;
     }
 
@@ -227,7 +227,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
         camera_view_compose_overlay(&surface,
                                     frame->light_text,
                                     frame->light_overlay,
-                                    LCD_W - light_width - 2U,
+                                    HK_DISPLAY_REQUIRED_WIDTH - light_width - 2U,
                                     2,
                                     light_width);
     }
@@ -354,7 +354,7 @@ void camera_view_compose_text_at(camera_view_present_t *present,
     while(*text && x + HACKYLENS_FONT_W <= present->width &&
           y + HACKYLENS_FONT_H <= present->height)
     {
-        const uint8_t *glyph = term_glyph((uint8_t)*text++);
+        const uint8_t *glyph = hk_font_glyph((uint8_t)*text++);
 
         for(uint16_t glyph_y = 0; glyph_y < HACKYLENS_FONT_H; glyph_y++)
         {
@@ -380,9 +380,9 @@ uint8_t camera_view_present(camera_view_present_t *present)
         return 0;
     lease_id = present->lease_id;
     memset(present, 0, sizeof(*present));
-    result = lcd_frame_present(lease_id);
+    result = hk_ui_display_frame_present(lease_id);
     if(!result)
-        lcd_frame_cancel(lease_id);
+        hk_ui_display_frame_cancel(lease_id);
     return result;
 }
 
@@ -390,7 +390,7 @@ void camera_view_discard(camera_view_present_t *present)
 {
     if(!present || present->lease_id == 0)
         return;
-    lcd_frame_cancel(present->lease_id);
+    hk_ui_display_frame_cancel(present->lease_id);
     memset(present, 0, sizeof(*present));
 }
 
@@ -431,11 +431,11 @@ void camera_view_draw_rects(const camera_view_frame_t *frame, const camera_view_
         draw_y = (uint16_t)(dst_y + (uint32_t)y0 * dst_h / frame->height);
         draw_w = (uint16_t)(((uint32_t)(x1 - x0) * dst_w + frame->width - 1U) / frame->width);
         draw_h = (uint16_t)(((uint32_t)(y1 - y0) * dst_h + frame->height - 1U) / frame->height);
-        lcd_draw_rect(draw_x, draw_y, draw_w ? draw_w : 1, draw_h ? draw_h : 1, 2, color);
+        hk_ui_display_draw_rect(draw_x, draw_y, draw_w ? draw_w : 1, draw_h ? draw_h : 1, 2, color);
     }
 }
 
 void camera_view_clear(void)
 {
-    lcd_fill_rect(0, 0, LCD_W, LCD_H, COLOR_BLACK);
+    hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
 }

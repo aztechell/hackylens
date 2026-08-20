@@ -5,11 +5,7 @@
 #include <stdint.h>
 
 #include <hackylens/capability/lights.h>
-
-#include "hk_lcd.h"
-
-#define LCD_W 320U
-#define LCD_H 240U
+#include <hackylens/capability/display.h>
 
 #define I2C_DEVICE_0 0
 #define IRQN_I2C0_INTERRUPT 1

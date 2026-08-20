@@ -11,11 +11,11 @@
 #include "../../config/display_config.h"
 #include "files_layout.h"
 
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 #include "../../drivers/frame_pool.h"
 #include "files_view_port.h"
 
-static lcd_frame_surface_t g_animation_surface;
+static hk_ui_display_surface_t g_animation_surface;
 static hk_indexed_frame_t g_animation_previous_frame;
 static hk_indexed_frame_t g_animation_current_frame;
 static uint16_t g_animation_canvas_w;
@@ -25,8 +25,8 @@ static uint16_t g_animation_view_y;
 static uint16_t g_animation_view_w;
 static uint16_t g_animation_view_h;
 static uint16_t g_animation_background;
-static uint16_t g_animation_source_x[LCD_W];
-static uint16_t g_animation_source_y[LCD_H];
+static uint16_t g_animation_source_x[HK_DISPLAY_REQUIRED_WIDTH];
+static uint16_t g_animation_source_y[HK_DISPLAY_REQUIRED_HEIGHT];
 static uint8_t *g_animation_backup;
 static uint8_t g_animation_frame_open;
 static uint8_t g_animation_reset_pending;
@@ -40,7 +40,7 @@ static void files_view_enter_impl(void)
 static void files_view_draw_status_impl(const char *line)
 {
     menu_draw_chrome("FILES");
-    lcd_draw_text_centered(96, line, COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(96, line, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items, uint8_t count, uint8_t top, uint8_t index)
@@ -52,14 +52,14 @@ static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items,
     uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
     char line[FILE_NAME_MAX + 4U];
 
-    lcd_fill_rect(6, y, LCD_W - 12, FILES_ROW_H - 2, bg);
+    hk_ui_display_fill_rect(6, y, HK_DISPLAY_REQUIRED_WIDTH - 12, FILES_ROW_H - 2, bg);
     if(entry_index >= count)
         return;
 
     line[0] = items[entry_index].kind == FILE_ITEM_DIRECTORY ? 'D' : 'F';
     line[1] = ' ';
     utf8_copy_glyphs(&line[2], sizeof(line) - 2U, items[entry_index].name, 18U);
-    lcd_draw_text_at(10, y + 1, line, fg, bg);
+    hk_ui_display_draw_text_at(10, y + 1, line, fg, bg);
 }
 
 static void files_view_render_list_impl(uint8_t sd_present, uint8_t fat_mounted, const file_list_item_t *items, uint8_t count, uint8_t top, uint8_t index)
@@ -67,17 +67,17 @@ static void files_view_render_list_impl(uint8_t sd_present, uint8_t fat_mounted,
     menu_draw_chrome("FILES");
     if(!sd_present)
     {
-        lcd_draw_text_centered(96, "NO SD", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "NO SD", COLOR_TERM_GREEN, COLOR_BLACK);
         return;
     }
     if(!fat_mounted)
     {
-        lcd_draw_text_centered(96, "FAT32 ONLY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "FAT32 ONLY", COLOR_TERM_GREEN, COLOR_BLACK);
         return;
     }
     if(count == 0)
     {
-        lcd_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
         return;
     }
 
@@ -93,7 +93,7 @@ static void files_view_render_preview_impl(const char *preview, uint16_t len, ui
     menu_draw_chrome("PREVIEW");
     if(len == 0)
     {
-        lcd_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
         return;
     }
 
@@ -105,13 +105,13 @@ static void files_view_render_preview_impl(const char *preview, uint16_t len, ui
         line[TERM_COLS] = '\0';
         for(uint8_t col = 0; col < TERM_COLS && offset + col < len; col++)
             line[col] = preview[offset + col];
-        lcd_draw_text_at(0, FILES_ROW_Y0 + row * HACKYLENS_FONT_H, line, COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_at(0, FILES_ROW_Y0 + row * HACKYLENS_FONT_H, line, COLOR_TERM_GREEN, COLOR_BLACK);
     }
 }
 
 static void files_view_clear_image_impl(void)
 {
-    lcd_fill_rect(0, 0, LCD_W, LCD_H, COLOR_BLACK);
+    hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
 }
 
 static void files_view_render_rgb888_scaled_row_at(uint16_t x0, uint16_t y, uint16_t dst_w, const uint8_t *row, uint16_t src_w, uint8_t bgr_order)
@@ -126,11 +126,11 @@ static void files_view_render_rgb888_scaled_row_at(uint16_t x0, uint16_t y, uint
         uint16_t color = (uint16_t)(((uint16_t)(r & 0xF8U) << 8) |
                                     ((uint16_t)(g & 0xFCU) << 3) |
                                     ((uint16_t)b >> 3));
-        lcd_line_buffer()[x * 2U + 0U] = color >> 8;
-        lcd_line_buffer()[x * 2U + 1U] = color & 0xFF;
+        hk_ui_display_row_buffer()[x * 2U + 0U] = color >> 8;
+        hk_ui_display_row_buffer()[x * 2U + 1U] = color & 0xFF;
     }
-    lcd_set_window(x0, y, x0 + dst_w - 1U, y);
-    lcd_write_pixels(lcd_line_buffer(), dst_w * 2U);
+    hk_ui_display_write_row(
+        x0, y, dst_w, hk_ui_display_row_buffer());
 }
 
 static void files_view_render_rgb565le_scaled_row_at(uint16_t x0, uint16_t y, uint16_t dst_w, const uint8_t *row, uint16_t src_w)
@@ -139,11 +139,11 @@ static void files_view_render_rgb565le_scaled_row_at(uint16_t x0, uint16_t y, ui
     {
         uint32_t src_x = (uint32_t)x * src_w / dst_w;
         uint16_t color = (uint16_t)row[src_x * 2U] | ((uint16_t)row[src_x * 2U + 1U] << 8);
-        lcd_line_buffer()[x * 2U + 0U] = color >> 8;
-        lcd_line_buffer()[x * 2U + 1U] = color & 0xFF;
+        hk_ui_display_row_buffer()[x * 2U + 0U] = color >> 8;
+        hk_ui_display_row_buffer()[x * 2U + 1U] = color & 0xFF;
     }
-    lcd_set_window(x0, y, x0 + dst_w - 1U, y);
-    lcd_write_pixels(lcd_line_buffer(), dst_w * 2U);
+    hk_ui_display_write_row(
+        x0, y, dst_w, hk_ui_display_row_buffer());
 }
 
 static void files_view_render_image_row_span_impl(uint32_t src_y, uint32_t src_h, const uint8_t *row, uint16_t src_w, uint8_t bpp, uint8_t bgr_order)
@@ -248,7 +248,7 @@ static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canva
         return 0;
     if(g_animation_frame_open)
     {
-        lcd_frame_cancel(g_animation_surface.lease_id);
+        hk_ui_display_frame_cancel(g_animation_surface.lease_id);
         g_animation_frame_open = 0;
     }
     g_animation_canvas_w = canvas_w;
@@ -260,7 +260,7 @@ static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canva
         g_animation_source_x[x] = (uint16_t)((uint32_t)x * canvas_w / g_animation_view_w);
     for(uint16_t y = 0; y < g_animation_view_h; y++)
         g_animation_source_y[y] = (uint16_t)((uint32_t)y * canvas_h / g_animation_view_h);
-    g_animation_backup = frame_pool_scratch_buffer(LCD_W * LCD_H * 2U);
+    g_animation_backup = frame_pool_scratch_buffer(HK_DISPLAY_REQUIRED_WIDTH * HK_DISPLAY_REQUIRED_HEIGHT * 2U);
     g_animation_reset_pending = 1;
     g_animation_previous_valid = 0;
     g_animation_backup_valid = 0;
@@ -273,7 +273,7 @@ static uint8_t files_view_animation_frame_begin_impl(const hk_indexed_frame_t *f
 
     if(!frame || frame->canvas_w != g_animation_canvas_w ||
        frame->canvas_h != g_animation_canvas_h || g_animation_frame_open ||
-       !lcd_frame_acquire(&g_animation_surface))
+       !hk_ui_display_frame_acquire(&g_animation_surface))
         return 0;
     g_animation_frame_open = 1;
     surface_bytes = (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height;
@@ -340,9 +340,9 @@ static uint8_t files_view_animation_frame_end_impl(void)
     g_animation_frame_open = 0;
     g_animation_previous_frame = g_animation_current_frame;
     g_animation_previous_valid = 1;
-    if(!lcd_frame_present(lease_id))
+    if(!hk_ui_display_frame_present(lease_id))
     {
-        lcd_frame_cancel(lease_id);
+        hk_ui_display_frame_cancel(lease_id);
         return 0;
     }
     return 1;
@@ -351,7 +351,7 @@ static uint8_t files_view_animation_frame_end_impl(void)
 static void files_view_animation_end_impl(void)
 {
     if(g_animation_frame_open)
-        lcd_frame_cancel(g_animation_surface.lease_id);
+        hk_ui_display_frame_cancel(g_animation_surface.lease_id);
     memset(&g_animation_surface, 0, sizeof(g_animation_surface));
     memset(&g_animation_previous_frame, 0, sizeof(g_animation_previous_frame));
     memset(&g_animation_current_frame, 0, sizeof(g_animation_current_frame));
@@ -365,10 +365,10 @@ static void files_view_animation_end_impl(void)
 static void files_view_draw_delete_confirm_impl(const char *name)
 {
     menu_draw_chrome("DELETE");
-    lcd_draw_text_centered(68, "do u want delete?", COLOR_TERM_GREEN, COLOR_BLACK);
-    lcd_draw_text_centered(104, name, COLOR_TERM_GREEN, COLOR_BLACK);
-    lcd_draw_text_centered(152, "OK DELETE", COLOR_TERM_GREEN, COLOR_BLACK);
-    lcd_draw_text_centered(182, "BACK CANCEL", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(68, "do u want delete?", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(104, name, COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(152, "OK DELETE", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(182, "BACK CANCEL", COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 void files_view_init(void)
@@ -395,15 +395,15 @@ void files_view_init(void)
 void files_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)bg;
-    lcd_fill_rect(x + 20, y + 8, 20, 2, color);
-    lcd_fill_rect(x + 18, y + 12, 2, 38, color);
-    lcd_fill_rect(x + 42, y + 14, 2, 36, color);
-    lcd_fill_rect(x + 20, y + 50, 22, 2, color);
-    lcd_fill_rect(x + 38, y + 8, 2, 8, color);
-    lcd_fill_rect(x + 40, y + 14, 4, 2, color);
-    lcd_fill_rect(x + 23, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 29, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 35, y + 15, 4, 8, color);
-    lcd_fill_rect(x + 24, y + 39, 14, 2, color);
-    lcd_fill_rect(x + 24, y + 44, 10, 2, color);
+    hk_ui_display_fill_rect(x + 20, y + 8, 20, 2, color);
+    hk_ui_display_fill_rect(x + 18, y + 12, 2, 38, color);
+    hk_ui_display_fill_rect(x + 42, y + 14, 2, 36, color);
+    hk_ui_display_fill_rect(x + 20, y + 50, 22, 2, color);
+    hk_ui_display_fill_rect(x + 38, y + 8, 2, 8, color);
+    hk_ui_display_fill_rect(x + 40, y + 14, 4, 2, color);
+    hk_ui_display_fill_rect(x + 23, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 29, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 35, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 24, y + 39, 14, 2, color);
+    hk_ui_display_fill_rect(x + 24, y + 44, 10, 2, color);
 }

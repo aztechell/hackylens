@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 #include "../../ui/hk_ui.h"
 
 #define PONG_DIRTY_REGION_MAX 12
@@ -44,7 +44,7 @@ static uint8_t pong_rect_intersection(pong_rect_t first, pong_rect_t second,
 
 static uint8_t pong_rect_clip_screen(pong_rect_t *rect)
 {
-    const pong_rect_t screen = {0, 0, LCD_W, LCD_H};
+    const pong_rect_t screen = {0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT};
     pong_rect_t clipped;
 
     if(!pong_rect_intersection(*rect, screen, &clipped))
@@ -117,7 +117,7 @@ static void pong_fill_shape(pong_rect_t shape, const pong_rect_t *clip,
         return;
     if(!pong_rect_clip_screen(&visible))
         return;
-    lcd_fill_rect((uint16_t)visible.x, (uint16_t)visible.y,
+    hk_ui_display_fill_rect((uint16_t)visible.x, (uint16_t)visible.y,
                   (uint16_t)visible.w, (uint16_t)visible.h, color);
 }
 
@@ -126,29 +126,29 @@ static void pong_view_draw_title(pong_view_state_t state)
     char title[24];
 
     snprintf(title, sizeof(title), "YOU  %u : %u  CPU", state.player_score, state.ai_score);
-    lcd_fill_rect(MENU_LINE,
+    hk_ui_display_fill_rect(MENU_LINE,
                   MENU_LINE,
-                  LCD_W - MENU_LINE * 2,
+                  HK_DISPLAY_REQUIRED_WIDTH - MENU_LINE * 2,
                   MENU_BAR_H - MENU_LINE * 2,
                   COLOR_BLACK);
-    lcd_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 static void pong_view_draw_chrome(void)
 {
-    lcd_fill_rect(0, 0, LCD_W, LCD_H, COLOR_BLACK);
-    lcd_draw_rect(0, 0, LCD_W, LCD_H, MENU_LINE, COLOR_TERM_GREEN);
-    lcd_fill_rect(0, MENU_BAR_H - MENU_LINE, LCD_W, MENU_LINE, COLOR_TERM_GREEN);
+    hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
+    hk_ui_display_draw_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, MENU_LINE, COLOR_TERM_GREEN);
+    hk_ui_display_fill_rect(0, MENU_BAR_H - MENU_LINE, HK_DISPLAY_REQUIRED_WIDTH, MENU_LINE, COLOR_TERM_GREEN);
 }
 
 static void pong_view_draw_chrome_clipped(const pong_rect_t *clip)
 {
     const pong_rect_t edges[] = {
-        {0, 0, LCD_W, MENU_LINE},
-        {0, LCD_H - MENU_LINE, LCD_W, MENU_LINE},
-        {0, 0, MENU_LINE, LCD_H},
-        {LCD_W - MENU_LINE, 0, MENU_LINE, LCD_H},
-        {0, MENU_BAR_H - MENU_LINE, LCD_W, MENU_LINE},
+        {0, 0, HK_DISPLAY_REQUIRED_WIDTH, MENU_LINE},
+        {0, HK_DISPLAY_REQUIRED_HEIGHT - MENU_LINE, HK_DISPLAY_REQUIRED_WIDTH, MENU_LINE},
+        {0, 0, MENU_LINE, HK_DISPLAY_REQUIRED_HEIGHT},
+        {HK_DISPLAY_REQUIRED_WIDTH - MENU_LINE, 0, MENU_LINE, HK_DISPLAY_REQUIRED_HEIGHT},
+        {0, MENU_BAR_H - MENU_LINE, HK_DISPLAY_REQUIRED_WIDTH, MENU_LINE},
     };
 
     for(uint8_t i = 0; i < (uint8_t)(sizeof(edges) / sizeof(edges[0])); i++)
@@ -157,7 +157,7 @@ static void pong_view_draw_chrome_clipped(const pong_rect_t *clip)
 
 static void pong_view_draw_border(void)
 {
-    lcd_draw_rect(PONG_FIELD_X, PONG_FIELD_Y, PONG_FIELD_W, PONG_FIELD_H,
+    hk_ui_display_draw_rect(PONG_FIELD_X, PONG_FIELD_Y, PONG_FIELD_W, PONG_FIELD_H,
                   MENU_LINE, COLOR_TERM_GREEN);
 }
 
@@ -372,9 +372,9 @@ void pong_view_render_frame(pong_view_state_t previous, pong_view_state_t curren
 void pong_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)bg;
-    lcd_fill_rect(x + 8, y + 10, 4, 40, color);
-    lcd_fill_rect(x + 48, y + 10, 4, 40, color);
-    lcd_fill_rect(x + 27, y + 27, 6, 6, color);
-    lcd_fill_rect(x + 18, y + 16, 2, 2, color);
-    lcd_fill_rect(x + 40, y + 42, 2, 2, color);
+    hk_ui_display_fill_rect(x + 8, y + 10, 4, 40, color);
+    hk_ui_display_fill_rect(x + 48, y + 10, 4, 40, color);
+    hk_ui_display_fill_rect(x + 27, y + 27, 6, 6, color);
+    hk_ui_display_fill_rect(x + 18, y + 16, 2, 2, color);
+    hk_ui_display_fill_rect(x + 40, y + 42, 2, 2, color);
 }

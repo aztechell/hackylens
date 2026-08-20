@@ -100,7 +100,9 @@ void terminal_controller_enter(const hk_input_snapshot_t *input)
     {
         shell_printf("[BOOT] HackyLens LCD terminal\r\n");
         shell_printf("[BOOT] HackyLens %s full\r\n", HACKYLENS_VERSION);
-        shell_printf("[LCD] ST7789-compatible " LCD_W_LABEL "x" LCD_H_LABEL "\r\n");
+        shell_printf("[DISPLAY] capability minimum %ux%u\r\n",
+                     (unsigned)HK_DISPLAY_REQUIRED_WIDTH,
+                     (unsigned)HK_DISPLAY_REQUIRED_HEIGHT);
         shell_printf("[TERM] LEFT/RIGHT scroll, OK latest\r\n");
         shell_printf("[TERM] hold OK toggles font, BACK menu\r\n");
     }

@@ -91,6 +91,6 @@ uint8_t screenshot_save_current_screen(const screenshot_pixel_source_t *source, 
     }
 
     g_screenshot_error = NULL;
-    printf("[SHOT] saved %s frame=%ux%u size=%u cluster=%u\r\n", saved_name, LCD_W, LCD_H, (unsigned)file_size, first_cluster);
+    printf("[SHOT] saved %s frame=%ux%u size=%u cluster=%u\r\n", saved_name, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, (unsigned)file_size, first_cluster);
     return 1;
 }

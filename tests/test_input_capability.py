@@ -104,7 +104,8 @@ class InputCapabilityTests(unittest.TestCase):
 
         self.assertEqual(
             [item.id for item in runtime.capabilities],
-            ["hackylens.cap.time", "hackylens.cap.input", "hackylens.cap.lights"],
+            ["hackylens.cap.time", "hackylens.cap.input",
+             "hackylens.cap.display", "hackylens.cap.lights"],
         )
         self.assertEqual(
             [item.id for item in conformance.capabilities],

@@ -17,7 +17,7 @@ void debug_uart_send_screenshot(const screenshot_pixel_source_t *source)
     char header[80];
     char footer[40];
 
-    snprintf(header, sizeof(header), "HKSHOT BEGIN BMP24 %u %u %u\n", LCD_W, LCD_H, (unsigned)file_size);
+    snprintf(header, sizeof(header), "HKSHOT BEGIN BMP24 %u %u %u\n", HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, (unsigned)file_size);
     debug_console_write_text(header);
 
     while(offset < file_size)

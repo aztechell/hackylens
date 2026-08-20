@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "../../config/display_config.h"
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 #include "../../ui/camera_view.h"
 
 #define APRILTAG_SELECTED_COLOR 0xFFE0U
@@ -63,10 +63,10 @@ void apriltag_view_compose_results(camera_view_present_t *present,
 void apriltag_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)bg;
-    lcd_draw_rect(x + 13, y + 11, 34, 34, 3, color);
-    lcd_draw_rect(x + 19, y + 17, 22, 22, 2, color);
-    lcd_fill_rect(x + 22, y + 20, 5, 5, color);
-    lcd_fill_rect(x + 33, y + 20, 5, 5, color);
-    lcd_fill_rect(x + 22, y + 31, 5, 5, color);
-    lcd_fill_rect(x + 31, y + 29, 7, 7, color);
+    hk_ui_display_draw_rect(x + 13, y + 11, 34, 34, 3, color);
+    hk_ui_display_draw_rect(x + 19, y + 17, 22, 22, 2, color);
+    hk_ui_display_fill_rect(x + 22, y + 20, 5, 5, color);
+    hk_ui_display_fill_rect(x + 33, y + 20, 5, 5, color);
+    hk_ui_display_fill_rect(x + 22, y + 31, 5, 5, color);
+    hk_ui_display_fill_rect(x + 31, y + 29, 7, 7, color);
 }

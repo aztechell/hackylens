@@ -135,7 +135,7 @@ static void pong_begin_serve(int8_t direction)
     g_pong_serve_direction = direction < 0 ? -1 : 1;
     g_pong_serve_ticks = PONG_SERVE_DELAY_TICKS;
     g_pong_rally_hits = 0;
-    g_pong_ai_target_x = (LCD_W - PONG_PADDLE_W) / 2;
+    g_pong_ai_target_x = (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2;
     g_pong_ai_reaction_ticks = PONG_AI_REACTION_TICKS;
     pong_clear_effects();
 }
@@ -156,8 +156,8 @@ static void pong_launch_serve(void)
 
 static void pong_reset(void)
 {
-    g_pong_player_x = (LCD_W - PONG_PADDLE_W) / 2;
-    g_pong_ai_x = (LCD_W - PONG_PADDLE_W) / 2;
+    g_pong_player_x = (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2;
+    g_pong_ai_x = (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2;
     g_pong_player_dx = 0;
     g_pong_ai_dx = 0;
     g_pong_player_score = 0;
@@ -204,7 +204,7 @@ static int16_t pong_reflect_ball_x(int32_t projected_x)
 
 static void pong_update_ai_target(void)
 {
-    int16_t target = (LCD_W - PONG_PADDLE_W) / 2;
+    int16_t target = (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2;
 
     if(g_pong_ball_dy < 0)
     {

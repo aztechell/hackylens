@@ -88,15 +88,34 @@ def validate(root: Path = ROOT) -> list[str]:
             "state", "events", "debounced-buttons"
         ) or input_capability.max_leases != 16:
             failures.append("input capability must publish the Phase 2.5 shared profile")
+        display_capability = next(
+            item for item in catalog if item.id == "hackylens.cap.display"
+        )
+        if display_capability.limits != (
+            ("width", 1, 320), ("height", 2, 240)
+        ):
+            failures.append(
+                "display capability must publish the required 320x240 limits"
+            )
         if [item.id for item in composed_by_board["huskylens-sen0305"].capabilities] != [
-            "hackylens.cap.time", "hackylens.cap.input", "hackylens.cap.lights"
+            "hackylens.cap.time", "hackylens.cap.input",
+            "hackylens.cap.display", "hackylens.cap.lights"
         ]:
-            failures.append("SEN0305 inventory must contain exactly Time, Input, and Lights")
+            failures.append(
+                "SEN0305 inventory must contain exactly Time, Input, Display, and Lights"
+            )
         if [item.id for item in composed_by_board["sipeed-maix-cube"].capabilities] != [
             "hackylens.cap.time"
         ]:
             failures.append("Cube conformance inventory must keep Input absent")
         for app, requirements in generator.load_app_requirements(apps_path).items():
+            if "display" in requirements.legacy:
+                failures.append(f"{app}: private display requirement survived Phase 2.8")
+            if not any(
+                request.id == "hackylens.cap.display"
+                for request in requirements.required
+            ):
+                failures.append(f"{app}: canonical required Display capability is missing")
             if "buttons" in requirements.legacy:
                 failures.append(f"{app}: private buttons requirement survived Phase 2.5")
             if not any(

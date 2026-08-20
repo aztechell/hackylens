@@ -62,7 +62,10 @@ Key public interfaces:
 - `services/camera_ai_input.h` owns the single aligned planar DVP/KPU input and exact frame-boundary handoff shared by FACE and OBJECT. `services/core1_executor.h` owns APRILTAG's reusable core-1 job slot.
 - `services/camera_session_preferences.h` supplies optional per-session FPS and LED/RGB overrides. APRILTAG and OBJECT use independent values; CAMERA and QR continue to read their normal persisted profile after the override is cleared.
 - Settings storage v4 keeps APRILTAG's original 80-byte app block, appends eight OBJECT bytes, and retains the autostart ID. The loader accepts v1/v2/v3 and preserves all previous settings.
-- `drivers/hk_lcd.h` for the synchronous full-frame RGB565-BE surface lease; UI composes into the existing LCD shadow before a single driver-owned SPI present.
+- `ui/display_binding.h` for the private native-view binding to a typed Display
+  BASE handle. `capabilities/display.c` owns the public dispatch boundary,
+  `platforms/k210/capabilities/display_adapter.c` owns plane state and bounded
+  composition, and `drivers/lcd_st7789_transport.h` is raw panel transport only.
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
 - `storage/file_mount.h` and `storage/file_dir_scan.h` for neutral FAT mount and directory queries. Browser lists and image viewing are private FILES APIs.
 - `apps/files/image_viewer.h` is private to FILES and supports BMP/PNG/PPM/RAW plus streaming animated GIF87a/GIF89a. GIF playback supports palettes, transparency, interlace, disposal, pause/resume, bulk sub-block reads, and a 1600x1200 logical-canvas limit without loading the complete file into RAM. FILES decodes FAT long names from UTF-16 to UTF-8, renders Russian Cyrillic, and sorts entries by FAT modification time with newest entries first.

@@ -6,20 +6,20 @@
 #include "../../config/menu_layout.h"
 #include "qr_layout.h"
 
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 
 void qr_result_view_draw_status(const char *status)
 {
-    lcd_fill_rect(0, QR_RESULT_STATUS_Y, LCD_W, HACKYLENS_FONT_H, COLOR_BLACK);
+    hk_ui_display_fill_rect(0, QR_RESULT_STATUS_Y, HK_DISPLAY_REQUIRED_WIDTH, HACKYLENS_FONT_H, COLOR_BLACK);
     if(status && status[0])
-        lcd_draw_text_centered(QR_RESULT_STATUS_Y, status, COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(QR_RESULT_STATUS_Y, status, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 static void qr_result_view_draw_actions(void)
 {
-    lcd_fill_rect(0, QR_RESULT_ACTION_Y, LCD_W, HACKYLENS_FONT_H, COLOR_BLACK);
-    lcd_draw_text_at(22, QR_RESULT_ACTION_Y, "OK:SAVE", COLOR_TERM_GREEN, COLOR_BLACK);
-    lcd_draw_text_at(166, QR_RESULT_ACTION_Y, "BACK:CLOSE", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_fill_rect(0, QR_RESULT_ACTION_Y, HK_DISPLAY_REQUIRED_WIDTH, HACKYLENS_FONT_H, COLOR_BLACK);
+    hk_ui_display_draw_text_at(22, QR_RESULT_ACTION_Y, "OK:SAVE", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_at(166, QR_RESULT_ACTION_Y, "BACK:CLOSE", COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 static void qr_result_view_draw_page_hint(uint16_t scroll_line, uint16_t max_scroll)
@@ -43,13 +43,13 @@ void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t m
     if(scroll_line > max_scroll)
         scroll_line = max_scroll;
 
-    lcd_fill_rect(0, 0, LCD_W, LCD_H, COLOR_BLACK);
-    lcd_draw_text_centered(4, "QR RESULT", COLOR_TERM_GREEN, COLOR_BLACK);
-    lcd_draw_rect(QR_RESULT_FRAME_X, QR_RESULT_FRAME_Y, QR_RESULT_FRAME_W, QR_RESULT_FRAME_H, MENU_LINE, COLOR_TERM_GREEN);
+    hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(4, "QR RESULT", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_rect(QR_RESULT_FRAME_X, QR_RESULT_FRAME_Y, QR_RESULT_FRAME_W, QR_RESULT_FRAME_H, MENU_LINE, COLOR_TERM_GREEN);
 
     if(!payload[0])
     {
-        lcd_draw_text_centered(QR_RESULT_TEXT_Y + HACKYLENS_FONT_H, "EMPTY PAYLOAD", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(QR_RESULT_TEXT_Y + HACKYLENS_FONT_H, "EMPTY PAYLOAD", COLOR_TERM_GREEN, COLOR_BLACK);
     }
     else
     {
@@ -69,7 +69,7 @@ void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t m
                 len++;
             }
             line[len] = '\0';
-            lcd_draw_text_at(QR_RESULT_TEXT_X,
+            hk_ui_display_draw_text_at(QR_RESULT_TEXT_X,
                              (uint16_t)(QR_RESULT_TEXT_Y + row * HACKYLENS_FONT_H),
                              line,
                              COLOR_TERM_GREEN,
@@ -83,5 +83,5 @@ void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t m
 
 void qr_result_view_clear(void)
 {
-    lcd_fill_rect(0, 0, LCD_W, LCD_H, COLOR_BLACK);
+    hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
 }

@@ -16,6 +16,7 @@
 #include "../services/settings_service.h"
 #include "../storage/file_mount.h"
 #include "../ui/hk_ui.h"
+#include "../ui/display_binding.h"
 
 static void firmware_wake_from_sleep(void)
 {
@@ -53,6 +54,8 @@ void firmware_startup(void)
         printf("[CAPABILITY] owner initialization failed\r\n");
     settings_storage_init();
     platform_bootstrap_init_hardware();
+    if(hk_ui_display_prepare() != HK_OK)
+        printf("[DISPLAY] capability initialization failed\r\n");
     external_link_service_init(settings_external_link_transport());
     screen_brightness_apply();
     illum_led_apply();

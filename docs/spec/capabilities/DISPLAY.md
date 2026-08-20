@@ -59,6 +59,11 @@ the previous clip. The fake command log records post-clip rectangles.
 maximum commands, text bytes, dirty rectangles, borrowed surfaces, transfer
 slice, and maximum present duration.
 
+Inventory limit key `HK_DISPLAY_LIMIT_WIDTH` (`1`) publishes the logical width
+in pixels, and `HK_DISPLAY_LIMIT_HEIGHT` (`2`) publishes the logical height in
+pixels. Runtime consumers still validate `hk_display_info_t`; the immutable
+limits allow build composition to reject an undersized provider.
+
 `buffer_alignment_bytes` applies to the first byte of a borrowed pixel view;
 `row_alignment_bytes` applies to every stride. `transfer_slice_bytes` bounds
 one cancellation/deadline-free hardware transfer interval.

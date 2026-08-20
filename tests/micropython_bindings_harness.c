@@ -4,6 +4,29 @@
 
 #include "micropython_binding_test_platform.h"
 #include "micropython_binding_service.h"
+#include "display_stage_private.h"
+
+#define LCD_OVERLAY_COMMAND_MAX 32U
+#define LCD_OVERLAY_TEXT_MAX 1024U
+#define LCD_OVERLAY_COMMAND_CLEAR 1U
+#define LCD_OVERLAY_COMMAND_TEXT 2U
+#define LCD_OVERLAY_COMMAND_RECT 3U
+#define LCD_OVERLAY_COMMAND_FILL 4U
+#define LCD_OVERLAY_PRESENT_OK HK_OK
+#define LCD_OVERLAY_PRESENT_CANCELLED HK_ERR_CANCELLED
+
+typedef struct
+{
+    uint8_t type;
+    uint8_t filled;
+    uint16_t x;
+    uint16_t y;
+    uint16_t width;
+    uint16_t height;
+    uint16_t color;
+    uint16_t text_offset;
+    uint16_t text_length;
+} test_display_command_t;
 
 typedef enum
 {
@@ -36,10 +59,10 @@ static uint32_t g_overlay_acquired_run_id;
 static uint32_t g_overlay_released_run_id;
 static size_t g_overlay_command_count;
 static size_t g_overlay_text_length;
-static lcd_overlay_command_t
+static test_display_command_t
     g_overlay_commands[LCD_OVERLAY_COMMAND_MAX];
 static uint8_t g_overlay_text[LCD_OVERLAY_TEXT_MAX];
-static lcd_overlay_present_result_t g_overlay_present_result;
+static hk_result_t g_overlay_present_result;
 static uint8_t g_cleanup_events[8];
 static size_t g_cleanup_event_count;
 static size_t g_uart_budget;
@@ -264,21 +287,22 @@ static void test_display_stages_until_present(void)
                               none, NULL, 0U) == MICROPYTHON_BINDING_OK,
                  "explicit display present must succeed");
     require_true(g_overlay_present_calls == 1U &&
-                 g_overlay_command_count == 3U &&
+                 g_overlay_command_count == 4U &&
                  g_overlay_text_length == sizeof(text),
                  "present must publish the complete staged frame");
     require_true(g_overlay_commands[0].type == LCD_OVERLAY_COMMAND_CLEAR &&
                  g_overlay_commands[0].color == 0x1234U,
                  "presented clear command must preserve its color");
-    require_true(g_overlay_commands[1].type == LCD_OVERLAY_COMMAND_TEXT &&
-                 g_overlay_commands[1].x == 7U &&
-                 g_overlay_commands[1].y == 9U &&
+    require_true(g_overlay_commands[1].type == LCD_OVERLAY_COMMAND_FILL &&
+                 g_overlay_commands[2].type == LCD_OVERLAY_COMMAND_TEXT &&
+                 g_overlay_commands[2].x == 7U &&
+                 g_overlay_commands[2].y == 9U &&
                  !memcmp(g_overlay_text, text, sizeof(text)),
-                 "presented text command and bytes must be intact");
-    require_true(g_overlay_commands[2].type == LCD_OVERLAY_COMMAND_RECT &&
-                 g_overlay_commands[2].width == 17U &&
-                 g_overlay_commands[2].height == 19U &&
-                 g_overlay_commands[2].filled,
+                 "text background, glyph command, and bytes must be intact");
+    require_true(g_overlay_commands[3].type == LCD_OVERLAY_COMMAND_FILL &&
+                 g_overlay_commands[3].width == 17U &&
+                 g_overlay_commands[3].height == 19U &&
+                 g_overlay_commands[3].filled,
                  "presented rectangle must preserve geometry");
 }
 
@@ -302,7 +326,7 @@ static void test_display_cancel_preserves_stage_for_retry(void)
                      MICROPYTHON_BINDING_ERROR_TIMEOUT,
                  "cancelled display transfer must report timeout");
     require_true(g_overlay_present_calls == 1U &&
-                 g_overlay_command_count == 2U &&
+                 g_overlay_command_count == 3U &&
                  !memcmp(g_overlay_text, text, sizeof(text)),
                  "cancelled present must receive an intact frame");
     g_overlay_present_result = LCD_OVERLAY_PRESENT_OK;
@@ -310,16 +334,34 @@ static void test_display_cancel_preserves_stage_for_retry(void)
                               none, NULL, 0U) == MICROPYTHON_BINDING_OK,
                  "cancelled staged frame must be retryable");
     require_true(g_overlay_present_calls == 2U &&
-                 g_overlay_command_count == 2U &&
+                 g_overlay_command_count == 3U &&
                  !memcmp(g_overlay_text, text, sizeof(text)),
                  "retry must publish the same staged frame");
 }
 
 static void test_display_limit_clear_recovery_and_cleanup(void)
 {
+    static const uint8_t text[] = {'X'};
     uint32_t rect[6] = {1U, 1U, 2U, 2U, 0xFFFFU, 0U};
+    uint32_t label[6] = {1U, 1U, 0xFFFFU, 0U, 0U, 0U};
     uint32_t clear[6] = {0x0020U, 0U, 0U, 0U, 0U, 0U};
     uint32_t none[6] = {0U, 0U, 0U, 0U, 0U, 0U};
+
+    reset_run();
+    for(size_t i = 0U; i < LCD_OVERLAY_COMMAND_MAX - 1U; i++)
+        require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_RECT,
+                                  rect, NULL, 0U) ==
+                         MICROPYTHON_BINDING_OK,
+                     "atomic text fixture must fill all but one command");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_TEXT,
+                              label, text, sizeof(text)) ==
+                     MICROPYTHON_BINDING_ERROR_LIMIT,
+                 "two-command text append must report capacity failure");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
+                              none, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == LCD_OVERLAY_COMMAND_MAX - 1U &&
+                 g_overlay_text_length == 0U,
+                 "failed text append must roll back its background command");
 
     reset_run();
     for(size_t i = 0U; i < LCD_OVERLAY_COMMAND_MAX; i++)
@@ -332,16 +374,16 @@ static void test_display_limit_clear_recovery_and_cleanup(void)
                      MICROPYTHON_BINDING_ERROR_LIMIT,
                  "display command overflow must be explicit");
     require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
-                              none, NULL, 0U) ==
-                     MICROPYTHON_BINDING_ERROR_LIMIT &&
-                 g_overlay_present_calls == 0U,
-                 "overflowed frame must never reach the panel driver");
+                              none, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_present_calls == 1U &&
+                 g_overlay_command_count == LCD_OVERLAY_COMMAND_MAX,
+                 "failed append must leave the valid bounded frame presentable");
     require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_CLEAR,
                               clear, NULL, 0U) == MICROPYTHON_BINDING_OK &&
                  call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
                               none, NULL, 0U) == MICROPYTHON_BINDING_OK,
                  "clear must recover from staging overflow");
-    require_true(g_overlay_present_calls == 1U &&
+    require_true(g_overlay_present_calls == 2U &&
                  g_overlay_command_count == 1U &&
                  g_overlay_commands[0].type == LCD_OVERLAY_COMMAND_CLEAR,
                  "recovered frame must contain only the new clear command");
@@ -416,45 +458,154 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
 void board_external_link_i2c_pins(void) {}
 uint32_t hk_input_state(void) { return 0x0aU; }
 
-uint8_t lcd_overlay_acquire(uint32_t run_id)
+hk_result_t hk_display_acquire(
+    hk_owner_t owner, const hk_capability_request_t *request,
+    uint32_t plane, hk_display_t *handle)
 {
+    (void)request;
+    if(!handle || plane != HK_DISPLAY_PLANE_OVERLAY)
+        return HK_ERR_INVALID_ARGUMENT;
     g_overlay_acquire_calls++;
-    g_overlay_acquired_run_id = run_id;
-    return run_id != 0U;
+    g_overlay_acquired_run_id = g_run_id;
+    handle->lease = (hk_lease_t){
+        7U, 1U, owner, HK_CAPABILITY_ID_DISPLAY,
+    };
+    return HK_OK;
 }
 
-lcd_overlay_present_result_t lcd_overlay_present(
-    uint32_t run_id, const lcd_overlay_command_t *commands,
-    size_t command_count, const uint8_t *text, size_t text_length,
-    lcd_overlay_cancel_fn cancelled, void *cancel_context)
+hk_result_t hk_display_release(
+    hk_owner_t owner, hk_deadline_t deadline, hk_display_t *handle)
 {
-    (void)cancelled;
-    (void)cancel_context;
-    require_true(run_id == g_overlay_acquired_run_id,
-                 "present must use the acquired display run id");
-    require_true(command_count <= LCD_OVERLAY_COMMAND_MAX &&
-                 text_length <= LCD_OVERLAY_TEXT_MAX,
-                 "service must respect bounded overlay capacities");
-    require_true((command_count == 0U || commands) &&
-                 (text_length == 0U || text),
-                 "non-empty overlay buffers must be present");
+    (void)owner;
+    (void)deadline;
+    g_overlay_release_calls++;
+    g_overlay_released_run_id = g_run_id;
+    g_cleanup_events[g_cleanup_event_count++] = 4U;
+    if(handle)
+        handle->lease = HK_LEASE_NONE;
+    return HK_OK;
+}
+
+hk_result_t hk_display_begin_batch(
+    hk_owner_t owner, const hk_display_t *handle)
+{
+    (void)owner;
+    (void)handle;
+    g_overlay_command_count = 0U;
+    g_overlay_text_length = 0U;
+    return HK_OK;
+}
+
+static hk_result_t display_append(
+    uint8_t type, const hk_display_rect_t *rect, uint16_t color,
+    const char *text, uint32_t text_bytes, uint8_t filled)
+{
+    test_display_command_t *command;
+
+    if(g_overlay_command_count >= LCD_OVERLAY_COMMAND_MAX ||
+       text_bytes > LCD_OVERLAY_TEXT_MAX - g_overlay_text_length)
+        return HK_ERR_LIMIT;
+    command = &g_overlay_commands[g_overlay_command_count++];
+    *command = (test_display_command_t){
+        type, filled, rect ? (uint16_t)rect->x : 0U,
+        rect ? (uint16_t)rect->y : 0U,
+        rect ? (uint16_t)rect->width : 320U,
+        rect ? (uint16_t)rect->height : 240U,
+        color, (uint16_t)g_overlay_text_length, (uint16_t)text_bytes,
+    };
+    if(text_bytes)
+    {
+        memcpy(g_overlay_text + g_overlay_text_length, text, text_bytes);
+        g_overlay_text_length += text_bytes;
+    }
+    return HK_OK;
+}
+
+hk_result_t hk_display_clear(
+    hk_owner_t owner, const hk_display_t *handle, uint16_t color)
+{
+    (void)owner;
+    (void)handle;
+    return display_append(
+        LCD_OVERLAY_COMMAND_CLEAR, NULL, color, NULL, 0U, 1U);
+}
+
+hk_result_t hk_display_fill_rect(
+    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_rect_t *rect, uint16_t color)
+{
+    (void)owner;
+    (void)handle;
+    return display_append(
+        LCD_OVERLAY_COMMAND_FILL, rect, color, NULL, 0U, 1U);
+}
+
+hk_result_t hk_display_stroke_rect(
+    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_rect_t *rect, uint16_t color)
+{
+    (void)owner;
+    (void)handle;
+    return display_append(
+        LCD_OVERLAY_COMMAND_RECT, rect, color, NULL, 0U, 0U);
+}
+
+hk_result_t hk_display_text(
+    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_rect_t *bounds, const char *utf8,
+    uint32_t size_bytes, uint16_t color)
+{
+    (void)owner;
+    (void)handle;
+    return display_append(
+        LCD_OVERLAY_COMMAND_TEXT, bounds, color,
+        utf8, size_bytes, 0U);
+}
+
+hk_result_t hk_display_present(
+    hk_owner_t owner, const hk_display_t *handle,
+    hk_deadline_t deadline, const hk_cancel_t *cancel)
+{
+    (void)owner;
+    (void)handle;
+    (void)deadline;
+    if(cancel && cancel->probe && cancel->probe(cancel->context))
+        return HK_ERR_CANCELLED;
     g_overlay_present_calls++;
-    g_overlay_command_count = command_count;
-    g_overlay_text_length = text_length;
-    if(command_count)
-        memcpy(g_overlay_commands, commands,
-               command_count * sizeof(commands[0]));
-    if(text_length)
-        memcpy(g_overlay_text, text, text_length);
     return g_overlay_present_result;
 }
 
-uint8_t lcd_overlay_release(uint32_t run_id)
+hk_result_t hk_display_stage_checkpoint(
+    hk_owner_t owner, const hk_display_t *handle,
+    uint16_t *commands, uint16_t *text_bytes)
 {
-    g_overlay_release_calls++;
-    g_overlay_released_run_id = run_id;
-    g_cleanup_events[g_cleanup_event_count++] = 4U;
-    return run_id == g_overlay_acquired_run_id;
+    (void)owner;
+    (void)handle;
+    *commands = (uint16_t)g_overlay_command_count;
+    *text_bytes = (uint16_t)g_overlay_text_length;
+    return HK_OK;
+}
+
+hk_result_t hk_display_stage_restore(
+    hk_owner_t owner, const hk_display_t *handle,
+    uint16_t commands, uint16_t text_bytes)
+{
+    (void)owner;
+    (void)handle;
+    if(commands > LCD_OVERLAY_COMMAND_MAX ||
+       text_bytes > LCD_OVERLAY_TEXT_MAX)
+        return HK_ERR_INVALID_ARGUMENT;
+    g_overlay_command_count = commands;
+    g_overlay_text_length = text_bytes;
+    return HK_OK;
+}
+
+hk_result_t hk_display_stage_keep_last_clear(
+    hk_owner_t owner, const hk_display_t *handle)
+{
+    (void)owner;
+    (void)handle;
+    return HK_OK;
 }
 
 hk_result_t hk_lights_acquire(

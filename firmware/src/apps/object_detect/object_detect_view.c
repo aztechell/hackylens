@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "../../config/display_config.h"
-#include "../../drivers/hk_lcd.h"
+#include "../../ui/display_binding.h"
 #include "object_detect_labels.h"
 
 static const uint16_t g_class_colors[] = {
@@ -67,8 +67,8 @@ void object_detect_view_draw_icon(uint16_t x, uint16_t y,
                                   uint16_t color, uint16_t bg)
 {
     (void)bg;
-    lcd_draw_rect(x + 10U, y + 12U, 40U, 32U, 2U, color);
-    lcd_draw_rect(x + 17U, y + 18U, 14U, 12U, 2U, color);
-    lcd_draw_rect(x + 32U, y + 28U, 12U, 10U, 2U, color);
-    lcd_fill_rect(x + 13U, y + 9U, 8U, 3U, color);
+    hk_ui_display_draw_rect(x + 10U, y + 12U, 40U, 32U, 2U, color);
+    hk_ui_display_draw_rect(x + 17U, y + 18U, 14U, 12U, 2U, color);
+    hk_ui_display_draw_rect(x + 32U, y + 28U, 12U, 10U, 2U, color);
+    hk_ui_display_fill_rect(x + 13U, y + 9U, 8U, 3U, color);
 }

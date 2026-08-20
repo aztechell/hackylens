@@ -524,6 +524,9 @@ buffers, dirty regions или cancel не переносится в K210 impleme
 
 ## 2.8 — K210 display implementation и consumer migration
 
+Статус пакета: `in_progress` (2026-08-20); K210 provider, consumer migration,
+resource verification, and CI are pending.
+
 ### Depends on
 
 `2.7`.
@@ -555,12 +558,13 @@ dirty rendering и без второго framebuffer.
 
 - `platforms/k210/capabilities/display_adapter.c`
 - `firmware/src/drivers/lcd_st7789.c`
-- `firmware/src/drivers/hk_lcd.h`
+- `firmware/src/drivers/lcd_st7789_transport.h`
+- `firmware/src/ui/display_binding.c`
 - view modules в `firmware/src/apps/`
 - `firmware/src/apps/pong/pong_view.c`
-- `firmware/src/apps/micropython/micropython_bindings.c`
+- `firmware/src/services/micropython_binding_service.c`
 - `tests/test_pong.py`
-- `tests/test_lcd_overlay.py`
+- `tests/test_micropython_bindings.py`
 
 ### Проверки
 

@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 #include "../../../firmware/src/internal/hk_board_port.h"
-#include "../../../firmware/src/drivers/hk_lcd.h"
+#include "../../../firmware/src/drivers/lcd_st7789_transport.h"
 #include "../hal/hal_system.h"
 
 void platform_bootstrap_init_clocks(void)
@@ -15,10 +15,10 @@ void platform_bootstrap_init_clocks(void)
 void platform_bootstrap_init_hardware(void)
 {
     hk_board_ops.display_prepare();
-    lcd_driver_prepare();
+    lcd_st7789_transport_prepare();
     hk_board_ops.lights_prepare();
     hk_board_ops.buttons_prepare();
 
     printf("[LCD] init original sequence\r\n");
-    lcd_init_original_sequence();
+    lcd_st7789_transport_init();
 }

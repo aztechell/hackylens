@@ -37,7 +37,7 @@ numeric_id = 65539
 instance = 0
 version = "0.1.0"
 feature_bits = { base-plane = 0, overlay-plane = 1, batch = 2, dirty-regions = 3, rgb565 = 4, borrowed-surface = 5, text = 6 }
-limits = {}
+limits = { width = { key = 1, value = 320 }, height = { key = 2, value = 240 } }
 flags = ["shared"]
 affinity = 0
 resources = ["display"]
