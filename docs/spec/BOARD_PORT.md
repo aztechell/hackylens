@@ -121,10 +121,11 @@ object keys, preserved array order, two-space indentation, no trailing spaces,
 LF line endings, and exactly one final LF. Its SHA-256 is calculated only after
 canonical-byte validation.
 
-Every successful firmware build first writes a canonical private schema-1 build
+Every successful firmware build first writes a canonical private schema-2 build
 attestation. It binds the exact image size and SHA-256 to the firmware version,
 board/platform/runtime profile, target, build profile, complete enabled/disabled
-app composition, board-driven exclusions, and fault-injection state. The
+app composition, diagnostic capability exclusions, generated capability-
+inventory SHA-256, board-driven exclusions, and fault-injection state. The
 attestation is build metadata, not a public contract or runtime discovery
 surface. Only an unmodified `full` target with the complete `hackylens-full`
 composition is `release_qualified`; feature-disabled and fault-injection builds

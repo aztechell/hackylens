@@ -1,0 +1,18 @@
+schema = 1
+
+[consumers.firmware-runtime]
+kind = "runtime"
+required_capabilities = []
+optional_capabilities = []
+
+[consumers.hmpy-service]
+kind = "service"
+enabled_by_app = "micropython"
+required_capabilities = []
+optional_capabilities = []
+
+[consumers.micropython-adapter]
+kind = "adapter"
+enabled_by_app = "micropython"
+required_capabilities = []
+optional_capabilities = []

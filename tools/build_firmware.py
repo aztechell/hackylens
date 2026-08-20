@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,7 +12,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +27,7 @@ from firmware_attestation import (
 )
 from gen_board import generate as generate_board
 from gen_flash_layout import load_validated, partition_by_name
+import gen_capability_inventory as capability_inventory
 
 WORKSPACE = ROOT.parent
 LOCAL_DEPS = ROOT / "_deps"
@@ -78,81 +79,41 @@ APP_REQUIREMENTS_PATH = ROOT / "firmware" / "app_requirements.toml"
 
 
 def load_app_requirements(path: Path = APP_REQUIREMENTS_PATH) -> dict[str, set[str]]:
-    """Load private build-only app composition requirements."""
+    """Compatibility view of schema-2 legacy private resource requirements."""
 
+    requirements = capability_inventory.load_app_requirements(
+        path, set(APP_MODULES)
+    )
+    return {app: set(value.legacy) for app, value in requirements.items()}
+
+
+def compose_capabilities(
+    board: Board,
+    disabled_apps: set[str],
+    required_apps: set[str],
+    disabled_capabilities: set[str],
+) -> capability_inventory.Composition:
     try:
-        with path.open("rb") as source:
-            raw = tomllib.load(source)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise RuntimeError(f"cannot read private app requirements: {exc}") from exc
-    if set(raw) != {"schema", "apps"} or raw.get("schema") != 1:
-        raise RuntimeError("app requirements: expected only schema=1 and apps")
-    apps = raw.get("apps")
-    if not isinstance(apps, dict) or set(apps) != set(APP_MODULES):
-        raise RuntimeError("app requirements: apps must exactly match build app modules")
-    result: dict[str, set[str]] = {}
-    for app, table in apps.items():
-        if not isinstance(table, dict) or set(table) != {"requires"}:
-            raise RuntimeError(f"app requirements {app}: expected only requires")
-        required = table["requires"]
-        if (not isinstance(required, list) or
-                any(not isinstance(item, str) or not item for item in required) or
-                len(required) != len(set(required))):
-            raise RuntimeError(f"app requirements {app}: invalid requires array")
-        result[app] = set(required)
-    return result
+        return capability_inventory.compose(
+            board,
+            set(APP_MODULES),
+            disabled_apps,
+            required_apps,
+            disabled_capabilities,
+        )
+    except capability_inventory.CapabilityError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 def compose_apps(board: Board, disabled_apps: set[str],
                  required_apps: set[str]) -> tuple[set[str], list[dict[str, object]]]:
-    """Apply board-aware exclusions without exposing a runtime hardware API."""
+    """Compatibility tuple for callers that only need app exclusions."""
 
-    unknown_required = sorted(required_apps - set(APP_MODULES))
-    if unknown_required:
-        raise RuntimeError("unknown required app(s): " + ", ".join(unknown_required))
-    conflict = sorted(required_apps & disabled_apps)
-    if conflict:
-        raise RuntimeError("app is both disabled and required: " + ", ".join(conflict))
-    requirements = load_app_requirements()
-    supported = board.driver_supported_kinds()
-    composed = set(disabled_apps)
-    exclusions: list[dict[str, object]] = []
-    for app in APP_MODULES:
-        if app in composed:
-            continue
-        missing = sorted(requirements[app] - supported)
-        if not missing:
-            continue
-        reason = {
-            "app": app,
-            "code": "missing-driver-supported-device",
-            "missing": missing,
-        }
-        if app in required_apps:
-            raise RuntimeError(
-                f"required app {app!r} is unavailable on {board.id}: " +
-                ", ".join(missing)
-            )
-        composed.add(app)
-        exclusions.append(reason)
-    return composed, exclusions
+    composition = compose_capabilities(
+        board, disabled_apps, required_apps, set()
+    )
+    return set(composition.disabled_apps), list(composition.exclusions)
 
-
-def write_composition(board: Board, disabled_apps: set[str],
-                      exclusions: list[dict[str, object]]) -> Path:
-    path = ROOT / "build" / board.id / "composition.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    document = {
-        "schema": 1,
-        "board": board.id,
-        "disabled_apps": sorted(disabled_apps),
-        "exclusions": exclusions,
-    }
-    path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8", newline="\n")
-    for exclusion in exclusions:
-        print(json.dumps({"event": "app-excluded", **exclusion}, sort_keys=True))
-    return path
 
 CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/controllers/camera_runtime_controller.c"),
@@ -513,18 +474,31 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
         shutil.copy2(path, out)
 
 
-def stage_platform_sources(stage: Path, disabled_apps: set[str]) -> None:
+def stage_platform_sources(
+    stage: Path,
+    disabled_apps: set[str],
+    capability_composition: capability_inventory.Composition,
+) -> None:
     camera_feature_enabled = ("camera" not in disabled_apps or
                               "qr-camera" not in disabled_apps or
                               "face-detect" not in disabled_apps or
                               "apriltag" not in disabled_apps or
                               "object-detect" not in disabled_apps)
     micropython_feature_enabled = "micropython" not in disabled_apps
+    provider_sources = {
+        Path(item.provider_source) for item in capability_inventory.load_catalog()
+    }
+    selected_provider_sources = {
+        Path(item.provider_source) for item in capability_composition.capabilities
+    }
     platform = ROOT / "platforms" / "k210"
     for path in platform.rglob("*"):
-        if not path.is_file() or path.name == "devices.toml":
+        if not path.is_file() or path.name in {"devices.toml", "capabilities.toml"}:
             continue
         rel = path.relative_to(ROOT)
+        if rel in provider_sources and rel not in selected_provider_sources:
+            print(f"[SKIP] excluded capability provider source {rel}")
+            continue
         if not camera_feature_enabled and rel in CAMERA_FEATURE_SOURCE_MODULES:
             print(f"[SKIP] unused camera platform source {rel}")
             continue
@@ -576,17 +550,23 @@ def stage_target(sdk: Path, target_name: str, board: Board,
                   disabled_apps: set[str],
                   micropython_package: Path | None = None,
                   littlefs: Path | None = None,
-                  wdt_fault_injection: bool = False) -> Path:
+                  wdt_fault_injection: bool = False,
+                  capability_composition: capability_inventory.Composition | None = None) -> Path:
     target = TARGETS[target_name]
     stage = sdk / "src" / str(target["project"])
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True, exist_ok=True)
 
+    if capability_composition is None:
+        capability_composition = compose_capabilities(
+            board, disabled_apps, set(), set()
+        )
+
     shutil.copy2(Path(target["target_source"]), stage / "main.c")
     stage_firmware_sources(stage, disabled_apps)
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
-    stage_platform_sources(stage, disabled_apps)
+    stage_platform_sources(stage, disabled_apps, capability_composition)
     stage_board_port(stage, board)
 
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
@@ -607,6 +587,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         for name in ("lfs.c", "lfs.h", "lfs_util.c", "lfs_util.h"):
             shutil.copy2(littlefs / name, stage / name)
 
+    capability_inventory.write_generated_c(capability_composition, stage)
     write_config(stage, disabled_apps, wdt_fault_injection)
     write_project_cmake(stage, micropython_package, board)
     return stage
@@ -614,6 +595,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
 
 def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
                  disabled_apps: set[str], exclusions: list[dict[str, object]],
+                 capability_composition: capability_inventory.Composition,
                  wdt_fault_injection: bool = False) -> Path:
     target = TARGETS[name]
     project = str(target["project"])
@@ -640,7 +622,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
             )
     stage = stage_target(
         sdk, name, board, disabled_apps, micropython_package, littlefs,
-        wdt_fault_injection,
+        wdt_fault_injection, capability_composition,
     )
     print(f"[STAGE] {stage}")
 
@@ -694,6 +676,8 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     out_image.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(built, out_image)
     attestation = out_image.with_suffix(".attestation.json")
+    capabilities_path = ROOT / "build" / board.id / "capabilities.json"
+    capabilities_sha256 = hashlib.sha256(capabilities_path.read_bytes()).hexdigest()
     write_build_attestation(
         attestation,
         out_image,
@@ -701,11 +685,13 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
         target=name,
         disabled_apps=disabled_apps,
         exclusions=exclusions,
+        disabled_capabilities=set(capability_composition.disabled_capabilities),
+        capabilities_sha256=capabilities_sha256,
         wdt_fault_injection=wdt_fault_injection,
     )
     if wdt_fault_injection:
         print("[DANGER] isolated test image kept under build/; dist/ was not touched")
-    elif disabled_apps:
+    elif disabled_apps or capability_composition.disabled_capabilities:
         print(
             "[BUILD] feature-modified image kept under build/; qualified dist/ "
             "artifacts were not replaced"
@@ -748,6 +734,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Disable an app in the menu registry. Can be repeated.",
     )
     parser.add_argument(
+        "--disable-capability",
+        action="append",
+        default=[],
+        choices=sorted(item.id for item in capability_inventory.load_catalog()),
+        help=(
+            "Diagnostic-only capability exclusion. Can be repeated and always "
+            "makes a runtime build non-release-qualified."
+        ),
+    )
+    parser.add_argument(
         "--wdt-fault-injection",
         action="store_true",
         help=(
@@ -770,6 +766,19 @@ def main(argv: list[str] | None = None) -> int:
         for failure in failures:
             print(f"[ERR] {failure}", file=sys.stderr)
         return 2
+    composition = compose_capabilities(
+        board,
+        set(args.disable_app),
+        set(args.require_app),
+        set(args.disable_capability),
+    )
+    capability_inventory.write_artifacts(
+        composition, ROOT / "build" / board.id
+    )
+    for exclusion in composition.exclusions:
+        print(json.dumps({"event": "app-excluded", **exclusion}, sort_keys=True))
+    for fallback in composition.optional_fallbacks:
+        print(json.dumps({"event": "optional-fallback", **fallback}, sort_keys=True))
     if args.target == "conformance":
         conformance_check(board)
         return 0
@@ -788,17 +797,15 @@ def main(argv: list[str] | None = None) -> int:
         print("[ERR] Kendryte toolchain not found. Run python tools\\bootstrap_deps.py and . .\\env.ps1", file=sys.stderr)
         return 1
 
-    disabled_apps, exclusions = compose_apps(
-        board, set(args.disable_app), set(args.require_app)
-    )
-    write_composition(board, disabled_apps, exclusions)
+    disabled_apps = set(composition.disabled_apps)
+    exclusions = list(composition.exclusions)
     if args.wdt_fault_injection and "micropython" in disabled_apps:
         raise RuntimeError(
             "--wdt-fault-injection requires the micropython app"
         )
     build_target(
         args.target, board, sdk, toolchain, disabled_apps, exclusions,
-        args.wdt_fault_injection,
+        composition, args.wdt_fault_injection,
     )
     return 0
 

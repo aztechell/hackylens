@@ -1,37 +1,59 @@
-schema = 1
+schema = 2
 
 [apps.terminal]
 requires = ["display", "buttons"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.camera]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.qr-camera]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.face-detect]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.apriltag]
 requires = ["display", "camera", "buttons", "lights"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.object-detect]
 requires = ["display", "camera", "buttons", "lights", "sd-card"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.files]
 requires = ["display", "buttons", "sd-card"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.buttons]
 requires = ["display", "buttons"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.pong]
 requires = ["display", "buttons"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.settings]
 requires = ["display", "buttons", "lights"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.sleep]
 requires = ["display", "buttons", "lights"]
+required_capabilities = []
+optional_capabilities = []
 
 [apps.micropython]
 requires = [
@@ -42,3 +64,5 @@ requires = [
   "external-uart",
   "external-i2c",
 ]
+required_capabilities = []
+optional_capabilities = []

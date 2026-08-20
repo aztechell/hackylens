@@ -11,6 +11,7 @@ CORE_SOURCES = (
     ROOT / "firmware" / "src" / "capabilities" / "capability_core.c",
     ROOT / "firmware" / "src" / "capabilities" / "capability_owner.c",
     ROOT / "firmware" / "src" / "runtime" / "capability_owner_runtime.c",
+    ROOT / "tests" / "capability_inventory_generated_stub.c",
 )
 
 

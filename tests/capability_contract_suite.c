@@ -39,6 +39,7 @@ typedef struct
 static capability_fake_provider_t s_fake[2];
 static hk_capability_info_t s_inventory[2];
 static hk_capability_provider_t s_providers[2];
+static const hk_capability_provider_t *s_provider_refs[2];
 static hk_capability_grant_t s_grants[2];
 
 static hk_version_t version(uint16_t major, uint16_t minor, uint16_t patch)
@@ -89,11 +90,12 @@ static void setup_core_with_affinity(
         s_providers[index].cleanup_dispatch = capability_fake_cleanup_dispatch;
         s_providers[index].recover = capability_fake_recover;
         s_providers[index].max_leases = UINT16_MAX;
+        s_provider_refs[index] = &s_providers[index];
         s_grants[index].request = request(CAP_TIME + index,
                                           FEATURE_A | FEATURE_B);
     }
     CHECK(hk_capability_core_init(
-        core, s_inventory, s_providers, 2U) == HK_OK);
+        core, s_inventory, s_provider_refs, 2U) == HK_OK);
 }
 
 static void setup_core(hk_capability_core_t *core)
@@ -424,7 +426,7 @@ static void test_negotiation_grants_and_inventory_validation(void)
 
     s_inventory[1] = s_inventory[0];
     CHECK(hk_capability_core_init(
-        &core, s_inventory, s_providers, 2U) == HK_ERR_INVALID_ARGUMENT);
+        &core, s_inventory, s_provider_refs, 2U) == HK_ERR_INVALID_ARGUMENT);
 
     setup_core(&core);
     s_grants[0].request.struct_version = 0U;
@@ -444,7 +446,7 @@ static void test_negotiation_grants_and_inventory_validation(void)
     s_inventory[0].limits = limits;
     s_inventory[0].limit_count = 2U;
     CHECK(hk_capability_core_init(
-        &core, s_inventory, s_providers, 2U) == HK_ERR_INVALID_ARGUMENT);
+        &core, s_inventory, s_provider_refs, 2U) == HK_ERR_INVALID_ARGUMENT);
 }
 
 static void test_private_runtime_owner_binding_and_empty_inventory(void)

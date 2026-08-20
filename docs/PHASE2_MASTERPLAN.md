@@ -2,7 +2,7 @@
 
 ## Статус и назначение
 
-Статус: `planned`.
+Статус: `in_progress`.
 
 Исходная ревизия для планирования:
 `7183c7ae59008958893c1585ff6cdd96f1fb746b`.
@@ -220,6 +220,9 @@ migration.
 ---
 
 ## 2.3 — Build composition и immutable inventory
+
+Статус пакета: `in_progress` (2026-08-20); implementation and corrective CI
+pending.
 
 ### Depends on
 

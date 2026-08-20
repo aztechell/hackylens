@@ -361,6 +361,17 @@ def verify_profile_artifacts(
 
     composition = read_json(composition_path, f"{profile_name} composition")
     attestation = read_json(attestation_path, f"{profile_name} attestation")
+    if composition.get("schema") != 2:
+        raise RuntimeError(f"{profile_name} composition schema mismatch")
+    capabilities_ref = composition.get("capabilities")
+    if not isinstance(capabilities_ref, dict):
+        raise RuntimeError(f"{profile_name} capability inventory reference is missing")
+    capabilities_path = composition_path.parent / str(capabilities_ref.get("path", ""))
+    if not capabilities_path.is_file():
+        raise RuntimeError(f"{profile_name} capabilities artifact is missing")
+    capabilities_sha256 = sha256(capabilities_path)
+    if capabilities_ref.get("sha256") != capabilities_sha256:
+        raise RuntimeError(f"{profile_name} capabilities artifact hash mismatch")
     if composition.get("disabled_apps") != profile["disabled_apps"]:
         raise RuntimeError(f"{profile_name} composition disabled apps mismatch")
     if attestation.get("build_profile") != profile["build_profile"]:
@@ -374,6 +385,12 @@ def verify_profile_artifacts(
     if attestation.get("composition", {}).get("disabled_apps") != \
             composition.get("disabled_apps"):
         raise RuntimeError(f"{profile_name} attestation composition mismatch")
+    if attestation.get("composition", {}).get("disabled_capabilities") != \
+            composition.get("disabled_capabilities"):
+        raise RuntimeError(f"{profile_name} disabled capability mismatch")
+    if attestation.get("composition", {}).get("capabilities_sha256") != \
+            capabilities_sha256:
+        raise RuntimeError(f"{profile_name} attestation capability hash mismatch")
 
     board = load_board(document["baseline"]["board"], root=root)
     flash, _ = load_validated(board.flash_layout_path)

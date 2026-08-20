@@ -7,6 +7,8 @@ import ast
 import re
 from pathlib import Path
 
+import check_capabilities
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "firmware" / "src"
@@ -533,6 +535,10 @@ def layout_failures() -> list[str]:
         ROOT / "firmware" / "src" / "internal" / "time_internal.h",
         ROOT / "firmware" / "src" / "internal" / "boot_internal.h",
         ROOT / "firmware" / "app_requirements.toml",
+        ROOT / "firmware" / "capability_consumers.toml",
+        ROOT / "platforms" / "k210" / "capabilities.toml",
+        ROOT / "tools" / "gen_capability_inventory.py",
+        ROOT / "tools" / "check_capabilities.py",
     ):
         if not required.exists():
             failures.append(f"{required.relative_to(ROOT).as_posix()}: required Phase 1 path is missing")
@@ -662,6 +668,7 @@ def board_behavior_violations(source: str) -> list[tuple[int, str]]:
 
 def main() -> int:
     failures = layout_failures()
+    failures.extend(check_capabilities.validate())
     for path in source_files():
         path_rel = relative(path)
         source_text = path.read_text(encoding="utf-8")

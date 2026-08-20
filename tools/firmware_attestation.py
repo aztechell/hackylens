@@ -18,7 +18,7 @@ from board_contract import Board
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ATTESTATION_TYPE = "hackylens-firmware-build"
 FULL_BUILD_PROFILE = "hackylens-full"
 FEATURE_BUILD_PROFILE = "hackylens-feature-modified"
@@ -52,7 +52,10 @@ ROOT_FIELDS = {
     "release_qualified",
     "image",
 }
-COMPOSITION_FIELDS = {"enabled_apps", "disabled_apps", "exclusions"}
+COMPOSITION_FIELDS = {
+    "enabled_apps", "disabled_apps", "disabled_capabilities",
+    "capabilities_sha256", "exclusions",
+}
 EXCLUSION_FIELDS = {"app", "code", "missing"}
 IMAGE_FIELDS = {"size", "sha256"}
 
@@ -95,11 +98,12 @@ def current_firmware_version(root: Path = ROOT) -> str:
 
 def _build_profile(
     disabled_apps: set[str], exclusions: list[dict[str, object]],
+    disabled_capabilities: set[str],
     wdt_fault_injection: bool,
 ) -> str:
     if wdt_fault_injection:
         return FAULT_BUILD_PROFILE
-    if disabled_apps or exclusions:
+    if disabled_apps or exclusions or disabled_capabilities:
         return FEATURE_BUILD_PROFILE
     return FULL_BUILD_PROFILE
 
@@ -111,6 +115,8 @@ def build_document(
     target: str,
     disabled_apps: set[str],
     exclusions: list[dict[str, object]],
+    disabled_capabilities: set[str] | None = None,
+    capabilities_sha256: str | None = None,
     wdt_fault_injection: bool = False,
 ) -> dict[str, object]:
     if not image.is_file() or image.stat().st_size <= 0:
@@ -123,13 +129,20 @@ def build_document(
             "unknown disabled app(s): " + ", ".join(sorted(unknown))
         )
     enabled_apps = FULL_APP_IDS - disabled_apps
+    disabled_capabilities = disabled_capabilities or set()
+    if (not isinstance(capabilities_sha256, str) or
+            SHA256_RE.fullmatch(capabilities_sha256) is None):
+        raise AttestationError("capabilities_sha256: expected lowercase SHA-256")
     exclusions = sorted(exclusions, key=lambda item: str(item.get("app", "")))
-    profile = _build_profile(disabled_apps, exclusions, wdt_fault_injection)
+    profile = _build_profile(
+        disabled_apps, exclusions, disabled_capabilities, wdt_fault_injection
+    )
     release_qualified = (
         target == "full"
         and profile == FULL_BUILD_PROFILE
         and enabled_apps == FULL_APP_IDS
         and not exclusions
+        and not disabled_capabilities
         and not wdt_fault_injection
     )
     document: dict[str, object] = {
@@ -144,6 +157,8 @@ def build_document(
         "composition": {
             "enabled_apps": sorted(enabled_apps),
             "disabled_apps": sorted(disabled_apps),
+            "disabled_capabilities": sorted(disabled_capabilities),
+            "capabilities_sha256": capabilities_sha256,
             "exclusions": exclusions,
         },
         "wdt_fault_injection": bool(wdt_fault_injection),
@@ -213,6 +228,16 @@ def validate_document(
     )
     enabled = _string_list(composition["enabled_apps"], "composition.enabled_apps")
     disabled = _string_list(composition["disabled_apps"], "composition.disabled_apps")
+    disabled_capabilities = _string_list(
+        composition["disabled_capabilities"],
+        "composition.disabled_capabilities",
+    )
+    capabilities_sha256 = composition["capabilities_sha256"]
+    if (not isinstance(capabilities_sha256, str) or
+            SHA256_RE.fullmatch(capabilities_sha256) is None):
+        raise AttestationError(
+            "composition.capabilities_sha256: expected lowercase SHA-256"
+        )
     if set(enabled) & set(disabled) or set(enabled) | set(disabled) != FULL_APP_IDS:
         raise AttestationError(
             "composition: enabled_apps and disabled_apps must exactly partition full apps"
@@ -249,13 +274,15 @@ def validate_document(
         raise AttestationError(f"firmware image not found: {image}")
 
     expected_profile = _build_profile(
-        set(disabled), exclusions, document["wdt_fault_injection"]
+        set(disabled), exclusions, set(disabled_capabilities),
+        document["wdt_fault_injection"]
     )
     expected_release = (
         document["target"] == "full"
         and expected_profile == FULL_BUILD_PROFILE
         and set(enabled) == FULL_APP_IDS
         and not exclusions
+        and not disabled_capabilities
         and not document["wdt_fault_injection"]
     )
     expected = {
@@ -329,6 +356,8 @@ def write(
     target: str,
     disabled_apps: set[str],
     exclusions: list[dict[str, object]],
+    disabled_capabilities: set[str] | None = None,
+    capabilities_sha256: str | None = None,
     wdt_fault_injection: bool = False,
 ) -> dict[str, object]:
     if path.resolve() == image.resolve():
@@ -339,6 +368,8 @@ def write(
         target=target,
         disabled_apps=disabled_apps,
         exclusions=exclusions,
+        disabled_capabilities=disabled_capabilities,
+        capabilities_sha256=capabilities_sha256,
         wdt_fault_injection=wdt_fault_injection,
     )
     path.parent.mkdir(parents=True, exist_ok=True)

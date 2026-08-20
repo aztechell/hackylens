@@ -151,9 +151,9 @@ static hk_result_t cleanup_lease(
     uint16_t provider_index = slot->provider_index;
     hk_result_t result = HK_OK;
 
-    if(core->providers[provider_index].cleanup)
-        result = core->providers[provider_index].cleanup(
-            core->providers[provider_index].context, slot->owner, deadline);
+    if(core->providers[provider_index]->cleanup)
+        result = core->providers[provider_index]->cleanup(
+            core->providers[provider_index]->context, slot->owner, deadline);
     if(core->provider_state[provider_index].active_leases > 0U)
         core->provider_state[provider_index].active_leases--;
     retire_or_advance_lease(slot);
@@ -173,7 +173,7 @@ static hk_result_t cleanup_lease_for_owner_close(
 {
     uint16_t provider_index = slot->provider_index;
     const hk_capability_info_t *info = &core->inventory[provider_index];
-    const hk_capability_provider_t *provider = &core->providers[provider_index];
+    const hk_capability_provider_t *provider = core->providers[provider_index];
     hk_result_t result = HK_OK;
 
     if(provider->cleanup)
@@ -198,7 +198,7 @@ static hk_result_t cleanup_lease_for_owner_close(
 hk_result_t hk_capability_core_init(
     hk_capability_core_t *core,
     const hk_capability_info_t *inventory,
-    const hk_capability_provider_t *providers,
+    const hk_capability_provider_t *const *providers,
     uint16_t provider_count)
 {
     uint16_t index;
@@ -220,11 +220,12 @@ hk_result_t hk_capability_core_init(
            (info->limit_count > 0U && !info->limits) ||
            (sharing != HK_CAPABILITY_FLAG_SHARED &&
             sharing != HK_CAPABILITY_FLAG_EXCLUSIVE) ||
-           providers[index].max_leases == 0U ||
+           !providers[index] ||
+           providers[index]->max_leases == 0U ||
            (info->affinity_core != HK_CAPABILITY_CORE_ANY &&
-            providers[index].cleanup &&
-            !providers[index].cleanup_dispatch) ||
-           providers[index].reserved != 0U ||
+            providers[index]->cleanup &&
+            !providers[index]->cleanup_dispatch) ||
+           providers[index]->reserved != 0U ||
            (index > 0U && provider_compare(
                &inventory[index - 1U], info->id, info->instance) >= 0))
             return HK_ERR_INVALID_ARGUMENT;
@@ -354,7 +355,7 @@ hk_result_t hk_capability_core_acquire(
        core->provider_state[provider_index].active_leases > 0U)
         return HK_ERR_BUSY;
     if(core->provider_state[provider_index].active_leases >=
-       core->providers[provider_index].max_leases)
+       core->providers[provider_index]->max_leases)
         return HK_ERR_BUSY;
     for(index = 0U; index < HK_CAPABILITY_MAX_LEASES; index++)
     {
@@ -366,10 +367,10 @@ hk_result_t hk_capability_core_acquire(
     }
     if(!lease_slot)
         return HK_ERR_LIMIT;
-    if(core->providers[provider_index].acquire)
+    if(core->providers[provider_index]->acquire)
     {
-        result = core->providers[provider_index].acquire(
-            core->providers[provider_index].context, owner);
+        result = core->providers[provider_index]->acquire(
+            core->providers[provider_index]->context, owner);
         if(result != HK_OK)
             return result;
     }
@@ -420,7 +421,7 @@ static hk_result_t validate_lease(
        core->provider_state[slot->provider_index].quarantined)
         return HK_ERR_INVALID_STATE;
     if(provider_context)
-        *provider_context = core->providers[slot->provider_index].context;
+        *provider_context = core->providers[slot->provider_index]->context;
     return HK_OK;
 }
 
@@ -483,10 +484,10 @@ hk_result_t hk_capability_core_recover(
         return HK_OK;
     if(core->provider_state[provider_index].active_leases > 0U)
         return HK_ERR_BUSY;
-    if(!core->providers[provider_index].recover)
+    if(!core->providers[provider_index]->recover)
         return HK_ERR_INVALID_STATE;
-    result = core->providers[provider_index].recover(
-        core->providers[provider_index].context, deadline);
+    result = core->providers[provider_index]->recover(
+        core->providers[provider_index]->context, deadline);
     if(result == HK_OK)
         core->provider_state[provider_index].quarantined = 0U;
     return result;

@@ -74,7 +74,7 @@ typedef struct
 typedef struct
 {
     const hk_capability_info_t *inventory;
-    const hk_capability_provider_t *providers;
+    const hk_capability_provider_t *const *providers;
     uint16_t provider_count;
     uint8_t initialized;
     uint8_t reserved;
@@ -86,7 +86,7 @@ typedef struct
 hk_result_t hk_capability_core_init(
     hk_capability_core_t *core,
     const hk_capability_info_t *inventory,
-    const hk_capability_provider_t *providers,
+    const hk_capability_provider_t *const *providers,
     uint16_t provider_count);
 hk_result_t hk_capability_core_owner_open(
     hk_capability_core_t *core,

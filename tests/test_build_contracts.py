@@ -84,9 +84,10 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn("s_owner_hooks.enter(app)", menu)
         self.assertIn("menu_owner_hooks_set(&owner_hooks)", startup)
         self.assertIn(
-            "hk_capability_core_init(&s_capability_core, NULL, NULL, 0U)",
+            "hk_generated_capability_inventory_get(",
             runtime,
         )
+        self.assertIn("hk_generated_capability_grants_for(app->id", runtime)
 
     def test_wdt_fault_injection_is_explicit_and_test_build_only(self):
         expected = (ROOT / "VERSION").read_text(encoding="utf-8").strip()

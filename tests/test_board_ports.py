@@ -640,7 +640,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         )
         self.assertEqual(disabled, set(build_firmware.APP_MODULES))
         self.assertTrue(exclusions)
-        self.assertTrue(all(item["code"] == "missing-driver-supported-device"
+        self.assertTrue(all(item["code"] == "driver-unsupported"
                             for item in exclusions))
         with self.assertRaisesRegex(RuntimeError, "required app"):
             build_firmware.compose_apps(self.cube, set(), {"camera"})
@@ -891,6 +891,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             target="full",
             disabled_apps=disabled_apps or set(),
             exclusions=[],
+            capabilities_sha256="a" * 64,
         )
         return output
 
@@ -1120,6 +1121,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
                     target="full",
                     disabled_apps=set(),
                     exclusions=[],
+                    capabilities_sha256="a" * 64,
                 )
             out_dir = temporary / "safe-root"
             out_dir.mkdir()
