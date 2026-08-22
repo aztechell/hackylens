@@ -901,6 +901,13 @@ operator host, UART loopback подготовлен, а I2C fixture будет �
 этапом на общих IO34/IO35. Physical smoke ещё не завершён, поэтому checklist
 items ниже остаются открытыми до exact-image evidence.
 
+Первый exact candidate `19b032c` прошёл automated CI и был прошит без erase, но
+не прошёл physical gate: `ticks_ms()` попал в unsupported long-int constructor,
+а UART loopback сохранил только 16 из 256 байт из-за недренированного RX FIFO.
+Эти результаты не являются hardware qualification; выполняется узкий corrective
+candidate с regression coverage, после чего smoke начинается заново на новом
+exact image.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и

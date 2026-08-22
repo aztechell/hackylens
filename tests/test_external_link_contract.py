@@ -72,6 +72,7 @@ class ExternalLinkContractTests(unittest.TestCase):
             )
         self.assertIn(
             "K210_EXTERNAL_LINK_OK normative=1 target_handoff=1 "
+            "uart_loopback=1 "
             "uart=102 i2c_tx=20",
             result.stdout,
         )

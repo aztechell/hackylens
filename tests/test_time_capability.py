@@ -131,6 +131,11 @@ class TimeCapabilityTests(unittest.TestCase):
         self.assertIn("hk_time_now_us", bindings)
         self.assertIn("hk_time_sleep_until", bindings)
         self.assertIn("micropython_runtime_interrupt_pending", bindings)
+        self.assertIn(
+            "mp_obj_new_int_from_uint((mp_uint_t)(now / 1000ULL))",
+            bindings,
+        )
+        self.assertNotIn("mp_obj_new_int_from_ull(now / 1000ULL)", bindings)
 
         adapters = list((ROOT / "platforms").rglob("time_adapter.c"))
         self.assertEqual(

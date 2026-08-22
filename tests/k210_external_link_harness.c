@@ -30,6 +30,10 @@ static uint32_t s_lease_generations[TEST_LEASES];
 static uint64_t s_now_us;
 static uint8_t s_uart_tx[TEST_BYTES * 2U];
 static uint32_t s_uart_tx_size;
+static uint8_t s_uart_rx[TEST_BYTES * 2U];
+static uint32_t s_uart_rx_head;
+static uint32_t s_uart_rx_size;
+static uint8_t s_uart_loopback;
 static uint8_t s_i2c_source[TEST_BYTES];
 static uint32_t s_i2c_source_size;
 static uint32_t s_i2c_source_position;
@@ -160,13 +164,25 @@ void hal_external_uart_init(uint32_t baud)
     (void)baud;
     s_i2c_active = 0U;
     s_target_callbacks = NULL;
+    s_uart_rx_head = 0U;
+    s_uart_rx_size = 0U;
 }
 
 size_t hal_external_uart_receive(uint8_t *data, size_t len)
 {
-    (void)data;
-    (void)len;
-    return 0U;
+    size_t available = s_uart_rx_size - s_uart_rx_head;
+
+    if(len > available)
+        len = available;
+    if(len != 0U)
+        memcpy(data, s_uart_rx + s_uart_rx_head, len);
+    s_uart_rx_head += (uint32_t)len;
+    if(s_uart_rx_head == s_uart_rx_size)
+    {
+        s_uart_rx_head = 0U;
+        s_uart_rx_size = 0U;
+    }
+    return len;
 }
 
 void hal_external_uart_send(const uint8_t *data, size_t len)
@@ -177,14 +193,25 @@ void hal_external_uart_send(const uint8_t *data, size_t len)
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)
 {
     size_t capacity = sizeof(s_uart_tx) - s_uart_tx_size;
+    size_t sent;
 
     if(!data)
         return 0U;
     if(len > capacity)
         len = capacity;
+    sent = len;
     memcpy(s_uart_tx + s_uart_tx_size, data, len);
     s_uart_tx_size += (uint32_t)len;
-    return len;
+    if(s_uart_loopback)
+    {
+        size_t rx_capacity = sizeof(s_uart_rx) - s_uart_rx_size;
+
+        if(len > rx_capacity)
+            len = rx_capacity;
+        memcpy(s_uart_rx + s_uart_rx_size, data, len);
+        s_uart_rx_size += (uint32_t)len;
+    }
+    return sent;
 }
 
 uint8_t hal_external_uart_tx_idle(void)
@@ -290,11 +317,15 @@ static void backend_reset(void)
     memset(s_leases, 0, sizeof(s_leases));
     memset(s_lease_generations, 0, sizeof(s_lease_generations));
     memset(s_uart_tx, 0, sizeof(s_uart_tx));
+    memset(s_uart_rx, 0, sizeof(s_uart_rx));
     memset(s_i2c_source, 0, sizeof(s_i2c_source));
     memset(s_i2c_rx, 0, sizeof(s_i2c_rx));
     memset(s_i2c_tx, 0, sizeof(s_i2c_tx));
     s_now_us = 0U;
     s_uart_tx_size = 0U;
+    s_uart_rx_head = 0U;
+    s_uart_rx_size = 0U;
+    s_uart_loopback = 0U;
     s_i2c_source_size = 0U;
     s_i2c_source_position = 0U;
     s_i2c_rx_head = 0U;
@@ -349,6 +380,109 @@ static void backend_target_read(uint8_t *bytes, uint32_t size_bytes)
 static uint32_t backend_uart_tx_bytes(void)
 {
     return s_uart_tx_size;
+}
+
+static int run_uart_loopback_capture_tests(void)
+{
+    static const hk_owner_t owner = {25U, 27U};
+    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    hk_external_link_t link = {0};
+    hk_external_link_uart_config_t uart = {
+        sizeof(uart), HK_EXTERNAL_LINK_UART_CONFIG_VERSION, 115200U, 0U,
+    };
+    hk_external_link_op_t operation = HK_EXTERNAL_LINK_OP_NONE;
+    hk_external_link_op_progress_t progress;
+    uint8_t transmit[TEST_BYTES];
+    uint8_t receive[TEST_BYTES] = {0};
+    uint8_t chunk[32];
+    hk_buffer_view_t tx = {
+        transmit, sizeof(transmit), 0U, HK_BUFFER_ACCESS_READABLE,
+    };
+    hk_buffer_view_t rx = {
+        chunk, sizeof(chunk), 0U, HK_BUFFER_ACCESS_WRITABLE,
+    };
+    uint32_t total = 0U;
+    uint32_t received = 0U;
+    hk_result_t result = HK_PENDING;
+
+    for(uint32_t index = 0U; index < sizeof(transmit); ++index)
+        transmit[index] = (uint8_t)(index * 73U + 19U);
+
+    backend_reset();
+    request.required_features = HK_EXTERNAL_LINK_FEATURE_UART;
+    HARNESS_CHECK(hk_external_link_acquire(
+        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(
+        owner, &link, &uart) == HK_OK);
+    s_uart_loopback = 1U;
+    HARNESS_CHECK(hk_external_link_uart_write_begin(
+        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
+        &operation) == HK_PENDING);
+    for(uint32_t poll = 0U; poll < 16U && result == HK_PENDING; ++poll)
+        result = hk_external_link_poll(
+            owner, &link, &operation, &progress);
+    HARNESS_CHECK(result == HK_OK);
+    while(total < sizeof(receive))
+    {
+        memset(chunk, 0, sizeof(chunk));
+        HARNESS_CHECK(hk_external_link_uart_read(
+            owner, &link, &rx, &received) == HK_OK);
+        HARNESS_CHECK(received != 0U && received <= sizeof(chunk));
+        memcpy(receive + total, chunk, received);
+        total += received;
+    }
+    HARNESS_CHECK(total == sizeof(transmit));
+    HARNESS_CHECK(memcmp(receive, transmit, sizeof(transmit)) == 0);
+
+    HARNESS_CHECK(hk_external_link_configure_uart(
+        owner, &link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(
+        owner, &link, &rx, &received) == HK_OK && received == 0U);
+
+    operation = HK_EXTERNAL_LINK_OP_NONE;
+    HARNESS_CHECK(hk_external_link_uart_write_begin(
+        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
+        &operation) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_poll(
+        owner, &link, &operation, &progress) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_cancel(
+        owner, &link, &operation, &progress) == HK_ERR_CANCELLED);
+    HARNESS_CHECK(hk_external_link_release(
+        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_acquire(
+        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(
+        owner, &link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(
+        owner, &link, &rx, &received) == HK_OK && received == 0U);
+    HARNESS_CHECK(hk_external_link_release(
+        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+
+    backend_reset();
+    HARNESS_CHECK(hk_external_link_acquire(
+        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(
+        owner, &link, &uart) == HK_OK);
+    s_uart_loopback = 1U;
+    memset(s_uart_rx, 0x5a, sizeof(chunk));
+    s_uart_rx_size = sizeof(chunk);
+    operation = HK_EXTERNAL_LINK_OP_NONE;
+    result = HK_PENDING;
+    HARNESS_CHECK(hk_external_link_uart_write_begin(
+        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
+        &operation) == HK_PENDING);
+    for(uint32_t poll = 0U; poll < 16U && result == HK_PENDING; ++poll)
+        result = hk_external_link_poll(
+            owner, &link, &operation, &progress);
+    HARNESS_CHECK(result == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(
+        owner, &link, &rx, &received) == HK_ERR_OVERFLOW);
+    HARNESS_CHECK(received == 0U);
+    HARNESS_CHECK(hk_external_link_uart_read(
+        owner, &link, &rx, &received) == HK_OK && received == 0U);
+    HARNESS_CHECK(hk_external_link_release(
+        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+    return 0;
 }
 
 static int run_target_handoff_tests(void)
@@ -510,11 +644,13 @@ int main(void)
         backend_uart_tx_bytes,
     };
 
+    if(run_uart_loopback_capture_tests() != 0)
+        return 1;
     if(run_target_handoff_tests() != 0)
         return 1;
     if(external_link_normative_suite_run(&backend) != 0)
         return 1;
-    printf("K210_EXTERNAL_LINK_OK normative=1 target_handoff=1 uart=%u i2c_tx=%u\n",
+    printf("K210_EXTERNAL_LINK_OK normative=1 target_handoff=1 uart_loopback=1 uart=%u i2c_tx=%u\n",
            (unsigned)s_uart_tx_size, (unsigned)s_i2c_tx_size);
     return 0;
 }

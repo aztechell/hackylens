@@ -89,10 +89,12 @@ UART/I2C protocol or routed-peripheral semantics.
   diagnostic, resource, latency, and rolling-evidence matrix passed
   [Release firmware run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140).
   Phase 2.13 is in progress. Its exact-image SEN0305 evidence contract and
-  operator runbook are implemented. The operator host now detects the SEN0305
-  and UART loopback is staged; I2C uses the same IO34/IO35 routes and will be
-  connected as a separate fixture stage. No physical claim exists until one
-  exact candidate image passes the complete physical gate.
+  operator runbook are implemented. Candidate `19b032c` passed automated CI and
+  booted as 0.4.0 on SEN0305, but physical smoke found a MicroPython
+  `ticks_ms()` integer-conversion failure and UART RX FIFO loss during a
+  256-byte loopback. A corrective candidate is in progress; I2C uses the same
+  IO34/IO35 routes and remains a later fixture stage. No physical claim exists
+  until one exact candidate image passes the complete physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external

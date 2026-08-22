@@ -118,7 +118,7 @@ static mp_obj_t binding_ticks_ms(void)
         result = hk_time_now_us(owner, &s_binding_time, &now);
     if(result != HK_OK)
         binding_time_raise(result);
-    return mp_obj_new_int_from_ull(now / 1000ULL);
+    return mp_obj_new_int_from_uint((mp_uint_t)(now / 1000ULL));
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_ticks_ms_obj, binding_ticks_ms);
 
