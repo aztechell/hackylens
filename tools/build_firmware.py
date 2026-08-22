@@ -92,6 +92,8 @@ def compose_capabilities(
     disabled_apps: set[str],
     required_apps: set[str],
     disabled_capabilities: set[str],
+    *,
+    allow_required_consumer_exclusion: bool = False,
 ) -> capability_inventory.Composition:
     try:
         return capability_inventory.compose(
@@ -100,6 +102,7 @@ def compose_capabilities(
             disabled_apps,
             required_apps,
             disabled_capabilities,
+            allow_required_consumer_exclusion=allow_required_consumer_exclusion,
         )
     except capability_inventory.CapabilityError as exc:
         raise RuntimeError(str(exc)) from exc
@@ -789,12 +792,17 @@ def main(argv: list[str] | None = None) -> int:
         set(args.disable_app),
         set(args.require_app),
         set(args.disable_capability),
+        allow_required_consumer_exclusion=bool(args.disable_capability),
     )
     capability_inventory.write_artifacts(
         composition, ROOT / "build" / board.id
     )
     for exclusion in composition.exclusions:
         print(json.dumps({"event": "app-excluded", **exclusion}, sort_keys=True))
+    for exclusion in composition.required_consumer_exclusions:
+        print(json.dumps(
+            {"event": "required-consumer-excluded", **exclusion}, sort_keys=True
+        ))
     for fallback in composition.optional_fallbacks:
         print(json.dumps({"event": "optional-fallback", **fallback}, sort_keys=True))
     if args.target == "conformance":

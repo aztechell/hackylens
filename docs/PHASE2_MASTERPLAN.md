@@ -668,8 +668,8 @@ register behavior не протёк в public contract.
 failed-cleanup invalidation/quarantine, shared ABI validation, оба firmware
 profile и resource evidence прошли в
 [`Release firmware` run 32557338515](https://github.com/aztechell/hackylens/actions/runs/32557338515).
-Phase `2.11` завершена отдельным corrective/closure gate; Phase `2.12` не
-начата.
+Phase `2.11` завершена отдельным corrective/closure gate. Текущий
+статус Phase `2.12` указан в её собственном разделе ниже.
 
 ### Depends on
 
@@ -741,7 +741,8 @@ Native external service, provider и MicroPython bridge мигрируются/�
 [`Release firmware` run 32565126272](https://github.com/aztechell/hackylens/actions/runs/32565126272):
 generic repository object-symbol graph, bounded workspace generation
 exhaustion, оба firmware-профиля, provider hash equivalence, symbols и resource
-evidence зелёные. Phase `2.12` не начата.
+evidence зелёные. Phase `2.12` теперь выполняется отдельно и не меняет runtime
+firmware behavior.
 
 ### Depends on
 
@@ -809,6 +810,9 @@ call sites.
 
 ## 2.12 — Full automated qualification и rolling evidence
 
+Статус пакета: `in_progress` (2026-08-22). Реализуется только automated
+pre-hardware gate; physical SEN0305 acceptance остаётся границей `2.13`.
+
 ### Depends on
 
 `2.11`.
@@ -820,16 +824,21 @@ pre-hardware gate.
 
 ### Scope
 
-- [ ] Добавить один contract suite, запускаемый против fake и K210 adapters.
-- [ ] Собрать SEN0305 full и MicroPython-disabled configurations.
-- [ ] Собрать diagnostic per-capability-absent configurations.
-- [ ] Проверить required exclusion, `--require-app` и optional fallback.
-- [ ] Выполнить Cube compile-conformance без runtime/hardware claims.
-- [ ] Измерить raw/rounded flash, static RAM, relevant stack и latency.
-- [ ] Проверить отсутствие новых heap/task/queue/core resources.
-- [ ] Создать rolling `docs/evidence/phase2-result.json`.
-- [ ] Добавить `tools/check_phase2_resources.py` и pre-hardware
+- [~] Добавить один contract suite, запускаемый против fake и K210 adapters.
+- [~] Собрать SEN0305 full и MicroPython-disabled configurations.
+- [~] Собрать diagnostic per-capability-absent configurations.
+- [~] Проверить required exclusion, `--require-app` и optional fallback.
+- [~] Выполнить Cube compile-conformance без runtime/hardware claims.
+- [~] Измерить raw/rounded flash, static RAM, relevant stack и latency.
+- [~] Проверить отсутствие новых heap/task/queue/core resources.
+- [~] Создать rolling `docs/evidence/phase2-result.json`.
+- [~] Добавить `tools/check_phase2_resources.py` и pre-hardware
   `tools/check_phase2_exit.py`.
+
+Все пять capability-absent вариантов обязаны реально собраться как
+feature-modified images. Диагностический режим явно фиксирует исключённых
+required consumers; обычная production composition по-прежнему отклоняет их
+отсутствие.
 
 ### Hard budgets относительно 2.1 baseline
 
@@ -852,6 +861,11 @@ pre-hardware gate.
 - deadline/cancel terminal notification не позже исходного deadline плюс один
   declared poll interval, максимум 5 ms;
 - Pong incremental frame не выполняет full-screen present.
+
+Pre-hardware evidence измеряет host registry p99 и проверяет source-declared
+bounds/compile guards. SEN0305 elapsed p99, display present/regression и external
+poll elapsed timing остаются `not-run` до `2.13`; rolling result не превращает
+эту отсрочку в hardware claim.
 
 ### Проверки
 

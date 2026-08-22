@@ -111,6 +111,7 @@ class Composition:
     disabled_apps: frozenset[str]
     disabled_capabilities: frozenset[str]
     exclusions: tuple[dict[str, object], ...]
+    required_consumer_exclusions: tuple[dict[str, object], ...]
     optional_fallbacks: tuple[dict[str, object], ...]
 
 
@@ -497,6 +498,7 @@ def compose(
     required_apps: set[str],
     disabled_capabilities: set[str],
     *,
+    allow_required_consumer_exclusion: bool = False,
     app_requirements_path: Path = APP_REQUIREMENTS_PATH,
     consumer_requirements_path: Path = CONSUMER_REQUIREMENTS_PATH,
     catalog_path: Path = CATALOG_PATH,
@@ -539,6 +541,7 @@ def compose(
     absent_by_key = {(str(item["id"]), int(item["instance"])): item for item in absences}
     composed_disabled = set(disabled_apps)
     exclusions: list[dict[str, object]] = []
+    consumer_exclusions: list[dict[str, object]] = []
     fallbacks: list[dict[str, object]] = []
     grants: dict[str, tuple[CapabilityRequest, ...]] = {}
 
@@ -570,6 +573,17 @@ def compose(
                 matched.append(request)
         if failures:
             if not app:
+                if allow_required_consumer_exclusion:
+                    first = failures[0]
+                    consumer_exclusions.append({
+                        "consumer": name,
+                        "code": first["code"],
+                        "missing": sorted({
+                            str(item) for failure in failures
+                            for item in failure["missing"]
+                        }),
+                    })
+                    return
                 first = failures[0]
                 raise CapabilityError(
                     f"required capability consumer {name!r} is unavailable: "
@@ -610,6 +624,9 @@ def compose(
         disabled_apps=frozenset(composed_disabled),
         disabled_capabilities=frozenset(disabled_capabilities),
         exclusions=tuple(sorted(exclusions, key=lambda item: str(item["app"]))),
+        required_consumer_exclusions=tuple(sorted(
+            consumer_exclusions, key=lambda item: str(item["consumer"])
+        )),
         optional_fallbacks=tuple(sorted(
             fallbacks, key=lambda item: (str(item["consumer"]), str(item["id"]))
         )),
@@ -666,6 +683,9 @@ def composition_document(composition: Composition, capabilities_sha256: str) -> 
         "disabled_apps": sorted(composition.disabled_apps),
         "disabled_capabilities": sorted(composition.disabled_capabilities),
         "exclusions": list(composition.exclusions),
+        "required_consumer_exclusions": list(
+            composition.required_consumer_exclusions
+        ),
         "optional_fallbacks": list(composition.optional_fallbacks),
         "capabilities": {
             "path": "capabilities.json",

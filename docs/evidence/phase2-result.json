@@ -1,0 +1,630 @@
+{
+  "accepted": true,
+  "builds": {
+    "capability_absent_diagnostics": {
+      "hackylens.cap.display": {
+        "absent_capability": "hackylens.cap.display",
+        "attestation_sha256": "16bdb81d67e648536dc7ce8aa7645a82797bbcdfd554d445db977748cfc31735",
+        "board": "huskylens-sen0305",
+        "build_attempted": true,
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "d43cd21ff3c43d7ec6a4fc13b776240013d27d157618e52984ae16d03de448a8",
+        "composition_sha256": "e66dee763a2738199754b4ffae12f515ecd1721d52f38cae62e3f13590758600",
+        "disabled_apps": [
+          "apriltag",
+          "buttons",
+          "camera",
+          "face-detect",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "settings",
+          "sleep",
+          "terminal"
+        ],
+        "elf": {
+          "bss_bytes": 198968,
+          "data_bytes": 157100,
+          "sha256": "afe19087ea0d22a00e0f8576996c5c47521920f5d760319196158a6d0bdc3fe6",
+          "static_ram_bytes": 356068,
+          "text_bytes": 952555
+        },
+        "entry_ids": [
+          "hackylens.cap.time",
+          "hackylens.cap.input",
+          "hackylens.cap.external-link",
+          "hackylens.cap.lights"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "image": {
+          "flash_occupied_bytes": 1110016,
+          "raw_bytes": 1109752,
+          "sha256": "e30abf76f0bab072e5555a0546f20fa4541ea5b3b2dbceceda0d65b5f42a6aa6"
+        },
+        "kind": "capability-absent-diagnostic",
+        "outcome": "built",
+        "release_qualified": false,
+        "required_consumer_exclusions": [],
+        "schema": 1
+      },
+      "hackylens.cap.external-link": {
+        "absent_capability": "hackylens.cap.external-link",
+        "attestation_sha256": "2ea16bc546c6ed2b2564242183393802b2a5cba64dd01fd0ffbc92ef6d38372d",
+        "board": "huskylens-sen0305",
+        "build_attempted": true,
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "dad6fd308692046adc7965afc8cbf96aa701c554d15b96acf4a7ca8bde576b4e",
+        "composition_sha256": "0bb43ef5b884c7a14ba3510d69a371c1fb7f75b369ee69f0ceccd4d1abb2422f",
+        "disabled_apps": [
+          "micropython"
+        ],
+        "elf": {
+          "bss_bytes": 2421128,
+          "data_bytes": 158736,
+          "sha256": "110a5a52b20c5a391020899c780884a63e4d5d80562efd242cc0290dba776fe7",
+          "static_ram_bytes": 2579864,
+          "text_bytes": 1181063
+        },
+        "entry_ids": [
+          "hackylens.cap.time",
+          "hackylens.cap.input",
+          "hackylens.cap.display",
+          "hackylens.cap.lights"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "image": {
+          "flash_occupied_bytes": 1343488,
+          "raw_bytes": 1339896,
+          "sha256": "59a490fb97be2167317a0bcce67b6ae4b838c97527aee5a4a7a7ff505bb9f44d"
+        },
+        "kind": "capability-absent-diagnostic",
+        "outcome": "built",
+        "release_qualified": false,
+        "required_consumer_exclusions": [],
+        "schema": 1
+      },
+      "hackylens.cap.input": {
+        "absent_capability": "hackylens.cap.input",
+        "attestation_sha256": "41450de446a099b4c855938d597a781a55496832a54a8365c0929877c6285b8d",
+        "board": "huskylens-sen0305",
+        "build_attempted": true,
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "c008d838e50ac00eca141e36a7183697a12f8d8f1004d6271ea1e99c5716ceaa",
+        "composition_sha256": "6ddd87471e99988bdea4d612dcec8d0e1291d3e92ab041e27bf51b737786163d",
+        "disabled_apps": [
+          "apriltag",
+          "buttons",
+          "camera",
+          "face-detect",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "settings",
+          "sleep",
+          "terminal"
+        ],
+        "elf": {
+          "bss_bytes": 1427248,
+          "data_bytes": 157228,
+          "sha256": "b7a5ca67057e6a2a2d4a3a078daca8c17e49f13cbaa0e26bf4bf47c1d2425c1c",
+          "static_ram_bytes": 1584476,
+          "text_bytes": 958259
+        },
+        "entry_ids": [
+          "hackylens.cap.time",
+          "hackylens.cap.display",
+          "hackylens.cap.external-link",
+          "hackylens.cap.lights"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "image": {
+          "flash_occupied_bytes": 1118208,
+          "raw_bytes": 1115576,
+          "sha256": "47ba43a2b8617606a26a3541e9bf7644de15d323bf3352283e071b0e819ef99e"
+        },
+        "kind": "capability-absent-diagnostic",
+        "outcome": "built",
+        "release_qualified": false,
+        "required_consumer_exclusions": [],
+        "schema": 1
+      },
+      "hackylens.cap.lights": {
+        "absent_capability": "hackylens.cap.lights",
+        "attestation_sha256": "b880fbe1d41d689b7c0e2496d80904dff29eda896e07dd0da8e93eb6b2a17e49",
+        "board": "huskylens-sen0305",
+        "build_attempted": true,
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "f847a287f7c8be8de87e1dab3fb97633120efd77fe1504d16f49de51bf73a224",
+        "composition_sha256": "5f86a5932fde7a22d5eff36dc2ac3140bebf25706cfe81bbeaf738c9f475e7d2",
+        "disabled_apps": [
+          "apriltag",
+          "camera",
+          "face-detect",
+          "micropython",
+          "object-detect",
+          "qr-camera",
+          "settings",
+          "sleep"
+        ],
+        "elf": {
+          "bss_bytes": 2131752,
+          "data_bytes": 157228,
+          "sha256": "2d11345081a82cc84a9e9c38fcb50bfaedc6ad29653f9aeffe0bc408de1b8457",
+          "static_ram_bytes": 2288980,
+          "text_bytes": 992039
+        },
+        "entry_ids": [
+          "hackylens.cap.time",
+          "hackylens.cap.input",
+          "hackylens.cap.display",
+          "hackylens.cap.external-link"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "image": {
+          "flash_occupied_bytes": 1150976,
+          "raw_bytes": 1149368,
+          "sha256": "5987849402c971426c1773fbbcc0aa6383a16bf321ed3ec61375987aa01604e0"
+        },
+        "kind": "capability-absent-diagnostic",
+        "outcome": "built",
+        "release_qualified": false,
+        "required_consumer_exclusions": [],
+        "schema": 1
+      },
+      "hackylens.cap.time": {
+        "absent_capability": "hackylens.cap.time",
+        "attestation_sha256": "a990d34058edb91f4e024c18aab5ff1b29c2e387de9a1ac296710d8abf99a50e",
+        "board": "huskylens-sen0305",
+        "build_attempted": true,
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "e47438b2e905605e0825787cebebe11c6d173a79ab579d6ca61ff689da2c34fc",
+        "composition_sha256": "a44fd3772e3128ef5ef4ff712b15b793b39d5657cd2c6d931712bd2b52d29a8a",
+        "disabled_apps": [
+          "apriltag",
+          "camera",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "sleep"
+        ],
+        "elf": {
+          "bss_bytes": 1675568,
+          "data_bytes": 158760,
+          "sha256": "468028cae7c968e7336b051d9b222b7d650c7236a4db5fdeab1aa3f704f29221",
+          "static_ram_bytes": 1834328,
+          "text_bytes": 1019515
+        },
+        "entry_ids": [
+          "hackylens.cap.input",
+          "hackylens.cap.display",
+          "hackylens.cap.external-link",
+          "hackylens.cap.lights"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "image": {
+          "flash_occupied_bytes": 1179648,
+          "raw_bytes": 1178360,
+          "sha256": "b9980fc79ab61128fdb6dab6c62678b6fa9813c9bacf3eec7db789cdb5c5f979"
+        },
+        "kind": "capability-absent-diagnostic",
+        "outcome": "built",
+        "release_qualified": false,
+        "required_consumer_exclusions": [
+          {
+            "code": "provider-excluded",
+            "consumer": "consumer:external-link-service",
+            "missing": [
+              "hackylens.cap.time"
+            ]
+          },
+          {
+            "code": "provider-excluded",
+            "consumer": "consumer:firmware-runtime",
+            "missing": [
+              "hackylens.cap.time"
+            ]
+          }
+        ],
+        "schema": 1
+      }
+    },
+    "cube_conformance": {
+      "board": "sipeed-maix-cube",
+      "capabilities_sha256": "d7e8bbf70beb842468e89c6e4c7705ee253f06d58d0ec114861409386a2822e7",
+      "compile_only": true,
+      "composition_sha256": "5a8d129a3b2239789a307b66aabe48d285c132d92ccc312511ff1f82e7d0aa9b",
+      "disabled_apps": [
+        "apriltag",
+        "buttons",
+        "camera",
+        "face-detect",
+        "files",
+        "micropython",
+        "object-detect",
+        "pong",
+        "qr-camera",
+        "settings",
+        "sleep",
+        "terminal"
+      ],
+      "entry_ids": [
+        "hackylens.cap.time"
+      ],
+      "kind": "compile-conformance",
+      "runtime_supported": false,
+      "schema": 1
+    },
+    "profiles": {
+      "full": {
+        "attestation_sha256": "981629fb62415c01e6bd756fe28a8416964c05193ea3d7527c21a903dd9a4322",
+        "board": "huskylens-sen0305",
+        "build_profile": "hackylens-full",
+        "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
+        "composition_sha256": "9d8bdceb42fc9d832f443d8acf394453ee42c4aa41eb82ca4fb4ec58944da4d9",
+        "disabled_apps": [],
+        "disabled_capabilities": [],
+        "elf": {
+          "bss_bytes": 2696840,
+          "data_bytes": 158888,
+          "sha256": "8429c0fa4ce7465e3cc4a63a09acf0f67bfdd9f7427d86ac48b54ae27c502147",
+          "static_ram_bytes": 2855728,
+          "text_bytes": 1372830
+        },
+        "flash_delta_bytes": 28672,
+        "image": {
+          "flash_occupied_bytes": 1531904,
+          "raw_bytes": 1531832,
+          "sha256": "33650e96a83d2ff0386f9e00cc9ff7799598e3a37ed83838ab1f2bb8299589bc"
+        },
+        "kind": "firmware-profile",
+        "profile": "full",
+        "release_qualified": true,
+        "schema": 1,
+        "static_ram_delta_bytes": 264
+      },
+      "micropython-disabled": {
+        "attestation_sha256": "d6f486262e295b28d3598e7bc3e513f32765de720e5f9aa723f6c327c65188c0",
+        "board": "huskylens-sen0305",
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
+        "composition_sha256": "ee6541218c1cb45a79608700d5175e2482c168327289f4683b13e8b94d83aa86",
+        "disabled_apps": [
+          "micropython"
+        ],
+        "disabled_capabilities": [],
+        "elf": {
+          "bss_bytes": 2421872,
+          "data_bytes": 158848,
+          "sha256": "a22e6851bacf2fcb2a8ced8d15baf7d36e0cac34bf798586ec791cc385375482",
+          "static_ram_bytes": 2580720,
+          "text_bytes": 1187287
+        },
+        "flash_delta_bytes": 28672,
+        "image": {
+          "flash_occupied_bytes": 1347584,
+          "raw_bytes": 1346232,
+          "sha256": "4599fa82019ed22c7bddca3cc77af40b67ed1ef22c5b8dd2685551269a0c2e84"
+        },
+        "kind": "firmware-profile",
+        "profile": "micropython-disabled",
+        "release_qualified": false,
+        "schema": 1,
+        "static_ram_delta_bytes": 4048
+      }
+    }
+  },
+  "composition": {
+    "capability_ids": [
+      "hackylens.cap.time",
+      "hackylens.cap.input",
+      "hackylens.cap.display",
+      "hackylens.cap.external-link",
+      "hackylens.cap.lights"
+    ],
+    "diagnostic_expectations": {
+      "hackylens.cap.display": {
+        "disabled_apps": [
+          "apriltag",
+          "buttons",
+          "camera",
+          "face-detect",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "settings",
+          "sleep",
+          "terminal"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "optional_fallbacks": [
+          {
+            "consumer": "consumer:firmware-runtime",
+            "fallback": "conformance-no-runtime-display",
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "reason": "provider-excluded"
+          }
+        ],
+        "outcome": "built",
+        "required_app": "pong",
+        "required_app_error": "required app 'pong' is unavailable on huskylens-sen0305: hackylens.cap.display",
+        "required_consumer_exclusions": []
+      },
+      "hackylens.cap.external-link": {
+        "disabled_apps": [
+          "micropython"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "optional_fallbacks": [
+          {
+            "consumer": "consumer:external-link-service",
+            "fallback": "disable-external-link-service",
+            "id": "hackylens.cap.external-link",
+            "instance": 0,
+            "reason": "provider-excluded"
+          },
+          {
+            "consumer": "settings",
+            "fallback": "hide-external-link-menu",
+            "id": "hackylens.cap.external-link",
+            "instance": 0,
+            "reason": "provider-excluded"
+          }
+        ],
+        "outcome": "built",
+        "required_app": "micropython",
+        "required_app_error": "required app 'micropython' is unavailable on huskylens-sen0305: hackylens.cap.external-link",
+        "required_consumer_exclusions": []
+      },
+      "hackylens.cap.input": {
+        "disabled_apps": [
+          "apriltag",
+          "buttons",
+          "camera",
+          "face-detect",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "settings",
+          "sleep",
+          "terminal"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "optional_fallbacks": [
+          {
+            "consumer": "consumer:firmware-runtime",
+            "fallback": "conformance-no-runtime-input",
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "reason": "provider-excluded"
+          }
+        ],
+        "outcome": "built",
+        "required_app": "pong",
+        "required_app_error": "required app 'pong' is unavailable on huskylens-sen0305: hackylens.cap.input",
+        "required_consumer_exclusions": []
+      },
+      "hackylens.cap.lights": {
+        "disabled_apps": [
+          "apriltag",
+          "camera",
+          "face-detect",
+          "micropython",
+          "object-detect",
+          "qr-camera",
+          "settings",
+          "sleep"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "optional_fallbacks": [
+          {
+            "consumer": "consumer:settings-lights",
+            "fallback": "conformance-no-lights",
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "reason": "provider-excluded"
+          }
+        ],
+        "outcome": "built",
+        "required_app": "settings",
+        "required_app_error": "required app 'settings' is unavailable on huskylens-sen0305: hackylens.cap.lights",
+        "required_consumer_exclusions": []
+      },
+      "hackylens.cap.time": {
+        "disabled_apps": [
+          "apriltag",
+          "camera",
+          "files",
+          "micropython",
+          "object-detect",
+          "pong",
+          "qr-camera",
+          "sleep"
+        ],
+        "exclusion_codes": [
+          "provider-excluded"
+        ],
+        "optional_fallbacks": [],
+        "outcome": "built",
+        "required_app": "pong",
+        "required_app_error": "required app 'pong' is unavailable on huskylens-sen0305: hackylens.cap.time",
+        "required_consumer_exclusions": [
+          {
+            "code": "provider-excluded",
+            "consumer": "consumer:external-link-service",
+            "missing": [
+              "hackylens.cap.time"
+            ]
+          },
+          {
+            "code": "provider-excluded",
+            "consumer": "consumer:firmware-runtime",
+            "missing": [
+              "hackylens.cap.time"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "contracts": {
+    "manifest_sha256": "6cf9ae17a0089ac10dd9210ddb6ff8be94726d722ae1f8b5b572fac878438d34",
+    "matrix": [
+      {
+        "backend": "fake",
+        "capability": "time",
+        "test": "test_time_capability.TimeCapabilityTests.test_time_contract_and_bounded_object"
+      },
+      {
+        "backend": "k210",
+        "capability": "time",
+        "test": "test_time_capability.TimeCapabilityTests.test_k210_any_core_clock_read_is_inside_provider_lock"
+      },
+      {
+        "backend": "fake",
+        "capability": "input",
+        "test": "test_input_capability.InputCapabilityTests.test_debounce_events_cursors_and_overflow"
+      },
+      {
+        "backend": "k210",
+        "capability": "input",
+        "test": "test_input_capability.InputCapabilityTests.test_k210_raw_sampler_is_gated_to_ten_milliseconds"
+      },
+      {
+        "backend": "fake",
+        "capability": "display",
+        "test": "test_display_contract.DisplayContractTests.test_fake_proves_display_state_machine"
+      },
+      {
+        "backend": "k210",
+        "capability": "display",
+        "test": "test_micropython_bindings.MicroPythonBindingSafetyTests.test_k210_display_adapter_composition_cancel_and_cleanup"
+      },
+      {
+        "backend": "fake",
+        "capability": "external-link",
+        "test": "test_external_link_contract.ExternalLinkContractTests.test_fake_proves_external_link_state_machine"
+      },
+      {
+        "backend": "k210",
+        "capability": "external-link",
+        "test": "test_external_link_contract.ExternalLinkContractTests.test_k210_adapter_passes_the_same_normative_suite"
+      },
+      {
+        "backend": "fake",
+        "capability": "lights",
+        "test": "test_lights_capability.LightsCapabilityTests.test_masks_deadlines_cleanup_and_bounded_object"
+      },
+      {
+        "backend": "k210",
+        "capability": "lights",
+        "test": "test_lights_capability.LightsCapabilityTests.test_k210_adapter_converts_only_after_cancel_and_deadline_checks"
+      }
+    ],
+    "passed": true,
+    "schema": 1,
+    "suite": "phase2-adapter-contracts-v1",
+    "supplemental_tests": [
+      "test_capability_core.CapabilityCoreHostTests.test_common_lifecycle_contract_suite",
+      "test_phase2_qualification.Phase2QualificationTests.test_registry_validation_host_p99",
+      "test_pong.PongHostTests.test_fixed_step_physics_and_dirty_rendering"
+    ]
+  },
+  "gate": "pre-hardware",
+  "latency": {
+    "accepted": true,
+    "display_present_deadline_us": 500000,
+    "elapsed_hardware_measurements": {
+      "display_full_present": "deferred-to-phase-2.13",
+      "display_matched_workload_regression": "deferred-to-phase-2.13",
+      "external_poll_slice": "deferred-to-phase-2.13",
+      "registry_validation_sen0305_p99": "deferred-to-phase-2.13"
+    },
+    "external_poll_slice_bytes": 32,
+    "external_poll_slice_limit_us": 500,
+    "host_registry_validation_p99_limit_us": 100,
+    "host_registry_validation_p99_passed": true,
+    "input_debounce_interval_us": 20000,
+    "input_publication_bound": "next-sample",
+    "input_sample_interval_us": 10000,
+    "measurement_scope": "host-p99-and-source-declared-bounds",
+    "pong_incremental_full_present": false,
+    "terminal_notification_poll_max_us": 5000
+  },
+  "phase": "2.12",
+  "physical_scope": {
+    "claims": [],
+    "deferred_to": "Phase 2.13",
+    "status": "not-run"
+  },
+  "resources": {
+    "accepted": true,
+    "framebuffer_proof": "static RAM growth is capped below one 320x240x2 framebuffer and new direct heap allocation sites are zero",
+    "limits": {
+      "additional_full_framebuffers": 0,
+      "flash_delta_max_bytes": 32768,
+      "new_cores": 0,
+      "new_heap_task_queue_resources": 0,
+      "static_ram_delta_max_bytes": 4096
+    },
+    "observed": {
+      "additional_full_framebuffers": 0,
+      "full_flash_delta_bytes": 28672,
+      "full_framebuffer_expression_delta": 0,
+      "full_static_ram_delta_bytes": 264,
+      "micropython_disabled_flash_delta_bytes": 28672,
+      "micropython_disabled_static_ram_delta_bytes": 4048,
+      "new_core_call_delta": 0,
+      "new_direct_heap_task_queue_findings": []
+    },
+    "relevant_stack": {
+      "compiler_stack_frame_limit_bytes": 32768,
+      "measurement_scope": "compiler-guard-and-source-declared-bound",
+      "micropython_vm_limit_bytes": 24576
+    }
+  },
+  "schema": 1,
+  "source": {
+    "content_normalization": "git-clean-filtered-blob-id",
+    "file_count": 624,
+    "manifest_sha256": "4dfae6aff6b69e71407c59c2298bd000e3cbc294160704279535703199a469b7",
+    "scope": [
+      ".github/workflows/release.yml",
+      "VERSION",
+      "boards",
+      "firmware",
+      "platforms",
+      "tests",
+      "tools",
+      "docs/spec"
+    ]
+  }
+}

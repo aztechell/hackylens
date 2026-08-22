@@ -219,6 +219,22 @@ max_leases = 1
             )
             self.assertFalse(attestation["release_qualified"])
         apps = set(generator.load_app_requirements())
+        with self.assertRaisesRegex(
+            generator.CapabilityError, "required capability consumer"
+        ):
+            generator.compose(
+                self.runtime, apps, set(), set(), {"hackylens.cap.time"}
+            )
+        diagnostic = generator.compose(
+            self.runtime, apps, set(), set(), {"hackylens.cap.time"},
+            allow_required_consumer_exclusion=True,
+        )
+        self.assertEqual(
+            [item["consumer"] for item in diagnostic.required_consumer_exclusions],
+            ["consumer:external-link-service", "consumer:firmware-runtime"],
+        )
+        self.assertNotIn("consumer:external-link-service", diagnostic.grants)
+        self.assertNotIn("consumer:firmware-runtime", diagnostic.grants)
         runtime = generator.compose(self.runtime, apps, set(), set(), set())
         cube = generator.compose(self.cube, apps, set(), set(), set())
         self.assertEqual(

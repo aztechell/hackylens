@@ -51,6 +51,12 @@ driver, unavailable route, excluded provider, incompatible version, and missing
 feature. A diagnostic capability exclusion is recorded and cannot be labelled
 release-qualified.
 
+Required non-app consumers remain a build error in ordinary compositions. The
+diagnostic-only `--disable-capability` mode may exclude them so every absent
+capability can be compiled as a bounded feature-modified image; each such
+exclusion is explicit in `composition.json` under
+`required_consumer_exclusions` and no private grant is generated for it.
+
 Board Port schema and responsibilities remain unchanged. The platform mapping
 is a build-local projection from Board Port facts to Capability API providers.
 
