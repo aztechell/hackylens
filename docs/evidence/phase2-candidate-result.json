@@ -272,7 +272,7 @@
     },
     "profiles": {
       "full": {
-        "attestation_sha256": "abd444fd8a0ed8fbfde8d318ad4d77d578873fa62f8878e3709cf0ee59be0ad3",
+        "attestation_sha256": "b84d96415e49ab97b01f43bbc608d4283899c0b1681d823f77074ed2a06ec697",
         "board": "huskylens-sen0305",
         "build_profile": "hackylens-full",
         "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
@@ -282,7 +282,7 @@
         "elf": {
           "bss_bytes": 2696848,
           "data_bytes": 158872,
-          "sha256": "969d45dd5e1ccdb5297cfc58ec15846b8d717933a75206e927ba2f077500ff9c",
+          "sha256": "512967eaf705d4294905b37db8ade8160c5f6fba828cedd92034be038bb2af9e",
           "static_ram_bytes": 2855720,
           "text_bytes": 1373430
         },
@@ -290,7 +290,7 @@
         "image": {
           "flash_occupied_bytes": 1536000,
           "raw_bytes": 1532408,
-          "sha256": "551abbc1afb997543200f7944b5fbd8650fe3ce894d56b2acb406d6fba9698f1"
+          "sha256": "63459419aa09c555467d46f3f053ed01758c40f24cbd8fd4797f381bb7853a62"
         },
         "kind": "firmware-profile",
         "profile": "full",
@@ -693,7 +693,7 @@
   "source": {
     "content_normalization": "git-clean-filtered-blob-id",
     "file_count": 635,
-    "manifest_sha256": "d73da4c68fb75d6a29fd9fddc43b329663a2a7cbc7ea404d262053df35fddca8",
+    "manifest_sha256": "39d5611bd0e4bb769d94c261b5e881a011504fdf1dd15777ffd8841aa5b183ff",
     "scope": [
       ".github/workflows/release.yml",
       "VERSION",
