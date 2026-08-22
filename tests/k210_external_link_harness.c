@@ -34,6 +34,8 @@ static uint8_t s_uart_rx[TEST_BYTES * 2U];
 static uint32_t s_uart_rx_head;
 static uint32_t s_uart_rx_size;
 static uint8_t s_uart_loopback;
+static hal_external_uart_receive_fn s_uart_receive;
+static void *s_uart_receive_context;
 static uint8_t s_i2c_source[TEST_BYTES];
 static uint32_t s_i2c_source_size;
 static uint32_t s_i2c_source_position;
@@ -159,11 +161,23 @@ uint64_t hal_time_us(void)
     return s_now_us;
 }
 
-void hal_external_uart_init(uint32_t baud)
+void hal_external_uart_init(uint32_t baud,
+                            hal_external_uart_receive_fn receive,
+                            void *context)
 {
     (void)baud;
     s_i2c_active = 0U;
     s_target_callbacks = NULL;
+    s_uart_rx_head = 0U;
+    s_uart_rx_size = 0U;
+    s_uart_receive = receive;
+    s_uart_receive_context = context;
+}
+
+void hal_external_uart_stop(void)
+{
+    s_uart_receive = NULL;
+    s_uart_receive_context = NULL;
     s_uart_rx_head = 0U;
     s_uart_rx_size = 0U;
 }
@@ -204,12 +218,11 @@ size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)
     s_uart_tx_size += (uint32_t)len;
     if(s_uart_loopback)
     {
-        size_t rx_capacity = sizeof(s_uart_rx) - s_uart_rx_size;
-
-        if(len > rx_capacity)
-            len = rx_capacity;
-        memcpy(s_uart_rx + s_uart_rx_size, data, len);
-        s_uart_rx_size += (uint32_t)len;
+        for(size_t index = 0U; index < len; ++index)
+        {
+            if(s_uart_receive)
+                s_uart_receive(s_uart_receive_context, data[index]);
+        }
     }
     return sent;
 }
@@ -326,6 +339,8 @@ static void backend_reset(void)
     s_uart_rx_head = 0U;
     s_uart_rx_size = 0U;
     s_uart_loopback = 0U;
+    s_uart_receive = NULL;
+    s_uart_receive_context = NULL;
     s_i2c_source_size = 0U;
     s_i2c_source_position = 0U;
     s_i2c_rx_head = 0U;
@@ -380,6 +395,14 @@ static void backend_target_read(uint8_t *bytes, uint32_t size_bytes)
 static uint32_t backend_uart_tx_bytes(void)
 {
     return s_uart_tx_size;
+}
+
+static int backend_uart_receive(const uint8_t *data, size_t size)
+{
+    HARNESS_CHECK(s_uart_receive != NULL);
+    for(size_t index = 0U; index < size; ++index)
+        s_uart_receive(s_uart_receive_context, data[index]);
+    return 0;
 }
 
 static int run_uart_loopback_capture_tests(void)
@@ -464,8 +487,8 @@ static int run_uart_loopback_capture_tests(void)
     HARNESS_CHECK(hk_external_link_configure_uart(
         owner, &link, &uart) == HK_OK);
     s_uart_loopback = 1U;
-    memset(s_uart_rx, 0x5a, sizeof(chunk));
-    s_uart_rx_size = sizeof(chunk);
+    memset(chunk, 0x5a, sizeof(chunk));
+    HARNESS_CHECK(backend_uart_receive(chunk, sizeof(chunk)) == 0);
     operation = HK_EXTERNAL_LINK_OP_NONE;
     result = HK_PENDING;
     HARNESS_CHECK(hk_external_link_uart_write_begin(

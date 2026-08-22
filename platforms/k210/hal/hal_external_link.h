@@ -17,7 +17,12 @@ typedef struct
     void (*event)(hal_external_i2c_event_t event);
 } hal_external_i2c_callbacks_t;
 
-void hal_external_uart_init(uint32_t baud);
+typedef void (*hal_external_uart_receive_fn)(void *context, uint8_t byte);
+
+void hal_external_uart_init(uint32_t baud,
+                            hal_external_uart_receive_fn receive,
+                            void *context);
+void hal_external_uart_stop(void);
 size_t hal_external_uart_receive(uint8_t *data, size_t len);
 void hal_external_uart_send(const uint8_t *data, size_t len);
 /* Queue only bytes that fit in the UART TX FIFO right now.  This function

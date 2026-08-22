@@ -92,9 +92,12 @@ UART/I2C protocol or routed-peripheral semantics.
   operator runbook are implemented. Candidate `19b032c` passed automated CI and
   booted as 0.4.0 on SEN0305, but physical smoke found a MicroPython
   `ticks_ms()` integer-conversion failure and UART RX FIFO loss during a
-  256-byte loopback. A corrective candidate is in progress; I2C uses the same
-  IO34/IO35 routes and remains a later fixture stage. No physical claim exists
-  until one exact candidate image passes the complete physical gate.
+  256-byte loopback. Corrective candidate `830b2a3` fixed TIME physically but
+  still retained only 22 of 256 UART bytes, proving that main-loop draining
+  cannot provide the required hardware FIFO handoff. The next corrective uses
+  an interrupt-backed bounded RX handoff; I2C uses the same IO34/IO35 routes
+  and remains a later fixture stage. No physical claim exists until one exact
+  candidate image passes the complete physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external

@@ -22,6 +22,7 @@
 /* K210 general-purpose UART1/2/3 expose an 8-byte TX FIFO. */
 #define HAL_EXTERNAL_UART_FIFO_DEPTH 8U
 #define HAL_EXTERNAL_UART_LSR_TEMT (1U << 6)
+#define HAL_EXTERNAL_UART_RX_IRQ_PRIORITY 2U
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #define HAL_EXTERNAL_UART_ADAPTER (uart[UART_DEVICE_1])
 #else
@@ -31,6 +32,28 @@
 static const hal_external_i2c_callbacks_t *g_i2c_callbacks;
 static uint8_t g_i2c_active;
 static uint8_t g_i2c_skip_sdk_receive;
+static hal_external_uart_receive_fn g_uart_receive;
+static void *g_uart_receive_context;
+static uint8_t g_uart_active;
+
+static int uart_receive_irq(void *context)
+{
+    uint8_t bytes[HAL_EXTERNAL_UART_FIFO_DEPTH];
+    size_t count;
+
+    (void)context;
+    do
+    {
+        count = (size_t)uart_receive_data(
+            UART_DEVICE_1, (char *)bytes, sizeof(bytes));
+        if(g_uart_receive)
+        {
+            for(size_t index = 0U; index < count; ++index)
+                g_uart_receive(g_uart_receive_context, bytes[index]);
+        }
+    } while(count != 0U);
+    return 0;
+}
 
 static void i2c_receive(uint32_t data)
 {
@@ -76,12 +99,32 @@ static const i2c_slave_handler_t g_i2c_handler = {
     .on_event = i2c_event,
 };
 
-void hal_external_uart_init(uint32_t baud)
+void hal_external_uart_stop(void)
+{
+    if(!g_uart_active)
+        return;
+    uart_irq_unregister(UART_DEVICE_1, UART_RECEIVE);
+    g_uart_active = 0U;
+    g_uart_receive = NULL;
+    g_uart_receive_context = NULL;
+    uart_init(UART_DEVICE_1);
+}
+
+void hal_external_uart_init(uint32_t baud,
+                            hal_external_uart_receive_fn receive,
+                            void *context)
 {
     hal_external_i2c_stop();
+    hal_external_uart_stop();
     PREPARE_EXTERNAL_UART();
     uart_init(UART_DEVICE_1);
     uart_configure(UART_DEVICE_1, baud, UART_BITWIDTH_8BIT, UART_STOP_1, UART_PARITY_NONE);
+    (void)uart_receive_irq(NULL);
+    g_uart_receive = receive;
+    g_uart_receive_context = context;
+    uart_irq_register(UART_DEVICE_1, UART_RECEIVE, uart_receive_irq, NULL,
+                      HAL_EXTERNAL_UART_RX_IRQ_PRIORITY);
+    g_uart_active = 1U;
 }
 
 size_t hal_external_uart_receive(uint8_t *data, size_t len)

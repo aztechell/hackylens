@@ -112,11 +112,14 @@ shift register. While those conditions are pending, progress includes
 
 `hk_external_link_uart_read` is synchronous and non-blocking. It copies no more
 than the provider poll bound and may return `HK_OK` with zero bytes.
-The K210 provider drains received bytes into fixed-capacity storage while a
-UART write is in flight so full-duplex or loopback traffic is not lost behind
-the hardware FIFO. If that bounded storage is exceeded, the next read returns
+The K210 provider uses the UART RX interrupt as the single producer for
+fixed-capacity storage while main-loop reads are its single consumer. This
+keeps full-duplex or loopback traffic from depending on the main-loop poll
+interval. If that bounded storage is exceeded, the next read returns
 `HK_ERR_OVERFLOW`, resets the UART receive path, and publishes zero bytes; the
-caller then continues from an explicit resynchronized state.
+caller then continues from an explicit resynchronized state. Mode changes,
+failed/cancelled writes, release, and owner cleanup stop the RX interrupt and
+clear its staged data before the storage can be reused by I2C target mode.
 
 ## I2C controller and target semantics
 

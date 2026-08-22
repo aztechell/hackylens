@@ -56,9 +56,9 @@ typedef struct
     uint32_t i2c_frequency_hz;
     uint32_t next_operation_generation;
     k210_external_operation_t operation;
-    uint16_t uart_rx_head;
-    uint16_t uart_rx_count;
-    uint8_t uart_rx_overflow;
+    volatile uint32_t uart_rx_read;
+    volatile uint32_t uart_rx_write;
+    volatile uint32_t uart_rx_dropped;
     volatile uint32_t target_event_requested_bytes[2];
     volatile uint16_t target_event_received_bytes[2];
     volatile uint8_t target_event_type[2];
@@ -145,35 +145,44 @@ static void reset_operation(k210_external_state_t *state)
 
 static void clear_uart_rx(k210_external_state_t *state)
 {
-    state->uart_rx_head = 0U;
-    state->uart_rx_count = 0U;
-    state->uart_rx_overflow = 0U;
+    state->uart_rx_read = 0U;
+    state->uart_rx_write = 0U;
+    state->uart_rx_dropped = 0U;
+    __sync_synchronize();
 }
 
-static void drain_uart_rx(k210_external_state_t *state)
+static void uart_receive(void *context, uint8_t byte)
 {
-    uint8_t bytes[K210_EXTERNAL_POLL_BYTES];
-    size_t capacity = K210_EXTERNAL_MAX_BYTES - state->uart_rx_count;
-    size_t received;
+    k210_external_state_t *state = (k210_external_state_t *)context;
+    uint32_t write;
+    uint32_t read;
 
-    if(capacity > sizeof(bytes))
-        capacity = sizeof(bytes);
-    if(capacity == 0U)
+    if(!state || !state->active ||
+       state->mode != HK_EXTERNAL_LINK_MODE_UART)
+        return;
+    write = state->uart_rx_write;
+    __sync_synchronize();
+    read = state->uart_rx_read;
+    if((uint32_t)(write - read) >= K210_EXTERNAL_MAX_BYTES)
     {
-        received = hal_external_uart_receive(bytes, 1U);
-        if(received != 0U)
-            state->uart_rx_overflow = 1U;
+        state->uart_rx_dropped++;
         return;
     }
-    received = hal_external_uart_receive(bytes, capacity);
-    for(size_t index = 0U; index < received; ++index)
-    {
-        uint16_t tail = (uint16_t)(
-            (state->uart_rx_head + state->uart_rx_count) %
-            K210_EXTERNAL_MAX_BYTES);
-        state->target_buffer[0][tail] = bytes[index];
-        state->uart_rx_count++;
-    }
+    state->target_buffer[0][write & (K210_EXTERNAL_MAX_BYTES - 1U)] = byte;
+    __sync_synchronize();
+    state->uart_rx_write = write + 1U;
+}
+
+static void start_uart(k210_external_state_t *state)
+{
+    hal_external_uart_init(state->uart_baud, uart_receive, state);
+}
+
+static void reset_uart(k210_external_state_t *state)
+{
+    hal_external_uart_stop();
+    clear_uart_rx(state);
+    start_uart(state);
 }
 
 static void stop_mode(k210_external_state_t *state)
@@ -182,7 +191,7 @@ static void stop_mode(k210_external_state_t *state)
        state->mode == HK_EXTERNAL_LINK_MODE_I2C_TARGET)
         hal_external_i2c_stop();
     else if(state->mode == HK_EXTERNAL_LINK_MODE_UART && state->uart_baud != 0U)
-        hal_external_uart_init(state->uart_baud);
+        hal_external_uart_stop();
     clear_target(state);
     clear_uart_rx(state);
     reset_operation(state);
@@ -309,7 +318,7 @@ static hk_result_t k210_external_configure_uart(
     if(result != HK_OK)
         return result;
     state->uart_baud = config->baud;
-    hal_external_uart_init(config->baud);
+    start_uart(state);
     return HK_OK;
 }
 
@@ -607,6 +616,9 @@ static hk_result_t k210_external_uart_read(
     uint32_t *received_bytes)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
+    uint32_t read;
+    uint32_t write;
+    uint32_t available;
     size_t capacity;
     hk_result_t result = validate_state(state, lease);
 
@@ -615,26 +627,28 @@ static hk_result_t k210_external_uart_read(
     if(state->mode != HK_EXTERNAL_LINK_MODE_UART)
         return HK_ERR_INVALID_STATE;
     *received_bytes = 0U;
-    drain_uart_rx(state);
-    if(state->uart_rx_overflow)
+    __sync_synchronize();
+    if(state->uart_rx_dropped != 0U)
     {
-        hal_external_uart_init(state->uart_baud);
-        clear_uart_rx(state);
+        reset_uart(state);
         return HK_ERR_OVERFLOW;
     }
+    read = state->uart_rx_read;
+    __sync_synchronize();
+    write = state->uart_rx_write;
+    available = write - read;
     capacity = rx->size_bytes;
     if(capacity > K210_EXTERNAL_POLL_BYTES)
         capacity = K210_EXTERNAL_POLL_BYTES;
-    if(capacity > state->uart_rx_count)
-        capacity = state->uart_rx_count;
+    if(capacity > available)
+        capacity = available;
     for(size_t index = 0U; index < capacity; ++index)
-    {
         ((uint8_t *)rx->data)[index] =
-            state->target_buffer[0][state->uart_rx_head];
-        state->uart_rx_head = (uint16_t)(
-            (state->uart_rx_head + 1U) % K210_EXTERNAL_MAX_BYTES);
-        state->uart_rx_count--;
-    }
+            state->target_buffer[0][
+                (read + (uint32_t)index) &
+                (K210_EXTERNAL_MAX_BYTES - 1U)];
+    __sync_synchronize();
+    state->uart_rx_read = read + (uint32_t)capacity;
     *received_bytes = (uint32_t)capacity;
     return HK_OK;
 }
@@ -707,7 +721,7 @@ static hk_result_t latch_terminal(
     if(operation->kind == HK_EXTERNAL_LINK_OP_I2C_TRANSFER)
         hal_external_i2c_stop();
     else if(result != HK_OK && state->uart_baud != 0U)
-        hal_external_uart_init(state->uart_baud);
+        reset_uart(state);
     operation->state = K210_EXTERNAL_OP_TERMINAL;
     operation->terminal_result = result;
     return result;
@@ -796,12 +810,10 @@ static hk_result_t k210_external_poll(
     {
         uint32_t remaining = operation->tx_size - operation->tx_done;
 
-        drain_uart_rx(state);
         if(remaining > K210_EXTERNAL_POLL_BYTES)
             remaining = K210_EXTERNAL_POLL_BYTES;
         operation->tx_done += (uint32_t)hal_external_uart_send_ready(
             operation->tx + operation->tx_done, remaining);
-        drain_uart_rx(state);
         if(operation->tx_done == operation->tx_size &&
            hal_external_uart_tx_idle())
             result = latch_terminal(state, HK_OK);

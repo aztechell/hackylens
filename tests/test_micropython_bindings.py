@@ -107,7 +107,8 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3", result.stdout
+            "HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3 uart_irq=8",
+            result.stdout,
         )
 
     def test_bridge_object_has_no_hardware_dependencies(self) -> None:

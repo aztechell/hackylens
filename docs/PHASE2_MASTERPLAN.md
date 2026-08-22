@@ -908,6 +908,13 @@ items ниже остаются открытыми до exact-image evidence.
 candidate с regression coverage, после чего smoke начинается заново на новом
 exact image.
 
+Corrective candidate `830b2a3` также прошёл automated gate и был прошит как
+exact image `d9699b2a...1aea`. TIME smoke после исправления прошёл, но UART
+loopback сохранил только 22 из 256 байт. Это доказало, что main-loop polling не
+является достаточным handoff для аппаратного RX FIFO даже с bounded staging.
+Следующий corrective переводит bounded RX storage на UART receive ISR как
+single producer; hardware gate снова начинается с нового exact image.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и

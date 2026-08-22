@@ -8,6 +8,7 @@
 #define UART_BITWIDTH_8BIT 8
 #define UART_STOP_1 1
 #define UART_PARITY_NONE 0
+#define UART_RECEIVE 2
 #define I2C_DEVICE_0 0
 #define IRQN_I2C0_INTERRUPT 1
 #define I2C_INTR_STAT_RX_FULL 0x01U
@@ -44,6 +45,8 @@ typedef enum
     I2C_EV_STOP,
 } i2c_event_t;
 
+typedef int (*plic_irq_callback_t)(void *context);
+
 typedef struct
 {
     void (*on_receive)(uint32_t data);
@@ -61,6 +64,10 @@ void uart_configure(int device, uint32_t baud, int width,
                     int stop, int parity);
 int uart_receive_data(int device, char *data, size_t length);
 int uart_send_data(int device, const char *data, size_t length);
+void uart_irq_register(int device, int mode,
+                       plic_irq_callback_t callback, void *context,
+                       uint32_t priority);
+void uart_irq_unregister(int device, int mode);
 void i2c_init_as_slave(int device, uint32_t address, uint32_t address_width,
                        const i2c_slave_handler_t *handler);
 void i2c_init(int device, uint32_t address, uint32_t address_width,
