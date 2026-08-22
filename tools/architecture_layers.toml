@@ -11,7 +11,14 @@ source_roots = [
 
 [[layers]]
 name = "public-capability"
-paths = ["firmware/include/hackylens/capability/**"]
+paths = [
+  "firmware/include/hackylens/capability/**",
+  "firmware/src/capabilities/display.c",
+  "firmware/src/capabilities/external_link.c",
+  "firmware/src/capabilities/input.c",
+  "firmware/src/capabilities/lights.c",
+  "firmware/src/capabilities/time.c",
+]
 
 [[layers]]
 name = "app"
@@ -23,7 +30,14 @@ paths = ["firmware/src/adapters/**"]
 
 [[layers]]
 name = "capability-implementation"
-paths = ["firmware/src/capabilities/**", "platforms/*/capabilities/**"]
+paths = [
+  "firmware/src/capabilities/*.h",
+  "firmware/src/capabilities/capability_core.c",
+  "firmware/src/capabilities/capability_inventory_generated.c",
+  "firmware/src/capabilities/capability_owner.c",
+  "firmware/src/capabilities/input_state.c",
+  "platforms/*/capabilities/**",
+]
 
 [[layers]]
 name = "service"

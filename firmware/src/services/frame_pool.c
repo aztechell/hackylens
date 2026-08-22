@@ -43,11 +43,11 @@ uint8_t frame_workspace_borrow(
 
     if(!borrow || minimum_size == 0U ||
        minimum_size > sizeof(g_camera_slots[0]) || g_camera_reserved ||
-       g_workspace_active_generation != 0U)
+       g_workspace_active_generation != 0U ||
+       g_workspace_generation == UINT32_MAX)
         return 0U;
-    generation = ++g_workspace_generation;
-    if(generation == 0U)
-        generation = ++g_workspace_generation;
+    generation = g_workspace_generation + 1U;
+    g_workspace_generation = generation;
     g_workspace_active_generation = generation;
     *borrow = (frame_workspace_borrow_t){
         (uint8_t *)g_camera_slots[0], sizeof(g_camera_slots[0]), generation,
@@ -69,3 +69,13 @@ uint8_t frame_workspace_release(frame_workspace_borrow_t *borrow)
     *borrow = FRAME_WORKSPACE_BORROW_NONE;
     return valid;
 }
+
+#if defined(HK_FRAME_POOL_TESTING)
+uint8_t frame_workspace_test_set_generation(uint32_t generation)
+{
+    if(g_camera_reserved || g_workspace_active_generation != 0U)
+        return 0U;
+    g_workspace_generation = generation;
+    return 1U;
+}
+#endif

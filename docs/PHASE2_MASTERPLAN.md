@@ -668,8 +668,8 @@ register behavior не протёк в public contract.
 failed-cleanup invalidation/quarantine, shared ABI validation, оба firmware
 profile и resource evidence прошли в
 [`Release firmware` run 32557338515](https://github.com/aztechell/hackylens/actions/runs/32557338515).
-Phase `2.11` завершена отдельным corrective/closure gate; Phase `2.12` не
-начата.
+Phase `2.11` снова открыта для corrective object-symbol graph и workspace
+generation-exhaustion fix; Phase `2.12` не начата.
 
 ### Depends on
 
@@ -737,11 +737,11 @@ Native external service, provider и MicroPython bridge мигрируются/�
 
 ## 2.11 — Residual app→driver cleanup и architecture guard v2
 
-Статус пакета: `completed` (2026-08-22). Corrective commit `706bdb6` прошёл
-[`Release firmware` run 32559217234](https://github.com/aztechell/hackylens/actions/runs/32559217234):
-source/environment validation, architecture guard v2, оба firmware-профиля,
-provider object hash equivalence, symbols и resource evidence зелёные. Phase
-`2.12` не начата.
+Статус пакета: `in_progress` (corrective object-symbol graph и bounded
+workspace generation exhaustion). Предыдущий commit `706bdb6` прошёл
+[`Release firmware` run 32559217234](https://github.com/aztechell/hackylens/actions/runs/32559217234),
+но closure снят до зелёного CI нового corrective commit. Phase `2.12` не
+начата.
 
 ### Depends on
 
@@ -754,13 +754,17 @@ provider object hash equivalence, symbols и resource evidence зелёные. P
 ### Scope
 
 - [x] Перенести пять direct `hk_sd.h` call sites в permanent storage operations.
-- [x] Переместить `drivers/frame_pool.*` в private portable
+- [~] Переместить `drivers/frame_pool.*` в private portable
   `services/frame_pool.*`; зафиксировать borrow/release semantics.
 - [x] Убедиться, что apps не включают capability implementation/private headers.
 - [x] Добавить explicit layer classification в
   `tools/architecture_layers.toml`.
-- [x] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
+- [~] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
   generated dependency files и object undefined symbols.
+- [~] Применять declarative layer policy ко всем разрешённым repository object
+  symbol edges, включая duplicate definitions, без origin-layer allowlist.
+- [~] После `UINT32_MAX` навсегда исчерпывать workspace generation до reboot,
+  не выдавая stale-compatible generation повторно.
 - [x] Запретить apps→board/BSP, HAL/SDK, drivers.
 - [x] Запретить MicroPython adapter→board/HAL/SDK/drivers.
 - [x] Запретить capability implementation→apps, service→feature-private и

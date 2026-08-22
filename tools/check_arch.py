@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from dataclasses import dataclass
 import fnmatch
 import hashlib
 import json
@@ -300,6 +301,16 @@ def layer_edge_violation(
     target_layer = classify_repository_path(target, policy)
     if source_layer is None or target_layer is None:
         return None
+    return repository_layer_violation(source_layer, target_layer, policy)
+
+
+def repository_layer_violation(
+    source_layer: str, target_layer: str,
+    policy: dict[str, object] | None = None,
+) -> str | None:
+    """Apply the declarative policy to two already-classified layers."""
+
+    policy = policy or load_layer_policy()
     for edge in policy["forbidden_edges"]:
         if source_layer in edge["from"] and target_layer in edge["to"]:
             return f"{edge['reason']} ({source_layer} -> {target_layer})"
@@ -1033,6 +1044,15 @@ def object_repository_source(path: Path) -> str | None:
     return fragment
 
 
+@dataclass(frozen=True)
+class RepositoryObjectSymbols:
+    object_path: str
+    source: str
+    layer: str
+    defined: frozenset[str]
+    undefined: frozenset[str]
+
+
 def find_nm() -> str:
     for name in (
         "riscv64-unknown-elf-nm", "riscv64-unknown-elf-nm.exe", "nm", "nm.exe",
@@ -1047,7 +1067,10 @@ def find_nm() -> str:
 
 
 def object_symbols(nm: str, path: Path, *, undefined: bool) -> set[str]:
-    command = [nm, "-u" if undefined else "--defined-only", str(path)]
+    command = [
+        nm, "-u" if undefined else "--defined-only", "--extern-only",
+        str(path),
+    ]
     result = subprocess.run(
         command, cwd=ROOT, text=True, capture_output=True, check=True,
     )
@@ -1067,6 +1090,56 @@ def forbidden_hardware_symbols(
         if (symbol in low_level_symbols or
             symbol.startswith(FORBIDDEN_DIRECT_SYMBOL_PREFIXES))
     )
+
+
+def repository_object_symbol_edge_failures(
+    objects: list[RepositoryObjectSymbols],
+    policy: dict[str, object] | None = None,
+) -> list[str]:
+    """Validate resolved object edges and unresolved hardware imports.
+
+    Every externally defined repository symbol retains every defining object.
+    Multiple definitions are therefore checked conservatively instead of being
+    resolved by filesystem or linker traversal order.
+    """
+
+    policy = policy or load_layer_policy()
+    ordered = sorted(
+        objects, key=lambda item: (item.source, item.object_path, item.layer)
+    )
+    definitions: dict[str, list[RepositoryObjectSymbols]] = {}
+    for item in ordered:
+        for symbol in sorted(item.defined):
+            definitions.setdefault(symbol, []).append(item)
+
+    failures: list[str] = []
+    for origin in ordered:
+        for symbol in sorted(origin.undefined):
+            targets = definitions.get(symbol, ())
+            for target in targets:
+                if target.object_path == origin.object_path:
+                    continue
+                violation = repository_layer_violation(
+                    origin.layer, target.layer, policy
+                )
+                if violation:
+                    failures.append(
+                        f"{origin.source}: object symbol {symbol} resolves to "
+                        f"forbidden {target.source}: {violation}"
+                    )
+            if targets or not forbidden_hardware_symbols({symbol}, set()):
+                continue
+            for target_layer in sorted(HARDWARE_LAYERS):
+                violation = repository_layer_violation(
+                    origin.layer, target_layer, policy
+                )
+                if violation:
+                    failures.append(
+                        f"{origin.source}: object has forbidden undefined "
+                        f"hardware symbol {symbol}: {violation}"
+                    )
+                    break
+    return sorted(set(failures))
 
 
 def generated_dependency_failures(build_dir: Path) -> list[str]:
@@ -1096,28 +1169,21 @@ def generated_dependency_failures(build_dir: Path) -> list[str]:
 def object_undefined_symbol_failures(build_dir: Path) -> list[str]:
     policy = load_layer_policy()
     nm = find_nm()
-    objects: list[tuple[Path, str, str]] = []
+    objects: list[RepositoryObjectSymbols] = []
     for path in sorted(build_dir.rglob("*.obj")):
         source = object_repository_source(path)
         if not source:
             continue
         layer = classify_repository_path(source, policy)
         if layer:
-            objects.append((path, source, layer))
-    low_level_symbols: set[str] = set()
-    for path, _source, layer in objects:
-        if layer in HARDWARE_LAYERS:
-            low_level_symbols.update(object_symbols(nm, path, undefined=False))
-    failures: list[str] = []
-    for path, source, layer in objects:
-        if layer not in {"app", "adapter"}:
-            continue
-        undefined = object_symbols(nm, path, undefined=True)
-        for symbol in forbidden_hardware_symbols(undefined, low_level_symbols):
-            failures.append(
-                f"{source}: object has forbidden undefined hardware symbol {symbol}"
+            objects.append(
+                RepositoryObjectSymbols(
+                    path.relative_to(build_dir).as_posix(), source, layer,
+                    frozenset(object_symbols(nm, path, undefined=False)),
+                    frozenset(object_symbols(nm, path, undefined=True)),
+                )
             )
-    return failures
+    return repository_object_symbol_edge_failures(objects, policy)
 
 
 def provider_object_hashes(build_dir: Path) -> dict[str, str]:

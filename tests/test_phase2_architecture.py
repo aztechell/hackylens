@@ -41,7 +41,7 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
             ("firmware/src/apps/demo/app.c", "boards/example/board.c"),
             ("firmware/src/adapters/micropython/binding.c",
              "platforms/k210/hal/hal_i2c.h"),
-            ("firmware/src/capabilities/display.c",
+            ("platforms/k210/capabilities/display_adapter.c",
              "firmware/src/apps/files/files_app.h"),
             ("firmware/src/services/shared.c",
              "firmware/src/apps/camera/camera_private.h"),
@@ -110,6 +110,172 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
             ["driver_private", "hal_hidden_call"],
         )
 
+    def test_object_symbol_graph_proves_every_forbidden_layer_family(self) -> None:
+        def record(
+            source: str, *, defined: tuple[str, ...] = (),
+            undefined: tuple[str, ...] = (), suffix: str = "",
+        ) -> check_arch.RepositoryObjectSymbols:
+            layer = check_arch.classify_repository_path(source)
+            self.assertIsNotNone(layer)
+            return check_arch.RepositoryObjectSymbols(
+                f"objects/{source}{suffix}.obj", source, layer,
+                frozenset(defined), frozenset(undefined),
+            )
+
+        objects = [
+            record(
+                "firmware/src/apps/demo/caller.c",
+                undefined=("driver_private_hook",),
+            ),
+            record(
+                "firmware/src/adapters/micropython/caller.c",
+                undefined=("hal_private_hook",),
+            ),
+            record(
+                "platforms/k210/capabilities/display_adapter.c",
+                undefined=("camera_private_hook", "duplicate_hook"),
+            ),
+            record(
+                "firmware/src/services/shared.c",
+                undefined=("files_private_hook",),
+            ),
+            record(
+                "boards/example/board.c",
+                undefined=("controller_policy_hook", "app_policy_hook"),
+            ),
+            record(
+                "firmware/src/drivers/private.c",
+                defined=("driver_private_hook",),
+            ),
+            record(
+                "platforms/k210/hal/hal_private.c",
+                defined=("hal_private_hook",),
+            ),
+            record(
+                "firmware/src/apps/camera/private.c",
+                defined=("camera_private_hook", "app_policy_hook"),
+            ),
+            record(
+                "firmware/src/apps/files/private.c",
+                defined=("files_private_hook",),
+            ),
+            record(
+                "firmware/src/controllers/product_policy.c",
+                defined=("controller_policy_hook",),
+            ),
+            # A duplicate definition in an allowed layer must not mask the
+            # forbidden app definition of the same symbol.
+            record(
+                "firmware/src/core/duplicate.c",
+                defined=("duplicate_hook",), suffix="-core",
+            ),
+            record(
+                "firmware/src/apps/camera/duplicate.c",
+                defined=("duplicate_hook",), suffix="-app",
+            ),
+        ]
+        failures = check_arch.repository_object_symbol_edge_failures(objects)
+        expected = (
+            ("driver_private_hook", "app -> driver"),
+            ("hal_private_hook", "adapter -> platform-hal"),
+            ("camera_private_hook", "capability-implementation -> app"),
+            ("files_private_hook", "service -> app"),
+            ("controller_policy_hook", "board -> controller"),
+            ("app_policy_hook", "board -> app"),
+            ("duplicate_hook", "capability-implementation -> app"),
+        )
+        for symbol, edge in expected:
+            with self.subTest(symbol=symbol):
+                self.assertTrue(any(
+                    symbol in failure and edge in failure
+                    for failure in failures
+                ), failures)
+        self.assertEqual(
+            failures,
+            check_arch.repository_object_symbol_edge_failures(
+                list(reversed(objects))
+            ),
+        )
+
+        external = record(
+            "firmware/src/apps/demo/external.c",
+            undefined=("hal_external_only",),
+        )
+        self.assertTrue(any(
+            "forbidden undefined hardware symbol hal_external_only" in failure
+            for failure in check_arch.repository_object_symbol_edge_failures(
+                [external]
+            )
+        ))
+
+        # Exercise build-object discovery too, so a future origin-layer filter
+        # in object_undefined_symbol_failures cannot bypass the generic graph.
+        fixture_symbols = {
+            "firmware/src/apps/demo/caller.c": (
+                (), ("driver_private_hook",),
+            ),
+            "firmware/src/adapters/micropython/caller.c": (
+                (), ("hal_private_hook",),
+            ),
+            "platforms/k210/capabilities/display_adapter.c": (
+                (), ("camera_private_hook",),
+            ),
+            "firmware/src/services/shared.c": (
+                (), ("files_private_hook",),
+            ),
+            "boards/example/board.c": (
+                (), ("controller_policy_hook", "app_policy_hook"),
+            ),
+            "firmware/src/drivers/private.c": (
+                ("driver_private_hook",), (),
+            ),
+            "platforms/k210/hal/hal_private.c": (
+                ("hal_private_hook",), (),
+            ),
+            "firmware/src/apps/camera/private.c": (
+                ("camera_private_hook", "app_policy_hook"), (),
+            ),
+            "firmware/src/apps/files/private.c": (
+                ("files_private_hook",), (),
+            ),
+            "firmware/src/controllers/product_policy.c": (
+                ("controller_policy_hook",), (),
+            ),
+        }
+        with tempfile.TemporaryDirectory(
+            prefix="hackylens-object-symbols-"
+        ) as temp:
+            build_dir = Path(temp)
+            for source in fixture_symbols:
+                path = build_dir / "objects" / f"{source}.obj"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"object fixture")
+
+            def fixture_object_symbols(
+                _nm: str, path: Path, *, undefined: bool,
+            ) -> set[str]:
+                source = check_arch.object_repository_source(path)
+                self.assertIn(source, fixture_symbols)
+                defined, unresolved = fixture_symbols[source]
+                return set(unresolved if undefined else defined)
+
+            with (
+                mock.patch.object(check_arch, "find_nm", return_value="nm"),
+                mock.patch.object(
+                    check_arch, "object_symbols",
+                    side_effect=fixture_object_symbols,
+                ),
+            ):
+                discovered = check_arch.object_undefined_symbol_failures(
+                    build_dir
+                )
+        for symbol, edge in expected[:6]:
+            with self.subTest(discovered_symbol=symbol):
+                self.assertTrue(any(
+                    symbol in failure and edge in failure
+                    for failure in discovered
+                ), discovered)
+
     def test_inventory_and_python_provider_bypasses_are_detected(self) -> None:
         manual = (
             "static const hk_capability_provider_t *const providers[] = {0};\n"
@@ -142,6 +308,7 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
             subprocess.run(
                 [
                     compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                    "-DHK_FRAME_POOL_TESTING",
                     f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                     f"-I{ROOT / 'firmware' / 'src' / 'config'}",
                     f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
@@ -156,7 +323,8 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
                 capture_output=True, timeout=30,
             )
         self.assertIn(
-            "FRAME_POOL_OK borrow=exclusive stale=blocked camera=exclusive",
+            "FRAME_POOL_OK borrow=exclusive stale=blocked camera=exclusive "
+            "generation=exhausted",
             result.stdout,
         )
 

@@ -81,4 +81,6 @@ Private headers are allowed only within their subsystem boundary; they are not c
 by architecture guard v2. The guard checks repository sources, forwarding and
 resolved symlink targets, generated compiler dependency files, undefined object
 symbols, generated-only provider inventory, and identical provider objects in
-full and MicroPython-disabled profiles.
+full and MicroPython-disabled profiles. The `public-capability` layer contains
+the public headers and the five common lifecycle frontends; provider bindings,
+private state machines, and K210 adapters remain `capability-implementation`.
