@@ -692,8 +692,8 @@
   "schema": 1,
   "source": {
     "content_normalization": "git-clean-filtered-blob-id",
-    "file_count": 633,
-    "manifest_sha256": "a0898e5e06fc6caaebddff7b6a8c5b027be108d3ee876bc9b47ebcdd0d60d655",
+    "file_count": 635,
+    "manifest_sha256": "8ec984d468c67ac617f406796e61e10021ebcd33d16aa5109102726780797680",
     "scope": [
       ".github/workflows/release.yml",
       "VERSION",

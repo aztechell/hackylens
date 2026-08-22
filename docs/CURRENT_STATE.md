@@ -88,7 +88,11 @@ UART/I2C protocol or routed-peripheral semantics.
   with adapter-specific checks kept supplemental. The complete build,
   diagnostic, resource, latency, and rolling-evidence matrix passed
   [Release firmware run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140).
-  Phase 2.13 has not started.
+  Phase 2.13 is in progress. Its exact-image SEN0305 evidence contract and
+  operator runbook are implemented, but no physical claim exists yet: this
+  workspace has no detected SEN0305 serial device and no documented UART
+  loopback/known-I2C-target fixture. The package remains open until one exact
+  candidate image passes the complete physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
