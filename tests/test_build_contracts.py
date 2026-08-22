@@ -275,6 +275,47 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn("boot_internal_watchdog_reset_detected()", app)
         self.assertIn("g_startup[0] && !watchdog_recovery", app)
 
+    def test_micropython_terminal_handoff_is_ordered_and_preserves_ticket(self):
+        runtime = (
+            ROOT / "firmware" / "src" / "services" /
+            "micropython_runtime.c"
+        ).read_text(encoding="utf-8")
+        executor = (
+            ROOT / "firmware" / "src" / "services" /
+            "core1_executor.c"
+        ).read_text(encoding="utf-8")
+
+        complete = executor.split(
+            "uint8_t core1_executor_complete(uint32_t ticket)", 1
+        )[1].split("uint8_t core1_executor_wait", 1)[0]
+        load = complete.index("completed = control->complete_ticket;")
+        self.assertGreater(
+            complete.index("__sync_synchronize();", load),
+            load,
+            "completion observation must acquire worker publications",
+        )
+
+        worker = runtime.split(
+            "static void micropython_worker(void *context)", 1
+        )[1].split("uint8_t micropython_runtime_start", 1)[0]
+        terminal = worker.index(
+            "if(shared->exit_reason == MICROPYTHON_EXIT_COMPLETE)"
+        )
+        self.assertLess(worker.index("mp_embed_deinit();"), terminal)
+        self.assertLess(terminal, worker.rindex("__sync_synchronize();"))
+
+        start = runtime.split(
+            "uint8_t micropython_runtime_start", 1
+        )[1].split("uint8_t micropython_runtime_request_stop", 1)[0]
+        self.assertLess(start.index("if(g_ticket)"), start.index("micropython_capability_bridge_prepare"))
+
+        poll = runtime.split(
+            "void micropython_runtime_poll(void)", 1
+        )[1].split("void micropython_runtime_get_status", 1)[0]
+        self.assertIn("core1_executor_complete(g_ticket) ||", poll)
+        self.assertIn("!micropython_state_active(shared->state)", poll)
+        self.assertLess(poll.index("g_ticket = 0U;"), poll.index("micropython_capability_bridge_cleanup();"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -144,6 +144,7 @@ uint8_t core1_executor_complete(uint32_t ticket)
 
     if(!ticket)
         return 0U;
+    __sync_synchronize();
     completed = control->complete_ticket;
     __sync_synchronize();
     /*

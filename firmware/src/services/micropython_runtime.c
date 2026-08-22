@@ -187,6 +187,15 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
         shared->exit_reason = MICROPYTHON_EXIT_BUSY;
         return 0U;
     }
+    /* The worker publishes its terminal state before core 1 publishes the
+       executor completion ticket.  Do not overwrite g_ticket or reset the
+       capability bridge during that bounded handoff window; the next poll
+       performs cleanup first. */
+    if(g_ticket)
+    {
+        shared->exit_reason = MICROPYTHON_EXIT_BUSY;
+        return 0U;
+    }
     if(!core1_executor_init())
     {
         shared->exit_reason = MICROPYTHON_EXIT_CORE1_FAILURE;
@@ -261,7 +270,13 @@ void micropython_runtime_poll(void)
 {
     micropython_shared_t *shared = micropython_shared_init();
 
-    if(g_ticket && core1_executor_complete(g_ticket))
+    /* The worker publishes a terminal state only after VM deinit and after
+       its final capability access.  That state is therefore the safe cleanup
+       handoff even when the executor completion-ticket store trails it by a
+       few instructions on the other core. */
+    if(g_ticket &&
+       (core1_executor_complete(g_ticket) ||
+        !micropython_state_active(shared->state)))
     {
         g_ticket = 0U;
         micropython_capability_bridge_cleanup();

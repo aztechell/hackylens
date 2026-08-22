@@ -94,10 +94,16 @@ UART/I2C protocol or routed-peripheral semantics.
   `ticks_ms()` integer-conversion failure and UART RX FIFO loss during a
   256-byte loopback. Corrective candidate `830b2a3` fixed TIME physically but
   still retained only 22 of 256 UART bytes, proving that main-loop draining
-  cannot provide the required hardware FIFO handoff. The next corrective uses
-  an interrupt-backed bounded RX handoff; I2C uses the same IO34/IO35 routes
-  and remains a later fixture stage. No physical claim exists until one exact
-  candidate image passes the complete physical gate.
+  cannot provide the required hardware FIFO handoff. Interrupt-backed
+  corrective `7212e32` passed automated CI, but its first physical UART attempt
+  exposed an unreliable temporary loopback connection and a separate bounded
+  worker-terminal/executor-completion handoff race between consecutive Python
+  runs. A soldered pre-candidate probe of the lifecycle correction returned the
+  exact 256-byte payload on repeated runs, completed bounded cancellation, and
+  passed TIME; the correction still needs its own green CI and exact-image
+  rerun. I2C uses the same IO34/IO35 routes and remains a later fixture stage.
+  No physical claim exists until one exact candidate image passes the complete
+  physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external

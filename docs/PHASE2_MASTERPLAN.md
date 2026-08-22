@@ -915,6 +915,15 @@ loopback сохранил только 22 из 256 байт. Это доказа
 Следующий corrective переводит bounded RX storage на UART receive ISR как
 single producer; hardware gate снова начинается с нового exact image.
 
+Interrupt-backed corrective `7212e32` прошёл automated gate и был заморожен
+snapshot-коммитом `eeb6f5b`. Первый physical UART запуск этого image обнаружил
+ненадёжный временный loopback, а диагностические повторные Python runs отдельно
+выявили bounded race между terminal state worker-а и публикацией executor
+completion ticket. На soldered loopback pre-candidate build с lifecycle fix
+прошёл repeated 256/256 UART, bounded cancellation с последующим чистым 256/256
+и TIME без reboot. Это только corrective probe: после green CI требуется новый
+exact candidate и полный повтор physical gate.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и
