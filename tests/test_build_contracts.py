@@ -1,4 +1,5 @@
 import importlib.util
+import datetime
 from pathlib import Path
 import shutil
 import tempfile
@@ -315,6 +316,22 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn("core1_executor_complete(g_ticket) ||", poll)
         self.assertIn("!micropython_state_active(shared->state)", poll)
         self.assertLess(poll.index("g_ticket = 0U;"), poll.index("micropython_capability_bridge_cleanup();"))
+
+    def test_micropython_build_date_is_pinned_to_dependency_revision(self):
+        with mock.patch.dict(
+            "os.environ", {"SOURCE_DATE_EPOCH": "1"}, clear=False
+        ):
+            environment = BUILD_FIRMWARE.micropython_build_environment()
+
+        epoch = BUILD_FIRMWARE.MICROPYTHON_SOURCE_DATE_EPOCH
+        self.assertEqual(environment["SOURCE_DATE_EPOCH"], epoch)
+        self.assertNotEqual(epoch, "1")
+        self.assertEqual(
+            datetime.datetime.fromtimestamp(
+                int(epoch), datetime.timezone.utc
+            ).date().isoformat(),
+            "2026-04-06",
+        )
 
 
 if __name__ == "__main__":

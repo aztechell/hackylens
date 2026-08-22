@@ -924,6 +924,13 @@ completion ticket. На soldered loopback pre-candidate build с lifecycle fix
 и TIME без reboot. Это только corrective probe: после green CI требуется новый
 exact candidate и полный повтор physical gate.
 
+Lifecycle corrective `1fe81c3` и snapshot `45250b9` прошли CI, но clean rebuild
+snapshot-а после UTC midnight не совпал с candidate SHA: upstream MicroPython
+генератор включал текущую host date в `MICROPY_BUILD_DATE`. Snapshot не прошивался
+и не является candidate. Следующий corrective закрепляет `SOURCE_DATE_EPOCH` на
+timestamp pinned MicroPython revision и доказывает одинаковый image через смену
+host date до выбора нового snapshot.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и

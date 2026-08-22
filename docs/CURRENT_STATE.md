@@ -101,9 +101,12 @@ UART/I2C protocol or routed-peripheral semantics.
   runs. A soldered pre-candidate probe of the lifecycle correction returned the
   exact 256-byte payload on repeated runs, completed bounded cancellation, and
   passed TIME; the correction still needs its own green CI and exact-image
-  rerun. I2C uses the same IO34/IO35 routes and remains a later fixture stage.
-  No physical claim exists until one exact candidate image passes the complete
-  physical gate.
+  rerun. Rebuilding the green snapshot after UTC midnight then exposed an
+  unpinned MicroPython build-date input, so that snapshot is also unqualified;
+  the build date is being bound to the pinned dependency revision before a new
+  candidate is selected. I2C uses the same IO34/IO35 routes and remains a later
+  fixture stage. No physical claim exists until one exact candidate image
+  passes the complete physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external

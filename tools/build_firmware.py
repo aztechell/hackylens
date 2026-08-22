@@ -37,6 +37,10 @@ MICROPYTHON_NATIVE_POLL_PATCH = (
     ROOT / "firmware" / "third_party" / "micropython" /
     "patches" / "0001-poll-native-iterators.patch"
 )
+# Commit timestamp of the pinned MicroPython v1.28.0 revision.  Its generator
+# otherwise embeds the host calendar date and changes an identical firmware
+# image when a qualification build crosses midnight.
+MICROPYTHON_SOURCE_DATE_EPOCH = "1775481169"
 SEMVER_RE = re.compile(
     r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 )
@@ -295,6 +299,13 @@ def apply_micropython_native_poll_patch(package: Path) -> None:
         raise RuntimeError("MicroPython native iterator poll patch is incomplete")
 
 
+def micropython_build_environment() -> dict[str, str]:
+    env = os.environ.copy()
+    # Exact-image builds must not inherit a caller-selected wall-clock value.
+    env["SOURCE_DATE_EPOCH"] = MICROPYTHON_SOURCE_DATE_EPOCH
+    return env
+
+
 def generate_micropython_embed(micropython: Path) -> Path:
     config_dir = ROOT / "firmware" / "third_party" / "micropython"
     makefile = config_dir / "micropython_embed.mk"
@@ -304,7 +315,7 @@ def generate_micropython_embed(micropython: Path) -> Path:
     if not make:
         raise RuntimeError("GNU make is required to generate the MicroPython embed package")
 
-    env = os.environ.copy()
+    env = micropython_build_environment()
     makefile_arg = cmake_path(Path(os.path.relpath(makefile, config_dir)))
     micropython_arg = cmake_path(Path(os.path.relpath(micropython, config_dir)))
     work_arg = cmake_path(Path(os.path.relpath(work, config_dir)))
