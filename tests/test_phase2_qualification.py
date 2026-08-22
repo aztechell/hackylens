@@ -71,8 +71,23 @@ class Phase2QualificationTests(unittest.TestCase):
         second = contracts.matrix_document(passed=True)
         self.assertEqual(first, second)
         self.assertRegex(first["manifest_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            first["suite_source_normalization"], "lf-text-sha256"
+        )
         for suite in first["normative_suites"]:
             self.assertRegex(suite["suite_source_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_contract_source_hash_is_checkout_eol_independent(self) -> None:
+        contracts = load_tool("run_phase2_contracts")
+        with tempfile.TemporaryDirectory(prefix="hackylens-phase2-eol-") as temp:
+            lf = Path(temp) / "lf.c"
+            crlf = Path(temp) / "crlf.c"
+            lf.write_bytes(b"int suite(void) {\n    return 0;\n}\n")
+            crlf.write_bytes(b"int suite(void) {\r\n    return 0;\r\n}\r\n")
+            self.assertEqual(
+                contracts.normalized_text_sha256(lf),
+                contracts.normalized_text_sha256(crlf),
+            )
 
     def test_contract_matrix_rejects_backend_local_suite_or_cases(self) -> None:
         contracts = load_tool("run_phase2_contracts")

@@ -149,6 +149,14 @@ def canonical_json_bytes(value: Any) -> bytes:
     ) + "\n").encode("utf-8")
 
 
+def normalized_text_sha256(path: Path) -> str:
+    source = path.read_bytes()
+    if b"\x00" in source:
+        raise RuntimeError(f"normative suite source is not text: {path}")
+    normalized = source.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(normalized).hexdigest()
+
+
 def validate_normative_suites(suites: Iterable[Mapping[str, Any]]) -> None:
     expected = {"time", "input", "display", "external-link", "lights"}
     seen: set[str] = set()
@@ -196,7 +204,7 @@ def normative_manifest() -> list[dict[str, Any]]:
     result = []
     for suite in NORMATIVE_SUITES:
         source = suite["suite_source"]
-        source_sha = hashlib.sha256((ROOT / source).read_bytes()).hexdigest()
+        source_sha = normalized_text_sha256(ROOT / source)
         result.append({
             "capability": suite["capability"],
             "suite_source": source,
@@ -214,6 +222,7 @@ def matrix_document(*, passed: bool) -> dict[str, Any]:
     manifest = {
         "schema": 2,
         "suite": "phase2-shared-provider-contracts-v2",
+        "suite_source_normalization": "lf-text-sha256",
         "normative_suites": normative_manifest(),
         "adapter_specific_tests": list(ADAPTER_SPECIFIC_TESTS),
         "supplemental_tests": list(SUPPLEMENTAL_TESTS),
