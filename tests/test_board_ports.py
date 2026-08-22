@@ -1048,7 +1048,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             output = temporary / "dist" / f"hackylens-full-{self.board.id}.bin"
             metadata = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["schema"], 1)
-            self.assertEqual(metadata["firmware_version"], "0.3.0")
+            self.assertEqual(metadata["firmware_version"], "0.4.0")
             self.assertEqual(metadata["board_id"], self.board.id)
             self.assertEqual(metadata["platform_id"], self.board.registry.platform)
             self.assertEqual(metadata["board_contract_version"], "0.1.0")
@@ -1178,7 +1178,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
                     "--out-dir", str(release),
                 ])
             self.assertEqual(result, 0)
-            stem = f"hackylens-{self.board.id}-v0.3.0"
+            stem = f"hackylens-{self.board.id}-v0.4.0"
             release_image = release / f"{stem}.bin"
             release_sidecar = release / f"{stem}.json"
             release_manifest = release / f"{stem}-release.json"

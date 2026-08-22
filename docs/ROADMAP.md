@@ -15,9 +15,9 @@ exit gates. Работа следующего слоя не считается �
 
 ## Текущий статус
 
-HackyLens v0.3 классифицируется как:
+HackyLens v0.4 классифицируется как:
 
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 Она уже доказывает:

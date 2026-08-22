@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sdcard", type=Path, default=ROOT / "sdcard")
     parser.add_argument("--out-dir", type=Path,
                         default=ROOT / "dist" / "release")
-    parser.add_argument("--tag", help="Expected release tag, for example v0.3.0")
+    parser.add_argument("--tag", help="Expected release tag, for example v0.4.0")
     args = parser.parse_args(argv)
 
     try:

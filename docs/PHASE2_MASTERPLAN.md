@@ -896,10 +896,15 @@ poll elapsed timing остаются `not-run` до `2.13`; rolling result не 
 ## 2.13 — Physical SEN0305 acceptance
 
 Статус пакета: `in_progress` (2026-08-22). Добавлены exact-image evidence
-contract, operator runbook и conditional CI validator. Physical smoke ещё не
-запущен: SEN0305 serial device и обязательный UART-loopback/known-I2C-target
-fixture в рабочей среде отсутствуют, поэтому все physical checklist items ниже
-остаются открытыми.
+contract, operator runbook и conditional CI validator. SEN0305 доступна на
+operator host, UART loopback подготовлен, а I2C fixture будет подключён отдельным
+этапом на общих IO34/IO35. Physical smoke ещё не завершён, поэтому checklist
+items ниже остаются открытыми до exact-image evidence.
+
+После подключения SEN0305 и явного operator approval финальная firmware version
+`0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
+наследовал hardware status. Это предваряет только version identity из `2.14` и
+не закрывает остальные checklist/exit gates пакета `2.14`.
 
 ### Depends on
 

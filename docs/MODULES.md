@@ -1,6 +1,6 @@
 # Modules
 
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 ## External link and vision results

@@ -1,11 +1,11 @@
 # Architecture
 
-HackyLens 0.3.0 is modular firmware built from common `firmware/src` layers, the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
+HackyLens 0.4.0 is modular firmware built from common `firmware/src` layers, the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-This document describes the implemented v0.3 architecture. The normative
+This document describes the implemented v0.4 architecture. The normative
 direction is defined in [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md), and
 the remaining gaps are recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
 

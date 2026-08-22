@@ -25,7 +25,7 @@ promote any firmware, protocol, API, or format to stable.
 
 | Axis | Current version | Stability/maturity | Canonical source |
 | --- | --- | --- | --- |
-| Firmware | `0.3.0` | Technology preview | `VERSION` |
+| Firmware | `0.4.0` | Technology preview; physical qualification in progress | `VERSION` |
 | HMPY | `1.1.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
 | Board Port Contract | `0.1.0` | Experimental | `BOARD_PORT.md` and board descriptors |
 | Platform API | Unpublished | No public contract | Future Platform API spec |

@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.3.0" src="https://img.shields.io/badge/firmware-v0.3.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.4.0" src="https://img.shields.io/badge/firmware-v0.4.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
@@ -13,7 +13,7 @@
 HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
 
 > [!IMPORTANT]
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview. The primary project goal is a lightweight, portable application
 > architecture for robotics hardware: board-independent feature apps, explicit
 > platform capabilities, and a direct path from MicroPython prototypes to native

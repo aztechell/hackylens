@@ -13,11 +13,11 @@ stability: experimental
 локальными решениями отдельных приложений. Изменение этих принципов требует
 явного архитектурного решения, а не побочного эффекта реализации новой функции.
 
-Текущая HackyLens v0.3 является первой reference implementation и technology
+Текущая HackyLens v0.4 является reference implementation и technology
 preview. Она доказывает жизнеспособность части решений, но ещё не доказывает
 аппаратную независимость или статус стандарта.
 
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 ## Цель

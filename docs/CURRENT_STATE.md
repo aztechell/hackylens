@@ -1,11 +1,11 @@
 # Current Project State
 
-> HackyLens v0.3 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 ## Phase 1 status
 
-Firmware 0.3.0 implements the experimental Board Port Contract 0.1.0. The
+Firmware 0.4.0 implements the experimental Board Port Contract 0.1.0. The
 common firmware is composed with the K210 platform and exactly one selected
 board support package. Build, image, package, release, and flash commands
 require an explicit `--board`; there is no implicit board.
@@ -89,10 +89,10 @@ UART/I2C protocol or routed-peripheral semantics.
   diagnostic, resource, latency, and rolling-evidence matrix passed
   [Release firmware run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140).
   Phase 2.13 is in progress. Its exact-image SEN0305 evidence contract and
-  operator runbook are implemented, but no physical claim exists yet: this
-  workspace has no detected SEN0305 serial device and no documented UART
-  loopback/known-I2C-target fixture. The package remains open until one exact
-  candidate image passes the complete physical gate.
+  operator runbook are implemented. The operator host now detects the SEN0305
+  and UART loopback is staged; I2C uses the same IO34/IO35 routes and will be
+  connected as a separate fixture stage. No physical claim exists until one
+  exact candidate image passes the complete physical gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -102,7 +102,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 
 | Area | Status |
 | --- | --- |
-| Firmware | 0.3.0 |
+| Firmware | 0.4.0 candidate; Phase 2.13 physical qualification in progress |
 | Board Port Contract | 0.1.0 experimental |
 | HMPY Contract | 1.1.0 experimental; wire-major 1 |
 | Versioning Policy | 0.4.0 |
