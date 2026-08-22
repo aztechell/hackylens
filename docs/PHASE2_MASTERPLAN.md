@@ -810,11 +810,12 @@ call sites.
 
 ## 2.12 — Full automated qualification и rolling evidence
 
-Статус пакета: `in_progress` (corrective, 2026-08-22). Qualification
-commit `aac4e01` имеет зелёный
-[`Release firmware` run 32567046801](https://github.com/aztechell/hackylens/actions/runs/32567046801),
-но fake/K210 matrix для Time, Input и Lights пока не доказывает
-одинаковый provider-independent normative case set. Physical SEN0305
+Статус пакета: `completed` (2026-08-22). Corrective qualification HEAD
+`7f320f7` прошёл полный
+[`Release firmware` run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140):
+каждый из пяти capability использует один provider-independent normative case
+set для fake и K210, а rolling evidence фиксирует LF-normalized source hashes,
+adapter-specific checks и полную build/resource matrix. Physical SEN0305
 acceptance остаётся границей `2.13` и не начата.
 
 ### Depends on
@@ -828,15 +829,15 @@ pre-hardware gate.
 
 ### Scope
 
-- [~] Добавить один contract suite, запускаемый против fake и K210 adapters.
-- [~] Собрать SEN0305 full и MicroPython-disabled configurations.
-- [~] Собрать diagnostic per-capability-absent configurations.
-- [~] Проверить required exclusion, `--require-app` и optional fallback.
-- [~] Выполнить Cube compile-conformance без runtime/hardware claims.
-- [~] Измерить raw/rounded flash, static RAM, relevant stack и latency.
-- [~] Проверить отсутствие новых heap/task/queue/core resources.
-- [~] Создать rolling `docs/evidence/phase2-result.json`.
-- [~] Добавить `tools/check_phase2_resources.py` и pre-hardware
+- [x] Добавить один contract suite, запускаемый против fake и K210 adapters.
+- [x] Собрать SEN0305 full и MicroPython-disabled configurations.
+- [x] Собрать diagnostic per-capability-absent configurations.
+- [x] Проверить required exclusion, `--require-app` и optional fallback.
+- [x] Выполнить Cube compile-conformance без runtime/hardware claims.
+- [x] Измерить raw/rounded flash, static RAM, relevant stack и latency.
+- [x] Проверить отсутствие новых heap/task/queue/core resources.
+- [x] Создать rolling `docs/evidence/phase2-result.json`.
+- [x] Добавить `tools/check_phase2_resources.py` и pre-hardware
   `tools/check_phase2_exit.py`.
 
 Все пять capability-absent вариантов обязаны реально собраться как
