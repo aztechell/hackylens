@@ -10,7 +10,7 @@
 #include "image_decode_png_inflate.h"
 
 #include "../../core/hk_binary.h"
-#include "../../drivers/frame_pool.h"
+#include "../../services/frame_workspace.h"
 
 static uint8_t g_png_comp[PNG_COMP_MAX] __attribute__((aligned(4), section(".bss")));
 
@@ -118,6 +118,8 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
     uint8_t bpp = 0;
     uint8_t *png_out;
     uint8_t *photo_row = image_decode_row_buffer();
+    file_result_t result = FILE_RESULT_OK;
+    frame_workspace_borrow_t workspace = FRAME_WORKSPACE_BORROW_NONE;
 
     if(!png_collect_idat(entry, &width, &height, &color_type, &bpp, &comp_size))
         return FILE_RESULT_UNSUPPORTED_FORMAT;
@@ -126,15 +128,21 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
     out_size = (row_bytes + 1U) * height;
     if(row_bytes > PHOTO_ROW_MAX_BYTES || out_size > PNG_OUT_MAX)
         return FILE_RESULT_TOO_LARGE;
-    png_out = frame_pool_scratch_buffer(out_size);
-    if(!png_out)
+    if(!frame_workspace_borrow(out_size, &workspace))
         return FILE_RESULT_TOO_LARGE;
+    png_out = workspace.data;
 
     if(!png_zlib_inflate_to_buffer(g_png_comp, comp_size, png_out, out_size))
-        return FILE_RESULT_UNSUPPORTED_FORMAT;
+    {
+        result = FILE_RESULT_UNSUPPORTED_FORMAT;
+        goto cleanup;
+    }
 
     if(!sink || !sink->render_row_span)
-        return FILE_RESULT_NOT_FOUND;
+    {
+        result = FILE_RESULT_NOT_FOUND;
+        goto cleanup;
+    }
     if(sink->begin)
         sink->begin(sink->context);
     for(uint32_t y = 0; y < height; y++)
@@ -157,7 +165,10 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
             else if(filter == 4)
                 row[i] = (uint8_t)(row[i] + png_paeth(a, b, c));
             else if(filter != 0)
-                return FILE_RESULT_UNSUPPORTED_FORMAT;
+            {
+                result = FILE_RESULT_UNSUPPORTED_FORMAT;
+                goto cleanup;
+            }
         }
 
         for(uint32_t x = 0; x < width; x++)
@@ -192,5 +203,7 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
         sink->render_row_span(sink->context, y, height, photo_row, (uint16_t)width, 24, 0);
     }
 
-    return FILE_RESULT_OK;
+cleanup:
+    (void)frame_workspace_release(&workspace);
+    return result;
 }

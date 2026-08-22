@@ -10,7 +10,7 @@
 #include <hackylens/capability/lights.h>
 #include <hackylens/capability/time.h>
 
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "../../capabilities/display_stage_private.h"
 #include "../../config/display_config.h"
 #include "../../services/external_link_service.h"

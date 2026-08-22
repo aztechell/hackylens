@@ -8,7 +8,7 @@
 #include "hackylens_boot_logo_1bpp.h"
 #include "hackylens_font_1bpp.h"
 #include "hk_font.h"
-#include "../capabilities/capability_client_binding.h"
+#include "../core/hk_capability_client.h"
 #include "../config/display_config.h"
 #include "hal_time.h"
 

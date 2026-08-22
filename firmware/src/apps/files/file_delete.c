@@ -11,7 +11,7 @@
 #include "../../storage/fat32_directory.h"
 #include "../../storage/fat32_volume.h"
 #include "../../core/hk_binary.h"
-#include "../../drivers/hk_sd.h"
+#include "../../storage/sd_card.h"
 
 static uint8_t files_delete_dir_contents(uint32_t dir_cluster)
 {
@@ -26,7 +26,7 @@ static uint8_t files_delete_dir_contents(uint32_t dir_cluster)
         uint32_t base = fat_cluster_lba(current);
         for(uint8_t s = 0; s < sectors_per_cluster; s++)
         {
-            if(!sd_read_block(base + s, sector))
+            if(!sd_card_read_block(base + s, sector))
                 return 0;
             for(uint16_t off = 0; off < SD_BLOCK_SIZE; off += 32)
             {

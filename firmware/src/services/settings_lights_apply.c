@@ -5,7 +5,7 @@
 #include <hackylens/capability/lights.h>
 
 #include "settings_service.h"
-#include "../capabilities/capability_client_binding.h"
+#include "../core/hk_capability_client.h"
 
 typedef struct
 {

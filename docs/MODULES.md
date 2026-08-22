@@ -68,7 +68,17 @@ Key public interfaces:
   composition, and `drivers/lcd_st7789_transport.h` is raw panel transport only.
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
 - `storage/file_mount.h` and `storage/file_dir_scan.h` for neutral FAT mount and directory queries. Browser lists and image viewing are private FILES APIs.
+- `storage/sd_card.h` is the permanent private raw-block boundary; no feature
+  app includes an SD driver header. `services/frame_pool.*` owns the two fixed
+  camera slots and the mutually exclusive generation-checked scratch workspace;
+  `services/frame_workspace.h` exposes only its internal borrow/release view.
 - `apps/files/image_viewer.h` is private to FILES and supports BMP/PNG/PPM/RAW plus streaming animated GIF87a/GIF89a. GIF playback supports palettes, transparency, interlace, disposal, pause/resume, bulk sub-block reads, and a 1600x1200 logical-canvas limit without loading the complete file into RAM. FILES decodes FAT long names from UTF-16 to UTF-8, renders Russian Cyrillic, and sorts entries by FAT modification time with newest entries first.
 - `ui/hk_ui.h` and per-screen view headers for UI rendering.
 
 Private headers are allowed only within their subsystem boundary; they are not compatibility facades or new global contracts.
+
+`tools/architecture_layers.toml` is the explicit layer classification consumed
+by architecture guard v2. The guard checks repository sources, forwarding and
+resolved symlink targets, generated compiler dependency files, undefined object
+symbols, generated-only provider inventory, and identical provider objects in
+full and MicroPython-disabled profiles.

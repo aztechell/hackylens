@@ -2,14 +2,14 @@
 
 #include <stdio.h>
 
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 #include "fat32_volume.h"
 
 uint8_t file_mount_if_needed(void)
 {
     if(hk_sd_present() && hk_fat_mounted())
         return 1U;
-    if(!sd_init_card())
+    if(!sd_card_init())
         return 0U;
     if(!fat32_mount())
     {

@@ -10,7 +10,7 @@
 #include "file_preview.h"
 #include "../../storage/fat32_file.h"
 #include "../../storage/fat32_volume.h"
-#include "../../drivers/hk_sd.h"
+#include "../../storage/sd_card.h"
 
 uint8_t files_read_preview(const fat_file_entry_t *entry)
 {
@@ -28,7 +28,7 @@ uint8_t files_read_preview(const fat_file_entry_t *entry)
         for(uint8_t s = 0; s < sectors_per_cluster && remaining && out < FILE_PREVIEW_MAX; s++)
         {
             uint16_t take;
-            if(!sd_read_block(base + s, sector))
+            if(!sd_card_read_block(base + s, sector))
                 return 0;
             take = remaining > SD_BLOCK_SIZE ? SD_BLOCK_SIZE : (uint16_t)remaining;
             if(take > FILE_PREVIEW_MAX - out)

@@ -12,7 +12,7 @@
 #include "files_layout.h"
 
 #include "../../ui/display_binding.h"
-#include "../../drivers/frame_pool.h"
+#include "../../services/frame_workspace.h"
 #include "files_view_port.h"
 
 static hk_ui_display_surface_t g_animation_surface;
@@ -28,6 +28,7 @@ static uint16_t g_animation_background;
 static uint16_t g_animation_source_x[HK_DISPLAY_REQUIRED_WIDTH];
 static uint16_t g_animation_source_y[HK_DISPLAY_REQUIRED_HEIGHT];
 static uint8_t *g_animation_backup;
+static frame_workspace_borrow_t g_animation_workspace;
 static uint8_t g_animation_frame_open;
 static uint8_t g_animation_reset_pending;
 static uint8_t g_animation_previous_valid;
@@ -260,7 +261,13 @@ static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canva
         g_animation_source_x[x] = (uint16_t)((uint32_t)x * canvas_w / g_animation_view_w);
     for(uint16_t y = 0; y < g_animation_view_h; y++)
         g_animation_source_y[y] = (uint16_t)((uint32_t)y * canvas_h / g_animation_view_h);
-    g_animation_backup = frame_pool_scratch_buffer(HK_DISPLAY_REQUIRED_WIDTH * HK_DISPLAY_REQUIRED_HEIGHT * 2U);
+    if(g_animation_workspace.generation != 0U)
+        (void)frame_workspace_release(&g_animation_workspace);
+    if(!frame_workspace_borrow(
+            HK_DISPLAY_REQUIRED_WIDTH * HK_DISPLAY_REQUIRED_HEIGHT * 2U,
+            &g_animation_workspace))
+        return 0;
+    g_animation_backup = g_animation_workspace.data;
     g_animation_reset_pending = 1;
     g_animation_previous_valid = 0;
     g_animation_backup_valid = 0;
@@ -360,6 +367,8 @@ static void files_view_animation_end_impl(void)
     g_animation_previous_valid = 0;
     g_animation_backup_valid = 0;
     g_animation_backup = NULL;
+    if(g_animation_workspace.generation != 0U)
+        (void)frame_workspace_release(&g_animation_workspace);
 }
 
 static void files_view_draw_delete_confirm_impl(const char *name)

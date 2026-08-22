@@ -10,7 +10,7 @@
 #include "../../core/hk_screen.h"
 #include "../../services/settings_lights.h"
 #include "../../services/settings_service.h"
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "sleep_view.h"
 
 static hk_time_t s_sleep_time;

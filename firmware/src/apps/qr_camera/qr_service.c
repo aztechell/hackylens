@@ -15,7 +15,7 @@
 #include "../../config/settings_config.h"
 #include "../../services/settings_persistence.h"
 #include "../../services/settings_service.h"
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 
 static uint64_t g_qr_last_decode_us;
 static uint64_t g_qr_last_status_log_us;

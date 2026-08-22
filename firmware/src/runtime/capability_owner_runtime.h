@@ -4,7 +4,7 @@
 #include <hackylens/capability/inventory.h>
 #include <hackylens/capability/owner.h>
 
-#include "../capabilities/capability_client_binding.h"
+#include "../core/hk_capability_client.h"
 #include "../capabilities/capability_core_binding.h"
 
 struct hk_app;

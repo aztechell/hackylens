@@ -5,7 +5,7 @@ The firmware uses statically allocated camera frame buffers, an LCD shadow, SD s
 Current ownership:
 
 - LCD shadow and row buffer: `drivers/lcd_st7789.c`; the 153,600-byte shadow is also the leased RGB565-BE full-frame staging surface, so LCD present does not allocate another framebuffer.
-- Two camera stream slots: `drivers/frame_pool.c`; preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c` without allocating a third frame.
+- Two camera stream slots: `services/frame_pool.c`; preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c` without allocating a third frame. When the camera reservation is inactive, files decoding or the Display batch provider may take the single generation-checked scratch workspace borrow; copied or stale borrow tokens cannot release a later borrower.
 - SD/FAT sector buffers: `storage/fat32_sd.c`.
 - PNG inflate and image row buffers: `apps/files/image_decode_png_inflate.c` and `apps/files/image_decode_common.c`; the complete allocation disappears with `--disable-app files`.
 - GIF decoding uses fixed 12-bit LZW tables, one 255-byte sub-block buffer, the shared image row buffer, and small precomputed viewport maps. Frames are composited directly into the 320x240 LCD shadow; disposal mode 3 temporarily reuses one existing camera frame-pool slot, so no GIF-sized logical canvas or additional framebuffer is allocated.

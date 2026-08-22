@@ -1,5 +1,5 @@
-#ifndef HK_CAPABILITY_CLIENT_BINDING_H
-#define HK_CAPABILITY_CLIENT_BINDING_H
+#ifndef HK_CAPABILITY_CLIENT_H
+#define HK_CAPABILITY_CLIENT_H
 
 #include <hackylens/capability/owner.h>
 

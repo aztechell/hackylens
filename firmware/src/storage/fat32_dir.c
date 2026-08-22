@@ -10,7 +10,7 @@
 #include "fat32_directory.h"
 
 #include "../core/hk_binary.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 uint8_t fat_dir_find_slots(uint32_t dir_cluster, uint8_t needed, fat_dir_slot_t *slot)
 {
@@ -26,7 +26,7 @@ uint8_t fat_dir_find_slots(uint32_t dir_cluster, uint8_t needed, fat_dir_slot_t 
         {
             uint8_t run = 0;
             uint8_t run_start = 0;
-            if(!sd_read_block(base + s, sector_data))
+            if(!sd_card_read_block(base + s, sector_data))
                 return 0;
             for(uint8_t entry = 0; entry < 16; entry++)
             {
@@ -80,10 +80,10 @@ uint8_t fat_dir_write_slots(const fat_dir_slot_t *slot, const uint8_t *entries, 
 
     if(offset + (uint16_t)count * 32U > SD_BLOCK_SIZE)
         return 0;
-    if(!sd_read_block(sector, sector_data))
+    if(!sd_card_read_block(sector, sector_data))
         return 0;
     memcpy(&sector_data[offset], entries, (size_t)count * 32U);
-    return sd_write_block(sector, sector_data);
+    return sd_card_write_block(sector, sector_data);
 }
 
 uint8_t fat_dir_mark_deleted(uint32_t dir_cluster, uint32_t entry_ordinal, uint8_t lfn_count)
@@ -101,7 +101,7 @@ uint8_t fat_dir_mark_deleted(uint32_t dir_cluster, uint32_t entry_ordinal, uint8
         for(uint8_t s = 0; s < geometry->sectors_per_cluster; s++)
         {
             uint8_t dirty = 0;
-            if(!sd_read_block(base + s, sector_data))
+            if(!sd_card_read_block(base + s, sector_data))
                 return 0;
             for(uint8_t entry = 0; entry < 16; entry++, ordinal++)
             {
@@ -113,7 +113,7 @@ uint8_t fat_dir_mark_deleted(uint32_t dir_cluster, uint32_t entry_ordinal, uint8
                 if(ordinal > end)
                     break;
             }
-            if(dirty && !sd_write_block(base + s, sector_data))
+            if(dirty && !sd_card_write_block(base + s, sector_data))
                 return 0;
             if(ordinal > end)
                 return 1;
@@ -193,5 +193,5 @@ uint8_t fat_init_directory_cluster(uint32_t cluster, uint32_t parent_cluster)
     dotdot[1] = '.';
     fat_make_short_entry(&sector_data[0], dot, FAT_ATTR_DIR, cluster, 0);
     fat_make_short_entry(&sector_data[32], dotdot, FAT_ATTR_DIR, parent_cluster, 0);
-    return sd_write_block(fat_cluster_lba(cluster), sector_data);
+    return sd_card_write_block(fat_cluster_lba(cluster), sector_data);
 }

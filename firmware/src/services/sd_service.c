@@ -6,7 +6,7 @@
 
 #include "../config/sd_config.h"
 
-#include "../drivers/hk_sd.h"
+#include "../storage/sd_card.h"
 #include "../storage/file_mount.h"
 #include "../storage/fat32_volume.h"
 

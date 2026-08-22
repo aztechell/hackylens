@@ -668,7 +668,7 @@ register behavior не протёк в public contract.
 failed-cleanup invalidation/quarantine, shared ABI validation, оба firmware
 profile и resource evidence прошли в
 [`Release firmware` run 32557338515](https://github.com/aztechell/hackylens/actions/runs/32557338515).
-Phase `2.11` не начата.
+Phase `2.11` в работе.
 
 ### Depends on
 
@@ -736,6 +736,8 @@ Native external service, provider и MicroPython bridge мигрируются/�
 
 ## 2.11 — Residual app→driver cleanup и architecture guard v2
 
+Статус пакета: `in_progress`.
+
 ### Depends on
 
 `2.10`.
@@ -746,20 +748,20 @@ Native external service, provider и MicroPython bridge мигрируются/�
 
 ### Scope
 
-- [ ] Перенести пять direct `hk_sd.h` call sites в permanent storage operations.
-- [ ] Переместить `drivers/frame_pool.*` в private portable
+- [~] Перенести пять direct `hk_sd.h` call sites в permanent storage operations.
+- [~] Переместить `drivers/frame_pool.*` в private portable
   `services/frame_pool.*`; зафиксировать borrow/release semantics.
-- [ ] Убедиться, что apps не включают capability implementation/private headers.
-- [ ] Добавить explicit layer classification в
+- [~] Убедиться, что apps не включают capability implementation/private headers.
+- [~] Добавить explicit layer classification в
   `tools/architecture_layers.toml`.
-- [ ] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
+- [~] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
   generated dependency files и object undefined symbols.
-- [ ] Запретить apps→board/BSP, HAL/SDK, drivers.
-- [ ] Запретить MicroPython adapter→board/HAL/SDK/drivers.
-- [ ] Запретить capability implementation→apps, service→feature-private и
+- [~] Запретить apps→board/BSP, HAL/SDK, drivers.
+- [~] Запретить MicroPython adapter→board/HAL/SDK/drivers.
+- [~] Запретить capability implementation→apps, service→feature-private и
   board→apps/product policy.
-- [ ] Запретить ручной provider inventory и Python-gated hardware provider.
-- [ ] Заменить Phase 1 test, который разрешает app→driver, на Phase 2 negative
+- [~] Запретить ручной provider inventory и Python-gated hardware provider.
+- [~] Заменить Phase 1 test, который разрешает app→driver, на Phase 2 negative
   rule.
 
 ### Основные файлы

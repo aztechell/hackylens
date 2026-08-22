@@ -9,7 +9,7 @@
 #include "fat32_file.h"
 #include "fat32_stream.h"
 
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 uint8_t fat_file_read_at(const fat_file_entry_t *entry, uint32_t offset, uint8_t *dst, uint32_t len)
 {
@@ -38,7 +38,7 @@ uint8_t fat_file_read_at(const fat_file_entry_t *entry, uint32_t offset, uint8_t
         for(uint8_t s = sector_index; s < geometry->sectors_per_cluster && len; s++)
         {
             uint16_t take;
-            if(!sd_read_block(base + s, sector_data))
+            if(!sd_card_read_block(base + s, sector_data))
                 return 0;
             take = (uint16_t)(SD_BLOCK_SIZE - sector_offset);
             if(take > len)
@@ -106,7 +106,7 @@ uint8_t fat_stream_read(fat_stream_t *stream, uint8_t *dst, uint32_t len)
 
         if(!stream->cache_valid || stream->cache_lba != lba)
         {
-            if(!sd_read_block(lba, sector_data))
+            if(!sd_card_read_block(lba, sector_data))
                 return 0;
             stream->cache_lba = lba;
             stream->cache_valid = 1;

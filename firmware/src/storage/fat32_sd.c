@@ -6,7 +6,7 @@
 #include "fat32_volume.h"
 
 #include "../core/hk_binary.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 uint8_t fat32_mount(void)
 {
@@ -24,7 +24,7 @@ uint8_t fat32_mount(void)
     uint32_t data_begin;
     uint8_t *sector_data = fat32_sector_scratch();
 
-    if(!sd_read_block(0, sector_data))
+    if(!sd_card_read_block(0, sector_data))
         return 0;
 
     if(sector_data[510] != 0x55 || sector_data[511] != 0xAA)
@@ -34,7 +34,7 @@ uint8_t fat32_mount(void)
     if(type == 0x0B || type == 0x0C)
         bpb_lba = rd32(&sector_data[454]);
 
-    if(bpb_lba && !sd_read_block(bpb_lba, sector_data))
+    if(bpb_lba && !sd_card_read_block(bpb_lba, sector_data))
         return 0;
 
     bytes_per_sector = rd16(&sector_data[11]);

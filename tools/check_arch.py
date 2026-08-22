@@ -3,8 +3,16 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
+import fnmatch
+import hashlib
+import json
+import os
 import re
+import shutil
+import subprocess
+import tomllib
 from pathlib import Path
 
 import check_capabilities
@@ -12,6 +20,7 @@ import check_capabilities
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "firmware" / "src"
+LAYER_POLICY_PATH = ROOT / "tools" / "architecture_layers.toml"
 DIRECTIVE_RE = re.compile(
     r"^\s*(?:#|%:)\s*(?P<keyword>[A-Za-z_][A-Za-z0-9_]*)\b(?P<operand>.*)$"
 )
@@ -73,6 +82,12 @@ def discover_sdk_headers() -> set[str]:
 
 SDK_HEADERS = discover_sdk_headers()
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
+HARDWARE_LAYERS = {"board", "platform-hal", "driver"}
+FORBIDDEN_DIRECT_SYMBOL_PREFIXES = (
+    "hal_", "hk_board_", "dmac_", "dvp_", "fpioa_", "gpio_",
+    "gpiohs_", "i2c_", "kpu_", "plic_", "pwm_", "sd_spi_", "spi_",
+    "sysctl_", "timer_", "uart_", "uarths_", "wdt_",
+)
 SDK_TOKEN_RE = re.compile(
     r"\b(dmac_|dvp_|fpioa_|gpio_|gpiohs_|i2c_|plic_|kpu_|pwm_|spi_|"
     r"sysctl_|timer_|uart_|uarths_|wdt_|msleep|"
@@ -214,6 +229,170 @@ def source_files() -> list[Path]:
         path for path in SRC.rglob("*")
         if path.is_file() and path.suffix.lower() in SOURCE_SUFFIXES
     )
+
+
+def load_layer_policy(path: Path = LAYER_POLICY_PATH) -> dict[str, object]:
+    """Load and strictly validate the explicit Phase 2 layer map."""
+
+    document = tomllib.loads(path.read_text(encoding="utf-8"))
+    if set(document) != {"schema", "source_roots", "layers", "forbidden_edges"}:
+        raise RuntimeError("architecture layer policy has missing or unknown fields")
+    if document["schema"] != 1:
+        raise RuntimeError("architecture layer policy schema must be 1")
+    roots = document["source_roots"]
+    layers = document["layers"]
+    edges = document["forbidden_edges"]
+    if not isinstance(roots, list) or not roots or any(
+            not isinstance(item, str) or not item for item in roots):
+        raise RuntimeError("architecture source_roots must be non-empty strings")
+    names: set[str] = set()
+    for layer in layers:
+        if set(layer) != {"name", "paths"} or not isinstance(layer["name"], str):
+            raise RuntimeError("architecture layer entries require name and paths")
+        if layer["name"] in names:
+            raise RuntimeError(f"duplicate architecture layer {layer['name']!r}")
+        names.add(layer["name"])
+        if not isinstance(layer["paths"], list) or not layer["paths"]:
+            raise RuntimeError(f"architecture layer {layer['name']!r} has no paths")
+    for edge in edges:
+        if set(edge) != {"from", "to", "reason"}:
+            raise RuntimeError("forbidden edge entries require from, to, and reason")
+        if (not set(edge["from"]).issubset(names) or
+                not set(edge["to"]).issubset(names)):
+            raise RuntimeError("forbidden edge references an unknown layer")
+        if not isinstance(edge["reason"], str) or not edge["reason"]:
+            raise RuntimeError("forbidden edge reason must be non-empty")
+    return document
+
+
+def canonical_repository_path(path: str | Path) -> str:
+    value = str(path).replace("\\", "/")
+    while "//" in value:
+        value = value.replace("//", "/")
+    if value.startswith("./"):
+        value = value[2:]
+    return value
+
+
+def classify_repository_path(
+    path: str | Path, policy: dict[str, object] | None = None
+) -> str | None:
+    """Classify by repository-root path, never by a misleading basename."""
+
+    policy = policy or load_layer_policy()
+    normalized = canonical_repository_path(path).casefold().lstrip("/")
+    matches: list[str] = []
+    for layer in policy["layers"]:
+        if any(fnmatch.fnmatchcase(normalized, pattern.casefold())
+               for pattern in layer["paths"]):
+            matches.append(layer["name"])
+    if len(matches) > 1:
+        raise RuntimeError(f"{path}: matches multiple architecture layers: {matches}")
+    return matches[0] if matches else None
+
+
+def layer_edge_violation(
+    source: str | Path, target: str | Path,
+    policy: dict[str, object] | None = None,
+) -> str | None:
+    policy = policy or load_layer_policy()
+    source_layer = classify_repository_path(source, policy)
+    target_layer = classify_repository_path(target, policy)
+    if source_layer is None or target_layer is None:
+        return None
+    for edge in policy["forbidden_edges"]:
+        if source_layer in edge["from"] and target_layer in edge["to"]:
+            return f"{edge['reason']} ({source_layer} -> {target_layer})"
+    return None
+
+
+def repository_source_files(
+    policy: dict[str, object] | None = None,
+) -> list[Path]:
+    policy = policy or load_layer_policy()
+    result: set[Path] = set()
+    for root_name in policy["source_roots"]:
+        root = ROOT / root_name
+        if not root.is_dir():
+            continue
+        result.update(
+            path for path in root.rglob("*")
+            if path.is_file() and path.suffix.casefold() in SOURCE_SUFFIXES
+        )
+    return sorted(result)
+
+
+def repository_relative(path: Path) -> str:
+    return path.relative_to(ROOT).as_posix()
+
+
+def resolve_repository_include(
+    path: Path, include: str, *, repository_root: Path = ROOT,
+    source_root: Path = SRC,
+) -> str | None:
+    """Resolve repository includes to their real target, including symlinks."""
+
+    normalized = normalize_include_path(include)
+    search = (
+        path.parent / normalized,
+        repository_root / normalized,
+        source_root / normalized,
+        repository_root / "firmware" / "include" / normalized,
+    )
+    root = repository_root.resolve()
+    for candidate in search:
+        try:
+            resolved = candidate.resolve()
+            resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if resolved.is_file():
+            return resolved.relative_to(root).as_posix()
+    return None
+
+
+def unresolved_hardware_violation(
+    source_layer: str | None, include: str,
+) -> str | None:
+    if source_layer not in {"app", "adapter"}:
+        return None
+    policy_include = normalize_include_path(include).casefold()
+    include_name = policy_include.rsplit("/", 1)[-1]
+    if policy_include in SDK_HEADERS or include_name in SDK_HEADERS:
+        return f"{source_layer} must not include K210 SDK headers"
+    if ("platforms/" in policy_include or "boards/" in policy_include or
+            include_name in PRIVATE_BOARD_HEADERS or
+            re.fullmatch(r"hal_[a-z0-9_]+\.h", include_name)):
+        return f"{source_layer} must not include board/BSP or platform HAL"
+    if "/drivers/" in f"/{policy_include}" or policy_include.startswith("drivers/"):
+        return f"{source_layer} must not include drivers"
+    return None
+
+
+def transitive_layer_failures(
+    graph: dict[str, list[str]], policy: dict[str, object] | None = None,
+) -> list[str]:
+    """Carry the originating app/adapter policy through forwarding headers."""
+
+    policy = policy or load_layer_policy()
+    failures: list[str] = []
+    for origin in sorted(graph):
+        if classify_repository_path(origin, policy) not in {"app", "adapter"}:
+            continue
+        pending = list(graph[origin])
+        visited: set[str] = set()
+        while pending:
+            target = pending.pop()
+            if target in visited:
+                continue
+            visited.add(target)
+            if violation := layer_edge_violation(origin, target, policy):
+                failures.append(
+                    f"{origin}: transitive dependency on {target}: {violation}"
+                )
+                continue
+            pending.extend(graph.get(target, ()))
+    return sorted(set(failures))
 
 
 def _translation_phase_lines(
@@ -427,6 +606,10 @@ def layer_violation(path: str, include: str, target: str | None) -> str | None:
         return "apps must use private runtime facades, not board/BSP or platform HAL"
     if (path.startswith("apps/") and target == "internal/time_internal.h"):
         return "apps must use the public Time capability"
+    if path.startswith("apps/") and target and target.startswith("drivers/"):
+        return "apps must use public capabilities or portable services, not drivers"
+    if path.startswith("apps/") and target and target.startswith("capabilities/"):
+        return "apps must not include capability implementation/private headers"
     if not path.startswith("runtime/") and target and target.startswith("runtime/"):
         return "only runtime may include runtime"
     if path.startswith("drivers/") and target and target.startswith(
@@ -551,16 +734,29 @@ def layout_failures() -> list[str]:
         ROOT / "platforms" / "k210" / "capabilities.toml",
         ROOT / "tools" / "gen_capability_inventory.py",
         ROOT / "tools" / "check_capabilities.py",
+        ROOT / "tools" / "architecture_layers.toml",
+        ROOT / "tests" / "test_phase2_architecture.py",
+        ROOT / "firmware" / "src" / "storage" / "sd_card.h",
+        ROOT / "firmware" / "src" / "services" / "frame_pool.c",
+        ROOT / "firmware" / "src" / "services" / "frame_pool.h",
+        ROOT / "firmware" / "src" / "services" / "frame_workspace.h",
+        ROOT / "firmware" / "src" / "core" / "hk_capability_client.h",
     ):
         if not required.exists():
-            failures.append(f"{required.relative_to(ROOT).as_posix()}: required Phase 1 path is missing")
+            failures.append(
+                f"{required.relative_to(ROOT).as_posix()}: required architecture path is missing"
+            )
     for removed in (
         ROOT / "firmware" / "src" / "internal" / "time_internal.c",
         ROOT / "firmware" / "src" / "internal" / "time_internal.h",
+        ROOT / "firmware" / "src" / "drivers" / "hk_sd.h",
+        ROOT / "firmware" / "src" / "drivers" / "frame_pool.c",
+        ROOT / "firmware" / "src" / "drivers" / "frame_pool.h",
+        ROOT / "firmware" / "src" / "capabilities" / "capability_client_binding.h",
     ):
         if removed.exists():
             failures.append(
-                f"{removed.relative_to(ROOT).as_posix()}: replaced Time facade must not exist"
+                f"{removed.relative_to(ROOT).as_posix()}: replaced private boundary must not exist"
             )
     for app_source in sorted((SRC / "apps").rglob("*")):
         if app_source.suffix not in {".c", ".h"}:
@@ -714,9 +910,290 @@ def board_behavior_violations(source: str) -> list[tuple[int, str]]:
     return sorted(set(findings))
 
 
-def main() -> int:
+def manual_provider_inventory_lines(source: str) -> list[int]:
+    patterns = (
+        re.compile(
+            r"\bhk_capability_provider_t\s*\*\s*(?:const\s+)?"
+            r"[A-Za-z_]\w*\s*\["
+        ),
+        re.compile(
+            r"\bhk_generated_capability_inventory_get\s*\([^;{}]*\)\s*\{",
+            re.DOTALL,
+        ),
+    )
+    lines: list[int] = []
+    for pattern in patterns:
+        lines.extend(source.count("\n", 0, match.start()) + 1
+                     for match in pattern.finditer(source))
+    return sorted(set(lines))
+
+
+def python_gated_provider_lines(source: str) -> list[int]:
+    return [
+        number for number, line in enumerate(source.splitlines(), 1)
+        if re.search(r"\bHK_ENABLE_APP_[A-Z0-9_]+\b", line)
+    ]
+
+
+def phase2_source_failures() -> list[str]:
+    policy = load_layer_policy()
+    failures: list[str] = []
+    graph: dict[str, list[str]] = {}
+    files = repository_source_files(policy)
+    for path in files:
+        path_rel = repository_relative(path)
+        layer = classify_repository_path(path_rel, policy)
+        if layer is None:
+            failures.append(f"{path_rel}: source has no explicit layer classification")
+            continue
+        source = path.read_text(encoding="utf-8")
+        graph[path_rel] = []
+        if layer in {"app", "adapter"}:
+            for number in nonliteral_include_lines(source):
+                failures.append(
+                    f"{path_rel}:{number}: {layer} must use ordinary literal includes"
+                )
+            for number, token in sdk_token_lines(source):
+                failures.append(
+                    f"{path_rel}:{number}: K210 SDK token in {layer}: {token}"
+                )
+        for number, include in includes(path):
+            target = resolve_repository_include(path, include)
+            if target:
+                graph[path_rel].append(target)
+                if violation := layer_edge_violation(path_rel, target, policy):
+                    failures.append(
+                        f"{path_rel}:{number}: {violation}: {include}"
+                    )
+            elif violation := unresolved_hardware_violation(layer, include):
+                failures.append(f"{path_rel}:{number}: {violation}: {include}")
+    failures.extend(transitive_layer_failures(graph, policy))
+
+    catalog = tomllib.loads(
+        (ROOT / "platforms" / "k210" / "capabilities.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    for capability in catalog["capabilities"]:
+        provider_path = ROOT / capability["provider_source"]
+        source = provider_path.read_text(encoding="utf-8")
+        for number in python_gated_provider_lines(source):
+            failures.append(
+                f"{capability['provider_source']}:{number}: hardware provider "
+                "must not be gated by a feature-app macro"
+            )
+    for path in files:
+        source = path.read_text(encoding="utf-8")
+        for number in manual_provider_inventory_lines(source):
+            failures.append(
+                f"{repository_relative(path)}:{number}: provider inventory must "
+                "be generated, not hand-declared"
+            )
+    for app in sorted((SRC / "apps").rglob("*")):
+        if app.is_file() and app.suffix.casefold() in SOURCE_SUFFIXES:
+            text = app.read_text(encoding="utf-8")
+            for token in ("hk_sd.h", "frame_pool.h", "frame_pool_"):
+                if token in text:
+                    failures.append(
+                        f"{relative(app)}: direct app dependency on {token} is forbidden"
+                    )
+    return sorted(set(failures))
+
+
+def extract_repository_fragment(value: str) -> str | None:
+    normalized = canonical_repository_path(value)
+    folded = normalized.casefold()
+    markers = (
+        "firmware/include/", "firmware/src/", "firmware/assets/",
+        "firmware/config/", "firmware/targets/", "platforms/", "boards/",
+    )
+    positions = [folded.find(marker) for marker in markers]
+    positions = [position for position in positions if position >= 0]
+    if not positions:
+        return None
+    fragment = normalized[min(positions):].rstrip(" \\:")
+    return fragment
+
+
+def dependency_repository_paths(source: str) -> list[str]:
+    logical = source.replace("\\\r\n", " ").replace("\\\n", " ")
+    result: list[str] = []
+    for token in re.split(r"\s+", logical):
+        if fragment := extract_repository_fragment(token):
+            result.append(fragment)
+    return list(dict.fromkeys(result))
+
+
+def object_repository_source(path: Path) -> str | None:
+    fragment = extract_repository_fragment(path.as_posix())
+    if fragment and fragment.casefold().endswith(".obj"):
+        fragment = fragment[:-4]
+    elif fragment and fragment.casefold().endswith(".o"):
+        fragment = fragment[:-2]
+    return fragment
+
+
+def find_nm() -> str:
+    for name in (
+        "riscv64-unknown-elf-nm", "riscv64-unknown-elf-nm.exe", "nm", "nm.exe",
+    ):
+        if located := shutil.which(name):
+            return located
+    for name in ("riscv64-unknown-elf-nm.exe", "riscv64-unknown-elf-nm"):
+        candidate = ROOT / "_deps" / "kendryte-toolchain" / "bin" / name
+        if candidate.is_file():
+            return str(candidate)
+    raise RuntimeError("nm is required for architecture object validation")
+
+
+def object_symbols(nm: str, path: Path, *, undefined: bool) -> set[str]:
+    command = [nm, "-u" if undefined else "--defined-only", str(path)]
+    result = subprocess.run(
+        command, cwd=ROOT, text=True, capture_output=True, check=True,
+    )
+    symbols: set[str] = set()
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if fields:
+            symbols.add(fields[-1].lstrip("_"))
+    return symbols
+
+
+def forbidden_hardware_symbols(
+    undefined: set[str], low_level_symbols: set[str],
+) -> list[str]:
+    return sorted(
+        symbol for symbol in undefined
+        if (symbol in low_level_symbols or
+            symbol.startswith(FORBIDDEN_DIRECT_SYMBOL_PREFIXES))
+    )
+
+
+def generated_dependency_failures(build_dir: Path) -> list[str]:
+    policy = load_layer_policy()
+    failures: list[str] = []
+    for dependency in sorted(build_dir.rglob("*.obj.d")):
+        paths = dependency_repository_paths(
+            dependency.read_text(encoding="utf-8", errors="replace")
+        )
+        source = next(
+            (item for item in paths
+             if Path(item).suffix.casefold() in {".c", ".cc", ".cpp", ".cxx"}
+             and classify_repository_path(item, policy) in {"app", "adapter"}),
+            None,
+        )
+        if not source:
+            continue
+        for target in paths:
+            if violation := layer_edge_violation(source, target, policy):
+                failures.append(
+                    f"{dependency.relative_to(build_dir).as_posix()}: generated "
+                    f"dependency {source} -> {target}: {violation}"
+                )
+    return sorted(set(failures))
+
+
+def object_undefined_symbol_failures(build_dir: Path) -> list[str]:
+    policy = load_layer_policy()
+    nm = find_nm()
+    objects: list[tuple[Path, str, str]] = []
+    for path in sorted(build_dir.rglob("*.obj")):
+        source = object_repository_source(path)
+        if not source:
+            continue
+        layer = classify_repository_path(source, policy)
+        if layer:
+            objects.append((path, source, layer))
+    low_level_symbols: set[str] = set()
+    for path, _source, layer in objects:
+        if layer in HARDWARE_LAYERS:
+            low_level_symbols.update(object_symbols(nm, path, undefined=False))
+    failures: list[str] = []
+    for path, source, layer in objects:
+        if layer not in {"app", "adapter"}:
+            continue
+        undefined = object_symbols(nm, path, undefined=True)
+        for symbol in forbidden_hardware_symbols(undefined, low_level_symbols):
+            failures.append(
+                f"{source}: object has forbidden undefined hardware symbol {symbol}"
+            )
+    return failures
+
+
+def provider_object_hashes(build_dir: Path) -> dict[str, str]:
+    catalog = tomllib.loads(
+        (ROOT / "platforms" / "k210" / "capabilities.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    objects = list(build_dir.rglob("*.obj"))
+    result: dict[str, str] = {}
+    for capability in catalog["capabilities"]:
+        source = canonical_repository_path(capability["provider_source"])
+        matches = [
+            path for path in objects
+            if canonical_repository_path(path).casefold().endswith(
+                f"/{source}.obj".casefold()
+            )
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"expected one built provider object for {source}, found {len(matches)}"
+            )
+        result[source] = hashlib.sha256(matches[0].read_bytes()).hexdigest()
+    return result
+
+
+def provider_hash_mismatches(
+    disabled: dict[str, str], full: dict[str, str],
+) -> list[str]:
+    return [
+        f"{source}: provider object differs between full and "
+        "MicroPython-disabled profiles"
+        for source in sorted(set(disabled) | set(full))
+        if disabled.get(source) != full.get(source)
+    ]
+
+
+def verify_build_architecture(profile: str) -> list[str]:
+    build_root = ROOT / "build" / "huskylens-sen0305"
+    build_dir = build_root / "sdk-full"
+    if not build_dir.is_dir():
+        raise RuntimeError(f"firmware build directory is missing: {build_dir}")
+    failures = generated_dependency_failures(build_dir)
+    failures.extend(object_undefined_symbol_failures(build_dir))
+    hashes = provider_object_hashes(build_dir)
+    snapshot = build_root / f"architecture-providers-{profile}.json"
+    snapshot.write_text(
+        json.dumps(hashes, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if profile == "full":
+        disabled = build_root / "architecture-providers-micropython-disabled.json"
+        if not disabled.is_file():
+            failures.append(
+                "MicroPython-disabled provider hash snapshot is missing; verify "
+                "that profile before full"
+            )
+        else:
+            previous = json.loads(disabled.read_text(encoding="utf-8"))
+            failures.extend(provider_hash_mismatches(previous, hashes))
+    return sorted(set(failures))
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--verify-build-profile",
+        choices=("micropython-disabled", "full"),
+        help=(
+            "validate generated dependencies and object symbols, record provider "
+            "hashes, and compare the full profile with the prior disabled build"
+        ),
+    )
+    args = parser.parse_args(argv)
     failures = layout_failures()
     failures.extend(check_capabilities.validate())
+    failures.extend(phase2_source_failures())
     for path in source_files():
         path_rel = relative(path)
         source_text = path.read_text(encoding="utf-8")
@@ -747,12 +1224,21 @@ def main() -> int:
                     f"{path_rel}:{number}: K210 SDK token in app: {token}"
                 )
     failures.extend(include_cycle_failures())
+    if args.verify_build_profile:
+        failures.extend(verify_build_architecture(args.verify_build_profile))
     if failures:
         print("[ARCH] boundary violations:")
         for failure in failures:
             print("  " + failure)
         return 1
-    print(f"[OK] architecture boundary guard passed ({len(FEATURES)} declarative feature modules)")
+    suffix = (
+        f"; {args.verify_build_profile} generated/object evidence verified"
+        if args.verify_build_profile else ""
+    )
+    print(
+        f"[OK] architecture boundary guard v2 passed "
+        f"({len(FEATURES)} declarative feature modules{suffix})"
+    )
     return 0
 
 

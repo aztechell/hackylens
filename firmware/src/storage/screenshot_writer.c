@@ -14,7 +14,7 @@
 #include "fat32_volume.h"
 #include "internal/fat32_state_private.h"
 #include "screenshot_path.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 static const char *g_screenshot_error = "SD WRITE";
 
@@ -34,7 +34,7 @@ static uint8_t screenshot_write_file_chain(const screenshot_pixel_source_t *sour
             uint16_t take = remaining > SD_BLOCK_SIZE ? SD_BLOCK_SIZE : (uint16_t)remaining;
             memset(sector, 0, SD_BLOCK_SIZE);
             screenshot_bmp_fill_bytes(source, offset, sector, take);
-            if(!sd_write_block_fast(base + s, sector))
+            if(!sd_card_write_block_fast(base + s, sector))
                 return 0;
             offset += take;
             remaining -= take;

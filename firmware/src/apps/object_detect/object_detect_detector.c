@@ -5,7 +5,7 @@
 
 #include <hackylens/capability/time.h>
 
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "../../services/ai_model_runtime.h"
 #include "../../services/camera_ai_input.h"
 #include "object_detect_postprocess.h"

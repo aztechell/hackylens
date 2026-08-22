@@ -13,7 +13,7 @@
 #include "../../storage/internal/fat32_state_private.h"
 #include "qr_text_path.h"
 #include "qr_text_writer.h"
-#include "../../drivers/hk_sd.h"
+#include "../../storage/sd_card.h"
 
 static void qr_text_fill_bytes(const char *text, uint32_t offset, uint8_t *dst, uint16_t len)
 {
@@ -49,7 +49,7 @@ static uint8_t qr_text_write_file_chain(uint32_t first_cluster, const char *text
             uint16_t take = remaining > SD_BLOCK_SIZE ? SD_BLOCK_SIZE : (uint16_t)remaining;
             memset(sector, 0, SD_BLOCK_SIZE);
             qr_text_fill_bytes(text, offset, sector, take);
-            if(!sd_write_block_fast(base + s, sector))
+            if(!sd_card_write_block_fast(base + s, sector))
                 return 0;
             offset += take;
             remaining -= take;

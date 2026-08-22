@@ -7,7 +7,7 @@
 #include <hackylens/capability/time.h>
 
 #include "pins.h"
-#include "../capabilities/capability_client_binding.h"
+#include "../core/hk_capability_client.h"
 #include "../core/hk_string.h"
 #include "debug_console_service.h"
 #include "external_link_protocol.h"

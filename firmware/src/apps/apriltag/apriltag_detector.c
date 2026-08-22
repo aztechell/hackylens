@@ -8,7 +8,7 @@
 #include "apriltag.h"
 #include "tag36h11.h"
 
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "../../services/core1_executor.h"
 #include "apriltag_config.h"
 

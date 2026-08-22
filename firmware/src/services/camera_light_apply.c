@@ -6,7 +6,7 @@
 
 #include "camera_session_preferences.h"
 #include "settings_lights.h"
-#include "../capabilities/capability_client_binding.h"
+#include "../core/hk_capability_client.h"
 #include "../core/hk_binary.h"
 
 #define CAMERA_LIGHT_CHANNELS \

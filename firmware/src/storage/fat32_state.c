@@ -4,7 +4,7 @@
 #include "fat32_volume.h"
 
 #include "../core/hk_binary.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 static uint8_t g_sd_present;
 static uint8_t g_sd_sdhc;
@@ -133,7 +133,7 @@ uint8_t fat32_health_check(void)
 {
     if(!g_sd_present || !g_fat_mounted)
         return 0;
-    if(!sd_read_block(g_fat_lba_begin, g_sd_sector))
+    if(!sd_card_read_block(g_fat_lba_begin, g_sd_sector))
         return 0;
     if(g_sd_sector[510] != 0x55 || g_sd_sector[511] != 0xAA)
         return 0;

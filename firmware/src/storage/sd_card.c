@@ -7,6 +7,7 @@
 
 #include "../config/sd_config.h"
 #include "fat32_volume.h"
+#include "sd_card.h"
 
 #include "../drivers/sd_spi.h"
 #include "hal_time.h"
@@ -64,7 +65,7 @@ static uint8_t sd_command(uint8_t cmd, uint32_t arg, uint8_t crc, uint8_t *extra
     return r1;
 }
 
-uint8_t sd_read_block(uint32_t lba, uint8_t *dst)
+uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
 {
     uint32_t arg = fat32_card_is_sdhc() ? lba : lba * SD_BLOCK_SIZE;
     uint8_t r1 = sd_command(17, arg, 0x01, NULL, 0, 0);
@@ -135,7 +136,7 @@ static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t 
             if(!verify)
                 return 1;
             uint8_t *verify_sector = fat32_verify_scratch();
-            if(!sd_read_block(lba, verify_sector))
+            if(!sd_card_read_block(lba, verify_sector))
             {
                 printf("[SD] CMD24 verify read failed lba=%u\r\n", lba);
                 return 0;
@@ -154,17 +155,17 @@ static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t 
     return 0;
 }
 
-uint8_t sd_write_block(uint32_t lba, const uint8_t *src)
+uint8_t sd_card_write_block(uint32_t lba, const uint8_t *src)
 {
     return sd_write_block_checked(lba, src, 1);
 }
 
-uint8_t sd_write_block_fast(uint32_t lba, const uint8_t *src)
+uint8_t sd_card_write_block_fast(uint32_t lba, const uint8_t *src)
 {
     return sd_write_block_checked(lba, src, 0);
 }
 
-uint8_t sd_init_card(void)
+uint8_t sd_card_init(void)
 {
     uint8_t r1;
     uint8_t r7[4] = {0};

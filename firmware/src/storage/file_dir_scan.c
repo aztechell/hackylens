@@ -8,7 +8,7 @@
 #include "../core/file_name.h"
 #include "../core/hk_binary.h"
 #include "../core/hk_string.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 #include "fat32_allocation.h"
 #include "fat32_volume.h"
 #include "internal/fat32_state_private.h"
@@ -73,7 +73,7 @@ static uint8_t file_dir_scan(uint32_t directory_cluster,
 
         for(uint8_t sector_index = 0U; sector_index < sectors_per_cluster; sector_index++)
         {
-            if(!sd_read_block(base + sector_index, sector))
+            if(!sd_card_read_block(base + sector_index, sector))
                 return 0U;
             for(uint16_t offset = 0U; offset < SD_BLOCK_SIZE; offset += 32U)
             {

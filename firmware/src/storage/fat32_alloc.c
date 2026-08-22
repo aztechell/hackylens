@@ -7,7 +7,7 @@
 #include "fat32_allocation.h"
 
 #include "../core/hk_binary.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 
 uint32_t fat_cluster_lba(uint32_t cluster)
 {
@@ -23,7 +23,7 @@ uint32_t fat_next_cluster(uint32_t cluster)
     uint32_t sector = geometry->fat_begin + fat_offset / SD_BLOCK_SIZE;
     uint16_t offset = (uint16_t)(fat_offset % SD_BLOCK_SIZE);
 
-    if(!sd_read_block(sector, sector_data))
+    if(!sd_card_read_block(sector, sector_data))
         return FAT32_EOC;
     return rd32(&sector_data[offset]) & 0x0FFFFFFFUL;
 }
@@ -43,11 +43,11 @@ uint8_t fat_write_entry(uint32_t cluster, uint32_t value)
     {
         uint32_t sector = geometry->fat_begin + (uint32_t)copy * geometry->sectors_per_fat + sector_offset;
         uint32_t old_value;
-        if(!sd_read_block(sector, sector_data))
+        if(!sd_card_read_block(sector, sector_data))
             return 0;
         old_value = rd32(&sector_data[offset]);
         wr32(&sector_data[offset], (old_value & 0xF0000000UL) | (value & 0x0FFFFFFFUL));
-        if(!sd_write_block(sector, sector_data))
+        if(!sd_card_write_block(sector, sector_data))
             return 0;
     }
 
@@ -131,7 +131,7 @@ uint8_t fat_zero_cluster(uint32_t cluster)
     memset(sector_data, 0, SD_BLOCK_SIZE);
     for(uint8_t s = 0; s < geometry->sectors_per_cluster; s++)
     {
-        if(!sd_write_block(fat_cluster_lba(cluster) + s, sector_data))
+        if(!sd_card_write_block(fat_cluster_lba(cluster) + s, sector_data))
             return 0;
     }
     return 1;

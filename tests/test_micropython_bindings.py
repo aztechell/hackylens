@@ -182,6 +182,8 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 str(ROOT / "tests" / "display_normative_suite.c"),
                 str(ROOT / "platforms" / "k210" / "capabilities" /
                     "display_adapter.c"),
+                str(ROOT / "firmware" / "src" / "services" /
+                    "frame_pool.c"),
                 str(ROOT / "firmware" / "src" / "capabilities" /
                     "display.c"),
                 str(ROOT / "firmware" / "src" / "ui" / "hk_font.c"),

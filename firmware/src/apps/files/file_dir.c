@@ -14,7 +14,7 @@
 #include "../../storage/fat32_allocation.h"
 #include "../../storage/fat32_volume.h"
 #include "../../core/hk_binary.h"
-#include "../../drivers/hk_sd.h"
+#include "../../storage/sd_card.h"
 
 static void files_add_entry(const char *name, uint8_t attr, uint32_t cluster, uint32_t size,
                             uint32_t modified, uint32_t dir_ordinal, uint8_t lfn_count)
@@ -138,7 +138,7 @@ uint8_t files_load_dir(uint32_t cluster)
         uint32_t base = fat_cluster_lba(current);
         for(uint8_t s = 0; s < sectors_per_cluster; s++)
         {
-            if(!sd_read_block(base + s, sector))
+            if(!sd_card_read_block(base + s, sector))
                 return 0;
             keep_going = files_parse_dir_sector(sector, lfn, &lfn_count, &ordinal);
             if(!keep_going || files_count() >= FILES_MAX_ENTRIES)

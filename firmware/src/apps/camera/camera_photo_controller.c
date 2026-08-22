@@ -8,7 +8,7 @@
 #include "../../services/camera_persist_settings.h"
 
 #include "camera_config.h"
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "camera_photo_service.h"
 #include "../../storage/file_mount.h"
 #include "../../storage/file_write_error.h"

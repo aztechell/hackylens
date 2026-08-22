@@ -76,6 +76,10 @@ UART/I2C protocol or routed-peripheral semantics.
   fixed-capacity fake. Phase 2.10 adds the K210 provider, migrates the native
   UART/I2C-target service and MicroPython UART/I2C-controller bindings to that
   single provider, and removes the Python-only hardware implementation.
+  Phase 2.11 is in progress: raw SD access now sits behind the private storage
+  boundary, frame storage is a portable service with explicit borrow/release,
+  and architecture guard v2 has an explicit layer map plus generated dependency
+  and object-symbol evidence. Completion remains gated on the corrective CI.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -91,7 +95,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.10 implementation; Time + Input + Display + External Link + Lights runtime providers |
+| Capability build composition | Phase 2.11 in progress; Time + Input + Display + External Link + Lights runtime providers |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 

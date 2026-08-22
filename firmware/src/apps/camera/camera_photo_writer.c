@@ -16,7 +16,7 @@
 #include "camera_photo_encode.h"
 #include "camera_photo_path.h"
 #include "camera_photo_writer.h"
-#include "../../drivers/hk_sd.h"
+#include "../../storage/sd_card.h"
 
 uint8_t photo_write_file_chain(uint32_t first_cluster, photo_format_t format, uint32_t file_size, uint16_t width, uint16_t height)
 {
@@ -34,7 +34,7 @@ uint8_t photo_write_file_chain(uint32_t first_cluster, photo_format_t format, ui
             uint16_t take = remaining > SD_BLOCK_SIZE ? SD_BLOCK_SIZE : (uint16_t)remaining;
             memset(sector, 0, SD_BLOCK_SIZE);
             photo_encode_fill_file_bytes(format, offset, sector, take, width, height);
-            if(!sd_write_block_fast(base + s, sector))
+            if(!sd_card_write_block_fast(base + s, sector))
                 return 0;
             offset += take;
             remaining -= take;

@@ -9,7 +9,7 @@
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "pong_config.h"
 #include "pong_view.h"
 

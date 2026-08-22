@@ -8,7 +8,7 @@
 #include "../core/file_name.h"
 #include "../core/hk_binary.h"
 #include "../core/hk_string.h"
-#include "../drivers/hk_sd.h"
+#include "sd_card.h"
 #include "fat32_allocation.h"
 #include "fat32_volume.h"
 #include "internal/fat32_state_private.h"
@@ -68,7 +68,7 @@ static file_path_result_t file_path_find_in_directory(uint32_t directory_cluster
         uint32_t base = fat_cluster_lba(current);
         for(uint8_t sector_index = 0; sector_index < sectors_per_cluster; sector_index++)
         {
-            if(!sd_read_block(base + sector_index, sector))
+            if(!sd_card_read_block(base + sector_index, sector))
                 return FILE_PATH_IO;
             for(uint16_t offset = 0; offset < SD_BLOCK_SIZE; offset += 32U)
             {

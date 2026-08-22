@@ -1,6 +1,7 @@
 #include "../../../firmware/src/capabilities/capability_provider.h"
 #include "../../../firmware/src/capabilities/display_provider.h"
 #include "../../../firmware/src/drivers/lcd_st7789_transport.h"
+#include "../../../firmware/src/services/frame_workspace.h"
 #include "../../../firmware/src/ui/hk_font.h"
 
 #include <hackylens/capability/display.h>
@@ -13,27 +14,9 @@
 #include "hackylens_font_1bpp.h"
 #include "hal_time.h"
 
-#if defined(K210_DISPLAY_ADAPTER_TESTING)
-#define HK_ENABLE_APP_MICROPYTHON 1
-#else
-#include "hk_config.h"
-#endif
-
-#if HK_ENABLE_APP_MICROPYTHON
 #define K210_DISPLAY_MAX_COMMANDS 32U
 #define K210_DISPLAY_MAX_TEXT_BYTES 1024U
 #define K210_DISPLAY_MAX_DIRTY_RECTS 8U
-#else
-/*
- * BASE rendering uses the borrowed surface and does not consume batch text
- * storage.  Keep a truthful, minimal batch implementation in compositions
- * without the MicroPython overlay consumer instead of reserving its full
- * retained-canvas budget.
- */
-#define K210_DISPLAY_MAX_COMMANDS 1U
-#define K210_DISPLAY_MAX_TEXT_BYTES 16U
-#define K210_DISPLAY_MAX_DIRTY_RECTS 4U
-#endif
 #define K210_DISPLAY_TRANSFER_SLICE_BYTES 128U
 #define K210_DISPLAY_MAX_PRESENT_US 500000U
 
@@ -76,10 +59,10 @@ typedef struct
 typedef struct
 {
     hk_lease_t lease;
-    uint32_t plane;
+    hk_display_rect_t *repair;
     uint32_t committed_generation;
-    hk_display_rect_t repair[K210_DISPLAY_MAX_DIRTY_RECTS];
     uint16_t repair_count;
+    uint8_t plane;
     uint8_t active;
 } display_plane_t;
 
@@ -87,9 +70,9 @@ typedef struct
 {
     hk_lease_t lease;
     hk_display_rect_t clip;
-    hk_display_rect_t dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
-    display_command_t commands[K210_DISPLAY_MAX_COMMANDS];
-    char text[K210_DISPLAY_MAX_TEXT_BYTES];
+    hk_display_rect_t *dirty;
+    display_command_t *commands;
+    char *text;
     display_borrow_t borrow;
     uint16_t command_count;
     uint16_t text_bytes;
@@ -101,13 +84,24 @@ typedef struct
 
 typedef struct
 {
-    display_command_t commands[K210_DISPLAY_MAX_COMMANDS];
-    char text[K210_DISPLAY_MAX_TEXT_BYTES];
-    hk_display_rect_t dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
+    display_command_t *commands;
+    char *text;
+    hk_display_rect_t *dirty;
     uint16_t command_count;
     uint16_t text_bytes;
     uint16_t dirty_count;
 } display_overlay_t;
+
+typedef struct
+{
+    display_command_t stage_commands[K210_DISPLAY_MAX_COMMANDS];
+    char stage_text[K210_DISPLAY_MAX_TEXT_BYTES];
+    hk_display_rect_t stage_dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
+    display_command_t overlay_commands[K210_DISPLAY_MAX_COMMANDS];
+    char overlay_text[K210_DISPLAY_MAX_TEXT_BYTES];
+    hk_display_rect_t overlay_dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
+    hk_display_rect_t overlay_repair[K210_DISPLAY_MAX_DIRTY_RECTS];
+} display_workspace_t;
 
 typedef struct
 {
@@ -123,6 +117,9 @@ typedef struct
     display_stage_t stage;
     display_surface_stage_t surface;
     display_overlay_t overlay;
+    hk_display_rect_t base_repair[K210_DISPLAY_MAX_DIRTY_RECTS];
+    frame_workspace_borrow_t workspace_borrow;
+    display_workspace_t *workspace;
 } k210_display_state_t;
 
 static k210_display_state_t s_display;
@@ -130,6 +127,8 @@ static k210_display_state_t s_display;
 #if defined(K210_DISPLAY_ADAPTER_TESTING)
 void hk_k210_display_test_reset(void)
 {
+    if(s_display.workspace_borrow.generation != 0U)
+        (void)frame_workspace_release(&s_display.workspace_borrow);
     memset(&s_display, 0, sizeof(s_display));
 }
 #endif
@@ -246,7 +245,8 @@ static hk_result_t dirty_preview(
     const display_stage_t *stage, const hk_display_rect_t *rect,
     hk_display_rect_t *dirty, uint16_t *count)
 {
-    memcpy(dirty, stage->dirty, sizeof(stage->dirty));
+    memcpy(dirty, stage->dirty,
+           sizeof(dirty[0]) * K210_DISPLAY_MAX_DIRTY_RECTS);
     *count = stage->dirty_count;
     return dirty_add(dirty, count, rect);
 }
@@ -263,6 +263,51 @@ static display_plane_t *find_plane(
             return &state->planes[index];
     }
     return NULL;
+}
+
+static uint8_t workspace_acquire(k210_display_state_t *state)
+{
+    display_workspace_t *workspace;
+
+    if(state->workspace)
+        return 1U;
+    if(!frame_workspace_borrow(
+            sizeof(display_workspace_t), &state->workspace_borrow))
+        return 0U;
+    workspace = (display_workspace_t *)state->workspace_borrow.data;
+    memset(workspace, 0, sizeof(*workspace));
+    state->workspace = workspace;
+    state->stage.commands = workspace->stage_commands;
+    state->stage.text = workspace->stage_text;
+    state->stage.dirty = workspace->stage_dirty;
+    state->overlay.commands = workspace->overlay_commands;
+    state->overlay.text = workspace->overlay_text;
+    state->overlay.dirty = workspace->overlay_dirty;
+    state->planes[1].repair = workspace->overlay_repair;
+    return 1U;
+}
+
+static void workspace_release_if_idle(k210_display_state_t *state)
+{
+    if(!state->workspace || state->stage.kind != DISPLAY_STAGE_NONE ||
+       state->overlay.command_count != 0U || state->planes[1].repair_count != 0U)
+        return;
+    (void)frame_workspace_release(&state->workspace_borrow);
+    state->workspace = NULL;
+    state->stage.commands = NULL;
+    state->stage.text = NULL;
+    state->stage.dirty = NULL;
+    state->overlay.commands = NULL;
+    state->overlay.text = NULL;
+    state->overlay.dirty = NULL;
+    state->planes[1].repair = NULL;
+}
+
+static void overlay_reset(display_overlay_t *overlay)
+{
+    overlay->command_count = 0U;
+    overlay->text_bytes = 0U;
+    overlay->dirty_count = 0U;
 }
 
 static void stage_reset(display_stage_t *stage)
@@ -309,6 +354,8 @@ static hk_result_t k210_display_open(
         return HK_ERR_BUSY;
     state->planes[index].lease = *lease;
     state->planes[index].plane = plane;
+    state->planes[index].repair = index == 0U ? state->base_repair :
+        (state->workspace ? state->workspace->overlay_repair : NULL);
     state->planes[index].repair_count = 0U;
     state->planes[index].active = 1U;
     return HK_OK;
@@ -620,6 +667,8 @@ static hk_result_t k210_display_begin(
        lease_equal(&state->surface.lease, lease))
         return HK_ERR_INVALID_STATE;
     if(state->stage.kind != DISPLAY_STAGE_NONE)
+        return HK_ERR_BUSY;
+    if(!workspace_acquire(state))
         return HK_ERR_BUSY;
     stage_reset(&state->stage);
     state->stage.lease = *lease;
@@ -968,8 +1017,10 @@ static hk_result_t k210_display_present(
             if(result != HK_OK)
                 return result;
         }
-        prospective = state->overlay;
-        overlay_from_stage(&prospective, stage);
+        prospective = (display_overlay_t){
+            stage->commands, stage->text, stage->dirty,
+            stage->command_count, stage->text_bytes, stage->dirty_count,
+        };
         result = transfer_regions(
             affected, affected_count, NULL, &prospective,
             deadline, cancel, &progress);
@@ -1000,7 +1051,10 @@ static hk_result_t k210_display_present(
     if(plane->committed_generation != UINT32_MAX)
         plane->committed_generation++;
     if(stage)
+    {
         stage_reset(stage);
+        workspace_release_if_idle(state);
+    }
     else
     {
         state->surface.lease = HK_LEASE_NONE;
@@ -1019,7 +1073,10 @@ static hk_result_t k210_display_abort(
         return HK_ERR_INTERNAL;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
        lease_equal(&state->stage.lease, lease))
+    {
         stage_reset(&state->stage);
+        workspace_release_if_idle(state);
+    }
     else if(state->surface.active &&
             lease_equal(&state->surface.lease, lease))
     {
@@ -1131,7 +1188,10 @@ static hk_result_t k210_display_close(
         return result;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
        lease_equal(&state->stage.lease, lease))
+    {
         stage_reset(&state->stage);
+        workspace_release_if_idle(state);
+    }
     if(state->surface.active &&
        lease_equal(&state->surface.lease, lease))
     {
@@ -1152,10 +1212,11 @@ static hk_result_t k210_display_close(
     if(result != HK_OK)
         return progress ? HK_ERR_INTERNAL : result;
     if(plane->plane == HK_DISPLAY_PLANE_OVERLAY)
-        memset(&state->overlay, 0, sizeof(state->overlay));
+        overlay_reset(&state->overlay);
     plane->lease = HK_LEASE_NONE;
     plane->repair_count = 0U;
     plane->active = 0U;
+    workspace_release_if_idle(state);
     return HK_OK;
 }
 

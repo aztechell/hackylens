@@ -736,9 +736,10 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             "#include K210_HEADER\n"
         )
         self.assertEqual(check_arch.nonliteral_include_lines(macro_include), [2])
-        self.assertEqual(
-            check_arch.nonliteral_include_lines('#include "../../drivers/hk_lcd.h"\n'),
-            [],
+        self.assertIsNotNone(
+            check_arch.layer_violation(
+                app, "../../drivers/hk_lcd.h", "drivers/hk_lcd.h"
+            ),
         )
         adversarial_includes = {
             "comment-split": "#/**/include <fpioa.h>\n",

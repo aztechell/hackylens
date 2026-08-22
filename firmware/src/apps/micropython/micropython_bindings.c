@@ -6,7 +6,7 @@
 #include "py/runtime.h"
 
 #include "../../config/input_config.h"
-#include "../../capabilities/capability_client_binding.h"
+#include "../../core/hk_capability_client.h"
 #include "../../adapters/micropython/micropython_capability_bridge.h"
 #include "../../services/micropython_runtime.h"
 

@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "frame_pool.h"
+#include "../services/frame_pool.h"
 #include "hal_dvp.h"
 
 typedef enum
@@ -117,6 +117,8 @@ static void camera_stream_on_event(hal_dvp_event_t event, uint32_t status, void 
 uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst)
 {
     camera_stream_stop();
+    if(!frame_pool_camera_reserve())
+        return 0;
     for(uint8_t i = 0; i < FRAME_POOL_CAMERA_SLOT_COUNT; i++)
     {
         g_slots[i].state = CAMERA_SLOT_FREE;
@@ -143,6 +145,7 @@ uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst)
     if(!hal_dvp_irq_start(camera_stream_on_event, NULL))
     {
         g_running = 0;
+        frame_pool_camera_release();
         return 0;
     }
     return 1;
@@ -164,6 +167,7 @@ void camera_stream_stop(void)
         g_slots[i].state = CAMERA_SLOT_FREE;
         g_slots[i].lease_id = 0;
     }
+    frame_pool_camera_release();
 }
 
 void camera_stream_pause(void)
