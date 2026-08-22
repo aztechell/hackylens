@@ -64,10 +64,12 @@ addresses only. I2C target configuration also accepts only a 7-bit address.
 The info structure reports fixed upper bounds for controller write/read and
 target receive/response buffers.
 
-Malformed configuration, out-of-range baud/frequency/address, non-zero
-reserved fields, and unknown feature bits return `HK_ERR_INVALID_ARGUMENT`
-before routing or peripheral side effects. A structurally valid mode absent
-from the provider returns `HK_ERR_FEATURE_UNAVAILABLE`.
+An undersized input structure, malformed configuration, out-of-range
+baud/frequency/address, non-zero reserved fields, and unknown feature bits
+return `HK_ERR_INVALID_ARGUMENT` before routing or peripheral side effects. A
+sufficient input size with an incompatible structure version returns
+`HK_ERR_VERSION_INCOMPATIBLE`. A structurally valid mode absent from the
+provider returns `HK_ERR_FEATURE_UNAVAILABLE`.
 
 ## Operation token and state machine
 
@@ -140,6 +142,20 @@ normal request/next-read flow. If a preload call races with a READ already in
 progress, the active READ retains its snapshot and the new preload belongs to
 the following READ. Mode reconfiguration, mode change, release, and owner
 cleanup discard unread preload and queued target events.
+
+The K210 handoff has two bounded completed-event slots backed by two reusable
+payload buffers; READ notifications do not reserve a payload buffer. ISR and
+main-loop ownership changes occur under the target IRQ lock. If another
+completed transaction or required payload snapshot exceeds that fixed
+capacity, the provider latches data loss. The next target poll returns
+`HK_ERR_OVERFLOW` with a `NONE` event and atomically discards the entire queued
+event window; a write already being discarded remains ignored through its
+STOP. The next transaction completed after that boundary is the first
+observable event. This is the explicit resynchronization state: no prefix or
+queued event from before the overflow is replayed. Mode change, release, and
+owner cleanup clear both the queued window and the overflow latch. An active
+READ keeps its one-shot preload snapshot, and a racing preload still arms the
+following READ exactly as above.
 
 ## Deadline and buffer ownership
 

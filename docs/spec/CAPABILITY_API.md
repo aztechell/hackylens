@@ -52,6 +52,11 @@ request, info, option, and configuration structures MUST start with
 `struct_size` and `struct_version`. Reserved fields MUST be zero on input and
 ignored on output.
 
+For extensible input structures, `struct_size` smaller than the implemented
+minimum returns `HK_ERR_INVALID_ARGUMENT`. A sufficient size with an
+unsupported `struct_version` returns `HK_ERR_VERSION_INCOMPATIBLE`. Providers
+MUST apply size validation before version validation.
+
 ```c
 typedef int32_t hk_result_t;
 

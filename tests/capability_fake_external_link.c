@@ -48,7 +48,7 @@ typedef struct
     uint8_t lease_active;
     uint8_t target_event_pending;
     uint8_t target_preload_active;
-    uint8_t reserved0;
+    uint8_t quarantined;
     hk_owner_t owner;
     hk_fake_external_link_operation_t operation;
     hk_result_t next_i2c_result;
@@ -557,6 +557,8 @@ hk_result_t hk_external_link_acquire(
     result = validate_request(request, mode_features);
     if (result != HK_OK)
         return remember(result);
+    if (g_fake.quarantined)
+        return remember(HK_ERR_INVALID_STATE);
     if (g_fake.lease_active)
         return remember(HK_ERR_BUSY);
     if (g_fake.lease_generation == UINT32_MAX)
@@ -604,7 +606,16 @@ hk_result_t hk_external_link_release(
     if (result != HK_OK)
         return remember(result);
     if (deadline_expired(deadline))
+    {
+        memset(&g_fake.operation, 0, sizeof(g_fake.operation));
+        clear_borrowed_buffers();
+        g_fake.metrics.active_operations = 0U;
+        g_fake.metrics.active_leases = 0U;
+        g_fake.lease_active = 0U;
+        g_fake.quarantined = 1U;
+        handle->lease = HK_LEASE_NONE;
         return remember(HK_ERR_DEADLINE_EXCEEDED);
+    }
     if (g_fake.operation.state == HK_FAKE_OP_IN_FLIGHT)
         reset_peripheral();
     memset(&g_fake.operation, 0, sizeof(g_fake.operation));

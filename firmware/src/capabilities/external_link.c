@@ -63,7 +63,9 @@ static hk_result_t validate_struct(
     uint16_t size, uint16_t expected_size,
     uint16_t version, uint16_t expected_version)
 {
-    if(size < expected_size || version != expected_version)
+    if(size < expected_size)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(version != expected_version)
         return HK_ERR_VERSION_INCOMPATIBLE;
     return HK_OK;
 }
@@ -116,7 +118,16 @@ hk_result_t hk_external_link_release(
         return result;
     result = provider->close(provider->context, &handle->lease, deadline);
     if(result != HK_OK)
-        return quarantine_internal(owner, handle, result);
+    {
+        hk_result_t cleanup_result;
+
+        (void)capability_owner_runtime_quarantine(
+            owner, &handle->lease, HK_CAPABILITY_ID_EXTERNAL_LINK);
+        cleanup_result = capability_owner_runtime_release(
+            owner, HK_CAPABILITY_ID_EXTERNAL_LINK, deadline, &handle->lease);
+        (void)cleanup_result;
+        return result;
+    }
     return capability_owner_runtime_release(
         owner, HK_CAPABILITY_ID_EXTERNAL_LINK, deadline, &handle->lease);
 }

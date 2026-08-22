@@ -71,7 +71,8 @@ class ExternalLinkContractTests(unittest.TestCase):
                 text=True, capture_output=True, timeout=30,
             )
         self.assertIn(
-            "K210_EXTERNAL_LINK_OK normative=1 uart=102 i2c_tx=20",
+            "K210_EXTERNAL_LINK_OK normative=1 target_handoff=1 "
+            "uart=102 i2c_tx=20",
             result.stdout,
         )
 
@@ -102,6 +103,7 @@ class ExternalLinkContractTests(unittest.TestCase):
             translation_unit = temporary / "abi.c"
             executable = temporary / ("abi.exe" if os.name == "nt" else "abi")
             fake_object = temporary / "fake.o"
+            adapter_object = temporary / "k210_adapter.o"
             translation_unit.write_text(source, encoding="utf-8")
             common = [
                 "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
@@ -117,16 +119,26 @@ class ExternalLinkContractTests(unittest.TestCase):
                 str(ROOT / "tests" / "capability_fake_external_link.c"),
                 "-o", str(fake_object),
             ], check=True, cwd=ROOT)
+            subprocess.run([
+                compiler, *common,
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
+                "-c",
+                str(ROOT / "platforms" / "k210" / "capabilities" /
+                    "external_link_adapter.c"),
+                "-o", str(adapter_object),
+            ], check=True, cwd=ROOT)
             nm = shutil.which("nm")
             if nm:
-                symbols = subprocess.run(
-                    [nm, "-u", str(fake_object)], check=True,
-                    text=True, capture_output=True,
-                ).stdout.lower()
-                for forbidden in (
-                    "malloc", "calloc", "realloc", "free", "task", "queue"
-                ):
-                    self.assertNotIn(forbidden, symbols)
+                for inspected_object in (fake_object, adapter_object):
+                    symbols = subprocess.run(
+                        [nm, "-u", str(inspected_object)], check=True,
+                        text=True, capture_output=True,
+                    ).stdout.lower()
+                    for forbidden in (
+                        "malloc", "calloc", "realloc", "free", "task", "queue"
+                    ):
+                        self.assertNotIn(forbidden, symbols)
 
     def test_normative_contract_closes_phase_2_9_ambiguities(self) -> None:
         contract = (
@@ -151,6 +163,10 @@ class ExternalLinkContractTests(unittest.TestCase):
             "atomically replaces an unread preload",
             "pads a longer request with `0x00`",
             "READ event is queued after that master transaction completes",
+            "undersized input structure",
+            "two bounded completed-event slots",
+            "`HK_ERR_OVERFLOW`",
+            "explicit resynchronization state",
             "Phase 2.10",
         ):
             self.assertIn(required, normalized)

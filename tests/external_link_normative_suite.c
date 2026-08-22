@@ -28,6 +28,8 @@ int external_link_normative_suite_run(
     hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
     hk_external_link_t link = {0};
     hk_external_link_t second = {0};
+    hk_external_link_t stale = {0};
+    hk_external_link_t blocked = {0};
     hk_external_link_info_t info;
     hk_external_link_op_t operation = HK_EXTERNAL_LINK_OP_NONE;
     hk_external_link_op_progress_t progress;
@@ -97,6 +99,45 @@ int external_link_normative_suite_run(
         OWNER_B, &request, HK_EXTERNAL_LINK_FEATURE_UART, &second) ==
         HK_ERR_BUSY);
 
+    uart.struct_size = (uint16_t)(sizeof(uart) - 1U);
+    SUITE_CHECK(hk_external_link_configure_uart(
+        OWNER_A, &link, &uart) == HK_ERR_INVALID_ARGUMENT);
+    uart.struct_size = sizeof(uart);
+    uart.struct_version++;
+    SUITE_CHECK(hk_external_link_configure_uart(
+        OWNER_A, &link, &uart) == HK_ERR_VERSION_INCOMPATIBLE);
+    uart.struct_version = HK_EXTERNAL_LINK_UART_CONFIG_VERSION;
+
+    controller.struct_size = (uint16_t)(sizeof(controller) - 1U);
+    SUITE_CHECK(hk_external_link_configure_i2c_controller(
+        OWNER_A, &link, &controller) == HK_ERR_INVALID_ARGUMENT);
+    controller.struct_size = sizeof(controller);
+    controller.struct_version++;
+    SUITE_CHECK(hk_external_link_configure_i2c_controller(
+        OWNER_A, &link, &controller) == HK_ERR_VERSION_INCOMPATIBLE);
+    controller.struct_version =
+        HK_EXTERNAL_LINK_I2C_CONTROLLER_CONFIG_VERSION;
+
+    target.struct_size = (uint16_t)(sizeof(target) - 1U);
+    SUITE_CHECK(hk_external_link_configure_i2c_target(
+        OWNER_A, &link, &target) == HK_ERR_INVALID_ARGUMENT);
+    target.struct_size = sizeof(target);
+    target.struct_version++;
+    SUITE_CHECK(hk_external_link_configure_i2c_target(
+        OWNER_A, &link, &target) == HK_ERR_VERSION_INCOMPATIBLE);
+    target.struct_version = HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION;
+
+    transfer.struct_size = (uint16_t)(sizeof(transfer) - 1U);
+    SUITE_CHECK(hk_external_link_i2c_transfer_begin(
+        OWNER_A, &link, &transfer, (hk_deadline_t){1000U}, NULL,
+        &operation) == HK_ERR_INVALID_ARGUMENT);
+    transfer.struct_size = sizeof(transfer);
+    transfer.struct_version++;
+    SUITE_CHECK(hk_external_link_i2c_transfer_begin(
+        OWNER_A, &link, &transfer, (hk_deadline_t){1000U}, NULL,
+        &operation) == HK_ERR_VERSION_INCOMPATIBLE);
+    transfer.struct_version = HK_EXTERNAL_LINK_I2C_TRANSFER_VERSION;
+
     SUITE_CHECK(hk_external_link_configure_uart(
         OWNER_A, &link, &uart) == HK_OK);
     SUITE_CHECK(hk_external_link_uart_write_begin(
@@ -164,8 +205,17 @@ int external_link_normative_suite_run(
     SUITE_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ);
     SUITE_CHECK(event.requested_bytes == sizeof(target_observed));
 
+    stale = link;
+    backend->set_now_us(2000U);
     SUITE_CHECK(hk_external_link_release(
-        OWNER_A, (hk_deadline_t){1000U}, &link) == HK_OK);
+        OWNER_A, (hk_deadline_t){1000U}, &link) ==
+        HK_ERR_DEADLINE_EXCEEDED);
+    SUITE_CHECK(hk_lease_is_zero(&link.lease));
+    SUITE_CHECK(hk_external_link_get_info(
+        OWNER_A, &stale, &info) == HK_ERR_STALE_HANDLE);
+    SUITE_CHECK(hk_external_link_acquire(
+        OWNER_A, &request, HK_EXTERNAL_LINK_FEATURE_UART, &blocked) ==
+        HK_ERR_INVALID_STATE);
     SUITE_CHECK(hk_external_link_release(
         OWNER_A, HK_DEADLINE_IMMEDIATE, &link) == HK_OK);
     return 0;

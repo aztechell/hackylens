@@ -17,6 +17,8 @@
 #define K210_EXTERNAL_I2C_MIN_HZ 10000U
 #define K210_EXTERNAL_I2C_MAX_HZ 1000000U
 #define K210_EXTERNAL_OPERATION_SLOT 1U
+#define K210_EXTERNAL_TARGET_EVENT_CAPACITY 2U
+#define K210_EXTERNAL_TARGET_BUFFER_NONE UINT8_MAX
 
 typedef enum
 {
@@ -54,11 +56,14 @@ typedef struct
     uint32_t i2c_frequency_hz;
     uint32_t next_operation_generation;
     k210_external_operation_t operation;
-    volatile uint32_t target_event_type;
-    volatile uint32_t target_received_bytes;
-    volatile uint32_t target_requested_bytes;
-    volatile uint8_t target_event_pending;
-    volatile uint8_t target_rx_overflow;
+    volatile uint32_t target_event_requested_bytes[2];
+    volatile uint16_t target_event_received_bytes[2];
+    volatile uint8_t target_event_type[2];
+    volatile uint8_t target_event_buffer_slot[2];
+    volatile uint8_t target_event_head;
+    volatile uint8_t target_event_count;
+    volatile uint8_t target_event_overflow;
+    volatile uint8_t target_rx_discard;
     volatile uint16_t target_rx_size;
     uint8_t target_buffer[2][K210_EXTERNAL_MAX_BYTES];
     volatile uint16_t target_response_size[2];
@@ -67,6 +72,7 @@ typedef struct
     volatile uint8_t target_preload_slot;
     volatile uint8_t target_active_slot;
     volatile uint8_t target_rx_slot;
+    volatile uint8_t target_rx_active;
     volatile uint8_t target_preload_active;
     volatile uint8_t target_read_active;
     uint8_t active;
@@ -102,19 +108,28 @@ static uint8_t cancellation_requested(const hk_cancel_t *cancel)
 
 static void clear_target(k210_external_state_t *state)
 {
-    state->target_event_type = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
-    state->target_received_bytes = 0U;
-    state->target_requested_bytes = 0U;
-    state->target_event_pending = 0U;
-    state->target_rx_overflow = 0U;
+    for(uint8_t slot = 0U;
+        slot < K210_EXTERNAL_TARGET_EVENT_CAPACITY; ++slot)
+    {
+        state->target_event_type[slot] = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
+        state->target_event_received_bytes[slot] = 0U;
+        state->target_event_requested_bytes[slot] = 0U;
+        state->target_event_buffer_slot[slot] =
+            K210_EXTERNAL_TARGET_BUFFER_NONE;
+    }
+    state->target_event_head = 0U;
+    state->target_event_count = 0U;
+    state->target_event_overflow = 0U;
+    state->target_rx_discard = 0U;
     state->target_rx_size = 0U;
     state->target_response_size[0] = 0U;
     state->target_response_size[1] = 0U;
     state->target_read_index = 0U;
     state->target_read_size = 0U;
     state->target_preload_slot = 0U;
-    state->target_active_slot = 0U;
-    state->target_rx_slot = 1U;
+    state->target_active_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
+    state->target_rx_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
+    state->target_rx_active = 0U;
     state->target_preload_active = 0U;
     state->target_read_active = 0U;
     memset(state->target_buffer, 0, sizeof(state->target_buffer));
@@ -280,14 +295,120 @@ static hk_result_t k210_external_configure_i2c_controller(
     return result;
 }
 
+static uint8_t target_event_index(uint8_t offset)
+{
+    return (uint8_t)((s_external.target_event_head + offset) & 1U);
+}
+
+static void target_discard_events(k210_external_state_t *state)
+{
+    for(uint8_t slot = 0U;
+        slot < K210_EXTERNAL_TARGET_EVENT_CAPACITY; ++slot)
+    {
+        state->target_event_type[slot] = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
+        state->target_event_received_bytes[slot] = 0U;
+        state->target_event_requested_bytes[slot] = 0U;
+        state->target_event_buffer_slot[slot] =
+            K210_EXTERNAL_TARGET_BUFFER_NONE;
+    }
+    state->target_event_head = 0U;
+    state->target_event_count = 0U;
+}
+
+static uint8_t target_buffer_reserved(uint8_t slot)
+{
+    uint8_t offset;
+
+    if(s_external.target_rx_active && s_external.target_rx_slot == slot)
+        return 1U;
+    if(s_external.target_read_active && s_external.target_active_slot == slot)
+        return 1U;
+    if(s_external.target_preload_active &&
+       s_external.target_preload_slot == slot)
+        return 1U;
+    for(offset = 0U; offset < s_external.target_event_count; ++offset)
+    {
+        uint8_t event_index = target_event_index(offset);
+
+        if(s_external.target_event_type[event_index] ==
+               HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
+           s_external.target_event_buffer_slot[event_index] == slot)
+            return 1U;
+    }
+    return 0U;
+}
+
+static uint8_t target_find_free_buffer(void)
+{
+    for(uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        if(!target_buffer_reserved(slot))
+            return slot;
+    }
+    return K210_EXTERNAL_TARGET_BUFFER_NONE;
+}
+
+static void target_latch_overflow(void)
+{
+    s_external.target_event_overflow = 1U;
+}
+
+static uint8_t target_queue_event(
+    uint32_t type, uint32_t received, uint32_t requested,
+    uint8_t buffer_slot)
+{
+    uint8_t index;
+
+    if(s_external.target_event_overflow ||
+       s_external.target_event_count >= K210_EXTERNAL_TARGET_EVENT_CAPACITY)
+    {
+        target_latch_overflow();
+        return 0U;
+    }
+    index = target_event_index(s_external.target_event_count);
+    s_external.target_event_type[index] = (uint8_t)type;
+    s_external.target_event_received_bytes[index] = (uint16_t)received;
+    s_external.target_event_requested_bytes[index] = requested;
+    s_external.target_event_buffer_slot[index] = buffer_slot;
+    __sync_synchronize();
+    s_external.target_event_count++;
+    return 1U;
+}
+
 static void target_receive(uint8_t byte)
 {
-    uint16_t size = s_external.target_rx_size;
+    uint16_t size;
+
+    if(s_external.target_event_overflow || s_external.target_rx_discard)
+    {
+        s_external.target_rx_discard = 1U;
+        return;
+    }
+    if(!s_external.target_rx_active)
+    {
+        uint8_t slot = target_find_free_buffer();
+
+        if(slot == K210_EXTERNAL_TARGET_BUFFER_NONE)
+        {
+            target_latch_overflow();
+            s_external.target_rx_discard = 1U;
+            return;
+        }
+        s_external.target_rx_slot = slot;
+        s_external.target_rx_size = 0U;
+        s_external.target_rx_active = 1U;
+        memset(s_external.target_buffer[slot], 0,
+               sizeof(s_external.target_buffer[slot]));
+    }
+    size = s_external.target_rx_size;
 
     if(size < K210_EXTERNAL_MAX_BYTES)
         s_external.target_buffer[s_external.target_rx_slot][size++] = byte;
     else
-        s_external.target_rx_overflow = 1U;
+    {
+        target_latch_overflow();
+        s_external.target_rx_discard = 1U;
+    }
     s_external.target_rx_size = size;
 }
 
@@ -298,7 +419,9 @@ static uint8_t target_transmit(void)
 
     if(!s_external.target_read_active)
     {
-        s_external.target_active_slot = s_external.target_preload_slot;
+        s_external.target_active_slot = s_external.target_preload_active ?
+            s_external.target_preload_slot :
+            K210_EXTERNAL_TARGET_BUFFER_NONE;
         s_external.target_read_size = s_external.target_preload_active ?
             s_external.target_response_size[s_external.target_preload_slot] : 0U;
         s_external.target_read_index = 0U;
@@ -307,20 +430,10 @@ static uint8_t target_transmit(void)
     }
     index = s_external.target_read_index++;
     slot = s_external.target_active_slot;
-    if(index < s_external.target_read_size)
+    if(slot != K210_EXTERNAL_TARGET_BUFFER_NONE &&
+       index < s_external.target_read_size)
         return s_external.target_buffer[slot][index];
     return HK_EXTERNAL_LINK_TARGET_FILL_BYTE;
-}
-
-static void target_queue_event(uint32_t type, uint32_t received, uint32_t requested)
-{
-    if(s_external.target_event_pending)
-        return;
-    s_external.target_event_type = type;
-    s_external.target_received_bytes = received;
-    s_external.target_requested_bytes = requested;
-    __sync_synchronize();
-    s_external.target_event_pending = 1U;
 }
 
 static void target_event(hal_external_i2c_event_t event)
@@ -329,20 +442,30 @@ static void target_event(hal_external_i2c_event_t event)
         return;
     if(s_external.target_read_active)
     {
-        target_queue_event(
+        uint8_t active_slot = s_external.target_active_slot;
+
+        (void)target_queue_event(
             HK_EXTERNAL_LINK_TARGET_EVENT_READ, 0U,
-            s_external.target_read_index);
-        s_external.target_rx_slot = s_external.target_active_slot;
+            s_external.target_read_index,
+            K210_EXTERNAL_TARGET_BUFFER_NONE);
+        if(active_slot != K210_EXTERNAL_TARGET_BUFFER_NONE)
+            s_external.target_response_size[active_slot] = 0U;
         s_external.target_read_active = 0U;
         s_external.target_read_index = 0U;
         s_external.target_read_size = 0U;
+        s_external.target_active_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
     }
-    else if(s_external.target_rx_size != 0U ||
-            s_external.target_rx_overflow)
+    else if(s_external.target_rx_active || s_external.target_rx_discard)
     {
-        target_queue_event(
-            HK_EXTERNAL_LINK_TARGET_EVENT_WRITE,
-            s_external.target_rx_size, 0U);
+        if(!s_external.target_rx_discard)
+            (void)target_queue_event(
+                HK_EXTERNAL_LINK_TARGET_EVENT_WRITE,
+                s_external.target_rx_size, 0U,
+                s_external.target_rx_slot);
+        s_external.target_rx_active = 0U;
+        s_external.target_rx_discard = 0U;
+        s_external.target_rx_size = 0U;
+        s_external.target_rx_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
     }
 }
 
@@ -667,8 +790,11 @@ static hk_result_t k210_external_target_poll(
     hk_external_link_target_event_t *event)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
+    uint32_t irq_state;
     uint32_t type;
     uint32_t received;
+    uint8_t index;
+    uint8_t buffer_slot;
     hk_result_t result = validate_state(state, lease);
 
     if(result != HK_OK)
@@ -680,29 +806,44 @@ static hk_result_t k210_external_target_poll(
         HK_EXTERNAL_LINK_TARGET_EVENT_VERSION,
         HK_EXTERNAL_LINK_TARGET_EVENT_NONE, 0U, 0U, 0U,
     };
-    if(!state->target_event_pending)
+    irq_state = hal_external_i2c_target_lock();
+    if(state->target_event_overflow)
+    {
+        target_discard_events(state);
+        state->target_event_overflow = 0U;
+        hal_external_i2c_target_unlock(irq_state);
+        return HK_ERR_OVERFLOW;
+    }
+    if(state->target_event_count == 0U)
+    {
+        hal_external_i2c_target_unlock(irq_state);
         return HK_PENDING;
-    __sync_synchronize();
-    type = state->target_event_type;
-    received = state->target_received_bytes;
-    if(state->target_rx_overflow)
-        return HK_ERR_LIMIT;
+    }
+    index = state->target_event_head;
+    type = state->target_event_type[index];
+    received = state->target_event_received_bytes[index];
+    buffer_slot = state->target_event_buffer_slot[index];
     if(type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
        rx->size_bytes < received)
+    {
+        hal_external_i2c_target_unlock(irq_state);
         return HK_ERR_LIMIT;
+    }
     if(type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE && received != 0U)
-        memcpy(rx->data, state->target_buffer[state->target_rx_slot], received);
+        memcpy(rx->data, state->target_buffer[buffer_slot], received);
     event->type = type;
     event->received_bytes = received;
-    event->requested_bytes = state->target_requested_bytes;
-    state->target_event_pending = 0U;
-    state->target_event_type = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
-    state->target_received_bytes = 0U;
-    state->target_requested_bytes = 0U;
-    state->target_rx_overflow = 0U;
-    state->target_rx_size = 0U;
-    memset(state->target_buffer[state->target_rx_slot], 0,
-           sizeof(state->target_buffer[state->target_rx_slot]));
+    event->requested_bytes = state->target_event_requested_bytes[index];
+    state->target_event_type[index] = HK_EXTERNAL_LINK_TARGET_EVENT_NONE;
+    state->target_event_received_bytes[index] = 0U;
+    state->target_event_requested_bytes[index] = 0U;
+    state->target_event_buffer_slot[index] = K210_EXTERNAL_TARGET_BUFFER_NONE;
+    state->target_event_head = (uint8_t)((index + 1U) & 1U);
+    state->target_event_count--;
+    if(type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE)
+        memset(state->target_buffer[buffer_slot], 0,
+               sizeof(state->target_buffer[buffer_slot]));
+    hal_external_i2c_target_unlock(irq_state);
     return HK_OK;
 }
 
@@ -719,12 +860,36 @@ static hk_result_t k210_external_target_preload(
     if(state->mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
         return HK_ERR_INVALID_STATE;
     irq_state = hal_external_i2c_target_lock();
+    if(tx->size_bytes == 0U)
+    {
+        if(state->target_preload_active)
+        {
+            slot = state->target_preload_slot;
+            state->target_response_size[slot] = 0U;
+            memset(state->target_buffer[slot], 0,
+                   sizeof(state->target_buffer[slot]));
+        }
+        state->target_preload_active = 0U;
+        hal_external_i2c_target_unlock(irq_state);
+        return HK_OK;
+    }
     if(state->target_read_active)
-        slot = (uint8_t)(1U - state->target_active_slot);
+        slot = target_find_free_buffer();
     else if(state->target_preload_active)
         slot = state->target_preload_slot;
     else
-        slot = (uint8_t)(1U - state->target_rx_slot);
+        slot = target_find_free_buffer();
+    if(slot == K210_EXTERNAL_TARGET_BUFFER_NONE)
+    {
+        target_latch_overflow();
+        target_discard_events(state);
+        slot = target_find_free_buffer();
+        if(slot == K210_EXTERNAL_TARGET_BUFFER_NONE)
+        {
+            hal_external_i2c_target_unlock(irq_state);
+            return HK_ERR_BUSY;
+        }
+    }
     memset(state->target_buffer[slot], 0,
            sizeof(state->target_buffer[slot]));
     if(tx->size_bytes != 0U)

@@ -664,11 +664,8 @@ register behavior не протёк в public contract.
 
 ## 2.10 — External-link implementation и MicroPython convergence
 
-Статус пакета: `completed` (2026-08-21); common provider boundary, native
-service и MicroPython convergence, оба firmware profile и resource evidence
-прошли в
-[`Release firmware` run 32421678740](https://github.com/aztechell/hackylens/actions/runs/32421678740).
-Phase `2.11` не начата.
+Статус пакета: `in_progress`; production-provider lifecycle/concurrency
+corrective открыт. Phase `2.11` не начата.
 
 ### Depends on
 
@@ -682,24 +679,24 @@ implementation.
 
 ### Scope
 
-- [x] Реализовать K210 adapter из descriptor-defined routing и existing HAL/raw
+- [ ] Реализовать K210 adapter из descriptor-defined routing и existing HAL/raw
   drivers.
-- [x] Перенести raw I2C register state machine из
+- [ ] Перенести raw I2C register state machine из
   `micropython_binding_service.c` в provider/private driver layer.
-- [x] Перенести incremental UART write state в provider; один deadline сохраняется
+- [ ] Перенести incremental UART write state в provider; один deadline сохраняется
   на весь Python payload, а не на 256-byte chunk.
-- [x] Сделать `external_link_service` native capability consumer для UART/I2C
+- [ ] Сделать `external_link_service` native capability consumer для UART/I2C
   target modes.
-- [x] Перед MicroPython raw use normal service добровольно release connector;
+- [ ] Перед MicroPython raw use normal service добровольно release connector;
   после owner cleanup service reacquires и восстанавливает HMPY mode.
-- [x] MicroPython bridge оставляет только RPC/ticket/cancel transport и public
+- [ ] MicroPython bridge оставляет только RPC/ticket/cancel transport и public
   capability calls.
-- [x] Переименовать hardware-free service в
+- [ ] Переименовать hardware-free service в
   `firmware/src/adapters/micropython/micropython_capability_bridge.*`.
-- [x] Settings объявляет external-link optional с fallback
+- [ ] Settings объявляет external-link optional с fallback
   `hide-external-link-menu`.
-- [x] MicroPython объявляет required UART+I2C controller features.
-- [x] Не менять External Link Protocol или MicroPython API v1.
+- [ ] MicroPython объявляет required UART+I2C controller features.
+- [ ] Не менять External Link Protocol или MicroPython API v1.
 
 ### Основные файлы
 
