@@ -668,7 +668,8 @@ register behavior не протёк в public contract.
 failed-cleanup invalidation/quarantine, shared ABI validation, оба firmware
 profile и resource evidence прошли в
 [`Release firmware` run 32557338515](https://github.com/aztechell/hackylens/actions/runs/32557338515).
-Phase `2.11` в работе.
+Phase `2.11` завершена отдельным corrective/closure gate; Phase `2.12` не
+начата.
 
 ### Depends on
 
@@ -736,7 +737,11 @@ Native external service, provider и MicroPython bridge мигрируются/�
 
 ## 2.11 — Residual app→driver cleanup и architecture guard v2
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed` (2026-08-22). Corrective commit `706bdb6` прошёл
+[`Release firmware` run 32559217234](https://github.com/aztechell/hackylens/actions/runs/32559217234):
+source/environment validation, architecture guard v2, оба firmware-профиля,
+provider object hash equivalence, symbols и resource evidence зелёные. Phase
+`2.12` не начата.
 
 ### Depends on
 
@@ -748,20 +753,20 @@ Native external service, provider и MicroPython bridge мигрируются/�
 
 ### Scope
 
-- [~] Перенести пять direct `hk_sd.h` call sites в permanent storage operations.
-- [~] Переместить `drivers/frame_pool.*` в private portable
+- [x] Перенести пять direct `hk_sd.h` call sites в permanent storage operations.
+- [x] Переместить `drivers/frame_pool.*` в private portable
   `services/frame_pool.*`; зафиксировать borrow/release semantics.
-- [~] Убедиться, что apps не включают capability implementation/private headers.
-- [~] Добавить explicit layer classification в
+- [x] Убедиться, что apps не включают capability implementation/private headers.
+- [x] Добавить explicit layer classification в
   `tools/architecture_layers.toml`.
-- [~] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
+- [x] Расширить `check_arch.py` на `firmware/include`, `boards`, `platforms`,
   generated dependency files и object undefined symbols.
-- [~] Запретить apps→board/BSP, HAL/SDK, drivers.
-- [~] Запретить MicroPython adapter→board/HAL/SDK/drivers.
-- [~] Запретить capability implementation→apps, service→feature-private и
+- [x] Запретить apps→board/BSP, HAL/SDK, drivers.
+- [x] Запретить MicroPython adapter→board/HAL/SDK/drivers.
+- [x] Запретить capability implementation→apps, service→feature-private и
   board→apps/product policy.
-- [~] Запретить ручной provider inventory и Python-gated hardware provider.
-- [~] Заменить Phase 1 test, который разрешает app→driver, на Phase 2 negative
+- [x] Запретить ручной provider inventory и Python-gated hardware provider.
+- [x] Заменить Phase 1 test, который разрешает app→driver, на Phase 2 negative
   rule.
 
 ### Основные файлы
