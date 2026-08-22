@@ -810,8 +810,11 @@ call sites.
 
 ## 2.12 — Full automated qualification и rolling evidence
 
-Статус пакета: `in_progress` (2026-08-22). Реализуется только automated
-pre-hardware gate; physical SEN0305 acceptance остаётся границей `2.13`.
+Статус пакета: `completed` (2026-08-22). Qualification commit `aac4e01`
+прошёл полный [`Release firmware` run 32567046801](https://github.com/aztechell/hackylens/actions/runs/32567046801):
+пять capability-absent images, Cube conformance, full и
+MicroPython-disabled profiles, contract/resource/latency и pre-hardware exit
+gates зелёные. Physical SEN0305 acceptance остаётся границей `2.13`.
 
 ### Depends on
 
@@ -824,15 +827,15 @@ pre-hardware gate.
 
 ### Scope
 
-- [~] Добавить один contract suite, запускаемый против fake и K210 adapters.
-- [~] Собрать SEN0305 full и MicroPython-disabled configurations.
-- [~] Собрать diagnostic per-capability-absent configurations.
-- [~] Проверить required exclusion, `--require-app` и optional fallback.
-- [~] Выполнить Cube compile-conformance без runtime/hardware claims.
-- [~] Измерить raw/rounded flash, static RAM, relevant stack и latency.
-- [~] Проверить отсутствие новых heap/task/queue/core resources.
-- [~] Создать rolling `docs/evidence/phase2-result.json`.
-- [~] Добавить `tools/check_phase2_resources.py` и pre-hardware
+- [x] Добавить один contract suite, запускаемый против fake и K210 adapters.
+- [x] Собрать SEN0305 full и MicroPython-disabled configurations.
+- [x] Собрать diagnostic per-capability-absent configurations.
+- [x] Проверить required exclusion, `--require-app` и optional fallback.
+- [x] Выполнить Cube compile-conformance без runtime/hardware claims.
+- [x] Измерить raw/rounded flash, static RAM, relevant stack и latency.
+- [x] Проверить отсутствие новых heap/task/queue/core resources.
+- [x] Создать rolling `docs/evidence/phase2-result.json`.
+- [x] Добавить `tools/check_phase2_resources.py` и pre-hardware
   `tools/check_phase2_exit.py`.
 
 Все пять capability-absent вариантов обязаны реально собраться как
