@@ -24,35 +24,56 @@ class LightsCapabilityTests(unittest.TestCase):
             raise unittest.SkipTest("host C compiler not installed")
         return compiler
 
-    def test_masks_deadlines_cleanup_and_bounded_object(self) -> None:
+    def run_normative_backend(self, backend: str) -> str:
         compiler = self.compiler()
-        with tempfile.TemporaryDirectory(prefix="hackylens-lights-") as temp:
+        with tempfile.TemporaryDirectory(
+            prefix=f"hackylens-lights-{backend}-"
+        ) as temp:
             temporary = Path(temp)
             executable = temporary / (
                 "lights_capability.exe" if os.name == "nt" else "lights_capability"
             )
-            lights_object = temporary / "lights.o"
             common = [
                 "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'tests'}",
             ]
+            sources = [
+                ROOT / "tests" / "lights_capability_harness.c",
+                ROOT / "tests" / f"lights_normative_{backend}_backend.c",
+                ROOT / "firmware" / "src" / "capabilities" / "lights.c",
+                ROOT / "firmware" / "src" / "capabilities" /
+                "capability_core.c",
+            ]
+            if backend == "k210":
+                sources.append(
+                    ROOT / "platforms" / "k210" / "capabilities" /
+                    "lights_adapter.c"
+                )
             subprocess.run([
-                compiler, *common, "-c",
-                str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
-                "-o", str(lights_object),
-            ], check=True, cwd=ROOT)
-            subprocess.run([
-                compiler, *common,
-                str(ROOT / "tests" / "lights_capability_harness.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "capability_core.c"),
+                compiler, *common, *(str(source) for source in sources),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(
                 [str(executable)], check=True, cwd=ROOT,
                 text=True, capture_output=True, timeout=30,
             )
+        return result.stdout
+
+    def test_fake_passes_lights_normative_contract_and_bounded_object(self) -> None:
+        result = self.run_normative_backend("fake")
+        compiler = self.compiler()
+        with tempfile.TemporaryDirectory(prefix="hackylens-lights-object-") as temp:
+            lights_object = Path(temp) / "lights.o"
+            subprocess.run([
+                compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                "-c",
+                str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
+                "-o", str(lights_object),
+            ], check=True, cwd=ROOT)
             nm = shutil.which("nm")
             if nm:
                 symbols = subprocess.run(
@@ -63,8 +84,17 @@ class LightsCapabilityTests(unittest.TestCase):
                     self.assertNotIn(forbidden, symbols)
 
         self.assertIn(
-            "LIGHTS_CAPABILITY_OK writes=5 safe_off_mask=0x7 level_max=1000",
-            result.stdout,
+            "LIGHTS_NORMATIVE_OK backend=fake cases=16 effects=10 "
+            "safe_off_mask=0x7 level_max=1000",
+            result,
+        )
+
+    def test_k210_passes_same_lights_normative_contract(self) -> None:
+        result = self.run_normative_backend("k210")
+        self.assertIn(
+            "LIGHTS_NORMATIVE_OK backend=k210 cases=16 effects=10 "
+            "safe_off_mask=0x7 level_max=1000",
+            result,
         )
 
     def test_k210_adapter_converts_only_after_cancel_and_deadline_checks(self) -> None:

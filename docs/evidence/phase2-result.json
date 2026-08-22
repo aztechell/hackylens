@@ -496,62 +496,139 @@
     }
   },
   "contracts": {
-    "manifest_sha256": "6cf9ae17a0089ac10dd9210ddb6ff8be94726d722ae1f8b5b572fac878438d34",
-    "matrix": [
+    "adapter_specific_tests": [
+      "test_time_capability.TimeCapabilityTests.test_k210_any_core_clock_read_is_inside_provider_lock",
+      "test_input_capability.InputCapabilityTests.test_k210_raw_sampler_is_gated_to_ten_milliseconds",
+      "test_lights_capability.LightsCapabilityTests.test_k210_adapter_converts_only_after_cancel_and_deadline_checks"
+    ],
+    "manifest_sha256": "2af0c10ac9b955cdc4f522bbe1fa3bdfec8c4b68dc0804c94b9a2775060f597f",
+    "normative_suites": [
       {
-        "backend": "fake",
+        "backends": {
+          "fake": {
+            "test": "test_time_capability.TimeCapabilityTests.test_fake_passes_time_normative_contract_and_bounded_object"
+          },
+          "k210": {
+            "test": "test_time_capability.TimeCapabilityTests.test_k210_passes_same_time_normative_contract"
+          }
+        },
         "capability": "time",
-        "test": "test_time_capability.TimeCapabilityTests.test_time_contract_and_bounded_object"
+        "case_ids": [
+          "now-deadline-sliced-sleep",
+          "already-reached",
+          "deadline-required",
+          "cancel-before-sleep",
+          "cancel-after-slices",
+          "cancel-deadline-boundary",
+          "target-wins-at-boundary",
+          "frozen-clock-quarantine",
+          "monotonic-regression",
+          "duration-limits-overflow"
+        ],
+        "suite_source": "tests/time_capability_harness.c",
+        "suite_source_sha256": "b6df90c68c909fef560cbd522c2182572aa2ecfe7e06408b3cde661867dc2009"
       },
       {
-        "backend": "k210",
-        "capability": "time",
-        "test": "test_time_capability.TimeCapabilityTests.test_k210_any_core_clock_read_is_inside_provider_lock"
-      },
-      {
-        "backend": "fake",
+        "backends": {
+          "fake": {
+            "test": "test_input_capability.InputCapabilityTests.test_fake_passes_input_normative_contract_and_bounded_object"
+          },
+          "k210": {
+            "test": "test_input_capability.InputCapabilityTests.test_k210_passes_same_input_normative_contract"
+          }
+        },
         "capability": "input",
-        "test": "test_input_capability.InputCapabilityTests.test_debounce_events_cursors_and_overflow"
+        "case_ids": [
+          "inventory",
+          "bounce-debounce",
+          "held-no-repeat",
+          "independent-cursors",
+          "multi-button-edge",
+          "bounded-overflow",
+          "wrong-context-deadline",
+          "owner-cleanup-stale-handle"
+        ],
+        "suite_source": "tests/input_capability_harness.c",
+        "suite_source_sha256": "fd1b0b4163d64f5f548ae6d74b6609eab8fd1c7e4509fbf5cdd2c5a5f58342ec"
       },
       {
-        "backend": "k210",
-        "capability": "input",
-        "test": "test_input_capability.InputCapabilityTests.test_k210_raw_sampler_is_gated_to_ten_milliseconds"
-      },
-      {
-        "backend": "fake",
+        "backends": {
+          "fake": {
+            "test": "test_display_contract.DisplayContractTests.test_fake_proves_display_state_machine"
+          },
+          "k210": {
+            "test": "test_micropython_bindings.MicroPythonBindingSafetyTests.test_k210_display_adapter_composition_cancel_and_cleanup"
+          }
+        },
         "capability": "display",
-        "test": "test_display_contract.DisplayContractTests.test_fake_proves_display_state_machine"
+        "case_ids": [
+          "surface-mutate-abort",
+          "retained-batch-abort",
+          "partial-failure-retry",
+          "partial-failure-abort-release",
+          "base-overlay-coexist",
+          "disjoint-surface-repair",
+          "failed-cleanup-quarantine"
+        ],
+        "suite_source": "tests/display_normative_suite.c",
+        "suite_source_sha256": "65412c1ad4b97d8387bc5bb023c0d6d17244d42ffb5c5e911fdda16c0c3dfe8c"
       },
       {
-        "backend": "k210",
-        "capability": "display",
-        "test": "test_micropython_bindings.MicroPythonBindingSafetyTests.test_k210_display_adapter_composition_cancel_and_cleanup"
-      },
-      {
-        "backend": "fake",
+        "backends": {
+          "fake": {
+            "test": "test_external_link_contract.ExternalLinkContractTests.test_fake_proves_external_link_state_machine"
+          },
+          "k210": {
+            "test": "test_external_link_contract.ExternalLinkContractTests.test_k210_adapter_passes_the_same_normative_suite"
+          }
+        },
         "capability": "external-link",
-        "test": "test_external_link_contract.ExternalLinkContractTests.test_fake_proves_external_link_state_machine"
+        "case_ids": [
+          "exclusive-acquire-and-info",
+          "malformed-abi",
+          "uart-bounded-progress-cancel",
+          "i2c-controller-progress",
+          "i2c-target-preload",
+          "failed-cleanup-quarantine"
+        ],
+        "suite_source": "tests/external_link_normative_suite.c",
+        "suite_source_sha256": "4c27ff2a30e7af4c608cf67f4bc23a164663000b67f3f0a82c06cfb372e41b31"
       },
       {
-        "backend": "k210",
-        "capability": "external-link",
-        "test": "test_external_link_contract.ExternalLinkContractTests.test_k210_adapter_passes_the_same_normative_suite"
-      },
-      {
-        "backend": "fake",
+        "backends": {
+          "fake": {
+            "test": "test_lights_capability.LightsCapabilityTests.test_fake_passes_lights_normative_contract_and_bounded_object"
+          },
+          "k210": {
+            "test": "test_lights_capability.LightsCapabilityTests.test_k210_passes_same_lights_normative_contract"
+          }
+        },
         "capability": "lights",
-        "test": "test_lights_capability.LightsCapabilityTests.test_masks_deadlines_cleanup_and_bounded_object"
-      },
-      {
-        "backend": "k210",
-        "capability": "lights",
-        "test": "test_lights_capability.LightsCapabilityTests.test_k210_adapter_converts_only_after_cancel_and_deadline_checks"
+        "case_ids": [
+          "declared-features",
+          "exclusive-channel-acquire",
+          "inventory",
+          "wrong-owner",
+          "channel-scope",
+          "level-limit",
+          "cancel",
+          "deadline",
+          "successful-writes",
+          "failed-release-retains-lease",
+          "safe-release",
+          "same-owner-disjoint-lease",
+          "owner-cleanup",
+          "stale-handle-replacement",
+          "malformed-request",
+          "failed-cleanup-quarantine"
+        ],
+        "suite_source": "tests/lights_capability_harness.c",
+        "suite_source_sha256": "059047ecf05be1e837b110d207be7cd5dc9513d29d2df3502aae15a2fa0691e9"
       }
     ],
     "passed": true,
-    "schema": 1,
-    "suite": "phase2-adapter-contracts-v1",
+    "schema": 2,
+    "suite": "phase2-shared-provider-contracts-v2",
     "supplemental_tests": [
       "test_capability_core.CapabilityCoreHostTests.test_common_lifecycle_contract_suite",
       "test_phase2_qualification.Phase2QualificationTests.test_registry_validation_host_p99",
@@ -614,8 +691,8 @@
   "schema": 1,
   "source": {
     "content_normalization": "git-clean-filtered-blob-id",
-    "file_count": 624,
-    "manifest_sha256": "4dfae6aff6b69e71407c59c2298bd000e3cbc294160704279535703199a469b7",
+    "file_count": 633,
+    "manifest_sha256": "e6fd497e4136714500c311a45539ccf064b2614da6818bd99b9fbf64a24f2a39",
     "scope": [
       ".github/workflows/release.yml",
       "VERSION",

@@ -83,7 +83,10 @@ UART/I2C protocol or routed-peripheral semantics.
   generalizes repository object-symbol edges, makes workspace generation
   exhaustion non-wrapping, and passed
   [Release firmware run 32565126272](https://github.com/aztechell/hackylens/actions/runs/32565126272).
-  Phase 2.12 has not started.
+  Phase 2.12 automated qualification is in corrective progress: the build,
+  diagnostic, resource, latency, and rolling-evidence gates are present, while
+  Time/Input/Lights fake and K210 backends are being moved onto identical
+  provider-independent normative case sets. Phase 2.13 has not started.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -99,7 +102,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.11 implementation; Time + Input + Display + External Link + Lights runtime providers |
+| Capability build composition | Phase 2.12 corrective qualification; Time + Input + Display + External Link + Lights runtime providers |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 

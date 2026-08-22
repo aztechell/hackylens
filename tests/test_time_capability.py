@@ -17,36 +17,58 @@ class TimeCapabilityTests(unittest.TestCase):
             raise unittest.SkipTest("host C compiler not installed")
         return compiler
 
-    def test_time_contract_and_bounded_object(self) -> None:
+    def run_normative_backend(self, backend: str) -> str:
         compiler = self.compiler()
-        with tempfile.TemporaryDirectory(prefix="hackylens-time-") as temp:
+        with tempfile.TemporaryDirectory(
+            prefix=f"hackylens-time-{backend}-"
+        ) as temp:
             temporary = Path(temp)
             executable = temporary / (
                 "time_capability.exe" if os.name == "nt" else "time_capability"
             )
-            time_object = temporary / "time.o"
             common = [
                 "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'runtime'}",
+                f"-I{ROOT / 'tests'}",
             ]
+            sources = [
+                ROOT / "tests" / "time_capability_harness.c",
+                ROOT / "tests" / f"time_normative_{backend}_backend.c",
+                ROOT / "firmware" / "src" / "capabilities" / "time.c",
+                ROOT / "firmware" / "src" / "capabilities" /
+                "capability_core.c",
+            ]
+            if backend == "k210":
+                common.append(f"-I{ROOT / 'tests' / 'k210_time_adapter_stubs'}")
+                sources.append(
+                    ROOT / "platforms" / "k210" / "capabilities" /
+                    "time_adapter.c"
+                )
             subprocess.run([
-                compiler, *common, "-c",
-                str(ROOT / "firmware" / "src" / "capabilities" / "time.c"),
-                "-o", str(time_object),
-            ], check=True, cwd=ROOT)
-            subprocess.run([
-                compiler, *common,
-                str(ROOT / "tests" / "time_capability_harness.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "time.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "capability_core.c"),
+                compiler, *common, *(str(source) for source in sources),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(
                 [str(executable)], check=True, cwd=ROOT,
                 text=True, capture_output=True, timeout=30,
             )
+        return result.stdout
+
+    def test_fake_passes_time_normative_contract_and_bounded_object(self) -> None:
+        result = self.run_normative_backend("fake")
+        compiler = self.compiler()
+        with tempfile.TemporaryDirectory(prefix="hackylens-time-object-") as temp:
+            time_object = Path(temp) / "time.o"
+            subprocess.run([
+                compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                "-c",
+                str(ROOT / "firmware" / "src" / "capabilities" / "time.c"),
+                "-o", str(time_object),
+            ], check=True, cwd=ROOT)
             nm = shutil.which("nm")
             if nm:
                 symbols = subprocess.run(
@@ -56,7 +78,17 @@ class TimeCapabilityTests(unittest.TestCase):
                 for forbidden in ("malloc", "calloc", "realloc", "free", "task", "queue"):
                     self.assertNotIn(forbidden, symbols)
 
-        self.assertIn("TIME_CAPABILITY_OK cases=10 max_slice_us=5000", result.stdout)
+        self.assertIn(
+            "TIME_NORMATIVE_OK backend=fake cases=10 max_slice_us=5000",
+            result,
+        )
+
+    def test_k210_passes_same_time_normative_contract(self) -> None:
+        result = self.run_normative_backend("k210")
+        self.assertIn(
+            "TIME_NORMATIVE_OK backend=k210 cases=10 max_slice_us=5000",
+            result,
+        )
 
     def test_k210_any_core_clock_read_is_inside_provider_lock(self) -> None:
         compiler = self.compiler()

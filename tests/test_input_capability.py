@@ -24,36 +24,57 @@ class InputCapabilityTests(unittest.TestCase):
             raise unittest.SkipTest("host C compiler not installed")
         return compiler
 
-    def test_debounce_events_cursors_and_overflow(self) -> None:
+    def run_normative_backend(self, backend: str) -> str:
         compiler = self.compiler()
-        with tempfile.TemporaryDirectory(prefix="hackylens-input-") as temp:
+        with tempfile.TemporaryDirectory(
+            prefix=f"hackylens-input-{backend}-"
+        ) as temp:
             temporary = Path(temp)
             executable = temporary / (
                 "input_capability.exe" if os.name == "nt" else "input_capability"
             )
-            input_object = temporary / "input_state.o"
             common = [
                 "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                f"-I{ROOT / 'tests'}",
             ]
+            sources = [
+                ROOT / "tests" / "input_capability_harness.c",
+                ROOT / "tests" / f"input_normative_{backend}_backend.c",
+                ROOT / "firmware" / "src" / "capabilities" / "input.c",
+                ROOT / "firmware" / "src" / "capabilities" / "input_state.c",
+                ROOT / "firmware" / "src" / "capabilities" /
+                "capability_core.c",
+            ]
+            if backend == "k210":
+                sources.append(
+                    ROOT / "platforms" / "k210" / "capabilities" /
+                    "input_adapter.c"
+                )
             subprocess.run([
-                compiler, *common, "-c",
-                str(ROOT / "firmware" / "src" / "capabilities" / "input_state.c"),
-                "-o", str(input_object),
-            ], check=True, cwd=ROOT)
-            subprocess.run([
-                compiler, *common,
-                str(ROOT / "tests" / "input_capability_harness.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "input.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "input_state.c"),
-                str(ROOT / "firmware" / "src" / "capabilities" / "capability_core.c"),
+                compiler, *common, *(str(source) for source in sources),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(
                 [str(executable)], check=True, cwd=ROOT,
                 text=True, capture_output=True, timeout=30,
             )
+        return result.stdout
+
+    def test_fake_passes_input_normative_contract_and_bounded_object(self) -> None:
+        result = self.run_normative_backend("fake")
+        compiler = self.compiler()
+        with tempfile.TemporaryDirectory(prefix="hackylens-input-object-") as temp:
+            input_object = Path(temp) / "input_state.o"
+            subprocess.run([
+                compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                "-c",
+                str(ROOT / "firmware" / "src" / "capabilities" / "input_state.c"),
+                "-o", str(input_object),
+            ], check=True, cwd=ROOT)
             nm = shutil.which("nm")
             if nm:
                 symbols = subprocess.run(
@@ -64,8 +85,15 @@ class InputCapabilityTests(unittest.TestCase):
                     self.assertNotIn(forbidden, symbols)
 
         self.assertIn(
-            "INPUT_CAPABILITY_OK events=12 capacity=8 dropped=11",
-            result.stdout,
+            "INPUT_NORMATIVE_OK backend=fake events=12 capacity=8 dropped=11",
+            result,
+        )
+
+    def test_k210_passes_same_input_normative_contract(self) -> None:
+        result = self.run_normative_backend("k210")
+        self.assertIn(
+            "INPUT_NORMATIVE_OK backend=k210 events=12 capacity=8 dropped=11",
+            result,
         )
 
     def test_k210_raw_sampler_is_gated_to_ten_milliseconds(self) -> None:

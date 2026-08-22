@@ -4,253 +4,21 @@
 #include <string.h>
 
 #include "../firmware/src/capabilities/capability_provider.h"
-#include "../firmware/src/capabilities/lights_provider.h"
+#include "lights_normative_backend.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
     {                                                                        \
         if(!(condition))                                                     \
         {                                                                    \
-            printf("LIGHTS_FAIL line=%d\n", __LINE__);                     \
+            printf("LIGHTS_NORMATIVE_FAIL backend=%s line=%d\n",          \
+                   lights_normative_backend_name(), __LINE__);               \
             return 1;                                                        \
         }                                                                    \
     } while(0)
 
-typedef struct
-{
-    hk_lease_t lease;
-    uint32_t channels;
-    uint8_t active;
-} fake_slot_t;
-
-typedef struct
-{
-    fake_slot_t slots[8];
-    uint64_t now_us;
-    uint32_t write_count;
-    uint32_t safe_off_mask;
-    uint32_t safe_off_count;
-    uint16_t backlight;
-    uint16_t illumination;
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-} fake_lights_t;
-
 static hk_capability_core_t s_core;
-static fake_lights_t s_fake;
-
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static uint8_t lease_equal(const hk_lease_t *left, const hk_lease_t *right)
-{
-    return (uint8_t)(left && right && left->slot == right->slot &&
-                     left->generation == right->generation &&
-                     left->capability_id == right->capability_id &&
-                     owner_equal(left->owner, right->owner));
-}
-
-static fake_slot_t *fake_find(fake_lights_t *fake, const hk_lease_t *lease)
-{
-    for(uint16_t index = 0U; index < 8U; index++)
-    {
-        if(fake->slots[index].active &&
-           lease_equal(&fake->slots[index].lease, lease))
-            return &fake->slots[index];
-    }
-    return NULL;
-}
-
-static void fake_safe_off(fake_lights_t *fake, uint32_t channels)
-{
-    fake->safe_off_mask |= channels;
-    fake->safe_off_count++;
-    if(channels & HK_LIGHTS_CHANNEL_BACKLIGHT)
-        fake->backlight = 0U;
-    if(channels & HK_LIGHTS_CHANNEL_ILLUMINATION)
-        fake->illumination = 0U;
-    if(channels & HK_LIGHTS_CHANNEL_RGB)
-        fake->red = fake->green = fake->blue = 0U;
-}
-
-static hk_result_t fake_open(
-    void *context, const hk_lease_t *lease, uint32_t channels)
-{
-    fake_lights_t *fake = (fake_lights_t *)context;
-    fake_slot_t *free_slot = NULL;
-
-    for(uint16_t index = 0U; index < 8U; index++)
-    {
-        fake_slot_t *slot = &fake->slots[index];
-
-        if(!slot->active)
-        {
-            if(!free_slot)
-                free_slot = slot;
-            continue;
-        }
-        if((slot->channels & channels) != 0U)
-            return HK_ERR_BUSY;
-    }
-    if(!free_slot)
-        return HK_ERR_LIMIT;
-    free_slot->lease = *lease;
-    free_slot->channels = channels;
-    free_slot->active = 1U;
-    return HK_OK;
-}
-
-static hk_result_t fake_close(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
-{
-    fake_lights_t *fake = (fake_lights_t *)context;
-    fake_slot_t *slot = fake_find(fake, lease);
-
-    if(!slot)
-        return HK_ERR_INTERNAL;
-    if(deadline.at_us != 0U && fake->now_us >= deadline.at_us)
-        return HK_ERR_DEADLINE_EXCEEDED;
-    fake_safe_off(fake, slot->channels);
-    memset(slot, 0, sizeof(*slot));
-    return HK_OK;
-}
-
-static hk_result_t fake_info(void *context, hk_lights_info_t *info)
-{
-    (void)context;
-    if(!info)
-        return HK_ERR_INVALID_ARGUMENT;
-    *info = (hk_lights_info_t){
-        sizeof(*info), HK_LIGHTS_INFO_VERSION, HK_LIGHTS_CHANNEL_ALL,
-        HK_LIGHTS_LEVEL_MAX, 0U,
-    };
-    return HK_OK;
-}
-
-static hk_result_t fake_validate_write(
-    fake_lights_t *fake, const hk_lease_t *lease, uint32_t channels,
-    hk_deadline_t deadline, const hk_cancel_t *cancel)
-{
-    fake_slot_t *slot = fake_find(fake, lease);
-
-    if(!slot)
-        return HK_ERR_INTERNAL;
-    if((slot->channels & channels) != channels)
-        return HK_ERR_WRONG_OWNER;
-    if(cancel && cancel->probe && cancel->probe(cancel->context))
-        return HK_ERR_CANCELLED;
-    if(deadline.at_us != 0U && fake->now_us >= deadline.at_us)
-        return HK_ERR_DEADLINE_EXCEEDED;
-    return HK_OK;
-}
-
-static hk_result_t fake_level(
-    void *context, const hk_lease_t *lease, uint32_t channel,
-    uint16_t level, hk_deadline_t deadline, const hk_cancel_t *cancel)
-{
-    fake_lights_t *fake = (fake_lights_t *)context;
-    hk_result_t result = fake_validate_write(
-        fake, lease, channel, deadline, cancel);
-
-    if(result != HK_OK)
-        return result;
-    if(channel == HK_LIGHTS_CHANNEL_BACKLIGHT)
-        fake->backlight = level;
-    else if(channel == HK_LIGHTS_CHANNEL_ILLUMINATION)
-        fake->illumination = level;
-    else
-        return HK_ERR_INVALID_ARGUMENT;
-    fake->write_count++;
-    return HK_OK;
-}
-
-static hk_result_t fake_rgb(
-    void *context, const hk_lease_t *lease, uint16_t red,
-    uint16_t green, uint16_t blue, hk_deadline_t deadline,
-    const hk_cancel_t *cancel)
-{
-    fake_lights_t *fake = (fake_lights_t *)context;
-    hk_result_t result = fake_validate_write(
-        fake, lease, HK_LIGHTS_CHANNEL_RGB, deadline, cancel);
-
-    if(result != HK_OK)
-        return result;
-    fake->red = red;
-    fake->green = green;
-    fake->blue = blue;
-    fake->write_count++;
-    return HK_OK;
-}
-
-static hk_lights_provider_t s_lights_provider = {
-    .context = &s_fake,
-    .open_channels = fake_open,
-    .close_channels = fake_close,
-    .get_info = fake_info,
-    .set_level = fake_level,
-    .set_rgb = fake_rgb,
-};
-
-static hk_result_t fake_cleanup(
-    void *context, hk_owner_t owner, hk_deadline_t deadline)
-{
-    hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
-    fake_lights_t *fake = (fake_lights_t *)provider->context;
-
-    for(uint16_t index = 0U; index < 8U; index++)
-    {
-        fake_slot_t *slot = &fake->slots[index];
-
-        if(slot->active && owner_equal(slot->lease.owner, owner))
-        {
-            if(deadline.at_us != 0U && fake->now_us >= deadline.at_us)
-                return HK_ERR_DEADLINE_EXCEEDED;
-            break;
-        }
-    }
-    for(uint16_t index = 0U; index < 8U; index++)
-    {
-        fake_slot_t *slot = &fake->slots[index];
-
-        if(!slot->active || !owner_equal(slot->lease.owner, owner))
-            continue;
-        fake_safe_off(fake, slot->channels);
-        memset(slot, 0, sizeof(*slot));
-    }
-    return HK_OK;
-}
-
-static hk_result_t fake_cleanup_lease(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
-{
-    hk_lights_provider_t *provider = (hk_lights_provider_t *)context;
-    fake_lights_t *fake = (fake_lights_t *)provider->context;
-
-    if(!fake_find(fake, lease))
-        return HK_OK;
-    return fake_close(fake, lease, deadline);
-}
-
-static hk_result_t fake_cleanup_dispatch(
-    void *context, hk_owner_t owner, uint16_t target_core,
-    hk_deadline_t deadline)
-{
-    return target_core == 0U ? fake_cleanup(context, owner, deadline) :
-                              HK_ERR_WRONG_CONTEXT;
-}
-
-static const hk_capability_provider_t s_provider = {
-    .context = &s_lights_provider,
-    .cleanup_lease = fake_cleanup_lease,
-    .cleanup = fake_cleanup,
-    .cleanup_dispatch = fake_cleanup_dispatch,
-    .max_leases = 8U,
-};
-static const hk_capability_provider_t *s_provider_ref = &s_provider;
+static const hk_capability_provider_t *s_provider_ref;
 static const hk_capability_info_t s_inventory = {
     sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
     HK_CAPABILITY_ID_LIGHTS, {0U, 1U, 0U, 0U}, HK_LIGHTS_FEATURES_0_1,
@@ -317,10 +85,11 @@ int main(void)
     hk_capability_grant_t illumination_grant = s_grant;
     hk_capability_request_t illumination_request = request;
     hk_capability_request_t short_request = request;
-    uint32_t safe_off_count;
+    uint32_t effects;
 
-    memset(&s_fake, 0, sizeof(s_fake));
-    s_fake.now_us = 100U;
+    lights_normative_backend_reset(100U);
+    s_provider_ref = lights_normative_backend_provider();
+    CHECK(s_provider_ref != NULL);
     CHECK(hk_capability_core_init(
         &s_core, &s_inventory, &s_provider_ref, 1U) == HK_OK);
     CHECK(hk_capability_core_owner_open(
@@ -355,7 +124,7 @@ int main(void)
         &backlight) == HK_OK);
     CHECK(hk_lights_get_info(owner_a, &illumination, &info) == HK_OK);
     CHECK(info.supported_channels == HK_LIGHTS_CHANNEL_ALL &&
-          info.maximum_level == 1000U);
+          info.maximum_level == HK_LIGHTS_LEVEL_MAX);
 
     CHECK(hk_lights_set_level(
         owner_b, &illumination, HK_LIGHTS_CHANNEL_ILLUMINATION, 500U,
@@ -372,7 +141,7 @@ int main(void)
     CHECK(hk_lights_set_level(
         owner_a, &illumination, HK_LIGHTS_CHANNEL_ILLUMINATION, 500U,
         (hk_deadline_t){100U}, NULL) == HK_ERR_DEADLINE_EXCEEDED);
-    CHECK(s_fake.write_count == 0U);
+    CHECK(lights_normative_backend_effect_count() == 0U);
 
     cancel_flag = 0U;
     CHECK(hk_lights_set_level(
@@ -384,20 +153,24 @@ int main(void)
     CHECK(hk_lights_set_level(
         owner_c, &backlight, HK_LIGHTS_CHANNEL_BACKLIGHT, 900U,
         (hk_deadline_t){101U}, NULL) == HK_OK);
-    CHECK(s_fake.write_count == 3U && s_fake.illumination == 500U &&
-          s_fake.red == 1000U && s_fake.green == 500U &&
-          s_fake.blue == 1U && s_fake.backlight == 900U);
+    CHECK(lights_normative_backend_effect_count() == 3U);
+    CHECK(lights_normative_backend_active_mask() == HK_LIGHTS_CHANNEL_ALL);
 
-    safe_off_count = s_fake.safe_off_count;
+    effects = lights_normative_backend_effect_count();
     CHECK(hk_lights_release(
         owner_c, (hk_deadline_t){100U}, &backlight) ==
-          HK_ERR_DEADLINE_EXCEEDED);
-    CHECK(s_fake.safe_off_count == safe_off_count &&
-          s_fake.backlight == 900U && !hk_lease_is_zero(&backlight.lease));
+        HK_ERR_DEADLINE_EXCEEDED);
+    CHECK(lights_normative_backend_effect_count() == effects &&
+          (lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_BACKLIGHT) != 0U &&
+          !hk_lease_is_zero(&backlight.lease));
     CHECK(hk_lights_release(
         owner_c, HK_DEADLINE_IMMEDIATE, &backlight) == HK_OK);
-    CHECK(s_fake.safe_off_count == safe_off_count + 1U &&
+    CHECK(lights_normative_backend_effect_count() == effects + 1U &&
+          (lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_BACKLIGHT) == 0U &&
           hk_lease_is_zero(&backlight.lease));
+
     CHECK(hk_lights_acquire(
         owner_a, &request, HK_LIGHTS_CHANNEL_BACKLIGHT,
         &same_owner_backlight) == HK_OK);
@@ -408,12 +181,16 @@ int main(void)
         HK_DEADLINE_IMMEDIATE, NULL) == HK_OK);
     CHECK(hk_lights_release(
         owner_a, HK_DEADLINE_IMMEDIATE, &illumination) == HK_OK);
-    CHECK(s_fake.illumination == 0U &&
-          (s_fake.safe_off_mask & HK_LIGHTS_CHANNEL_ILLUMINATION));
+    CHECK((lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_ILLUMINATION) == 0U);
+    CHECK((lights_normative_backend_safe_off_mask() &
+           HK_LIGHTS_CHANNEL_ILLUMINATION) != 0U);
+
     stale_rgb = rgb;
     CHECK(hk_capability_core_owner_close(
         &s_core, owner_b, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
-    CHECK(s_fake.red == 0U && s_fake.green == 0U && s_fake.blue == 0U);
+    CHECK((lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_RGB) == 0U);
     CHECK(hk_lights_set_rgb(
         owner_b, &stale_rgb, 1U, 1U, 1U,
         HK_DEADLINE_IMMEDIATE, NULL) == HK_ERR_STALE_HANDLE);
@@ -422,8 +199,13 @@ int main(void)
     CHECK(hk_lights_set_rgb(
         owner_d, &replacement, 25U, 50U, 75U,
         HK_DEADLINE_IMMEDIATE, NULL) == HK_OK);
+    CHECK((lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_RGB) != 0U);
     CHECK(hk_lights_release(
         owner_d, HK_DEADLINE_IMMEDIATE, &replacement) == HK_OK);
+    CHECK((lights_normative_backend_active_mask() &
+           HK_LIGHTS_CHANNEL_RGB) == 0U);
+
     CHECK(hk_lights_acquire(
         owner_d, &request, 0U, &replacement) == HK_ERR_INVALID_ARGUMENT);
     CHECK(hk_lights_acquire(
@@ -437,19 +219,23 @@ int main(void)
     CHECK(hk_lights_acquire(
         owner_e, &illumination_request, HK_LIGHTS_CHANNEL_ILLUMINATION,
         &illumination) == HK_OK);
-    safe_off_count = s_fake.safe_off_count;
+    effects = lights_normative_backend_effect_count();
     CHECK(hk_capability_core_owner_close(
         &s_core, owner_e, 0U, (hk_deadline_t){100U}) == HK_ERR_INTERNAL);
-    CHECK(s_fake.safe_off_count == safe_off_count);
+    CHECK(lights_normative_backend_effect_count() == effects);
     CHECK(hk_lights_set_level(
         owner_e, &illumination, HK_LIGHTS_CHANNEL_ILLUMINATION, 1U,
         HK_DEADLINE_IMMEDIATE, NULL) == HK_ERR_STALE_HANDLE);
     CHECK(hk_lights_acquire(
         owner_c, &request, HK_LIGHTS_CHANNEL_BACKLIGHT,
         &replacement) == HK_ERR_INVALID_STATE);
+    CHECK(lights_normative_backend_safe_off_mask() == HK_LIGHTS_CHANNEL_ALL);
 
-    printf("LIGHTS_CAPABILITY_OK writes=%u safe_off_mask=0x%X level_max=%u\n",
-           (unsigned)s_fake.write_count, (unsigned)s_fake.safe_off_mask,
+    printf("LIGHTS_NORMATIVE_OK backend=%s cases=16 effects=%u "
+           "safe_off_mask=0x%X level_max=%u\n",
+           lights_normative_backend_name(),
+           (unsigned)lights_normative_backend_effect_count(),
+           (unsigned)lights_normative_backend_safe_off_mask(),
            (unsigned)HK_LIGHTS_LEVEL_MAX);
     return 0;
 }

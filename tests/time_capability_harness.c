@@ -5,36 +5,22 @@
 #include <string.h>
 
 #include "../firmware/src/capabilities/capability_provider.h"
-#include "../firmware/src/capabilities/time_provider.h"
+#include "time_normative_backend.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
     {                                                                        \
         if(!(condition))                                                     \
         {                                                                    \
-            printf("TIME_FAIL line=%d\n", __LINE__);                       \
+            printf("TIME_NORMATIVE_FAIL backend=%s line=%d\n",            \
+                   time_normative_backend_name(), __LINE__);                 \
             return 1;                                                        \
         }                                                                    \
     } while(0)
 
-typedef struct
-{
-    uint64_t now_us;
-    uint64_t last_us;
-    uint64_t slept_us;
-    uint32_t sleep_calls;
-    uint32_t cancel_polls;
-    uint32_t cancel_on_poll;
-    uint8_t observed;
-    uint8_t freeze;
-} fake_time_t;
-
 static hk_capability_core_t s_core;
 static hk_owner_t s_owner;
-static fake_time_t s_fake;
-static hk_time_provider_t s_time_provider;
-static hk_capability_provider_t s_provider;
-static const hk_capability_provider_t *s_provider_ref = &s_provider;
+static const hk_capability_provider_t *s_provider_ref;
 static const hk_capability_limit_t s_limits[] = {
     {sizeof(hk_capability_limit_t), HK_CAPABILITY_LIMIT_VERSION,
      1U, HK_TIME_MAX_SLEEP_US},
@@ -48,39 +34,8 @@ static const hk_capability_info_t s_inventory = {
 static const hk_capability_grant_t s_grant = {
     .request = HK_TIME_REQUEST_0_1_INIT,
 };
-
-static hk_result_t fake_now(void *context, uint64_t *value)
-{
-    fake_time_t *fake = (fake_time_t *)context;
-
-    if(fake->observed && fake->now_us < fake->last_us)
-        return HK_ERR_INTERNAL;
-    fake->last_us = fake->now_us;
-    fake->observed = 1U;
-    *value = fake->now_us;
-    return HK_OK;
-}
-
-static hk_result_t fake_sleep(void *context, uint64_t duration_us)
-{
-    fake_time_t *fake = (fake_time_t *)context;
-
-    CHECK(duration_us > 0U && duration_us <= HK_TIME_CANCEL_PROBE_MAX_US);
-    fake->sleep_calls++;
-    fake->slept_us += duration_us;
-    if(!fake->freeze)
-        fake->now_us += duration_us;
-    return HK_OK;
-}
-
-static uint8_t fake_cancel(const void *context)
-{
-    fake_time_t *fake = (fake_time_t *)context;
-
-    fake->cancel_polls++;
-    return (uint8_t)(fake->cancel_on_poll != 0U &&
-                     fake->cancel_polls >= fake->cancel_on_poll);
-}
+static uint32_t s_cancel_polls;
+static uint32_t s_cancel_on_poll;
 
 hk_result_t capability_owner_runtime_acquire(
     hk_owner_t owner, const hk_capability_request_t *request,
@@ -114,20 +69,22 @@ hk_result_t capability_owner_runtime_quarantine(
         &s_core, owner, lease, expected_type, 0U);
 }
 
-static int reset(hk_time_t *time)
+static uint8_t cancel_probe(const void *context)
+{
+    (void)context;
+    s_cancel_polls++;
+    return (uint8_t)(s_cancel_on_poll != 0U &&
+                     s_cancel_polls >= s_cancel_on_poll);
+}
+
+static int reset(hk_time_t *time, uint64_t *base)
 {
     memset(&s_core, 0, sizeof(s_core));
-    memset(&s_fake, 0, sizeof(s_fake));
-    s_fake.now_us = 1000000U;
-    s_time_provider.context = &s_fake;
-    s_time_provider.now_us = fake_now;
-    s_time_provider.sleep_us = fake_sleep;
-    s_time_provider.max_sleep_us = HK_TIME_MAX_SLEEP_US;
-    s_time_provider.max_slice_us = (uint32_t)HK_TIME_CANCEL_PROBE_MAX_US;
-    s_time_provider.reserved = 0U;
-    memset(&s_provider, 0, sizeof(s_provider));
-    s_provider.context = &s_time_provider;
-    s_provider.max_leases = 16U;
+    s_cancel_polls = 0U;
+    s_cancel_on_poll = 0U;
+    *base = time_normative_backend_reset();
+    s_provider_ref = time_normative_backend_provider();
+    CHECK(s_provider_ref != NULL);
     CHECK(hk_capability_core_init(
         &s_core, &s_inventory, &s_provider_ref, 1U) == HK_OK);
     CHECK(hk_capability_core_owner_open(
@@ -141,90 +98,94 @@ int main(void)
     hk_time_t time;
     hk_deadline_t target;
     hk_deadline_t deadline;
-    hk_cancel_t cancel = {fake_cancel, &s_fake};
+    hk_cancel_t cancel = {cancel_probe, NULL};
+    uint64_t base;
     uint64_t now;
 
-    CHECK(reset(&time) == 0);
-    CHECK(hk_time_now_us(s_owner, &time, &now) == HK_OK);
-    CHECK(now == 1000000U);
+    CHECK(reset(&time, &base) == 0);
+    CHECK(hk_time_now_us(s_owner, &time, &now) == HK_OK && now == base);
     CHECK(hk_time_deadline_after_us(
         s_owner, &time, 12000U, &target) == HK_OK);
-    CHECK(target.at_us == 1012000U);
+    CHECK(target.at_us == base + 12000U);
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, target, NULL) == HK_OK);
-    CHECK(s_fake.sleep_calls == 3U && s_fake.slept_us == 12000U);
+    CHECK(time_normative_backend_sleep_calls() == 3U &&
+          time_normative_backend_slept_us() == 12000U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base;
     deadline.at_us = 0U;
-    s_fake.cancel_on_poll = 1U;
+    s_cancel_on_poll = 1U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, &cancel) == HK_OK);
-    CHECK(s_fake.sleep_calls == 0U && s_fake.cancel_polls == 0U);
+    CHECK(time_normative_backend_sleep_calls() == 0U && s_cancel_polls == 0U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 1000U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 1000U;
     deadline.at_us = 0U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, NULL) == HK_ERR_DEADLINE_EXCEEDED);
-    CHECK(s_fake.sleep_calls == 0U);
+    CHECK(time_normative_backend_sleep_calls() == 0U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 20000U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 20000U;
     deadline.at_us = target.at_us;
-    s_fake.cancel_on_poll = 1U;
+    s_cancel_on_poll = 1U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, &cancel) == HK_ERR_CANCELLED);
-    CHECK(s_fake.sleep_calls == 0U);
+    CHECK(time_normative_backend_sleep_calls() == 0U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 20000U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 20000U;
     deadline.at_us = target.at_us;
-    s_fake.cancel_on_poll = 3U;
+    s_cancel_on_poll = 3U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, &cancel) == HK_ERR_CANCELLED);
-    CHECK(s_fake.sleep_calls == 2U && s_fake.slept_us == 10000U);
+    CHECK(time_normative_backend_sleep_calls() == 2U &&
+          time_normative_backend_slept_us() == 10000U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 20000U;
-    deadline.at_us = s_fake.now_us + 10000U;
-    s_fake.cancel_on_poll = 3U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 20000U;
+    deadline.at_us = base + 10000U;
+    s_cancel_on_poll = 3U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, &cancel) == HK_ERR_CANCELLED);
-    CHECK(s_fake.slept_us == 10000U);
+    CHECK(time_normative_backend_slept_us() == 10000U);
 
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 10000U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 10000U;
     deadline.at_us = target.at_us;
-    s_fake.cancel_on_poll = 3U;
+    s_cancel_on_poll = 3U;
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, &cancel) == HK_OK);
 
-    CHECK(reset(&time) == 0);
-    CHECK(hk_time_deadline_after_us(
-        s_owner, &time, HK_TIME_MAX_SLEEP_US + 1U,
-        &deadline) == HK_ERR_LIMIT);
-    s_fake.now_us = UINT64_MAX - 4U;
-    s_fake.observed = 0U;
-    CHECK(hk_time_deadline_after_us(
-        s_owner, &time, 4U, &deadline) == HK_ERR_LIMIT);
-
-    CHECK(reset(&time) == 0);
-    target.at_us = s_fake.now_us + 1U;
+    CHECK(reset(&time, &base) == 0);
+    target.at_us = base + 1U;
     deadline.at_us = target.at_us;
-    s_fake.freeze = 1U;
+    time_normative_backend_set_freeze(1U);
     CHECK(hk_time_sleep_until(
         s_owner, &time, target, deadline, NULL) == HK_ERR_INTERNAL);
     CHECK(hk_time_now_us(s_owner, &time, &now) == HK_ERR_INVALID_STATE);
 
-    CHECK(reset(&time) == 0);
-    CHECK(hk_time_now_us(s_owner, &time, &now) == HK_OK);
-    s_fake.now_us--;
+    CHECK(reset(&time, &base) == 0);
+    CHECK(hk_time_now_us(s_owner, &time, &now) == HK_OK && now == base);
+    time_normative_backend_set_now(base - 1U);
     CHECK(hk_time_now_us(s_owner, &time, &now) == HK_ERR_INTERNAL);
     CHECK(hk_time_release(
         s_owner, HK_DEADLINE_IMMEDIATE, &time) == HK_OK);
 
-    printf("TIME_CAPABILITY_OK cases=10 max_slice_us=%llu\n",
+    /* Keep the near-UINT64_MAX clock case last: the real K210 provider's
+       process-lifetime monotonic guard intentionally cannot be reset. */
+    CHECK(reset(&time, &base) == 0);
+    CHECK(hk_time_deadline_after_us(
+        s_owner, &time, HK_TIME_MAX_SLEEP_US + 1U,
+        &deadline) == HK_ERR_LIMIT);
+    time_normative_backend_set_now(UINT64_MAX - 4U);
+    CHECK(hk_time_deadline_after_us(
+        s_owner, &time, 4U, &deadline) == HK_ERR_LIMIT);
+
+    printf("TIME_NORMATIVE_OK backend=%s cases=10 max_slice_us=%llu\n",
+           time_normative_backend_name(),
            (unsigned long long)HK_TIME_CANCEL_PROBE_MAX_US);
     return 0;
 }

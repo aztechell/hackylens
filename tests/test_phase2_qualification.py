@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import importlib.util
 import os
 from pathlib import Path
@@ -55,23 +56,37 @@ class Phase2QualificationTests(unittest.TestCase):
         self.assertIsNotNone(match, result.stdout)
         self.assertLessEqual(int(match.group(1)), 100_000)
 
-    def test_contract_matrix_is_exactly_fake_and_k210_for_five_capabilities(self) -> None:
+    def test_contract_matrix_is_one_shared_suite_per_capability(self) -> None:
         contracts = load_tool("run_phase2_contracts")
-        matrix = contracts.CONTRACT_MATRIX
+        suites = contracts.NORMATIVE_SUITES
+        contracts.validate_normative_suites(suites)
         self.assertEqual(
-            sorted({item["capability"] for item in matrix}),
+            sorted(suite["capability"] for suite in suites),
             ["display", "external-link", "input", "lights", "time"],
         )
-        for capability in {item["capability"] for item in matrix}:
-            self.assertEqual(
-                [item["backend"] for item in matrix
-                 if item["capability"] == capability],
-                ["fake", "k210"],
-            )
+        for suite in suites:
+            self.assertEqual(list(suite["backends"]), ["fake", "k210"])
+            self.assertGreater(len(suite["case_ids"]), 0)
         first = contracts.matrix_document(passed=True)
         second = contracts.matrix_document(passed=True)
         self.assertEqual(first, second)
         self.assertRegex(first["manifest_sha256"], r"^[0-9a-f]{64}$")
+        for suite in first["normative_suites"]:
+            self.assertRegex(suite["suite_source_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_contract_matrix_rejects_backend_local_suite_or_cases(self) -> None:
+        contracts = load_tool("run_phase2_contracts")
+        local_source = copy.deepcopy(list(contracts.NORMATIVE_SUITES))
+        local_source[0]["backends"]["k210"]["suite_source"] = (
+            "tests/k210_time_adapter_harness.c"
+        )
+        with self.assertRaisesRegex(RuntimeError, "backend-local suite"):
+            contracts.validate_normative_suites(local_source)
+
+        local_cases = copy.deepcopy(list(contracts.NORMATIVE_SUITES))
+        local_cases[1]["backends"]["k210"]["case_ids"] = ["sampling-only"]
+        with self.assertRaisesRegex(RuntimeError, "case-manifest substitution"):
+            contracts.validate_normative_suites(local_cases)
 
     def test_result_rejects_physical_claims_and_stale_source(self) -> None:
         resources = load_tool("check_phase2_resources")
