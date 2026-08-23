@@ -931,6 +931,18 @@ snapshot-а после UTC midnight не совпал с candidate SHA: upstream
 timestamp pinned MicroPython revision и доказывает одинаковый image через смену
 host date до выбора нового snapshot.
 
+Reproducibility corrective `51fb551` и snapshot `9e24d6f` прошли CI; exact image
+`63459419...3a62` был прошит как `0.4.0`. На нём прошли HMPY до и после Python,
+два последовательных UART loopback 256/256, TIME, bounded cancellation и чистый
+post-cancel loopback без reboot. Следующая physical проверка обнаружила, что
+menu после button wake немедленно снова уходит в sleep. `sleep_controller`
+использовал полный `HK_TIME_REQUEST_0_1_INIT`, хотя consumer
+`firmware-runtime` имеет grant только `monotonic-us`; failed acquire возвращал
+zero sentinel, а unsigned subtraction превращал его в истёкший inactivity
+deadline. Snapshot `9e24d6f` отозван. Corrective с monotonic-only request,
+явной обработкой ошибок и защитой от обратного времени проходит новый CI,
+после чего выбирается новый exact candidate и physical gate начинается заново.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и

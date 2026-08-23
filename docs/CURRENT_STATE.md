@@ -102,11 +102,18 @@ UART/I2C protocol or routed-peripheral semantics.
   exact 256-byte payload on repeated runs, completed bounded cancellation, and
   passed TIME; the correction still needs its own green CI and exact-image
   rerun. Rebuilding the green snapshot after UTC midnight then exposed an
-  unpinned MicroPython build-date input, so that snapshot is also unqualified;
-  the build date is being bound to the pinned dependency revision before a new
-  candidate is selected. I2C uses the same IO34/IO35 routes and remains a later
-  fixture stage. No physical claim exists until one exact candidate image
-  passes the complete physical gate.
+  unpinned MicroPython build-date input, so that snapshot is also unqualified.
+  Corrective `51fb551` pinned that input and snapshot `9e24d6f` passed CI with
+  reproducible image SHA-256 `63459419...3a62`. On that exact flashed image,
+  HMPY, repeated 256-byte UART loopback, TIME, cancellation, post-cancel UART,
+  and native-service restoration passed. The next physical observation found
+  that the menu wakes and immediately sleeps: the sleep controller requested
+  the full TIME feature set although its runtime consumer is granted only
+  `monotonic-us`, then treated the failed read's zero sentinel as unsigned
+  elapsed time. Snapshot `9e24d6f` is unqualified and withdrawn; the corrective
+  narrows the request and makes elapsed-time handling failure-safe. No physical
+  claim exists until one exact candidate image passes the complete physical
+  gate.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -116,7 +123,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 
 | Area | Status |
 | --- | --- |
-| Firmware | 0.4.0 candidate; Phase 2.13 physical qualification in progress |
+| Firmware | 0.4.0 corrective; no active Phase 2.13 hardware candidate |
 | Board Port Contract | 0.1.0 experimental |
 | HMPY Contract | 1.1.0 experimental; wire-major 1 |
 | Versioning Policy | 0.4.0 |
