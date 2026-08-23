@@ -240,15 +240,29 @@ void hal_external_i2c_init(
     s_target_callbacks = callbacks;
 }
 
-void hal_external_i2c_controller_init(
-    uint8_t address, uint32_t frequency_hz)
+void hal_external_i2c_controller_start(
+    uint8_t address, uint32_t frequency_hz,
+    const uint8_t *tx, uint32_t tx_size,
+    uint8_t *rx, uint32_t rx_size)
 {
     (void)address;
     (void)frequency_hz;
     s_i2c_active = 1U;
     s_target_callbacks = NULL;
     s_i2c_rx_head = 0U;
-    s_i2c_rx_size = 0U;
+    s_i2c_rx_size = rx_size;
+    s_i2c_tx_size = tx_size;
+    if(tx_size != 0U)
+        memcpy(s_i2c_tx, tx, tx_size);
+    for(uint32_t index = 0U; index < rx_size; ++index)
+    {
+        uint8_t value = s_i2c_source_position < s_i2c_source_size ?
+            s_i2c_source[s_i2c_source_position] :
+            (uint8_t)(0x80U + s_i2c_source_position);
+
+        s_i2c_source_position++;
+        rx[index] = value;
+    }
 }
 
 uint8_t hal_external_i2c_controller_aborted(void)
@@ -256,41 +270,19 @@ uint8_t hal_external_i2c_controller_aborted(void)
     return s_i2c_aborted;
 }
 
-uint8_t hal_external_i2c_controller_tx_ready(void)
+uint32_t hal_external_i2c_controller_tx_accepted(void)
 {
-    return 1U;
+    return s_i2c_tx_size;
 }
 
-uint8_t hal_external_i2c_controller_rx_ready(void)
+uint32_t hal_external_i2c_controller_rx_received(void)
 {
-    return (uint8_t)(s_i2c_rx_head < s_i2c_rx_size);
+    return s_i2c_rx_size;
 }
 
 uint8_t hal_external_i2c_controller_idle(void)
 {
-    return (uint8_t)(s_i2c_rx_head == s_i2c_rx_size);
-}
-
-void hal_external_i2c_controller_write(uint8_t byte)
-{
-    if(s_i2c_tx_size < sizeof(s_i2c_tx))
-        s_i2c_tx[s_i2c_tx_size++] = byte;
-}
-
-void hal_external_i2c_controller_request_read(void)
-{
-    uint8_t value = s_i2c_source_position < s_i2c_source_size ?
-        s_i2c_source[s_i2c_source_position] :
-        (uint8_t)(0x80U + s_i2c_source_position);
-
-    s_i2c_source_position++;
-    if(s_i2c_rx_size < sizeof(s_i2c_rx))
-        s_i2c_rx[s_i2c_rx_size++] = value;
-}
-
-uint8_t hal_external_i2c_controller_read(void)
-{
-    return s_i2c_rx[s_i2c_rx_head++];
+    return (uint8_t)(!s_i2c_aborted && s_i2c_active);
 }
 
 uint32_t hal_external_i2c_target_lock(void)

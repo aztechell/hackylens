@@ -40,7 +40,6 @@ typedef struct
     uint32_t rx_size;
     uint32_t tx_done;
     uint32_t rx_done;
-    uint32_t read_commands;
     uint16_t i2c_address;
     hk_result_t terminal_result;
     uint8_t controller_started;
@@ -731,12 +730,13 @@ static void poll_i2c(k210_external_state_t *state)
 {
     k210_external_operation_t *operation = &state->operation;
     uint32_t budget = K210_EXTERNAL_POLL_BYTES;
-    uint32_t steps = K210_EXTERNAL_POLL_BYTES;
 
     if(!operation->controller_started)
     {
-        hal_external_i2c_controller_init(
-            (uint8_t)operation->i2c_address, state->i2c_frequency_hz);
+        hal_external_i2c_controller_start(
+            (uint8_t)operation->i2c_address, state->i2c_frequency_hz,
+            operation->tx, operation->tx_size,
+            operation->rx, operation->rx_size);
         operation->controller_started = 1U;
     }
     if(hal_external_i2c_controller_aborted())
@@ -744,41 +744,32 @@ static void poll_i2c(k210_external_state_t *state)
         (void)latch_terminal(state, HK_ERR_IO);
         return;
     }
-    while(budget != 0U && operation->rx_done < operation->rx_size &&
-          hal_external_i2c_controller_rx_ready())
     {
-        operation->rx[operation->rx_done++] =
-            hal_external_i2c_controller_read();
-        --budget;
+        uint32_t accepted = hal_external_i2c_controller_tx_accepted();
+        uint32_t progress = accepted - operation->tx_done;
+
+        if(progress > budget)
+            progress = budget;
+        operation->tx_done += progress;
+        budget -= progress;
     }
-    while(budget != 0U && operation->tx_done < operation->tx_size &&
-          hal_external_i2c_controller_tx_ready())
     {
-        hal_external_i2c_controller_write(
-            operation->tx[operation->tx_done++]);
-        --budget;
-    }
-    while(operation->tx_done == operation->tx_size &&
-          operation->read_commands < operation->rx_size && steps != 0U &&
-          hal_external_i2c_controller_tx_ready())
-    {
-        hal_external_i2c_controller_request_read();
-        operation->read_commands++;
-        --steps;
-    }
-    while(budget != 0U && operation->rx_done < operation->rx_size &&
-          hal_external_i2c_controller_rx_ready())
-    {
-        operation->rx[operation->rx_done++] =
-            hal_external_i2c_controller_read();
-        --budget;
+        uint32_t received = hal_external_i2c_controller_rx_received();
+        uint32_t progress = received - operation->rx_done;
+
+        if(progress > budget)
+            progress = budget;
+        operation->rx_done += progress;
+        budget -= progress;
     }
     if(hal_external_i2c_controller_aborted())
+    {
         (void)latch_terminal(state, HK_ERR_IO);
-    else if(operation->tx_done == operation->tx_size &&
-            operation->read_commands == operation->rx_size &&
-            operation->rx_done == operation->rx_size &&
-            hal_external_i2c_controller_idle())
+        return;
+    }
+    if(operation->tx_done == operation->tx_size &&
+       operation->rx_done == operation->rx_size &&
+       hal_external_i2c_controller_idle())
         (void)latch_terminal(state, HK_OK);
 }
 

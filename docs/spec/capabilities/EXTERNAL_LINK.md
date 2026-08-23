@@ -129,6 +129,14 @@ phase must be non-empty. The 32-byte poll bound applies to the sum of write and
 read progress. NACK maps to `HK_ERR_IO`; NACK, timeout, and cancellation stop
 and reset the controller before returning terminal.
 
+The K210 controller provider keeps that single-transaction guarantee across
+the controller's eight-entry command FIFO with a fixed-state I2C0 interrupt.
+The interrupt refills the command FIFO before it becomes empty and drains the
+receive FIFO into the still-borrowed caller buffer; it allocates no storage and
+publishes no more than the normal 32-byte TX/RX progress budget from a main-loop
+poll. Stop, cancellation, deadline failure, mode change, and cleanup mask and
+unregister the interrupt before the borrowed buffers can be returned.
+
 I2C target uses a preload model; it does not wait for application code after a
 master READ has begun. Polling is synchronous and non-blocking and returns
 `HK_PENDING` when no completed event is queued. A WRITE event is consumed only

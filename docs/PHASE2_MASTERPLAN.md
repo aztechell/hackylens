@@ -943,6 +943,15 @@ deadline. Snapshot `9e24d6f` отозван. Corrective с monotonic-only reques
 явной обработкой ошибок и защитой от обратного времени проходит новый CI,
 после чего выбирается новый exact candidate и physical gate начинается заново.
 
+Sleep-corrected snapshot `cc653e4` прошёл automated gate и был прошит как exact
+image `c0c1309a...dec3`; TIME и sleep regression на нём прошли. Подключённый
+deterministic I2C target затем обнаружил controller FIFO-boundary defect:
+combined write/read на восемь байт возвращал первые семь байт и повторял первый
+байт отдельной транзакции. Snapshot `cc653e4` отозван. Corrective сохраняет одну
+I2C transaction через bounded fixed-state I2C0 interrupt и добавляет
+детерминированный eight-entry FIFO harness; physical gate начнётся заново только
+после общего corrective image для оставшихся найденных regressions.
+
 После подключения SEN0305 и явного operator approval финальная firmware version
 `0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
 наследовал hardware status. Это предваряет только version identity из `2.14` и

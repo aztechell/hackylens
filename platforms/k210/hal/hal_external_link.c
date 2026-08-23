@@ -23,6 +23,8 @@
 #define HAL_EXTERNAL_UART_FIFO_DEPTH 8U
 #define HAL_EXTERNAL_UART_LSR_TEMT (1U << 6)
 #define HAL_EXTERNAL_UART_RX_IRQ_PRIORITY 2U
+#define HAL_EXTERNAL_I2C_IRQ_PRIORITY 2U
+#define HAL_EXTERNAL_I2C_FIFO_DEPTH 8U
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #define HAL_EXTERNAL_UART_ADAPTER (uart[UART_DEVICE_1])
 #else
@@ -32,9 +34,104 @@
 static const hal_external_i2c_callbacks_t *g_i2c_callbacks;
 static uint8_t g_i2c_active;
 static uint8_t g_i2c_skip_sdk_receive;
+static const uint8_t *g_i2c_controller_tx;
+static uint8_t *g_i2c_controller_rx;
+static uint32_t g_i2c_controller_tx_size;
+static uint32_t g_i2c_controller_rx_size;
+static volatile uint32_t g_i2c_controller_commands;
+static volatile uint32_t g_i2c_controller_rx_received;
+static volatile uint8_t g_i2c_controller_aborted;
+static uint8_t g_i2c_controller_active;
 static hal_external_uart_receive_fn g_uart_receive;
 static void *g_uart_receive_context;
 static uint8_t g_uart_active;
+
+#if defined(HAL_EXTERNAL_LINK_TESTING)
+#define I2C_CONTROLLER_WRITE(adapter, value) \
+    hal_external_i2c_test_write_command((value))
+#define I2C_CONTROLLER_READ(adapter) \
+    hal_external_i2c_test_read_data()
+#else
+#define I2C_CONTROLLER_WRITE(adapter, value) ((adapter)->data_cmd = (value))
+#define I2C_CONTROLLER_READ(adapter) ((adapter)->data_cmd)
+#endif
+
+static void i2c_controller_abort(volatile i2c_t *adapter)
+{
+    g_i2c_controller_aborted = 1U;
+    adapter->intr_mask = 0U;
+}
+
+static void i2c_controller_drain_rx(volatile i2c_t *adapter)
+{
+    uint32_t received = g_i2c_controller_rx_received;
+    uint32_t drained = 0U;
+
+    while(adapter->rxflr != 0U &&
+          received < g_i2c_controller_rx_size &&
+          drained < HAL_EXTERNAL_I2C_FIFO_DEPTH)
+    {
+        g_i2c_controller_rx[received] =
+            (uint8_t)I2C_CONTROLLER_READ(adapter);
+        __sync_synchronize();
+        g_i2c_controller_rx_received = ++received;
+        ++drained;
+    }
+    if(adapter->rxflr != 0U)
+        i2c_controller_abort(adapter);
+}
+
+static void i2c_controller_fill_tx(volatile i2c_t *adapter)
+{
+    uint32_t commands = g_i2c_controller_commands;
+    uint32_t total = g_i2c_controller_tx_size +
+                     g_i2c_controller_rx_size;
+
+    while(adapter->txflr < HAL_EXTERNAL_I2C_FIFO_DEPTH &&
+          commands < total)
+    {
+        uint32_t command = commands < g_i2c_controller_tx_size ?
+            I2C_DATA_CMD_DATA(g_i2c_controller_tx[commands]) :
+            I2C_DATA_CMD_CMD;
+
+        I2C_CONTROLLER_WRITE(adapter, command);
+        __sync_synchronize();
+        g_i2c_controller_commands = ++commands;
+    }
+    if(commands == total)
+        adapter->intr_mask &= ~I2C_INTR_MASK_TX_EMPTY;
+}
+
+static int i2c_controller_irq(void *context)
+{
+    volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
+    uint32_t status = adapter->intr_stat;
+
+    (void)context;
+    if(!g_i2c_controller_active)
+        return 0;
+    if((status & I2C_INTR_STAT_TX_ABRT) != 0U)
+    {
+        (void)adapter->clr_tx_abrt;
+        i2c_controller_abort(adapter);
+        return 0;
+    }
+    if((status & I2C_INTR_STAT_RX_OVER) != 0U)
+    {
+        (void)adapter->clr_rx_over;
+        i2c_controller_abort(adapter);
+        return 0;
+    }
+    if((status & I2C_INTR_STAT_RX_FULL) != 0U ||
+       (status & I2C_INTR_STAT_STOP_DET) != 0U)
+        i2c_controller_drain_rx(adapter);
+    if(!g_i2c_controller_aborted &&
+       (status & I2C_INTR_STAT_TX_EMPTY) != 0U)
+        i2c_controller_fill_tx(adapter);
+    if((status & I2C_INTR_STAT_STOP_DET) != 0U)
+        (void)adapter->clr_stop_det;
+    return 0;
+}
 
 static int uart_receive_irq(void *context)
 {
@@ -85,7 +182,7 @@ static void i2c_event(i2c_event_t event)
         /* The SDK announces STOP before servicing RX_FULL and consumes only
            one FIFO byte per IRQ. Drain the completed write here so the main
            loop can prepare the response before the master's read START. */
-        while(adapter->rxflr & I2C_RXFLR_VALUE_MASK)
+        while(adapter->rxflr != 0U)
             g_i2c_callbacks->receive((uint8_t)adapter->data_cmd);
         g_i2c_skip_sdk_receive = sdk_will_read;
     }
@@ -175,51 +272,78 @@ void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *
     g_i2c_active = 1U;
 }
 
-void hal_external_i2c_controller_init(uint8_t address, uint32_t frequency_hz)
+void hal_external_i2c_controller_start(
+    uint8_t address, uint32_t frequency_hz,
+    const uint8_t *tx, uint32_t tx_size,
+    uint8_t *rx, uint32_t rx_size)
 {
+    volatile i2c_t *adapter;
+
     hal_external_i2c_stop();
     PREPARE_EXTERNAL_I2C();
     i2c_init(I2C_DEVICE_0, address, 7U, frequency_hz);
-    (void)i2c[I2C_DEVICE_0]->clr_tx_abrt;
+    adapter = i2c[I2C_DEVICE_0];
+    (void)adapter->clr_tx_abrt;
+    (void)adapter->clr_intr;
+    g_i2c_controller_tx = tx;
+    g_i2c_controller_rx = rx;
+    g_i2c_controller_tx_size = tx_size;
+    g_i2c_controller_rx_size = rx_size;
+    g_i2c_controller_commands = 0U;
+    g_i2c_controller_rx_received = 0U;
+    g_i2c_controller_aborted = 0U;
+    g_i2c_controller_active = 1U;
     g_i2c_active = 1U;
+    adapter->rx_tl = I2C_RX_TL_VALUE(0U);
+    adapter->tx_tl = I2C_TX_TL_VALUE(4U);
+    plic_irq_disable(IRQN_I2C0_INTERRUPT);
+    plic_set_priority(IRQN_I2C0_INTERRUPT,
+                      HAL_EXTERNAL_I2C_IRQ_PRIORITY);
+    plic_irq_register(IRQN_I2C0_INTERRUPT, i2c_controller_irq, NULL);
+    adapter->intr_mask = I2C_INTR_MASK_RX_FULL |
+                         I2C_INTR_MASK_RX_OVER |
+                         I2C_INTR_MASK_TX_EMPTY |
+                         I2C_INTR_MASK_TX_ABRT |
+                         I2C_INTR_MASK_STOP_DET;
+    i2c_controller_fill_tx(adapter);
+    plic_irq_enable(IRQN_I2C0_INTERRUPT);
 }
 
 uint8_t hal_external_i2c_controller_aborted(void)
 {
-    return (uint8_t)(i2c[I2C_DEVICE_0]->tx_abrt_source != 0U);
+    return (uint8_t)(g_i2c_controller_aborted ||
+                     i2c[I2C_DEVICE_0]->tx_abrt_source != 0U);
 }
 
-uint8_t hal_external_i2c_controller_tx_ready(void)
+uint32_t hal_external_i2c_controller_tx_accepted(void)
 {
-    return (uint8_t)((i2c[I2C_DEVICE_0]->status & I2C_STATUS_TFNF) != 0U);
+    uint32_t commands;
+
+    __sync_synchronize();
+    commands = g_i2c_controller_commands;
+    return commands < g_i2c_controller_tx_size ?
+        commands : g_i2c_controller_tx_size;
 }
 
-uint8_t hal_external_i2c_controller_rx_ready(void)
+uint32_t hal_external_i2c_controller_rx_received(void)
 {
-    return (uint8_t)(i2c[I2C_DEVICE_0]->rxflr != 0U);
+    __sync_synchronize();
+    return g_i2c_controller_rx_received;
 }
 
 uint8_t hal_external_i2c_controller_idle(void)
 {
     volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
 
-    return (uint8_t)((adapter->status & I2C_STATUS_ACTIVITY) == 0U &&
+    return (uint8_t)(g_i2c_controller_active &&
+                     !g_i2c_controller_aborted &&
+                     g_i2c_controller_commands ==
+                         g_i2c_controller_tx_size +
+                         g_i2c_controller_rx_size &&
+                     g_i2c_controller_rx_received ==
+                         g_i2c_controller_rx_size &&
+                     (adapter->status & I2C_STATUS_ACTIVITY) == 0U &&
                      (adapter->status & I2C_STATUS_TFE) != 0U);
-}
-
-void hal_external_i2c_controller_write(uint8_t byte)
-{
-    i2c[I2C_DEVICE_0]->data_cmd = I2C_DATA_CMD_DATA(byte);
-}
-
-void hal_external_i2c_controller_request_read(void)
-{
-    i2c[I2C_DEVICE_0]->data_cmd = I2C_DATA_CMD_CMD;
-}
-
-uint8_t hal_external_i2c_controller_read(void)
-{
-    return (uint8_t)i2c[I2C_DEVICE_0]->data_cmd;
 }
 
 uint32_t hal_external_i2c_target_lock(void)
@@ -244,7 +368,16 @@ void hal_external_i2c_stop(void)
     adapter->intr_mask = 0U;
     adapter->enable = 0U;
     plic_irq_disable(IRQN_I2C0_INTERRUPT);
+    plic_irq_unregister(IRQN_I2C0_INTERRUPT);
     g_i2c_callbacks = NULL;
+    g_i2c_controller_tx = NULL;
+    g_i2c_controller_rx = NULL;
+    g_i2c_controller_tx_size = 0U;
+    g_i2c_controller_rx_size = 0U;
+    g_i2c_controller_commands = 0U;
+    g_i2c_controller_rx_received = 0U;
+    g_i2c_controller_aborted = 0U;
+    g_i2c_controller_active = 0U;
     g_i2c_active = 0U;
     g_i2c_skip_sdk_receive = 0U;
 }

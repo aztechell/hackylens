@@ -272,7 +272,7 @@
     },
     "profiles": {
       "full": {
-        "attestation_sha256": "06dd57bbf4c0edfab7be47ce3b4a039b3c0f0a1b53de88f17f75697ef71338fb",
+        "attestation_sha256": "42df1b7108f87ffeaed83de8eef3de5f13c20ce3dee5b9fab85484a2849ae822",
         "board": "huskylens-sen0305",
         "build_profile": "hackylens-full",
         "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
@@ -281,25 +281,25 @@
         "disabled_capabilities": [],
         "elf": {
           "bss_bytes": 2696848,
-          "data_bytes": 158856,
-          "sha256": "9d7af9244b43add83eb2be2b8992a1e640f3fbd0a1d3a5dc95d938b3393def37",
-          "static_ram_bytes": 2855704,
-          "text_bytes": 1373446
+          "data_bytes": 158840,
+          "sha256": "b7e48116ae8c3a9e04638548d61e5561dbaaff2db259f3fcdf8b99fa2dc5991b",
+          "static_ram_bytes": 2855688,
+          "text_bytes": 1373910
         },
         "flash_delta_bytes": 32768,
         "image": {
           "flash_occupied_bytes": 1536000,
-          "raw_bytes": 1532408,
-          "sha256": "c0c1309ad757b11c4e968e653674bf816cdf5b0731843fda1a3e2bf45794dec3"
+          "raw_bytes": 1532856,
+          "sha256": "c483957f6f5ed003e4d9fb4021b42d3dc603ccac72f22723d710140061ab3eba"
         },
         "kind": "firmware-profile",
         "profile": "full",
         "release_qualified": true,
         "schema": 1,
-        "static_ram_delta_bytes": 240
+        "static_ram_delta_bytes": 224
       },
       "micropython-disabled": {
-        "attestation_sha256": "260a2f2eba443accb870a1ee13cd10cedf7716474fb1c2f2bcdb4d72bd4f0750",
+        "attestation_sha256": "e9825847c14fb55bae4b0b0fec9b59b01b8dc7f3256ad574a6d22a27ffe84607",
         "board": "huskylens-sen0305",
         "build_profile": "hackylens-feature-modified",
         "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
@@ -310,22 +310,22 @@
         "disabled_capabilities": [],
         "elf": {
           "bss_bytes": 2421880,
-          "data_bytes": 158864,
-          "sha256": "9e3eab7e55a9412b87dab7c2a8555d8897acc34cb0ab1d9cb5418eb72f3505b6",
-          "static_ram_bytes": 2580744,
-          "text_bytes": 1187911
+          "data_bytes": 158848,
+          "sha256": "ab66b3f9dd2d0114e53decc0978cdcfd377d99849d79af5982d58989140d2c71",
+          "static_ram_bytes": 2580728,
+          "text_bytes": 1188367
         },
         "flash_delta_bytes": 28672,
         "image": {
           "flash_occupied_bytes": 1347584,
-          "raw_bytes": 1346872,
-          "sha256": "44ec8fb94f18b0d46979a29709aba2acf1e233fee79497e3c41fc32b41bc4883"
+          "raw_bytes": 1347320,
+          "sha256": "ba2e800ce7fa74ac0f061fa437c2870a42a6254cdb9019b17b703d4a75888a26"
         },
         "kind": "firmware-profile",
         "profile": "micropython-disabled",
         "release_qualified": false,
         "schema": 1,
-        "static_ram_delta_bytes": 4072
+        "static_ram_delta_bytes": 4056
       }
     }
   },
@@ -677,9 +677,9 @@
       "additional_full_framebuffers": 0,
       "full_flash_delta_bytes": 32768,
       "full_framebuffer_expression_delta": 0,
-      "full_static_ram_delta_bytes": 240,
+      "full_static_ram_delta_bytes": 224,
       "micropython_disabled_flash_delta_bytes": 28672,
-      "micropython_disabled_static_ram_delta_bytes": 4072,
+      "micropython_disabled_static_ram_delta_bytes": 4056,
       "new_core_call_delta": 0,
       "new_direct_heap_task_queue_findings": []
     },
@@ -693,7 +693,7 @@
   "source": {
     "content_normalization": "git-clean-filtered-blob-id",
     "file_count": 637,
-    "manifest_sha256": "e606a05890826f397c06b529b358a7bbbbaa7f4ba426ad993a0a389b2abff285",
+    "manifest_sha256": "18cca756fbdf2228ea36bb2c1d03ec52eeaff263a2cce768cd0a64ab6b369112",
     "scope": [
       ".github/workflows/release.yml",
       "VERSION",

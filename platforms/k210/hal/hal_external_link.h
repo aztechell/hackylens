@@ -32,14 +32,17 @@ size_t hal_external_uart_send_ready(const uint8_t *data, size_t len);
 /* True only after both the TX FIFO and the shift register are empty. */
 uint8_t hal_external_uart_tx_idle(void);
 void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *callbacks);
-void hal_external_i2c_controller_init(uint8_t address, uint32_t frequency_hz);
+/* Start one controller transaction.  The fixed-state ISR keeps the K210's
+ * eight-entry command FIFO non-empty across a combined write/read transfer.
+ * tx and rx remain borrowed by the caller until stop. */
+void hal_external_i2c_controller_start(
+    uint8_t address, uint32_t frequency_hz,
+    const uint8_t *tx, uint32_t tx_size,
+    uint8_t *rx, uint32_t rx_size);
 uint8_t hal_external_i2c_controller_aborted(void);
-uint8_t hal_external_i2c_controller_tx_ready(void);
-uint8_t hal_external_i2c_controller_rx_ready(void);
+uint32_t hal_external_i2c_controller_tx_accepted(void);
+uint32_t hal_external_i2c_controller_rx_received(void);
 uint8_t hal_external_i2c_controller_idle(void);
-void hal_external_i2c_controller_write(uint8_t byte);
-void hal_external_i2c_controller_request_read(void);
-uint8_t hal_external_i2c_controller_read(void);
 /* Serialize target response publication with the I2C0 ISR. */
 uint32_t hal_external_i2c_target_lock(void);
 void hal_external_i2c_target_unlock(uint32_t state);
