@@ -399,6 +399,9 @@ Public app-facing discovery и manifest integration остаются Phase 3+.
 
 ## Phase 3 — App Runtime v2 и Feature App SDK
 
+Подробная последовательность implementation-пакетов и их локальные exit gates
+зафиксированы в [PHASE3_MASTERPLAN.md](PHASE3_MASTERPLAN.md).
+
 ### Цель
 
 Сделать приложение самостоятельной переносимой единицей, которую можно создать,
