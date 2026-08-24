@@ -20,6 +20,8 @@ static uint8_t s_ready;
 static uint8_t s_frame_active;
 static uint32_t s_frame_lease_id;
 static uint32_t s_next_frame_lease_id;
+static uint8_t *s_frame_pixels;
+static uint32_t s_frame_stride;
 static uint8_t s_row[HK_UI_DISPLAY_WIDTH * 2U];
 
 static hk_deadline_t present_deadline(void)
@@ -55,7 +57,8 @@ hk_result_t hk_ui_display_prepare(void)
     result = hk_display_get_info(s_owner, &s_display, &info);
     if(result != HK_OK || info.width < HK_UI_DISPLAY_WIDTH ||
        info.height < HK_UI_DISPLAY_HEIGHT ||
-       (info.pixel_formats & HK_DISPLAY_FORMAT_RGB565_BE) == 0U)
+       (info.pixel_formats & HK_DISPLAY_FORMAT_RGB565_BE) == 0U ||
+       info.maximum_dirty_rects < HK_UI_DISPLAY_FRAME_MAX_DIRTY_RECTS)
     {
         (void)hk_display_release(s_owner, HK_DEADLINE_IMMEDIATE, &s_display);
         return result == HK_OK ? HK_ERR_FEATURE_UNAVAILABLE : result;
@@ -68,6 +71,19 @@ static hk_result_t surface_acquire(hk_display_surface_t *surface)
 {
     hk_result_t result;
 
+    if(s_frame_active)
+    {
+        *surface = (hk_display_surface_t){
+            sizeof(hk_display_surface_t), HK_DISPLAY_SURFACE_VERSION,
+            {s_frame_pixels,
+             s_frame_stride * HK_UI_DISPLAY_HEIGHT,
+             s_frame_stride,
+             HK_BUFFER_ACCESS_READABLE | HK_BUFFER_ACCESS_WRITABLE},
+            HK_UI_DISPLAY_WIDTH, HK_UI_DISPLAY_HEIGHT,
+            HK_DISPLAY_FORMAT_RGB565_BE, 0U,
+        };
+        return HK_OK;
+    }
     if(!s_ready)
     {
         result = hk_ui_display_prepare();
@@ -77,7 +93,7 @@ static hk_result_t surface_acquire(hk_display_surface_t *surface)
     return hk_display_surface_acquire(s_owner, &s_display, surface);
 }
 
-static hk_result_t surface_present(const hk_display_rect_t *dirty)
+static hk_result_t surface_present_now(const hk_display_rect_t *dirty)
 {
     hk_result_t result = hk_display_mark_dirty(s_owner, &s_display, dirty);
 
@@ -87,6 +103,13 @@ static hk_result_t surface_present(const hk_display_rect_t *dirty)
     if(result != HK_OK)
         (void)hk_display_abort(s_owner, &s_display);
     return result;
+}
+
+static hk_result_t surface_present(const hk_display_rect_t *dirty)
+{
+    if(s_frame_active)
+        return HK_OK;
+    return surface_present_now(dirty);
 }
 
 static hk_display_rect_t clipped_rect(
@@ -363,6 +386,8 @@ uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
         lease_id = ++s_next_frame_lease_id;
     s_frame_active = 1U;
     s_frame_lease_id = lease_id;
+    s_frame_pixels = (uint8_t *)capability_surface.pixels.data;
+    s_frame_stride = capability_surface.pixels.stride_bytes;
     *surface = (hk_ui_display_surface_t){
         (uint8_t *)capability_surface.pixels.data,
         (uint16_t)capability_surface.width,
@@ -382,9 +407,45 @@ uint8_t hk_ui_display_frame_present(uint32_t lease_id)
 
     if(!s_frame_active || lease_id == 0U || lease_id != s_frame_lease_id)
         return 0U;
-    result = surface_present(&screen);
+    result = surface_present_now(&screen);
     s_frame_active = 0U;
     s_frame_lease_id = 0U;
+    s_frame_pixels = NULL;
+    s_frame_stride = 0U;
+    return result == HK_OK;
+}
+
+uint8_t hk_ui_display_frame_present_regions(
+    uint32_t lease_id, const hk_ui_display_rect_t *regions,
+    uint16_t region_count)
+{
+    hk_result_t result = HK_OK;
+
+    if(!s_frame_active || lease_id == 0U || lease_id != s_frame_lease_id ||
+       !regions || region_count == 0U ||
+       region_count > HK_UI_DISPLAY_FRAME_MAX_DIRTY_RECTS)
+        return 0U;
+    for(uint16_t index = 0U; index < region_count; index++)
+    {
+        hk_display_rect_t dirty = clipped_rect(
+            regions[index].x, regions[index].y,
+            regions[index].width, regions[index].height);
+
+        if(dirty.width == 0U || dirty.height == 0U)
+            continue;
+        result = hk_display_mark_dirty(s_owner, &s_display, &dirty);
+        if(result != HK_OK)
+            break;
+    }
+    if(result == HK_OK)
+        result = hk_display_present(
+            s_owner, &s_display, present_deadline(), NULL);
+    if(result != HK_OK)
+        (void)hk_display_abort(s_owner, &s_display);
+    s_frame_active = 0U;
+    s_frame_lease_id = 0U;
+    s_frame_pixels = NULL;
+    s_frame_stride = 0U;
     return result == HK_OK;
 }
 
@@ -395,4 +456,6 @@ void hk_ui_display_frame_cancel(uint32_t lease_id)
     (void)hk_display_abort(s_owner, &s_display);
     s_frame_active = 0U;
     s_frame_lease_id = 0U;
+    s_frame_pixels = NULL;
+    s_frame_stride = 0U;
 }

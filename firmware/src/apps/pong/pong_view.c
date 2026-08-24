@@ -5,7 +5,7 @@
 #include "../../ui/display_binding.h"
 #include "../../ui/hk_ui.h"
 
-#define PONG_DIRTY_REGION_MAX 12
+#define PONG_DIRTY_REGION_MAX HK_UI_DISPLAY_FRAME_MAX_DIRTY_RECTS
 
 typedef struct
 {
@@ -78,6 +78,11 @@ static pong_rect_t pong_rect_union(pong_rect_t first, pong_rect_t second)
     return result;
 }
 
+static uint32_t pong_rect_area(pong_rect_t rect)
+{
+    return (uint32_t)rect.w * (uint32_t)rect.h;
+}
+
 static void pong_dirty_add(pong_dirty_list_t *dirty, pong_rect_t region)
 {
     uint8_t index = 0;
@@ -103,9 +108,28 @@ static void pong_dirty_add(pong_dirty_list_t *dirty, pong_rect_t region)
         return;
     }
 
-    /* The maximum is the exact unmerged shape count. This fallback keeps a
-     * future visual effect bounded without ever escalating to a full frame. */
-    dirty->regions[0] = pong_rect_union(dirty->regions[0], region);
+    {
+        uint8_t best = 0U;
+        pong_rect_t best_union = pong_rect_union(dirty->regions[0], region);
+        uint32_t best_growth = pong_rect_area(best_union) -
+            pong_rect_area(dirty->regions[0]);
+
+        for(uint8_t candidate = 1U; candidate < dirty->count; candidate++)
+        {
+            pong_rect_t combined = pong_rect_union(
+                dirty->regions[candidate], region);
+            uint32_t growth = pong_rect_area(combined) -
+                pong_rect_area(dirty->regions[candidate]);
+
+            if(growth < best_growth)
+            {
+                best = candidate;
+                best_union = combined;
+                best_growth = growth;
+            }
+        }
+        dirty->regions[best] = best_union;
+    }
 }
 
 static void pong_fill_shape(pong_rect_t shape, const pong_rect_t *clip,
@@ -349,32 +373,72 @@ static void pong_view_restore_region(pong_view_state_t current,
 
 void pong_view_render_initial(pong_view_state_t state)
 {
+    hk_ui_display_surface_t frame;
+
+    if(!hk_ui_display_frame_acquire(&frame))
+        return;
     pong_view_draw_chrome();
     pong_view_draw_border();
     pong_view_draw_midline();
     pong_view_draw_title(state);
     pong_view_draw_dynamic(state, NULL);
+    if(!hk_ui_display_frame_present(frame.lease_id))
+        hk_ui_display_frame_cancel(frame.lease_id);
 }
 
 void pong_view_render_score(pong_view_state_t state)
 {
+    hk_ui_display_surface_t frame;
+    const hk_ui_display_rect_t title = {
+        MENU_LINE, MENU_LINE,
+        HK_DISPLAY_REQUIRED_WIDTH - MENU_LINE * 2,
+        MENU_BAR_H - MENU_LINE * 2,
+    };
+
+    if(!hk_ui_display_frame_acquire(&frame))
+        return;
     pong_view_draw_title(state);
+    if(!hk_ui_display_frame_present_regions(frame.lease_id, &title, 1U))
+        hk_ui_display_frame_cancel(frame.lease_id);
 }
 
 void pong_view_render_frame(pong_view_state_t previous, pong_view_state_t current)
 {
     pong_dirty_list_t dirty = pong_view_dirty_regions(previous, current);
+    hk_ui_display_rect_t regions[PONG_DIRTY_REGION_MAX];
+    hk_ui_display_surface_t frame;
+
+    if(dirty.count == 0U || !hk_ui_display_frame_acquire(&frame))
+        return;
 
     for(uint8_t i = 0; i < dirty.count; i++)
+    {
         pong_view_restore_region(current, dirty.regions[i]);
+        regions[i] = (hk_ui_display_rect_t){
+            (uint16_t)dirty.regions[i].x,
+            (uint16_t)dirty.regions[i].y,
+            (uint16_t)dirty.regions[i].w,
+            (uint16_t)dirty.regions[i].h,
+        };
+    }
+    if(!hk_ui_display_frame_present_regions(
+           frame.lease_id, regions, dirty.count))
+        hk_ui_display_frame_cancel(frame.lease_id);
 }
 
 void pong_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
+    hk_ui_display_surface_t frame;
+    const hk_ui_display_rect_t icon = {x, y, 60U, 60U};
+
     (void)bg;
+    if(!hk_ui_display_frame_acquire(&frame))
+        return;
     hk_ui_display_fill_rect(x + 8, y + 10, 4, 40, color);
     hk_ui_display_fill_rect(x + 48, y + 10, 4, 40, color);
     hk_ui_display_fill_rect(x + 27, y + 27, 6, 6, color);
     hk_ui_display_fill_rect(x + 18, y + 16, 2, 2, color);
     hk_ui_display_fill_rect(x + 40, y + 42, 2, 2, color);
+    if(!hk_ui_display_frame_present_regions(frame.lease_id, &icon, 1U))
+        hk_ui_display_frame_cancel(frame.lease_id);
 }

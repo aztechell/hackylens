@@ -10,6 +10,24 @@
 
 #define HAL_SPI_FIFO_TIMEOUT_US 500000ULL
 
+static uint8_t s_fifo_tx_active_mask;
+
+static uint8_t fifo_tx_active(uint8_t device)
+{
+    return (uint8_t)(device < 4U &&
+                     (s_fifo_tx_active_mask & (uint8_t)(1U << device)) != 0U);
+}
+
+static void fifo_tx_set_active(uint8_t device, uint8_t active)
+{
+    uint8_t bit = (uint8_t)(1U << device);
+
+    if(active)
+        s_fifo_tx_active_mask |= bit;
+    else
+        s_fifo_tx_active_mask &= (uint8_t)~bit;
+}
+
 static volatile spi_t *hal_spi_regs(uint8_t device)
 {
     switch(device)
@@ -114,6 +132,7 @@ void hal_spi_fifo_config(uint8_t device, uint32_t hz, uint8_t chip_select)
     while(spi->rxflr)
         (void)spi->dr[0];
     spi->ssienr = 1;
+    fifo_tx_set_active(device, 0U);
 }
 
 void hal_spi_fifo_set_tmod_tx(uint8_t device)
@@ -136,24 +155,56 @@ uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
                                       const uint8_t *data, size_t len,
                                       uint64_t deadline_us)
 {
-    volatile spi_t *spi = hal_spi_regs(device);
-    size_t i = 0;
-    if(!spi || chip_select >= 4U || (len && !data))
+    if((len && !data) ||
+       !hal_spi_fifo_tx_begin_until(device, chip_select, deadline_us))
         return 0U;
     if(len == 0U)
-        return 1U;
-    if(hal_time_us() >= deadline_us)
+        return hal_spi_fifo_tx_end_until(device, deadline_us);
+    if(!hal_spi_fifo_tx_write_until(device, data, len, deadline_us))
+    {
+        hal_spi_fifo_tx_abort(device);
         return 0U;
+    }
+    return hal_spi_fifo_tx_end_until(device, deadline_us);
+}
 
+uint8_t hal_spi_fifo_tx_begin_until(
+    uint8_t device, uint8_t chip_select, uint64_t deadline_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+
+    if(!spi || device >= 4U || chip_select >= 4U ||
+       fifo_tx_active(device) || hal_time_us() >= deadline_us)
+        return 0U;
+    spi->ssienr = 0U;
     hal_spi_fifo_set_tmod_tx(device);
-    spi->ssienr = 1;
+    while(spi->rxflr)
+        (void)spi->dr[0];
     spi->ser = 1U << chip_select;
+    spi->ssienr = 1U;
+    fifo_tx_set_active(device, 1U);
+    return 1U;
+}
+
+uint8_t hal_spi_fifo_tx_write_until(
+    uint8_t device, const uint8_t *data, size_t len,
+    uint64_t deadline_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+    size_t i = 0U;
+
+    if(!spi || device >= 4U ||
+       !fifo_tx_active(device) || (len && !data))
+        return 0U;
 
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
         if(hal_time_us() >= deadline_us)
-            goto timeout;
+        {
+            hal_spi_fifo_tx_abort(device);
+            return 0U;
+        }
         if(!fifo_len)
             continue;
         if(fifo_len > len - i)
@@ -161,6 +212,16 @@ uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
         while(fifo_len--)
             spi->dr[0] = data[i++];
     }
+
+    return 1U;
+}
+
+uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+
+    if(!spi || device >= 4U || !fifo_tx_active(device))
+        return 0U;
 
     while((spi->sr & 0x05U) != 0x04U)
     {
@@ -171,12 +232,23 @@ uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
         goto timeout;
     spi->ser = 0;
     spi->ssienr = 0;
+    fifo_tx_set_active(device, 0U);
     return 1U;
 
 timeout:
+    hal_spi_fifo_tx_abort(device);
+    return 0U;
+}
+
+void hal_spi_fifo_tx_abort(uint8_t device)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+
+    if(!spi || device >= 4U)
+        return;
     spi->ser = 0U;
     spi->ssienr = 0U;
-    return 0U;
+    fifo_tx_set_active(device, 0U);
 }
 
 uint8_t hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select,

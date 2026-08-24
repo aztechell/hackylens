@@ -23,6 +23,9 @@ static uint64_t s_now_us;
 static uint64_t s_transfer_bytes;
 static uint32_t s_write_calls;
 static uint32_t s_begin_calls;
+static uint32_t s_end_calls;
+static uint32_t s_abort_calls;
+static uint8_t s_stream_active;
 static hk_display_rect_t s_window;
 static uint32_t s_window_pixels;
 static hk_result_t s_fail_result;
@@ -140,6 +143,8 @@ hk_result_t lcd_st7789_transport_begin(
 {
     if(deadline.at_us && s_now_us >= deadline.at_us)
         return HK_ERR_DEADLINE_EXCEEDED;
+    if(s_stream_active)
+        return HK_ERR_INVALID_STATE;
     if(!rect || rect->x < 0 || rect->y < 0 ||
        (uint64_t)(uint32_t)rect->x + rect->width > TEST_WIDTH ||
        (uint64_t)(uint32_t)rect->y + rect->height > TEST_HEIGHT)
@@ -147,6 +152,7 @@ hk_result_t lcd_st7789_transport_begin(
     s_window = *rect;
     s_window_pixels = 0U;
     s_begin_calls++;
+    s_stream_active = 1U;
     return HK_OK;
 }
 
@@ -154,7 +160,7 @@ hk_result_t lcd_st7789_transport_write(
     const uint8_t *pixels, size_t size_bytes,
     hk_deadline_t deadline, const hk_cancel_t *cancel)
 {
-    if(!pixels || size_bytes == 0U || size_bytes > 128U ||
+    if(!s_stream_active || !pixels || size_bytes == 0U || size_bytes > 128U ||
        (size_bytes & 1U) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
     if(cancel && cancel->probe && cancel->probe(cancel->context))
@@ -186,6 +192,28 @@ hk_result_t lcd_st7789_transport_write(
     return HK_OK;
 }
 
+hk_result_t lcd_st7789_transport_end(
+    hk_deadline_t deadline, const hk_cancel_t *cancel)
+{
+    if(!s_stream_active)
+        return HK_ERR_INVALID_STATE;
+    if(cancel && cancel->probe && cancel->probe(cancel->context))
+        return HK_ERR_CANCELLED;
+    if(deadline.at_us && s_now_us >= deadline.at_us)
+        return HK_ERR_DEADLINE_EXCEEDED;
+    s_stream_active = 0U;
+    s_end_calls++;
+    return HK_OK;
+}
+
+void lcd_st7789_transport_abort(void)
+{
+    if(!s_stream_active)
+        return;
+    s_stream_active = 0U;
+    s_abort_calls++;
+}
+
 uint8_t *lcd_st7789_transport_shadow(void) { return s_shadow; }
 uint32_t lcd_st7789_transport_shadow_size(void) { return sizeof(s_shadow); }
 uint32_t lcd_st7789_transport_stride(void) { return TEST_WIDTH * 2U; }
@@ -212,6 +240,9 @@ static void fixture_reset(void)
     s_transfer_bytes = 0U;
     s_write_calls = 0U;
     s_begin_calls = 0U;
+    s_end_calls = 0U;
+    s_abort_calls = 0U;
+    s_stream_active = 0U;
     s_window = (hk_display_rect_t){0};
     s_window_pixels = 0U;
     s_fail_result = HK_OK;
@@ -332,7 +363,10 @@ int main(void)
     test_public_overlay_cancel_retry_release();
     require_true(s_begin_calls > 0U && s_write_calls > 0U,
                  "adapter suite must exercise the raw panel transport");
+    require_true(!s_stream_active &&
+                 s_begin_calls == s_end_calls + s_abort_calls,
+                 "every panel stream must end or abort exactly once");
     puts("K210_DISPLAY_ADAPTER_OK cases=9 normative=7 public_api=1 "
-         "slice=128 framebuffer=153600");
+         "slice=128 framebuffer=153600 stream=one-per-region");
     return 0;
 }

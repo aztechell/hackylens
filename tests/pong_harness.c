@@ -26,6 +26,12 @@ static uint16_t g_fill_call_count;
 static uint16_t g_draw_rect_count;
 static uint16_t g_text_count;
 static uint8_t g_record_lcd;
+static uint8_t g_frame_active;
+static uint16_t g_frame_acquire_count;
+static uint16_t g_frame_present_count;
+static uint16_t g_frame_full_present_count;
+static uint16_t g_present_region_count;
+static uint32_t g_next_lease_id;
 
 hk_owner_t capability_client_current_owner(void)
 {
@@ -104,11 +110,67 @@ void hk_ui_display_draw_text_centered(uint16_t y, const char *text,
         g_text_count++;
 }
 
+uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
+{
+    assert(surface != NULL);
+    assert(!g_frame_active);
+    g_frame_active = 1U;
+    surface->rgb565_be = NULL;
+    surface->width = HK_DISPLAY_REQUIRED_WIDTH;
+    surface->height = HK_DISPLAY_REQUIRED_HEIGHT;
+    surface->stride_bytes = HK_DISPLAY_REQUIRED_WIDTH * 2U;
+    surface->lease_id = ++g_next_lease_id;
+    if(g_record_lcd)
+        g_frame_acquire_count++;
+    return 1U;
+}
+
+uint8_t hk_ui_display_frame_present(uint32_t lease_id)
+{
+    assert(g_frame_active);
+    assert(lease_id == g_next_lease_id);
+    g_frame_active = 0U;
+    if(g_record_lcd)
+    {
+        g_frame_present_count++;
+        g_frame_full_present_count++;
+    }
+    return 1U;
+}
+
+uint8_t hk_ui_display_frame_present_regions(
+    uint32_t lease_id, const hk_ui_display_rect_t *regions,
+    uint16_t region_count)
+{
+    assert(g_frame_active);
+    assert(lease_id == g_next_lease_id);
+    assert(regions != NULL);
+    assert(region_count > 0U && region_count <= 8U);
+    g_frame_active = 0U;
+    if(g_record_lcd)
+    {
+        g_frame_present_count++;
+        g_present_region_count = region_count;
+    }
+    return 1U;
+}
+
+void hk_ui_display_frame_cancel(uint32_t lease_id)
+{
+    assert(g_frame_active);
+    assert(lease_id == g_next_lease_id);
+    g_frame_active = 0U;
+}
+
 static void reset_lcd_log(void)
 {
     g_fill_call_count = 0U;
     g_draw_rect_count = 0U;
     g_text_count = 0U;
+    g_frame_acquire_count = 0U;
+    g_frame_present_count = 0U;
+    g_frame_full_present_count = 0U;
+    g_present_region_count = 0U;
 }
 
 static void advance_and_tick(uint32_t elapsed_us,
@@ -213,6 +275,10 @@ static void test_dirty_rendering(void)
 
     assert(g_draw_rect_count == 0U);
     assert(g_text_count == 0U);
+    assert(g_frame_acquire_count == 1U);
+    assert(g_frame_present_count == 1U);
+    assert(g_frame_full_present_count == 0U);
+    assert(g_present_region_count > 0U && g_present_region_count <= 8U);
     assert(g_fill_call_count >= 3U);
     for(uint16_t i = 0; i < g_fill_call_count; i++)
     {
@@ -237,12 +303,64 @@ static void test_dirty_rendering(void)
     assert(g_fill_call_count == 0U);
     assert(g_draw_rect_count == 0U);
     assert(g_text_count == 0U);
+    assert(g_frame_acquire_count == 0U);
+    assert(g_frame_present_count == 0U);
+}
+
+static void test_single_present_for_full_and_maximal_frames(void)
+{
+    pong_view_state_t previous = {
+        .player_x = 12,
+        .ai_x = 250,
+        .ball_x = 40,
+        .ball_y = 90,
+        .trail_x = {70, 100},
+        .trail_y = {120, 150},
+        .flash_x = 180,
+        .flash_y = 110,
+        .trail_count = PONG_TRAIL_LENGTH,
+        .flash_ticks = 1U,
+    };
+    pong_view_state_t current = {
+        .player_x = 210,
+        .ai_x = 30,
+        .ball_x = 270,
+        .ball_y = 180,
+        .trail_x = {220, 250},
+        .trail_y = {70, 40},
+        .flash_x = 140,
+        .flash_y = 170,
+        .trail_count = PONG_TRAIL_LENGTH,
+        .flash_ticks = 1U,
+    };
+
+    g_record_lcd = 1U;
+    reset_lcd_log();
+    pong_view_render_initial(current);
+    assert(g_frame_acquire_count == 1U);
+    assert(g_frame_present_count == 1U);
+    assert(g_frame_full_present_count == 1U);
+
+    reset_lcd_log();
+    pong_view_render_score(current);
+    assert(g_frame_acquire_count == 1U);
+    assert(g_frame_present_count == 1U);
+    assert(g_frame_full_present_count == 0U);
+    assert(g_present_region_count == 1U);
+
+    reset_lcd_log();
+    pong_view_render_frame(previous, current);
+    assert(g_frame_acquire_count == 1U);
+    assert(g_frame_present_count == 1U);
+    assert(g_frame_full_present_count == 0U);
+    assert(g_present_region_count > 0U && g_present_region_count <= 8U);
 }
 
 int main(void)
 {
     test_frame_rate_independence();
     test_dirty_rendering();
-    puts("PONG_HOST_OK fixed_step=20ms dirty_regions=bounded");
+    test_single_present_for_full_and_maximal_frames();
+    puts("PONG_HOST_OK fixed_step=20ms dirty_regions=bounded presents=1");
     return 0;
 }

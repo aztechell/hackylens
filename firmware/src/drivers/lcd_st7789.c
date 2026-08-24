@@ -10,6 +10,7 @@
 
 static uint8_t s_shadow[LCD_W * LCD_H * 2U]
     __attribute__((aligned(4), section(".bss")));
+static uint8_t s_pixel_stream_active;
 
 static uint64_t transport_deadline(hk_deadline_t deadline)
 {
@@ -100,8 +101,6 @@ void lcd_st7789_transport_init(void)
     };
     static const uint8_t b2[] = {0x01, 0x01, 0x00, 0x01, 0x01};
     static const uint8_t d0[] = {0xA4, 0xA1};
-    hk_display_rect_t screen = {0, 0, LCD_W, LCD_H};
-
     reset_panel();
     command(0x11);
     command(0x36); data_u8(0xA0);
@@ -119,7 +118,6 @@ void lcd_st7789_transport_init(void)
     command(0xD6); data_u8(0xA1);
     command(0xE0); data(gamma_p, sizeof(gamma_p));
     command(0xE1); data(gamma_n, sizeof(gamma_n));
-    (void)lcd_st7789_transport_begin(&screen, HK_DEADLINE_IMMEDIATE);
     command(0x29);
 }
 
@@ -131,6 +129,8 @@ hk_result_t lcd_st7789_transport_begin(
 
     if(result != HK_OK)
         return result;
+    if(s_pixel_stream_active)
+        return HK_ERR_INVALID_STATE;
     if(!rect || rect->x < 0 || rect->y < 0 || rect->width == 0U ||
        rect->height == 0U ||
        (uint64_t)(uint32_t)rect->x + rect->width > LCD_W ||
@@ -152,6 +152,12 @@ hk_result_t lcd_st7789_transport_begin(
     if(!data_until(coordinates, sizeof(coordinates), deadline) ||
        !command_until(0x2CU, deadline))
         return transfer_failure(deadline);
+    hal_spi_fifo_set_frame_bits(LCD_SPI, 8U);
+    hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1U);
+    if(!hal_spi_fifo_tx_begin_until(
+           LCD_SPI, LCD_CS, transport_deadline(deadline)))
+        return transfer_failure(deadline);
+    s_pixel_stream_active = 1U;
     return HK_OK;
 }
 
@@ -162,12 +168,51 @@ hk_result_t lcd_st7789_transport_write(
     hk_result_t result = terminal_result(deadline, cancel);
 
     if(result != HK_OK)
+    {
+        lcd_st7789_transport_abort();
         return result;
+    }
+    if(!s_pixel_stream_active)
+        return HK_ERR_INVALID_STATE;
     if(!pixels || size_bytes == 0U)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!data_until(pixels, size_bytes, deadline))
+    if(!hal_spi_fifo_tx_write_until(
+           LCD_SPI, pixels, size_bytes, transport_deadline(deadline)))
+    {
+        lcd_st7789_transport_abort();
         return transfer_failure(deadline);
+    }
     return terminal_result(deadline, cancel);
+}
+
+hk_result_t lcd_st7789_transport_end(
+    hk_deadline_t deadline, const hk_cancel_t *cancel)
+{
+    hk_result_t result = terminal_result(deadline, cancel);
+
+    if(!s_pixel_stream_active)
+        return HK_ERR_INVALID_STATE;
+    if(result != HK_OK)
+    {
+        lcd_st7789_transport_abort();
+        return result;
+    }
+    if(!hal_spi_fifo_tx_end_until(
+           LCD_SPI, transport_deadline(deadline)))
+    {
+        s_pixel_stream_active = 0U;
+        return transfer_failure(deadline);
+    }
+    s_pixel_stream_active = 0U;
+    return terminal_result(deadline, cancel);
+}
+
+void lcd_st7789_transport_abort(void)
+{
+    if(!s_pixel_stream_active)
+        return;
+    hal_spi_fifo_tx_abort(LCD_SPI);
+    s_pixel_stream_active = 0U;
 }
 
 uint8_t *lcd_st7789_transport_shadow(void)

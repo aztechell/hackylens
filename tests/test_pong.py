@@ -73,7 +73,7 @@ class PongHostTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "PONG_HOST_OK fixed_step=20ms dirty_regions=bounded",
+            "PONG_HOST_OK fixed_step=20ms dirty_regions=bounded presents=1",
             result.stdout,
         )
 

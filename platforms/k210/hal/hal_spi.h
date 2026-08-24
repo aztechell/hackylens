@@ -27,6 +27,14 @@ uint8_t hal_spi_fifo_send_bytes(uint8_t device, uint8_t chip_select,
 uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
                                       const uint8_t *data, size_t len,
                                       uint64_t deadline_us);
+/* Keeps one TX transaction active across bounded caller-sized writes. */
+uint8_t hal_spi_fifo_tx_begin_until(
+    uint8_t device, uint8_t chip_select, uint64_t deadline_us);
+uint8_t hal_spi_fifo_tx_write_until(
+    uint8_t device, const uint8_t *data, size_t len,
+    uint64_t deadline_us);
+uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us);
+void hal_spi_fifo_tx_abort(uint8_t device);
 uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out);
 
 #endif

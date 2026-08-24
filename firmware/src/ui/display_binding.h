@@ -11,6 +11,7 @@
 
 #define HK_UI_DISPLAY_WIDTH HK_DISPLAY_REQUIRED_WIDTH
 #define HK_UI_DISPLAY_HEIGHT HK_DISPLAY_REQUIRED_HEIGHT
+#define HK_UI_DISPLAY_FRAME_MAX_DIRTY_RECTS 8U
 
 typedef struct
 {
@@ -20,6 +21,14 @@ typedef struct
     uint16_t stride_bytes;
     uint32_t lease_id;
 } hk_ui_display_surface_t;
+
+typedef struct
+{
+    uint16_t x;
+    uint16_t y;
+    uint16_t width;
+    uint16_t height;
+} hk_ui_display_rect_t;
 
 hk_result_t hk_ui_display_prepare(void);
 void hk_ui_display_draw_boot_logo(void);
@@ -44,6 +53,9 @@ void hk_ui_display_write_row(
 uint16_t hk_ui_display_shadow_pixel(uint16_t x, uint16_t y);
 uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface);
 uint8_t hk_ui_display_frame_present(uint32_t lease_id);
+uint8_t hk_ui_display_frame_present_regions(
+    uint32_t lease_id, const hk_ui_display_rect_t *regions,
+    uint16_t region_count);
 void hk_ui_display_frame_cancel(uint32_t lease_id);
 
 #endif

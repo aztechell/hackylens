@@ -570,18 +570,27 @@ static hk_result_t transfer_rect(
                 (uint16_t)(sizeof(pixels) / 2U) : (uint16_t)remaining;
             result = terminal_result(deadline, cancel);
             if(result != HK_OK)
+            {
+                lcd_st7789_transport_abort();
                 return result;
+            }
             render_span(pixels, x, count, y, base_stage, overlay);
             result = lcd_st7789_transport_write(
                 pixels, (size_t)count * 2U, deadline, cancel);
             if(result != HK_OK)
+            {
+                lcd_st7789_transport_abort();
                 return result;
+            }
             *progress = 1U;
             x = (uint16_t)(x + count);
             remaining -= count;
         }
     }
-    return HK_OK;
+    result = lcd_st7789_transport_end(deadline, cancel);
+    if(result != HK_OK)
+        lcd_st7789_transport_abort();
+    return result;
 }
 
 static hk_result_t transfer_regions(
