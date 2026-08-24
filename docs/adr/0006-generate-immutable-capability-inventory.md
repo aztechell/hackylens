@@ -1,7 +1,7 @@
 ---
 adr: 0006
 title: Generate immutable capability inventory
-status: proposed
+status: accepted
 date: 2026-08-14
 deciders: platform-architecture
 supersedes:

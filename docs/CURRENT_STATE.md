@@ -88,12 +88,13 @@ UART/I2C protocol or routed-peripheral semantics.
   with adapter-specific checks kept supplemental. The complete build,
   diagnostic, resource, latency, and rolling-evidence matrix passed
   [Release firmware run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140).
-  Phase 2.13 is in progress under an impact-based physical policy. Each physical
-  observation retains its tested image hash; a later build repeats only checks
-  affected by its source/composition diff, after the full automated gate and a
-  boot sanity check. The current ledger records passed UART, I2C, TIME, HMPY,
-  camera, Pong, and menu observations, plus the remaining partial/not-run
-  checks. See `docs/PHASE2_PHYSICAL_STATUS.md`.
+  Phase 2 is complete. Exact implementation commit `f8b76f4` passed automated
+  qualification, and owner acceptance links the tested SEN0305 image to the
+  immutable candidate result through the impact-based physical ledger. Buttons,
+  Files, MicroPython, and Lights received the final targeted checks; unchanged
+  UART, I2C, TIME, HMPY, camera, Pong, menu, and Sleep observations were carried
+  forward only after impact review. Evidence limitations remain explicit; Maix
+  Cube is compile-conformance-only. See `docs/PHASE2_PHYSICAL_STATUS.md`.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -103,13 +104,13 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 
 | Area | Status |
 | --- | --- |
-| Firmware | 0.4.0; Phase 2.13 impact-based physical acceptance in progress |
+| Firmware | 0.4.0; Phase 2 Capability Platform completed on SEN0305 |
 | Board Port Contract | 0.1.0 experimental |
 | HMPY Contract | 1.1.0 experimental; wire-major 1 |
 | Versioning Policy | 0.4.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
-| Capability build composition | Phase 2.12 pre-hardware qualified; Time + Input + Display + External Link + Lights runtime providers |
+| Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
 | App SDK | Deferred to Phase 3 |
 | General hardware portability | Not claimed |
 
@@ -176,15 +177,14 @@ hardware qualification is a separate future gate.
 ## Remaining architecture work
 
 Display is runtime-composed; its borrowed BASE surface is explicitly an in-place
-backing store, while retained command
-batches remain transactional. Host timing checks do not constitute physical
-hardware qualification; real display latency is deferred to Phase 2.13. Later
-packages may
-forbid direct application-to-driver dependencies as migrations complete.
+backing store, while retained command batches remain transactional. Phase 2
+records physical display observations and explicitly retains the missing
+matched-workload timing dataset as an evidence limitation rather than inventing
+measurements. Later packages may extend qualification on new hardware.
 Public App Runtime/context, app manifests, App SDK, and public storage, camera,
 vision, and AI capabilities remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,
-on-device program management, multi-project IDE workflows, formal
+full project/package management, multi-project IDE workflows, formal
 Python-to-native migration, complete original-firmware parity, and long-run
 hardware qualification.

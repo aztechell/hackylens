@@ -24,11 +24,13 @@ quarantine/recovery, and bounded owner-wide cleanup. Provider callbacks and
 mutable core state are private in `capability_provider.h`; public typed handles
 contain only an `hk_lease_t`.
 
-Phase 2.2 intentionally ships an empty production capability inventory and no
-hardware providers. `runtime/capability_owner_runtime.c` privately binds one
-generation-checked owner around existing menu entry/exit callbacks through
-neutral menu hooks, without changing `hk_app_t` callback signatures or current
-app behavior. The deterministic host fake runs the common lifecycle suite.
+Phase 2 is complete for the SEN0305 runtime profile. The generated immutable
+inventory contains exactly Time, Input, Display, External Link, and Lights;
+native and MicroPython consumers share the same providers and lifecycle core.
+`runtime/capability_owner_runtime.c` privately binds generation-checked owners
+around menu entry/exit callbacks without changing `hk_app_t`. Deterministic
+fakes and K210 providers run the same normative contract suites. Public storage,
+camera, vision, AI, app-context, and manifest capabilities remain Phase 3+.
 
 Compile-time app flags are generated into `hk_config.h` by
 `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`.

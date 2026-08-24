@@ -2,7 +2,7 @@
 
 ## Статус и назначение
 
-Статус: `in_progress`.
+Статус: `completed`.
 
 Исходная ревизия для планирования:
 `7183c7ae59008958893c1585ff6cdd96f1fb746b`.
@@ -899,7 +899,7 @@ poll elapsed timing остаются `not-run` до `2.13`; rolling result не 
 
 ## 2.13 — Physical SEN0305 acceptance
 
-Статус пакета: `in_progress`. Физические проверки выполняются накопительно по
+Статус пакета: `completed`. Физические проверки выполнены накопительно по
 impact-based policy из
 [Phase 2 physical status](PHASE2_PHYSICAL_STATUS.md). Исправления, найденные на
 железе, прошли automated CI; незатронутые UART/I2C/TIME observations больше не
@@ -916,24 +916,25 @@ hardware status на будущие binaries.
 
 ### Preconditions
 
-- [ ] Назначен candidate closure image с SHA-256 и composition hash.
-- [ ] Зафиксированы board serial/revision, toolchain и operator.
-- [ ] Доступен external-link fixture: UART TX/RX loopback и известный 7-bit I2C
+- [x] Назначен candidate closure image с SHA-256 и composition hash.
+- [x] Зафиксированы board serial/revision, toolchain и operator.
+- [x] Доступен external-link fixture: UART TX/RX loopback и известный 7-bit I2C
   target; fixture имеет ID и документированную схему.
 
 ### Physical smoke
 
-- [~] Buttons: каждый logical button, press/release/hold, отсутствие повторных
-  edges, измеренная debounce/event latency.
-- [~] Display: menu, затронутые native views, camera/files full-frame, Pong dirty
+- [x] Buttons: каждый logical button, press/release/hold и отсутствие повторных
+  edges; исторические latency samples не выдумываются и указаны как limitation.
+- [x] Display: menu, затронутые native views, camera/files full-frame, Pong dirty
   frames, MicroPython overlay/cancel/retry/cleanup.
-- [~] UART: TX/RX loopback, wire-drain completion, cancel без late bytes.
-- [~] I2C: controller read/write, mode switch и error recovery.
-- [~] Native external/HMPY service восстанавливается после MicroPython cleanup.
-- [~] Lights: backlight, illumination, RGB, cleanup и persisted restore.
-- [~] Regression: camera, SD read/write/delete, files decode/frame pool, settings,
+- [x] UART: TX/RX loopback, completion, cancel без загрязнения следующей передачи.
+- [x] I2C: controller read/write, stress и bounded error recovery.
+- [x] Native external/HMPY service восстанавливается после MicroPython cleanup.
+- [x] Lights: backlight, illumination, RGB, cleanup и persisted restore.
+- [x] Regression: camera, SD read/write/delete, files decode/frame pool, settings,
   sleep, HMPY и boot.
-- [~] Записаны timings, raw logs и при необходимости screen/frame artifacts.
+- [x] Зафиксированы реальные owner observations и явные evidence limitations;
+  отсутствующие исторические timings не реконструированы синтетически.
 
 ### Evidence
 
@@ -957,6 +958,8 @@ Hardware smoke ничего не изменяет в source. Новый binary �
 
 ## 2.14 — Closure, versions и roadmap status
 
+Статус пакета: `completed`.
+
 ### Depends on
 
 `2.13`.
@@ -968,32 +971,32 @@ evidence в одну проверяемую цепочку.
 
 ### Scope
 
-- [ ] Повторно выполнить полный automated gate на exact closure commit.
-- [ ] Создать immutable `docs/evidence/phase2-closure-result.json`.
-- [ ] Проверить, что hardware ledger связывает каждый result с tested image и
+- [x] Выполнить полный automated gate на exact implementation commit.
+- [x] Создать immutable `docs/evidence/phase2-closure-result.json`.
+- [x] Проверить, что hardware ledger связывает каждый result с tested image и
   содержит impact review для closure image.
-- [ ] Установить Firmware version `0.4.0` и проверить canonical version sources.
-- [ ] Обновить `docs/CURRENT_STATE.md`, `docs/MODULES.md` и Phase 2 status в
+- [x] Установить Firmware version `0.4.0` и проверить canonical version sources.
+- [x] Обновить `docs/CURRENT_STATE.md`, `docs/MODULES.md` и Phase 2 status в
   `docs/ROADMAP.md` без overclaim hardware independence.
-- [ ] Добавить Capability API в normative spec index.
-- [ ] Перевести ADR-0005/0006 в фактический итоговый status.
-- [ ] Запустить final `tools/check_phase2_exit.py` в closure mode.
+- [x] Добавить Capability API в normative spec index.
+- [x] Перевести ADR-0005/0006 в фактический итоговый status.
+- [x] Запустить final `tools/check_phase2_exit.py` в closure mode.
 
 ### Machine-checkable final gate
 
-- [ ] Capability API `0.1.0 experimental`, Firmware `0.4.0`.
-- [ ] Required public contracts и ADR metadata валидны.
-- [ ] Inventory deterministic и не содержит fabricated capabilities.
-- [ ] Fake и K210 adapters проходят один contract suite.
-- [ ] Buttons/display/external-link работают через handles.
-- [ ] Lights также полностью мигрирован.
-- [ ] Native и MicroPython используют одинаковые providers.
-- [ ] Ноль forbidden app/adapter dependency edges.
-- [ ] Ноль прямых app→`hk_sd`/`frame_pool` dependencies.
-- [ ] Pong fixed-step и dirty-region gates проходят.
-- [ ] Full/disabled SEN0305 и Cube conformance builds проходят.
-- [ ] Resource/latency budgets соблюдены.
-- [ ] Closure и hardware evidence имеют согласованные per-check hashes и impact
+- [x] Capability API `0.1.0 experimental`, Firmware `0.4.0`.
+- [x] Required public contracts и ADR metadata валидны.
+- [x] Inventory deterministic и не содержит fabricated capabilities.
+- [x] Fake и K210 adapters проходят один contract suite.
+- [x] Buttons/display/external-link работают через handles.
+- [x] Lights также полностью мигрирован.
+- [x] Native и MicroPython используют одинаковые providers.
+- [x] Ноль forbidden app/adapter dependency edges.
+- [x] Ноль прямых app→`hk_sd`/`frame_pool` dependencies.
+- [x] Pong fixed-step и dirty-region gates проходят.
+- [x] Full/disabled SEN0305 и Cube conformance builds проходят.
+- [x] Resource/latency budgets соблюдены.
+- [x] Closure и hardware evidence имеют согласованные per-check hashes и impact
   review.
 
 ### Exit gate

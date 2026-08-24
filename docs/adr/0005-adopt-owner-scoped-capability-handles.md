@@ -1,7 +1,7 @@
 ---
 adr: 0005
 title: Adopt owner-scoped capability handles
-status: proposed
+status: accepted
 date: 2026-08-14
 deciders: platform-architecture
 supersedes:

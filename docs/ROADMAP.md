@@ -34,9 +34,7 @@ HackyLens v0.4 классифицируется как:
 - переносимость на вторую K210-плату;
 - стабильный App SDK;
 - manifest-driven composition;
-- единый Capability API для native и Python;
 - OpenMV-class Python vision workflow;
-- полноценный запуск программ с устройства;
 - production-grade IDE;
 - parity с оригинальной прошивкой;
 - статус архитектурного стандарта.
@@ -296,6 +294,13 @@ constant.
 
 Подробная последовательность отдельных implementation-пакетов и их локальные
 exit gates зафиксированы в [PHASE2_MASTERPLAN.md](PHASE2_MASTERPLAN.md).
+
+Статус: **DONE**. Пять начальных capabilities реализованы и квалифицированы на
+SEN0305; automated result, owner hardware acceptance и closure chain находятся
+в `docs/evidence/phase2-candidate-result.json`,
+`docs/evidence/phase2-hardware-smoke.json` и
+`docs/evidence/phase2-closure-result.json`. Maix Cube остаётся
+compile-conformance-only; общая hardware portability не заявляется.
 
 ### Цель
 
