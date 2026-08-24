@@ -693,7 +693,7 @@
   "source": {
     "content_normalization": "git-clean-filtered-blob-id",
     "file_count": 641,
-    "manifest_sha256": "aaea135b05fc6e560ae4ddc51569ffbfbdef1a057bbb16b5c464c1c90db2b9c0",
+    "manifest_sha256": "0cc379bf6dddc6eb16962ff4e0150c17901f3471486b37edbafd0fc838e475b6",
     "scope": [
       ".github/workflows/release.yml",
       "VERSION",

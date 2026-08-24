@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate exact-image Phase 2.13 SEN0305 physical acceptance evidence."""
+"""Validate Phase 2.13 SEN0305 physical acceptance evidence."""
 
 from __future__ import annotations
 
@@ -619,7 +619,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     except (HardwareEvidenceError, OSError, ValueError) as exc:
         print(f"[ERR] Phase 2.13 hardware gate failed: {exc}", file=sys.stderr)
         return 1
-    print("[OK] Phase 2.13 exact-image SEN0305 hardware gate passed")
+    print("[OK] Phase 2.13 SEN0305 hardware evidence gate passed")
     return 0
 
 

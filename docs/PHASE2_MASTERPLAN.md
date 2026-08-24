@@ -66,11 +66,11 @@ MicroPython adapter. К концу фазы:
 10. Существующий `hk_app_t` callback ABI не меняется. Private registry wiring
     связывает current native app с owner/handles; полноценный App Runtime остаётся
     Phase 3.
-11. Rolling development result никогда автоматически не наследует hardware
-    qualification. Hardware smoke обязан ссылаться на immutable closure result и
-    exact firmware image, как в
-    [Phase 1 closure evidence](evidence/phase1-closure-result.json) и
-    [Phase 1 hardware smoke](evidence/phase1-hardware-smoke.json).
+11. Каждое physical observation привязано к exact tested image. Новый build
+    сохраняет результаты незатронутых проверок после recorded impact review,
+    полного automated gate и boot sanity. Повторяются только затронутые области;
+    полный physical rerun нужен лишь для board/provider/HAL/routing/toolchain или
+    другого неясного cross-cutting изменения.
 
 ## Общие правила выполнения пакетов
 
@@ -895,67 +895,11 @@ poll elapsed timing остаются `not-run` до `2.13`; rolling result не 
 
 ## 2.13 — Physical SEN0305 acceptance
 
-Статус пакета: `in_progress` (2026-08-22). Добавлены exact-image evidence
-contract, operator runbook и conditional CI validator. SEN0305 доступна на
-operator host, UART loopback подготовлен, а I2C fixture будет подключён отдельным
-этапом на общих IO34/IO35. Physical smoke ещё не завершён, поэтому checklist
-items ниже остаются открытыми до exact-image evidence.
-
-Первый exact candidate `19b032c` прошёл automated CI и был прошит без erase, но
-не прошёл physical gate: `ticks_ms()` попал в unsupported long-int constructor,
-а UART loopback сохранил только 16 из 256 байт из-за недренированного RX FIFO.
-Эти результаты не являются hardware qualification; выполняется узкий corrective
-candidate с regression coverage, после чего smoke начинается заново на новом
-exact image.
-
-Corrective candidate `830b2a3` также прошёл automated gate и был прошит как
-exact image `d9699b2a...1aea`. TIME smoke после исправления прошёл, но UART
-loopback сохранил только 22 из 256 байт. Это доказало, что main-loop polling не
-является достаточным handoff для аппаратного RX FIFO даже с bounded staging.
-Следующий corrective переводит bounded RX storage на UART receive ISR как
-single producer; hardware gate снова начинается с нового exact image.
-
-Interrupt-backed corrective `7212e32` прошёл automated gate и был заморожен
-snapshot-коммитом `eeb6f5b`. Первый physical UART запуск этого image обнаружил
-ненадёжный временный loopback, а диагностические повторные Python runs отдельно
-выявили bounded race между terminal state worker-а и публикацией executor
-completion ticket. На soldered loopback pre-candidate build с lifecycle fix
-прошёл repeated 256/256 UART, bounded cancellation с последующим чистым 256/256
-и TIME без reboot. Это только corrective probe: после green CI требуется новый
-exact candidate и полный повтор physical gate.
-
-Lifecycle corrective `1fe81c3` и snapshot `45250b9` прошли CI, но clean rebuild
-snapshot-а после UTC midnight не совпал с candidate SHA: upstream MicroPython
-генератор включал текущую host date в `MICROPY_BUILD_DATE`. Snapshot не прошивался
-и не является candidate. Следующий corrective закрепляет `SOURCE_DATE_EPOCH` на
-timestamp pinned MicroPython revision и доказывает одинаковый image через смену
-host date до выбора нового snapshot.
-
-Reproducibility corrective `51fb551` и snapshot `9e24d6f` прошли CI; exact image
-`63459419...3a62` был прошит как `0.4.0`. На нём прошли HMPY до и после Python,
-два последовательных UART loopback 256/256, TIME, bounded cancellation и чистый
-post-cancel loopback без reboot. Следующая physical проверка обнаружила, что
-menu после button wake немедленно снова уходит в sleep. `sleep_controller`
-использовал полный `HK_TIME_REQUEST_0_1_INIT`, хотя consumer
-`firmware-runtime` имеет grant только `monotonic-us`; failed acquire возвращал
-zero sentinel, а unsigned subtraction превращал его в истёкший inactivity
-deadline. Snapshot `9e24d6f` отозван. Corrective с monotonic-only request,
-явной обработкой ошибок и защитой от обратного времени проходит новый CI,
-после чего выбирается новый exact candidate и physical gate начинается заново.
-
-Sleep-corrected snapshot `cc653e4` прошёл automated gate и был прошит как exact
-image `c0c1309a...dec3`; TIME и sleep regression на нём прошли. Подключённый
-deterministic I2C target затем обнаружил controller FIFO-boundary defect:
-combined write/read на восемь байт возвращал первые семь байт и повторял первый
-байт отдельной транзакции. Snapshot `cc653e4` отозван. Corrective сохраняет одну
-I2C transaction через bounded fixed-state I2C0 interrupt и добавляет
-детерминированный eight-entry FIFO harness; physical gate начнётся заново только
-после общего corrective image для оставшихся найденных regressions.
-
-После подключения SEN0305 и явного operator approval финальная firmware version
-`0.4.0` выбрана до physical smoke, чтобы последующий version-only binary не
-наследовал hardware status. Это предваряет только version identity из `2.14` и
-не закрывает остальные checklist/exit gates пакета `2.14`.
+Статус пакета: `in_progress`. Физические проверки выполняются накопительно по
+impact-based policy из
+[Phase 2 physical status](PHASE2_PHYSICAL_STATUS.md). Исправления, найденные на
+железе, прошли automated CI; незатронутые UART/I2C/TIME observations больше не
+обнуляются из-за изменений Pong, menu или другой независимой области.
 
 ### Depends on
 
@@ -975,17 +919,17 @@ hardware status на будущие binaries.
 
 ### Physical smoke
 
-- [ ] Buttons: каждый logical button, press/release/hold, отсутствие повторных
+- [~] Buttons: каждый logical button, press/release/hold, отсутствие повторных
   edges, измеренная debounce/event latency.
-- [ ] Display: menu, затронутые native views, camera/files full-frame, Pong dirty
+- [~] Display: menu, затронутые native views, camera/files full-frame, Pong dirty
   frames, MicroPython overlay/cancel/retry/cleanup.
-- [ ] UART: TX/RX loopback, wire-drain completion, cancel без late bytes.
-- [ ] I2C: controller read/write, mode switch и error recovery.
-- [ ] Native external/HMPY service восстанавливается после MicroPython cleanup.
-- [ ] Lights: backlight, illumination, RGB, cleanup и persisted restore.
-- [ ] Regression: camera, SD read/write/delete, files decode/frame pool, settings,
+- [~] UART: TX/RX loopback, wire-drain completion, cancel без late bytes.
+- [~] I2C: controller read/write, mode switch и error recovery.
+- [~] Native external/HMPY service восстанавливается после MicroPython cleanup.
+- [~] Lights: backlight, illumination, RGB, cleanup и persisted restore.
+- [~] Regression: camera, SD read/write/delete, files decode/frame pool, settings,
   sleep, HMPY и boot.
-- [ ] Записаны timings, raw logs и при необходимости screen/frame artifacts.
+- [~] Записаны timings, raw logs и при необходимости screen/frame artifacts.
 
 ### Evidence
 
@@ -995,14 +939,15 @@ hardware status на будущие binaries.
 
 ### Exit gate
 
-Все обязательные physical checks прошли на одном exact image. Maix Cube в этом
-пакете не квалифицируется. Если нет external fixture, Phase 2 остаётся открытым,
-даже когда host external-link tests зелёные.
+Все обязательные physical checks имеют immutable tested-image identity; текущий
+closure build прошёл automated gate и boot sanity, а impact ledger не содержит
+непроверенного затронутого участка. Maix Cube в этом пакете не квалифицируется.
 
 ### Rollback boundary
 
-Hardware smoke ничего не изменяет в source. Любой новый binary после smoke
-требует нового closure selection и не наследует этот статус.
+Hardware smoke ничего не изменяет в source. Новый binary повторяет только
+проверки, затронутые его source/composition diff; незатронутые observations
+сохраняются в ledger с исходным image hash.
 
 ---
 
@@ -1021,7 +966,8 @@ evidence в одну проверяемую цепочку.
 
 - [ ] Повторно выполнить полный automated gate на exact closure commit.
 - [ ] Создать immutable `docs/evidence/phase2-closure-result.json`.
-- [ ] Проверить, что hardware smoke ссылается на exact closure result/image.
+- [ ] Проверить, что hardware ledger связывает каждый result с tested image и
+  содержит impact review для closure image.
 - [ ] Установить Firmware version `0.4.0` и проверить canonical version sources.
 - [ ] Обновить `docs/CURRENT_STATE.md`, `docs/MODULES.md` и Phase 2 status в
   `docs/ROADMAP.md` без overclaim hardware independence.
@@ -1043,7 +989,8 @@ evidence в одну проверяемую цепочку.
 - [ ] Pong fixed-step и dirty-region gates проходят.
 - [ ] Full/disabled SEN0305 и Cube conformance builds проходят.
 - [ ] Resource/latency budgets соблюдены.
-- [ ] Closure и hardware evidence имеют согласованные hashes.
+- [ ] Closure и hardware evidence имеют согласованные per-check hashes и impact
+  review.
 
 ### Exit gate
 

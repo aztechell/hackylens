@@ -1,28 +1,30 @@
 # Phase 2.13 SEN0305 hardware acceptance
 
-This procedure qualifies the five Phase 2 capabilities on one exact
-HUSKYLENS/SEN0305 firmware image. It does not qualify Maix Cube and it does not
-transfer hardware status to a later build.
+This procedure qualifies the five Phase 2 capabilities on HUSKYLENS/SEN0305.
+Each observation is retained with the exact image that was tested. A closure
+build may carry forward unaffected observations after an explicit impact review;
+it does not require a complete physical rerun after every unrelated change.
 
-Current status: **NOT RUN**. No SEN0305 serial device or external-link fixture
-was available when this procedure and its evidence validator were added. This
-document is a runbook, not physical evidence.
+Current status: **IN PROGRESS**. The live checklist is maintained in
+[Phase 2 physical status](PHASE2_PHYSICAL_STATUS.md). This document is the
+runbook, not the physical evidence itself.
 
 ## Non-negotiable gate
 
-A passing session needs all of the following at the same time:
+A passing closure needs:
 
 - one immutable `phase2-candidate-result.json` copied from a green Phase 2
   rolling result;
-- the exact full-profile image named by that result, with matching image,
-  composition, capability-inventory, and attestation hashes;
+- the exact closure image identity, with matching image, composition,
+  capability-inventory, and attestation hashes;
 - the candidate commit and its green `Release firmware` workflow URL;
 - the pinned Kendryte compiler archive/version and SDK revision, plus the host
   Python and CMake versions used for the candidate build;
 - one recorded SEN0305 board serial/revision and operator identity;
 - a fixture with an ID and a checked-in schematic, providing both UART TX/RX
   loopback and a known 7-bit I2C target;
-- raw logs and timing logs under `docs/evidence/phase2-hardware/`;
+- a per-check ledger that retains the tested image identity and raw/timing logs;
+- an impact review mapping the closure diff to repeated and carried checks;
 - every required result marked `pass` in
   `docs/evidence/phase2-hardware-smoke.json`;
 - a successful `python tools/check_phase2_hardware.py` invocation.
@@ -30,11 +32,11 @@ A passing session needs all of the following at the same time:
 Host tests never replace the external electrical fixture. A missing UART
 loopback or known I2C target leaves Phase 2.13 open.
 
-The firmware version is part of the qualified identity. In particular, a
-later Phase 2.14 change from the current development version to `0.4.0` creates
-a different image and invalidates an earlier smoke. Select the final-version
-candidate before the physical run, or repeat the complete physical run on the
-new exact image.
+The firmware version remains part of each tested identity. A version-only or
+unrelated app/UI change requires the automated gate and closure boot sanity,
+not an automatic UART/I2C/lights rerun. Provider, HAL, routing, board,
+toolchain, composition, resource-assumption, or uncertain cross-cutting changes
+repeat the affected physical checks.
 
 ## 1. Select the candidate
 
@@ -73,9 +75,10 @@ count and SHA-256 before it is flashed. The firmware version recorded in the
 hardware report must equal the repository `VERSION` file.
 
 Do not edit `phase2-candidate-result.json` after selection. If automated
-evidence, firmware source, composition, toolchain, or `VERSION` changes, delete
-the unqualified candidate snapshot and select a new one. Never edit a candidate
-that already has physical evidence referring to it.
+evidence, firmware source, composition, toolchain, or `VERSION` changes, select
+a new closure snapshot and record an impact review. Preserve older tested-image
+records. Repeat only the checks named by that review; never rewrite an old
+observation as if it ran on the new image.
 
 ## 2. Record the board, operator, and fixture
 
@@ -165,9 +168,10 @@ native transport is restored and complete at least one HMPY request/response.
 Observe backlight, illumination, and RGB. Exercise normal completion,
 cancellation/error cleanup to safe-off, and restoration of persisted settings.
 
-On the same exact image, pass boot, camera capture, SD read/write/delete, Files
-decode and frame-pool reuse, settings persistence, Sleep, and HMPY. Do not
-format USERFS as part of the acceptance run.
+Across the retained physical ledger, cover boot, camera capture, SD
+read/write/delete, Files decode and frame-pool reuse, settings persistence,
+Sleep, and HMPY. The closure image itself must pass boot sanity and every check
+affected by its impact review. Do not format USERFS as part of acceptance.
 
 ## 5. Evidence and validation
 
@@ -185,9 +189,11 @@ are:
 - `time`;
 - `regression`.
 
-Every result must reference one or more declared artifacts. The artifact list
-must include at least one `fixture-schematic`, one `raw-log`, and one
-`timing-log`; every path must stay under
+Every result must reference one or more declared artifacts. A carried result's
+raw artifact must identify its original tested commit/image; the impact review
+must explain why the closure diff does not affect it. The artifact list must
+include at least one `fixture-schematic`, one `raw-log`, and one `timing-log`;
+every path must stay under
 `docs/evidence/phase2-hardware/` and its content SHA-256 must match.
 
 Use [the validator](../tools/check_phase2_hardware.py) and its deterministic
@@ -207,9 +213,6 @@ all Phase 2.13 checklist items complete.
 ## Rollback and cleanup
 
 Restore temporary settings and remove only files created for the session. Keep
-the candidate result, smoke report, raw logs, timings, and fixture record
-immutable.
-
-Any later binary, including one produced only by a version change, has no
-hardware-qualified status. It needs a new candidate selection and a complete
-new smoke rather than an edited copy of the old report.
+candidate results, impact reviews, raw logs, timings, and fixture records
+immutable. A later binary gets a new closure identity and targeted impact
+review; it does not erase unrelated physical observations.

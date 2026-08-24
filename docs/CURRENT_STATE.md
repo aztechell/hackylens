@@ -88,32 +88,12 @@ UART/I2C protocol or routed-peripheral semantics.
   with adapter-specific checks kept supplemental. The complete build,
   diagnostic, resource, latency, and rolling-evidence matrix passed
   [Release firmware run 32569674140](https://github.com/aztechell/hackylens/actions/runs/32569674140).
-  Phase 2.13 is in progress. Its exact-image SEN0305 evidence contract and
-  operator runbook are implemented. Candidate `19b032c` passed automated CI and
-  booted as 0.4.0 on SEN0305, but physical smoke found a MicroPython
-  `ticks_ms()` integer-conversion failure and UART RX FIFO loss during a
-  256-byte loopback. Corrective candidate `830b2a3` fixed TIME physically but
-  still retained only 22 of 256 UART bytes, proving that main-loop draining
-  cannot provide the required hardware FIFO handoff. Interrupt-backed
-  corrective `7212e32` passed automated CI, but its first physical UART attempt
-  exposed an unreliable temporary loopback connection and a separate bounded
-  worker-terminal/executor-completion handoff race between consecutive Python
-  runs. A soldered pre-candidate probe of the lifecycle correction returned the
-  exact 256-byte payload on repeated runs, completed bounded cancellation, and
-  passed TIME; the correction still needs its own green CI and exact-image
-  rerun. Rebuilding the green snapshot after UTC midnight then exposed an
-  unpinned MicroPython build-date input, so that snapshot is also unqualified.
-  Corrective `51fb551` pinned that input and snapshot `9e24d6f` passed CI with
-  reproducible image SHA-256 `63459419...3a62`. On that exact flashed image,
-  HMPY, repeated 256-byte UART loopback, TIME, cancellation, post-cancel UART,
-  and native-service restoration passed. The next physical observation found
-  that the menu wakes and immediately sleeps: the sleep controller requested
-  the full TIME feature set although its runtime consumer is granted only
-  `monotonic-us`, then treated the failed read's zero sentinel as unsigned
-  elapsed time. Snapshot `9e24d6f` is unqualified and withdrawn; the corrective
-  narrows the request and makes elapsed-time handling failure-safe. No physical
-  claim exists until one exact candidate image passes the complete physical
-  gate.
+  Phase 2.13 is in progress under an impact-based physical policy. Each physical
+  observation retains its tested image hash; a later build repeats only checks
+  affected by its source/composition diff, after the full automated gate and a
+  boot sanity check. The current ledger records passed UART, I2C, TIME, HMPY,
+  camera, Pong, and menu observations, plus the remaining partial/not-run
+  checks. See `docs/PHASE2_PHYSICAL_STATUS.md`.
 
 The twelve feature applications remain self-contained source modules with
 compile-time exclusion. Existing camera, LCD, input, storage, HMPY, external
@@ -123,7 +103,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 
 | Area | Status |
 | --- | --- |
-| Firmware | 0.4.0 corrective; no active Phase 2.13 hardware candidate |
+| Firmware | 0.4.0; Phase 2.13 impact-based physical acceptance in progress |
 | Board Port Contract | 0.1.0 experimental |
 | HMPY Contract | 1.1.0 experimental; wire-major 1 |
 | Versioning Policy | 0.4.0 |

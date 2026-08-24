@@ -369,8 +369,14 @@ The deterministic fake and every platform adapter MUST run the same capability
 contract suite. A compile-conformance board does not acquire runtime or hardware
 qualification merely by generating an inventory or compiling an adapter.
 
-Hardware qualification is bound to an immutable result and exact image hash.
-A later development build does not inherit that qualification.
+Each physical observation is bound to an immutable result and the exact image
+hash that was tested. A later build MAY carry that observation forward when a
+recorded source/composition impact review shows that the relevant capability,
+provider, HAL, routing, resource budget, and test assumptions are unchanged.
+The later build MUST pass the full automated gate and a boot sanity check.
+Only affected physical checks are repeated. A provider, HAL, routing, board,
+toolchain, or uncertain cross-cutting change invalidates the related
+observations; it does not automatically invalidate unrelated observations.
 
 ## Compatibility and deprecation
 
