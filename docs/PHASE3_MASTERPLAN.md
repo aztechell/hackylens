@@ -15,7 +15,7 @@
 [GLOSSARY.md](spec/GLOSSARY.md) и
 [VERSIONING.md](spec/VERSIONING.md).
 
-Номера `3.1`–`3.15` ниже — последовательные execution-пакеты. Они детализируют,
+Номера `3.1`–`3.17` ниже — последовательные execution-пакеты. Они детализируют,
 но не заменяют тематические разделы `3.1`–`3.6` нормативного roadmap. Один turn
 выполняет только один пакет, если пользователь явно не расширил scope.
 
@@ -64,7 +64,7 @@ Native app manifest и будущий project manifest — разные конт
 1. App Runtime, App Manifest и App SDK начинают отдельные линии версий с
    `0.1.0 experimental`.
 2. Candidate firmware version Phase 3 — `0.5.0`; окончательно она фиксируется в
-   `3.15` после version review. HMPY, Board Port, Capability API и MicroPython API
+   `3.17` после version review. HMPY, Board Port, Capability API и MicroPython API
    не меняют версии без изменения их наблюдаемого контракта.
 3. Manifest читается только build tooling. Firmware получает immutable generated
    descriptors и не содержит TOML parser, filesystem discovery или runtime app
@@ -84,8 +84,12 @@ Native app manifest и будущий project manifest — разные конт
    скрытые background loops запрещены.
 9. Screen/menu — adapters runtime. `screen_t` может сохраняться внутри legacy
    adapter, но не становится public app identity v2.
-10. Capability handles выдаются owner-scoped и generation-checked. Cleanup app
-    всегда заканчивается owner-wide cleanup/quarantine semantics Phase 2.
+10. Capability handles выдаются owner-scoped и generation-checked. Нормативный
+    teardown имеет один порядок: `stop(ctx)` → app `cleanup(ctx)` при ещё валидных
+    context/handles → runtime owner-wide capability/service cleanup → provider
+    quarantine по Phase 2 при failed provider cleanup → invalidation всех
+    owner-scoped handles → invalidation context generation → app state становится
+    reusable. App cleanup failure не пропускает runtime owner-wide cleanup.
 11. Новая camera capability обязана использовать существующий K210 camera/frame
     implementation. После её migration package не остаётся второй production
     hardware path для того же поведения.
@@ -98,6 +102,12 @@ Native app manifest и будущий project manifest — разные конт
 14. Full physical regression после каждого package не нужен. Повторяются только
     затронутые runtime/app/provider сценарии; незатронутые Phase 2 observations
     переносятся после impact review и green automated CI.
+15. `sdk/include` — public entry surface Feature App SDK. SDK headers могут
+    зависеть от и re-export public Phase 2 Capability API types из
+    `firmware/include/hackylens/capability/`; это единственное разрешённое
+    SDK→Capability API направление. Apps не включают implementation/provider/
+    private capability headers. Redundant `hk_app_time_t`/`hk_app_display_t`
+    wrappers без конкретной ABI-причины не вводятся.
 
 ## Общие правила выполнения
 
@@ -140,8 +150,14 @@ Phase 2 closure как baseline.
   `APP_SDK.md` с metadata `0.1.0 experimental`.
 - [ ] Добавить ADR для lifecycle/context ownership и ADR для manifest-generated
   composition.
+- [ ] Нормативно закрепить SDK/Capability API boundary: Feature App SDK является
+  app-facing entry surface, использует public capability types и не открывает
+  implementation/provider/platform headers.
 - [ ] Зафиксировать state machine, callback ordering, failure unwind, stop reason,
   cleanup и stale-callback semantics.
+- [ ] Зафиксировать teardown ordering: idempotent `stop`, app cleanup at most once
+  при валидном context, обязательный runtime owner cleanup, provider quarantine
+  при его failure, затем handle/context invalidation и state reuse.
 - [ ] Зафиксировать разницу native app manifest и Phase 4 project format.
 - [ ] Снять Phase 3 flash/static RAM/dispatch baseline с exact Phase 2 closure и
   утвердить численные budgets до runtime implementation.
@@ -285,13 +301,20 @@ production menu.
 ### Scope
 
 - [ ] Реализовать states `inactive`, `injecting`, `probed`, `prepared`, `running`,
-  `stopping`, `cleaning`, `failed/quarantined`.
+  `stopping`, `cleaning`, `faulted`. Provider quarantine остаётся отдельным
+  состоянием capability provider и не используется как app-runtime state.
 - [ ] Реализовать callbacks `probe`, `prepare`, `start`, `event`, `tick`, `render`,
   `stop`, `cleanup` в нормативном порядке.
 - [ ] `prepare` failure вызывает полный unwind; `start` не вызывается без
   successful injection/probe/prepare.
-- [ ] `stop` идемпотентен; `cleanup` выполняется ровно один раз для normal close,
-  BACK, timeout, failure и forced switch.
+- [ ] `stop` идемпотентен; app `cleanup` выполняется не более одного раза для
+  normal close, BACK, timeout, exception/failure и forced switch.
+- [ ] Реализовать точный teardown: `stop(ctx)` → app `cleanup(ctx)` при валидных
+  declared handles → обязательный runtime owner-wide capability/service cleanup
+  → provider quarantine по Phase 2 при failed provider cleanup → invalidate
+  owner handles → invalidate context generation → разрешить state reuse.
+- [ ] Ошибка app cleanup не останавливает runtime owner-wide cleanup; deferred
+  work использует generation/epoch token и не влияет на следующий run.
 - [ ] Reentrant switch/callback и callback после context generation invalidation
   возвращают deterministic error.
 - [ ] App state остаётся private fixed storage; descriptor size/alignment
@@ -328,10 +351,12 @@ Lifecycle normative suite полностью проходит на host; product
   запускает app.
 - [ ] Optional grant либо присутствует, либо возвращает manifest fallback state.
 - [ ] App не может запросить capability, не объявленную manifest.
-- [ ] Все acquired handles принадлежат одному runtime owner и инвалидируются до
-  возврата из cleanup.
-- [ ] Failed cleanup использует provider quarantine rules Phase 2; stale copied
-  context/handle не получает доступ при следующем запуске.
+- [ ] Все acquired handles принадлежат одному runtime owner. Они остаются
+  валидными во время app cleanup, затем runtime выполняет owner-wide cleanup и
+  только после этого инвалидирует handles и context generation.
+- [ ] Failure app cleanup не пропускает owner-wide cleanup; provider quarantine
+  применяется только если cleanup соответствующего provider не смог установить
+  safe state. Stale copied context/handle не получает доступ при следующем run.
 - [ ] Добавить fake inventory/grant tests, version/feature mismatch, partial
   injection unwind и owner exhaustion tests.
 
@@ -394,9 +419,12 @@ Mixed runtime работает в full firmware host harness; current physical b
 
 ### Scope
 
-- [ ] Создать `sdk/include` как единственную public native app include surface.
+- [ ] Создать `sdk/include` как public entry surface Feature App SDK.
+- [ ] SDK headers могут включать/re-export только public Phase 2 Capability API
+  types из `firmware/include/hackylens/capability/`; не создавать redundant
+  app-specific wrappers для Time/Display/Input без доказанной ABI-причины.
 - [ ] Экспортировать app definition/context, lifecycle ops, events, result/error,
-  deadline/cancel, input и display surface wrappers.
+  deadline/cancel и declared capability handles/types.
 - [ ] Не реэкспортировать board, HAL, SDK, drivers, private capability providers,
   raw SD или framebuffer ownership internals.
 - [ ] Добавить CMake/make integration для standalone app compile.
@@ -404,7 +432,8 @@ Mixed runtime работает в full firmware host harness; current physical b
   lifecycle driver и failure injection.
 - [ ] Добавить compatibility metadata и compile tests для C/C++ consumers.
 - [ ] Architecture guard запрещает SDK→platform/app-private и app→anything кроме
-  SDK plus own private headers.
+  SDK plus own private headers; разрешено только SDK public header→public
+  Capability API header, но не implementation/provider/private headers.
 
 ### Exit gate
 
@@ -413,7 +442,124 @@ header closure не содержит repository-private dependencies.
 
 ---
 
-## 3.9 — App-scoped settings, storage и logging
+## 3.9 — `new_app.py` и independent sample app
+
+Статус пакета: `not_started`.
+
+### Depends on
+
+`3.2`–`3.8`.
+
+### Цель
+
+Доказать эргономику SDK до добавления storage/camera complexity и до миграции
+production features.
+
+### Scope
+
+- [ ] Реализовать `python tools/new_app.py <id>` с безопасным отказом при
+  collision/overwrite.
+- [ ] Генерировать directory, manifest, public entry, private state/controller/
+  view split, lifecycle ops и host tests.
+- [ ] Capability declarations выбираются flags generator, а не редактированием
+  central templates после generation.
+- [ ] Generated code deterministic, format-clean и architecture-valid.
+- [ ] Создать простой sample app только на Time/Input/Display без platform
+  includes, logging dependency и ручной правки core/registry/build script.
+- [ ] Проверить standalone fake build, full firmware inclusion, disable/exclusion
+  и resource report.
+- [ ] Добавить CLI negative tests для invalid ID, unknown capability, existing
+  directory и unwritable target.
+
+### Exit gate
+
+Новый sample app создаётся одной командой и проходит tests/build только через
+manifest + SDK; central firmware files не меняются для регистрации app, а
+services следующих пакетов ему не требуются.
+
+---
+
+## 3.10 — App-scoped Settings и Logging
+
+Статус пакета: `not_started`.
+
+### Depends on
+
+`3.9`.
+
+### Цель
+
+Дать app изолированные settings и bounded diagnostics без прямого доступа к
+settings storage или debug transport.
+
+### Scope
+
+- [ ] Определить versioned settings namespace с app ID isolation, fixed-size
+  records, validation, atomic commit и compatibility rules.
+- [ ] Определить structured bounded logging без format heap allocation и без
+  прямого UART/debug driver access.
+- [ ] Manifest объявляет используемые settings/logging namespaces; runtime
+  injects only declared service handles.
+- [ ] Реализовать portable service boundaries поверх existing settings/debug
+  services без дублирования production implementation.
+- [ ] Добавить shared fake/production normative cases для namespace isolation,
+  record validation, atomic settings commit, bounded logging и cleanup.
+
+### Не входит
+
+Storage paths/quotas, USERFS project format, package installation и Phase 4
+workflow.
+
+### Exit gate
+
+App не может читать/портить чужие settings или писать напрямую в UART/debug
+driver; fake и production adapters проходят одинаковые normative cases.
+
+---
+
+## 3.11 — App-scoped Storage
+
+Статус пакета: `not_started`.
+
+### Depends on
+
+`3.10`.
+
+### Цель
+
+Дать app bounded filesystem service с явными namespaces и permissions без raw SD
+или произвольных platform paths.
+
+### Scope
+
+- [ ] Определить app-private storage namespace и явно разрешённые shared-media
+  operations; raw SD blocks и arbitrary platform paths запрещены.
+- [ ] Защитить resolution от `..`, absolute path, symlink, case-folding и других
+  path escape/collision вариантов.
+- [ ] Manifest объявляет storage namespaces, permissions и fixed quotas; runtime
+  injects only declared service handles.
+- [ ] Reads/writes bounded, deadline/cancel aware и не загружают file целиком без
+  declared limit.
+- [ ] Определить atomic replace/commit и deterministic partial-write/power-loss
+  semantics.
+- [ ] Реализовать portable boundary поверх existing storage layer без raw block
+  или app-specific filesystem bypass.
+- [ ] Добавить shared fake/production normative cases для isolation, quota, path
+  escape, cancellation, partial write, recovery и cleanup.
+
+### Не входит
+
+USERFS project format, package installation, editor/upload workflow, Files-app
+migration и Phase 4 workflow.
+
+### Exit gate
+
+Fixture apps не могут выйти из разрешённого namespace, обойти quota или получить
+raw SD access; fake и production adapters проходят одинаковые normative cases.
+
+---
+
+## 3.12 — Camera/frame public contract и deterministic fake
 
 Статус пакета: `not_started`.
 
@@ -423,118 +569,77 @@ header closure не содержит repository-private dependencies.
 
 ### Цель
 
-Дать app полезные platform services без raw filesystem/settings/debug access.
-
-### Scope
-
-- [ ] Определить versioned settings namespace с app ID isolation, fixed-size
-  records, validation, atomic commit и compatibility rules.
-- [ ] Определить storage namespace/permissions для app-private data и явно
-  разрешённых shared media operations; запретить raw block и path escape.
-- [ ] Все file operations bounded, deadline/cancel aware и не загружают file
-  целиком без declared limit.
-- [ ] Определить structured bounded logging без format heap allocation и без
-  прямого UART/debug driver access.
-- [ ] Manifest объявляет используемые namespaces и quotas; runtime injects only
-  declared service handles.
-- [ ] Реализовать portable service boundaries поверх existing storage/settings/
-  debug services без дублирования production implementation.
-- [ ] Добавить host fakes, namespace isolation, quota, power-loss/partial-write,
-  path traversal, cancellation и cleanup tests.
-
-### Не входит
-
-USERFS project format, package installation, editor/upload workflow и Files app
-migration.
-
-### Exit gate
-
-Fixture apps не могут читать/портить чужое state или raw SD; fakes и production
-service adapters проходят общие normative cases.
-
----
-
-## 3.10 — Camera/frame capability для App SDK
-
-Статус пакета: `not_started`.
-
-### Depends on
-
-`3.6`, `3.8`.
-
-### Цель
-
-Создать единственный injectable camera/frame path, достаточный для camera app
-migration proof.
+Зафиксировать portable camera/frame semantics до K210 production migration.
 
 ### Scope
 
 - [ ] Определить `hackylens.cap.camera` `0.1.0 experimental`: configuration,
-  start/stop, bounded capture/poll, frame metadata, cancel/deadline и cleanup.
+  start/stop, bounded capture/poll, frame metadata, deadline/cancel и cleanup.
 - [ ] Определить borrowed frame ownership, generation, immutable-until-release,
   format/stride/geometry и stale-token semantics.
-- [ ] Переиспользовать existing camera stream/frame pool и K210 DVP provider;
-  второй framebuffer или frame queue запрещены.
-- [ ] Camera and scratch workspace mutual exclusion остаётся доказанным.
-- [ ] Добавить fixed-capacity host fake и общую fake/K210 normative suite.
-- [ ] Свести существующих native/MicroPython v1 consumers этого hardware к одному
-  provider boundary без изменения MicroPython API v1.
-- [ ] Добавить architecture guards против app/adapter→DVP/camera driver bypass.
-- [ ] Зафиксировать flash/RAM/frame latency delta.
+- [ ] Определить fixed-capacity limits, one-shot completion/error behavior и
+  teardown interaction с app owner lifecycle.
+- [ ] Реализовать deterministic allocation-free host fake с fault injection.
+- [ ] Создать provider-independent normative host suite для configuration,
+  start/stop, capture/poll, cancellation, deadlines, release, stale tokens и
+  cleanup.
+- [ ] Зафиксировать public header/ABI closure без K210/DVP/driver dependencies.
 
 ### Не входит
 
-Vision blobs, QR, AI model API и migration camera-analysis apps.
+K210 provider, production consumer migration, Vision, QR и AI APIs.
+
+### Exit gate
+
+Public contract и deterministic fake полностью проходят normative host suite;
+production firmware camera path не изменён.
+
+---
+
+## 3.13 — K210 camera provider и consumer convergence
+
+Статус пакета: `not_started`.
+
+### Depends on
+
+`3.12`.
+
+### Цель
+
+Реализовать Camera capability на существующем K210 path и убрать параллельные
+native/MicroPython hardware paths.
+
+### Scope
+
+- [ ] Переиспользовать existing DVP, camera stream и frame pool; второй
+  framebuffer или frame queue запрещены.
+- [ ] Сохранить camera reservation и scratch workspace mutual exclusion.
+- [ ] K210 provider и fake проходят одну provider-independent normative suite;
+  adapter-specific ISR/DVP cases остаются supplemental.
+- [ ] Свести существующих native и MicroPython v1 camera consumers к одному
+  provider boundary без изменения MicroPython API v1.
+- [ ] После migration удалить второй production camera hardware path.
+- [ ] Добавить architecture guards против app/adapter→DVP/camera driver bypass.
+- [ ] Зафиксировать flash/static RAM и frame-latency evidence.
+
+### Не входит
+
+Vision, QR, AI APIs и lifecycle v2 migration конкретного CAMERA app.
 
 ### Exit gate
 
 Fake и K210 provider имеют одинаковую lifecycle/frame semantics; firmware имеет
-один camera hardware path; current camera consumers и both profiles зелёные.
+один production camera hardware path; current consumers и both profiles зелёные.
 
 ---
 
-## 3.11 — `new_app.py` и independent sample app
+## 3.14 — BUTTONS migration proof
 
 Статус пакета: `not_started`.
 
 ### Depends on
 
-`3.2`–`3.10`.
-
-### Цель
-
-Доказать короткий путь создания app до миграции production features.
-
-### Scope
-
-- [ ] Реализовать `python tools/new_app.py <id>` с безопасным отказом при
-  collision/overwrite.
-- [ ] Генерировать directory, manifest, public entry, private state/controller/
-  view split, lifecycle ops и host tests.
-- [ ] Capability/service declarations выбираются flags generator, а не
-  редактированием central templates после generation.
-- [ ] Generated code deterministic, format-clean и architecture-valid.
-- [ ] Создать простой sample app на Time/Input/Display/Logging без platform
-  includes и без ручной правки core/registry/build script.
-- [ ] Проверить standalone fake build, full firmware inclusion, disable/exclusion
-  и resource report.
-- [ ] Добавить CLI negative tests для invalid ID, unknown capability, existing
-  directory и unwritable target.
-
-### Exit gate
-
-Новый sample app создаётся одной командой и проходит тесты/build только через
-manifest + SDK; central firmware files не меняются для регистрации app.
-
----
-
-## 3.12 — BUTTONS migration proof
-
-Статус пакета: `not_started`.
-
-### Depends on
-
-`3.11`.
+`3.9`.
 
 ### Цель
 
@@ -555,17 +660,18 @@ manifest + SDK; central firmware files не меняются для регист
 ### Exit gate
 
 BUTTONS работает только как v2 app; legacy path отсутствует; automated gate и
-targeted owner smoke зелёные.
+targeted owner smoke зелёные. Camera, storage и settings packages для закрытия
+BUTTONS не требуются.
 
 ---
 
-## 3.13 — PONG migration proof
+## 3.15 — PONG migration proof
 
 Статус пакета: `not_started`.
 
 ### Depends on
 
-`3.12`.
+`3.14`.
 
 ### Цель
 
@@ -585,35 +691,38 @@ targeted owner smoke зелёные.
 ### Exit gate
 
 PONG не использует legacy lifecycle и сохраняет Phase 2 gameplay/render
-behavior; targeted owner smoke и CI зелёные.
+behavior; targeted owner smoke и CI зелёные. Camera/storage packages не являются
+его dependency.
 
 ---
 
-## 3.14 — CAMERA migration proof
+## 3.16 — CAMERA migration proof
 
 Статус пакета: `not_started`.
 
 ### Depends on
 
-`3.9`, `3.10`, `3.13`.
+`3.10`, `3.11`, `3.13`, `3.15`.
 
 ### Цель
 
-Выполнить обязательный camera app proof через injected capabilities и services.
+Выполнить обязательный camera app proof через injected capabilities и services
+после BUTTONS и PONG.
 
 ### Scope
 
 - [ ] Перевести только CAMERA app, не QR/FACE/APRILTAG/OBJECT, на lifecycle v2.
-- [ ] Использовать injected Camera, Display, Input, Time, Lights, settings и
-  storage handles; app не включает camera stream, frame pool, raw SD или HAL.
+- [ ] Использовать injected Camera, Display, Input, Time, Lights, settings,
+  logging и storage handles; app не включает camera stream, frame pool, raw SD
+  или HAL.
 - [ ] Camera settings child session становится app-private state, а не отдельной
   public screen identity.
 - [ ] Photo write использует SDK storage namespace и сохраняет current format/path
   compatibility либо документированную migration.
 - [ ] Stop/cleanup корректны для active frame, capture, settings, photo write,
   BACK, timeout и forced switch.
-- [ ] Deferred provider work использует generation token и не трогает state после
-  exit/re-entry.
+- [ ] Deferred provider work использует generation/epoch token и не трогает state
+  после exit/re-entry.
 - [ ] Сохранить camera FPS/visual behavior и full-frame display path в пределах
   Phase 3 budgets.
 - [ ] На устройстве проверить только camera start/live view/settings/photo/BACK/
@@ -626,13 +735,13 @@ bypasses отсутствуют; targeted physical smoke и full CI зелёны
 
 ---
 
-## 3.15 — Qualification, versions и Phase 3 closure
+## 3.17 — Qualification, versions и Phase 3 closure
 
 Статус пакета: `not_started`.
 
 ### Depends on
 
-`3.1`–`3.14`.
+`3.1`–`3.16`.
 
 ### Цель
 
@@ -666,7 +775,8 @@ portability.
 - [ ] New sample app не требует изменений core/registry/build script.
 - [ ] Required/optional grants и app-scoped services следуют manifest.
 - [ ] Lifecycle failure/switch/cleanup/stale-callback suite зелёный.
-- [ ] SDK header closure portable; app→board/HAL/SDK/drivers edges равны нулю.
+- [ ] SDK header closure portable; app→board/HAL/platform-SDK/drivers edges равны
+  нулю.
 - [ ] BUTTONS, PONG и CAMERA используют lifecycle v2; остальные legacy apps явно
   изолированы adapter-ом.
 - [ ] Camera имеет один production provider path и сохраняет frame ownership.
@@ -682,8 +792,9 @@ targeted owner smoke. Непереведённые legacy apps и отложен
 ## Как продолжать работу
 
 Следующий implementation turn называется номером execution-пакета, например
-`Phase 3.1` или `Phase 3.8`. Перед изменением source нужно прочитать этот пакет,
-его dependencies и связанные normative contracts. Итог turn сообщает:
+`Phase 3.1`, `Phase 3.9` или `Phase 3.13`. Перед изменением source нужно
+прочитать этот пакет, его dependencies и связанные normative contracts. Итог
+turn сообщает:
 
 1. какие checklist items завершены;
 2. какие contracts/files изменены;
