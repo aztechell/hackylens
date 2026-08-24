@@ -20,16 +20,18 @@
 static uint32_t g_files_repeat_button;
 static uint8_t g_files_repeat_ticks;
 static uint64_t g_files_ok_press_us;
+static uint8_t g_files_ok_active;
 static uint8_t g_files_ok_hold_fired;
 static hk_time_t s_files_time;
 static hk_owner_t s_files_time_owner;
 
 static uint64_t files_time_now_us(void)
 {
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
     hk_owner_t owner = capability_client_current_owner();
     uint64_t value = 0U;
 
+    request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
     if(hk_owner_is_zero(owner))
         return 0U;
     if(owner.slot != s_files_time_owner.slot ||
@@ -51,6 +53,7 @@ void files_controller_reset_input(void)
     g_files_repeat_button = 0;
     g_files_repeat_ticks = 0;
     g_files_ok_press_us = 0;
+    g_files_ok_active = 0;
     g_files_ok_hold_fired = 0;
 }
 
@@ -82,29 +85,35 @@ static void files_repeat_set_next_delay(void)
 static void files_ok_reset(void)
 {
     g_files_ok_press_us = 0;
+    g_files_ok_active = 0;
     g_files_ok_hold_fired = 0;
 }
 
 static void files_ok_press(uint64_t now_us)
 {
     g_files_ok_press_us = now_us;
+    g_files_ok_active = 1U;
     g_files_ok_hold_fired = 0;
 }
 
 static uint8_t files_ok_release_should_open(void)
 {
-    return g_files_ok_press_us != 0 && !g_files_ok_hold_fired;
+    return g_files_ok_active && !g_files_ok_hold_fired;
 }
 
 static uint8_t files_ok_hold_ready(uint32_t input_state, uint64_t now_us)
 {
-    if(g_files_ok_press_us == 0 ||
+    if(!g_files_ok_active ||
+       g_files_ok_press_us == 0U ||
+       now_us == 0U ||
+       now_us < g_files_ok_press_us ||
        g_files_ok_hold_fired ||
        !(input_state & BUTTON_OK) ||
        now_us - g_files_ok_press_us < FILES_OK_HOLD_US)
         return 0;
 
     g_files_ok_hold_fired = 1;
+    g_files_ok_active = 0U;
     g_files_ok_press_us = 0;
     return 1;
 }

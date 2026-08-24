@@ -32,6 +32,50 @@ def timing(*, maximum: int = 3000) -> dict[str, int]:
 
 
 class Phase2HardwareEvidenceTests(unittest.TestCase):
+    def make_impact_evidence(self, root: Path) -> dict[str, object]:
+        (root / "VERSION").write_text("0.4.0\n", encoding="utf-8")
+        observations = [
+            {
+                "id": identifier,
+                "method": "operator physical check",
+                "result": "passed on connected SEN0305",
+                "status": "pass",
+            }
+            for identifier in sorted(hardware.IMPACT_RESULT_IDS)
+        ]
+        return {
+            "accepted": True,
+            "board": {
+                "id": "huskylens-sen0305",
+                "revision": "SEN0305",
+                "serial": "owner-device",
+            },
+            "current_image": {
+                "boot_sanity": True,
+                "image_bytes": 1_543_928,
+                "image_sha256": "1" * 64,
+                "source_manifest_sha256": "2" * 64,
+                "version": "0.4.0",
+            },
+            "excluded_boards": ["sipeed-maix-cube"],
+            "impact_review": {
+                "broader_retest_required": False,
+                "carried_forward": ["time", "uart", "i2c"],
+                "changed_areas": ["buttons", "files", "micropython-ui"],
+                "provider_hal_routing_changed": False,
+                "retested_areas": ["buttons", "files", "micropython-ui"],
+            },
+            "limitations": [
+                "Historical timing samples were not reconstructed or invented."
+            ],
+            "observations": observations,
+            "operator": {"identity": "project-owner"},
+            "phase": "2.13",
+            "policy": "impact-based-owner-acceptance",
+            "recorded_at": "2026-08-24T15:00:00Z",
+            "schema": 2,
+        }
+
     def make_evidence(self, root: Path) -> dict[str, object]:
         evidence_dir = root / "docs" / "evidence"
         artifact_dir = evidence_dir / "phase2-hardware"
@@ -215,6 +259,28 @@ class Phase2HardwareEvidenceTests(unittest.TestCase):
             root = Path(temp)
             evidence = self.make_evidence(root)
             self.assertIs(hardware.validate_document(evidence, root), evidence)
+
+    def test_impact_based_owner_evidence_passes_without_fabricated_timings(self) -> None:
+        with self.with_fixture() as temp:
+            root = Path(temp)
+            evidence = self.make_impact_evidence(root)
+            self.assertIs(hardware.validate_document(evidence, root), evidence)
+
+            evidence["observations"].pop()
+            with self.assertRaisesRegex(
+                hardware.HardwareEvidenceError, "coverage is incomplete"
+            ):
+                hardware.validate_document(evidence, root)
+
+    def test_impact_review_requires_every_changed_area_to_be_retested(self) -> None:
+        with self.with_fixture() as temp:
+            root = Path(temp)
+            evidence = self.make_impact_evidence(root)
+            evidence["impact_review"]["retested_areas"].remove("files")
+            with self.assertRaisesRegex(
+                hardware.HardwareEvidenceError, "must be retested"
+            ):
+                hardware.validate_document(evidence, root)
 
     def test_candidate_image_or_source_mismatch_is_rejected(self) -> None:
         with self.with_fixture() as temp:

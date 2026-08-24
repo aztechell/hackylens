@@ -1,7 +1,7 @@
 {
   "acceptance": {
     "additional_full_framebuffers_max": 0,
-    "flash_delta_max_bytes": 32768,
+    "flash_delta_max_bytes": 40960,
     "new_background_tasks_queues_or_heap_allocations": 0,
     "static_ram_delta_max_bytes": 4096
   },

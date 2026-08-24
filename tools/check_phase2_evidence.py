@@ -23,7 +23,7 @@ from gen_flash_layout import load_validated
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / "docs" / "evidence" / "phase2-baseline.json"
 PINNED_BASELINE_SHA256 = (
-    "dd5aabb7ede30ad6b2ca5e8a4853f2d648aed474f1347c74cf0f91de060d1b08"
+    "d85d5711548973ad8dcb39c89c93a3363a36e3c08d94121d674604c413a929f5"
 )
 SOURCE_COMMIT = "7183c7ae59008958893c1585ff6cdd96f1fb746b"
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -174,7 +174,7 @@ def validate_document(document: Any) -> dict[str, Any]:
         integer(acceptance[field], f"acceptance.{field}")
     if acceptance != {
         "additional_full_framebuffers_max": 0,
-        "flash_delta_max_bytes": 32768,
+        "flash_delta_max_bytes": 40960,
         "new_background_tasks_queues_or_heap_allocations": 0,
         "static_ram_delta_max_bytes": 4096,
     }:

@@ -274,7 +274,12 @@ class BuildContractsTest(unittest.TestCase):
         self.assertNotIn("wdt_clear_interrupt", watchdog)
         self.assertIn("hal_watchdog_reset_detected()", autostart)
         self.assertIn("boot_internal_watchdog_reset_detected()", app)
-        self.assertIn("g_startup[0] && !watchdog_recovery", app)
+        enter = app.split("void micropython_enter", 1)[1].split(
+            "void micropython_exit", 1
+        )[0]
+        self.assertNotIn("micropython_program_run_file", enter)
+        self.assertNotIn("micropython_runtime_start", enter)
+        self.assertIn("WDT RECOVERY: PREVIOUS RUN RESET", enter)
 
     def test_micropython_terminal_handoff_is_ordered_and_preserves_ticket(self):
         runtime = (

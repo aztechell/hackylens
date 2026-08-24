@@ -847,13 +847,17 @@ required consumers; обычная production composition по-прежнему 
 
 ### Hard budgets относительно 2.1 baseline
 
-- erase-rounded flash: не более `+32 KiB`;
+- erase-rounded flash: не более `+40 KiB`;
 - static RAM: не более `+4096 B`;
 - новые heap allocations: `0`;
 - новые tasks/queues/cores: `0`;
 - дополнительный full display framebuffer: `0`.
 
-Любое повышение budget требует отдельного review и обновления masterplan до
+Flash budget повышен на один erase sector (`+8 KiB`) после отдельного review
+функционального native MICRO-PYTHON script manager: список, viewer, logs и
+подтверждённое управление startup/delete занимают итоговые `+40 KiB` от 2.1
+baseline. RAM, tasks/queues/cores и framebuffer budgets не повышались. Любое
+следующее повышение budget требует нового review и обновления masterplan до
 принятия изменения. Искусственный RAM padding запрещён.
 
 ### Latency gates

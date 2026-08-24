@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
@@ -17,11 +19,108 @@ if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
 import check_phase2_evidence
+import check_phase2_hardware
 import check_phase2_resources
 import run_phase2_contracts
 
 
 DEFAULT_RESULT = ROOT / "docs" / "evidence" / "phase2-result.json"
+DEFAULT_CLOSURE = ROOT / "docs" / "evidence" / "phase2-closure-result.json"
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+WORKFLOW_URL_RE = re.compile(
+    r"^https://github\.com/aztechell/hackylens/actions/runs/(\d+)$"
+)
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def linked_document(
+    value: Any, *, expected_name: str, label: str
+) -> tuple[Path, dict[str, Any]]:
+    if not isinstance(value, dict) or set(value) != {"path", "sha256"}:
+        raise RuntimeError(f"{label} link fields are invalid")
+    relative = value["path"]
+    digest = value["sha256"]
+    if not isinstance(relative, str) or not isinstance(digest, str):
+        raise RuntimeError(f"{label} link values are invalid")
+    path = (ROOT / relative).resolve()
+    try:
+        path.relative_to((ROOT / "docs" / "evidence").resolve())
+    except ValueError as exc:
+        raise RuntimeError(f"{label} must be under docs/evidence") from exc
+    if path.name != expected_name or not path.is_file():
+        raise RuntimeError(f"{label} path is invalid")
+    if sha256(path) != digest:
+        raise RuntimeError(f"{label} digest mismatch")
+    return path, check_phase2_resources.read_canonical_json(path, label)
+
+
+def verify_closure(
+    closure: dict[str, Any], *, verify_receipts: bool = True
+) -> None:
+    expected_fields = {
+        "accepted", "automated", "capability_api", "firmware_version",
+        "hardware", "impact_review", "implementation", "phase", "schema",
+    }
+    if not isinstance(closure, dict) or set(closure) != expected_fields:
+        raise RuntimeError("Phase 2 closure has missing or unknown fields")
+    if closure["schema"] != 1 or closure["phase"] != "2.14" or \
+            closure["accepted"] is not True:
+        raise RuntimeError("Phase 2 closure identity/status mismatch")
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    if closure["firmware_version"] != version or version != "0.4.0":
+        raise RuntimeError("Phase 2 closure firmware version mismatch")
+    if closure["capability_api"] != {
+        "stability": "experimental", "version": "0.1.0",
+    }:
+        raise RuntimeError("Phase 2 closure Capability API mismatch")
+
+    implementation = closure["implementation"]
+    if not isinstance(implementation, dict) or set(implementation) != {
+        "commit", "workflow",
+    }:
+        raise RuntimeError("Phase 2 implementation identity is invalid")
+    commit = implementation["commit"]
+    if not isinstance(commit, str) or not COMMIT_RE.fullmatch(commit):
+        raise RuntimeError("Phase 2 implementation commit is invalid")
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=ROOT
+    )
+    if ancestor.returncode != 0:
+        raise RuntimeError("Phase 2 implementation commit is not an ancestor")
+    workflow = implementation["workflow"]
+    if not isinstance(workflow, dict) or set(workflow) != {"run_id", "url"}:
+        raise RuntimeError("Phase 2 implementation workflow is invalid")
+    run_id = workflow["run_id"]
+    url = workflow["url"]
+    match = WORKFLOW_URL_RE.fullmatch(url) if isinstance(url, str) else None
+    if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id < 1 or \
+            not match or int(match.group(1)) != run_id:
+        raise RuntimeError("Phase 2 implementation workflow URL/run mismatch")
+
+    automated_path, automated = linked_document(
+        closure["automated"], expected_name="phase2-candidate-result.json",
+        label="Phase 2 automated evidence",
+    )
+    del automated_path
+    verify_result(automated, verify_receipts=verify_receipts)
+    hardware_path, hardware = linked_document(
+        closure["hardware"], expected_name="phase2-hardware-smoke.json",
+        label="Phase 2 hardware evidence",
+    )
+    check_phase2_hardware.validate_document(hardware, ROOT)
+    if hardware["current_image"]["source_manifest_sha256"] != \
+            automated["source"]["manifest_sha256"]:
+        raise RuntimeError("Phase 2 hardware/automated source identity mismatch")
+    del hardware_path
+
+    if closure["impact_review"] != {
+        "closure_changes": "documentation-and-evidence-only",
+        "runtime_retest_required": False,
+    }:
+        raise RuntimeError("Phase 2 closure impact review mismatch")
 
 
 def verify_workflow(workflow: str) -> None:
@@ -117,30 +216,44 @@ def verify_result(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", required=True, choices=("pre-hardware",))
+    parser.add_argument(
+        "--mode", required=True, choices=("pre-hardware", "closure")
+    )
     parser.add_argument("--result", type=Path, default=DEFAULT_RESULT)
+    parser.add_argument("--closure-result", type=Path, default=DEFAULT_CLOSURE)
     parser.add_argument(
         "--without-build-receipts", action="store_true",
         help="Validate tracked source/schema only (tests and diagnostics).",
     )
     args = parser.parse_args(argv)
     try:
-        result = check_phase2_resources.read_canonical_json(
-            args.result, "Phase 2 rolling result"
-        )
-        verify_result(result, verify_receipts=not args.without_build_receipts)
-        workflow = (ROOT / ".github/workflows/release.yml").read_text(
-            encoding="utf-8"
-        )
-        verify_workflow(workflow)
+        if args.mode == "closure":
+            closure = check_phase2_resources.read_canonical_json(
+                args.closure_result, "Phase 2 closure result"
+            )
+            verify_closure(
+                closure, verify_receipts=not args.without_build_receipts
+            )
+        else:
+            result = check_phase2_resources.read_canonical_json(
+                args.result, "Phase 2 rolling result"
+            )
+            verify_result(result, verify_receipts=not args.without_build_receipts)
+            workflow = (ROOT / ".github/workflows/release.yml").read_text(
+                encoding="utf-8"
+            )
+            verify_workflow(workflow)
     except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError,
             json.JSONDecodeError) as exc:
         print(f"[ERR] Phase 2 exit gate failed: {exc}", file=sys.stderr)
         return 1
-    print(
-        "[OK] Phase 2.12 pre-hardware exit passed; physical SEN0305 "
-        "acceptance remains Phase 2.13"
-    )
+    if args.mode == "closure":
+        print("[OK] Phase 2.14 closure gate passed")
+    else:
+        print(
+            "[OK] Phase 2.12 pre-hardware exit passed; physical SEN0305 "
+            "acceptance remains Phase 2.13"
+        )
     return 0
 
 

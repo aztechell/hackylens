@@ -186,7 +186,7 @@ byte as reserved and ignored it:
 
 | Bit | Name | Meaning |
 |---:|---|---|
-| 0 | `WDT1_RECOVERY` | this boot followed the MicroPython fatal-stop WDT1 fallback; automatic MicroPython startup is suppressed for this boot |
+| 0 | `WDT1_RECOVERY` | this boot followed the MicroPython fatal-stop WDT1 fallback; firmware autostart of the MicroPython app is suppressed for this boot |
 | 1--7 | reserved | hosts must ignore unknown bits |
 
 Capability bits are stable for v1:

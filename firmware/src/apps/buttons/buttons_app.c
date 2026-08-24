@@ -9,6 +9,11 @@ void buttons_enter(const hk_input_snapshot_t *input)
     buttons_controller_enter(input);
 }
 
+void buttons_tick(const hk_input_snapshot_t *input)
+{
+    buttons_controller_tick(input);
+}
+
 void buttons_handle_buttons(const hk_input_snapshot_t *input)
 {
     buttons_controller_handle_buttons(input);

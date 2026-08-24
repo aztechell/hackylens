@@ -152,6 +152,12 @@ The internal `userfs` partition is enabled only when JEDEC discovery confirms
 exactly 16 MiB of flash. Unsupported 8 MiB revisions keep normal firmware
 features but expose no script filesystem. Formatting is never automatic.
 
+The on-device **MICRO-PYTHON** app lists stored `.py` files and provides RUN,
+read-only source preview, scrollable logs, startup selection, and confirmed
+deletion. Entering the app never executes a script automatically: the startup
+selection is the persisted default used for initial selection and an empty-name
+HMPY `RUN`. Uploading and editing remain PC/IDE operations.
+
 The IDE covers edit, atomic upload, list/read/delete, startup selection,
 run/stop/status, and live stdout/stderr. The same HMPY v1 workflow is available
 from the reference CLI:

@@ -25,10 +25,13 @@
 | Native/HMPY restore | HMPY работал до и после MicroPython raw use/cancellation без reboot | done |
 | I2C controller | Nano target `0x42`: write/read, prefix lengths 1/2/6/7/8, bounded NACK recovery | done |
 | I2C stress | 100/100 циклов с периодическим NACK и восстановлением, включая работу при запущенной camera | done |
-| Camera/display throughput | Camera стабильно 25.4–25.5 FPS; present около 31.27 ms | done |
+| Camera/display throughput | Camera стабильно 25.4–25.5 FPS; present около 31.27 ms; Files full-frame визуально проверен | done |
 | Menu | Навигация работает; хвост `T` после `OBJECT DETECT` устранён | done |
 | Pong | Мяч выходит из serve state и игра движется | done |
 | Sleep regression | Wake больше не приводит к немедленному повторному sleep | done |
+| Buttons | LEFT/OK/RIGHT/BACK прошли press, hold, release и no-repeat через встроенный `BUTTON TEST` | done |
+| Files/SD | Папки листаются и открываются; файлы открываются и записываются | done |
+| Lights | Backlight, illumination и RGB визуально работают на текущем Phase 2 build | done |
 
 UART/I2C/TIME код не изменялся в `89f6141..06c8433`; эти observations
 переносятся. Коммит `06c8433` затронул только Pong TIME request, menu title
@@ -39,18 +42,17 @@ cleanup, tests и rolling evidence; его targeted Pong/menu и boot checks п�
 
 | Область | Что подтверждено | Что ещё нужно |
 | --- | --- | --- |
-| Buttons | Left/Right/OK/Back использовались для реальной навигации | Отдельный press/release/hold/no-repeat check; latency нужна только если хотим численную qualification |
-| Display | Menu, camera full-frame и Pong проверены | Files full-frame и физический MicroPython overlay cleanup/retry |
+| Display | Menu, camera full-frame, Files и Pong проверены | Физический MicroPython overlay cleanup/retry |
 | UART | Payload и cancellation проверены | Отдельное инструментальное доказательство момента wire-drain не записано |
 | I2C/mode switching | Controller и NACK recovery проверены | Явный UART→I2C→UART round trip без reboot не записан |
-| Lights | Phase 1 подтверждал illumination/RGB на этой SEN0305 | Phase 2 safe-off cleanup и persisted restore отдельно не проверены |
-| Regression | Boot, camera, sleep и HMPY проверены | Полный SD read/write/delete, Files decode/frame-pool и settings persistence на Phase 2 build |
+| Lights | Backlight, illumination и RGB проверены на Phase 2 build | Safe-off cleanup и persisted restore отдельно не проверены |
+| Regression | Boot, camera, SD/Files read/write, sleep и HMPY проверены | SD delete, frame-pool reuse и settings persistence |
 | Evidence | Локальные UART/HMPY/I2C scripts и результаты сохранены в `build/` | Перед closure перенести только нужные короткие raw logs в tracked evidence |
 
 ## Не запускалось физически
 
-- полный Files decode/frame-pool сценарий;
-- полный SD read/write/delete сценарий на Phase 2 build;
+- frame-pool reuse сценарий;
+- SD delete сценарий на Phase 2 build;
 - MicroPython overlay success/cancel/retry/cleanup с визуальным подтверждением;
 - lights safe-off cleanup и persisted restore;
 - численные button debounce/event latency samples;

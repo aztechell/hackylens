@@ -39,9 +39,10 @@ while True:
 python tools\hkpy.py --port COM10 upload build\hka-wdt-fi.py --name hka-wdt-fi.py --startup
 ```
 
-On the device set **Settings / Autostart / MicroPython**. This is necessary to
-prove that a WDT recovery boot suppresses both firmware autostart and the
-selected startup script.
+On the device set **Settings / Autostart / MicroPython**. This proves that a
+WDT recovery boot suppresses firmware autostart of the app. The native app does
+not execute startup metadata on entry; the fixture is triggered explicitly in
+the next section.
 
 Capture the immutable pre-reset evidence. This invocation is read-only:
 
@@ -87,8 +88,8 @@ python tools\hmpy_acceptance.py --port COM10 --expected-version $wdtVersion `
 
 The postcheck requires `WDT1_RECOVERY`, `STOPPED / EXIT_NONE / run_id=0`, the
 same firmware/board/files/startup as the baseline, and three seconds with no
-automatic run. It rejects FORMAT, workflow, or reconnect suites so this phase
-cannot mutate the recovery evidence.
+run. It rejects FORMAT, workflow, or reconnect suites so this phase cannot
+mutate the recovery evidence.
 
 Finally restore the previous Autostart and startup selections, delete only the
 test fixture, rebuild without `--wdt-fault-injection`, and flash the normal

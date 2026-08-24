@@ -113,7 +113,8 @@ const hk_app_t g_menu_items[] = {
 #if HK_ENABLE_APP_BUTTONS
     {.id = "buttons", .title = "BUTTONS", .screen = SCREEN_BUTTONS,
      .autostart_id = HK_AUTOSTART_BUTTONS,
-     .enter = buttons_enter, .handle_input = buttons_handle_buttons,
+     .enter = buttons_enter, .tick = buttons_tick,
+     .handle_input = buttons_handle_buttons,
      .draw_icon = buttons_draw_icon},
 #endif
 #if HK_ENABLE_APP_PONG

@@ -14,6 +14,12 @@ limit. Core 0 keeps the menu, serial protocol, display, flash, and hardware
 services responsive. The default execution limit is 30 seconds and the maximum
 requested limit is 300 seconds.
 
+The native **MICRO-PYTHON** app is a script manager. It lists USERFS `.py`
+files, previews source without loading the whole file, runs the selected file,
+shows scrollable output, changes startup selection, and deletes only after an
+explicit confirmation. Opening the app does not run the selected startup file.
+That selection remains the HMPY/default program used when `RUN` omits a name.
+
 Import the board module with:
 
 ```python
@@ -132,8 +138,9 @@ service call is bounded.
 If core 1 has not finished two seconds after STOP, or five seconds after the
 run deadline, core 0 starts WDT1 as a one-shot fatal fallback. The watchdog is
 not armed during ordinary execution or flash mutation. Its hardware reset
-cause suppresses firmware autostart and automatic startup-script execution for
-that boot; the script can still be started explicitly after inspection. New
+cause suppresses firmware autostart for that boot; the native script manager
+never starts a script on entry, and an explicit run remains available after
+inspection. New
 HMPY v1 clients can distinguish this recovery path through HELLO capability
 `BOOT_FLAGS` and boot flag `WDT1_RECOVERY`; older v1 clients safely ignore the
 formerly reserved byte.

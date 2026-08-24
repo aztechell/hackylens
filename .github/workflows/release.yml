@@ -142,6 +142,9 @@ jobs:
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile full
           Invoke-NativeChecked python tools/check_phase2_resources.py --check-result
           Invoke-NativeChecked python tools/check_phase2_exit.py --mode pre-hardware
+          if (Test-Path -LiteralPath docs/evidence/phase2-closure-result.json) {
+            Invoke-NativeChecked python tools/check_phase2_exit.py --mode closure
+          }
 
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'

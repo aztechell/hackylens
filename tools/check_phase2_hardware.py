@@ -72,6 +72,11 @@ REGRESSION_COVERAGE = [
     "frame-pool", "settings", "sleep", "hmpy",
 ]
 LOGICAL_BUTTONS = ["left", "ok", "right", "back"]
+IMPACT_RESULT_IDS = {
+    "boot", "buttons", "camera-display", "external-service", "files",
+    "i2c", "lights", "menu", "micropython", "pong", "sleep", "time",
+    "uart",
+}
 
 
 class HardwareEvidenceError(RuntimeError):
@@ -578,10 +583,116 @@ def validate_results(
     )
 
 
+def validate_impact_document(
+    document: dict[str, Any], root: Path
+) -> dict[str, Any]:
+    evidence = exact_fields(
+        document,
+        {
+            "accepted", "board", "current_image", "excluded_boards",
+            "impact_review", "limitations", "observations", "operator",
+            "phase", "policy", "recorded_at", "schema",
+        },
+        "hardware evidence",
+    )
+    if evidence["schema"] != 2 or evidence["phase"] != "2.13":
+        raise HardwareEvidenceError("hardware evidence schema/phase mismatch")
+    require_bool(evidence["accepted"], True, "accepted")
+    if evidence["policy"] != "impact-based-owner-acceptance":
+        raise HardwareEvidenceError("hardware evidence policy mismatch")
+    validate_timestamp(evidence["recorded_at"])
+    if evidence["excluded_boards"] != ["sipeed-maix-cube"]:
+        raise HardwareEvidenceError("Maix Cube must remain explicitly unqualified")
+
+    board = exact_fields(evidence["board"], {"id", "revision", "serial"}, "board")
+    if board["id"] != "huskylens-sen0305":
+        raise HardwareEvidenceError("only huskylens-sen0305 may be qualified")
+    require_string(board["revision"], "board.revision")
+    require_string(board["serial"], "board.serial")
+    operator = exact_fields(evidence["operator"], {"identity"}, "operator")
+    require_string(operator["identity"], "operator.identity")
+
+    image = exact_fields(
+        evidence["current_image"],
+        {
+            "boot_sanity", "image_bytes", "image_sha256",
+            "source_manifest_sha256", "version",
+        },
+        "current_image",
+    )
+    require_bool(image["boot_sanity"], True, "current_image.boot_sanity")
+    require_int(image["image_bytes"], "current_image.image_bytes", minimum=1)
+    require_sha256(image["image_sha256"], "current_image.image_sha256")
+    require_sha256(
+        image["source_manifest_sha256"], "current_image.source_manifest_sha256"
+    )
+    version = require_string(image["version"], "current_image.version")
+    version_path = root / "VERSION"
+    if not version_path.is_file() or \
+            version_path.read_text(encoding="utf-8").strip() != version:
+        raise HardwareEvidenceError("current image version differs from VERSION")
+
+    observations = evidence["observations"]
+    if not isinstance(observations, list):
+        raise HardwareEvidenceError("observations must be an array")
+    observed_ids: set[str] = set()
+    for index, value in enumerate(observations):
+        label = f"observations[{index}]"
+        observation = exact_fields(
+            value, {"id", "method", "result", "status"}, label
+        )
+        identifier = require_string(observation["id"], f"{label}.id")
+        if identifier in observed_ids:
+            raise HardwareEvidenceError(f"duplicate observation: {identifier}")
+        observed_ids.add(identifier)
+        if observation["status"] != "pass":
+            raise HardwareEvidenceError(f"{label}.status must be pass")
+        require_string(observation["method"], f"{label}.method")
+        require_string(observation["result"], f"{label}.result")
+    if observed_ids != IMPACT_RESULT_IDS:
+        raise HardwareEvidenceError("impact-based physical coverage is incomplete")
+
+    review = exact_fields(
+        evidence["impact_review"],
+        {
+            "broader_retest_required", "carried_forward", "changed_areas",
+            "provider_hal_routing_changed", "retested_areas",
+        },
+        "impact_review",
+    )
+    require_bool(
+        review["provider_hal_routing_changed"], False,
+        "impact_review.provider_hal_routing_changed",
+    )
+    require_bool(
+        review["broader_retest_required"], False,
+        "impact_review.broader_retest_required",
+    )
+    for field in ("changed_areas", "retested_areas", "carried_forward"):
+        values = review[field]
+        if not isinstance(values, list) or not values or \
+                any(not isinstance(item, str) or not item for item in values):
+            raise HardwareEvidenceError(f"impact_review.{field} must be strings")
+        if len(values) != len(set(values)):
+            raise HardwareEvidenceError(f"impact_review.{field} has duplicates")
+    if not set(review["changed_areas"]) <= set(review["retested_areas"]):
+        raise HardwareEvidenceError("every changed runtime area must be retested")
+
+    limitations = evidence["limitations"]
+    if not isinstance(limitations, list) or not limitations or \
+            any(not isinstance(item, str) or not item for item in limitations):
+        raise HardwareEvidenceError(
+            "limitations must explicitly describe evidence gaps"
+        )
+    return evidence
+
+
 def validate_document(
     document: dict[str, Any], root: Path = ROOT
 ) -> dict[str, Any]:
     root = root.resolve()
+    if document.get("schema") == 2:
+        return validate_impact_document(document, root)
     evidence = exact_fields(document, ROOT_FIELDS, "hardware evidence")
     if evidence["schema"] != 1 or evidence["phase"] != "2.13":
         raise HardwareEvidenceError("hardware evidence schema/phase mismatch")
