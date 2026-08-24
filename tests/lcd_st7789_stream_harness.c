@@ -18,6 +18,8 @@ static uint32_t s_stream_write_calls;
 static uint32_t s_stream_end_calls;
 static uint32_t s_stream_abort_calls;
 static uint32_t s_stream_bytes;
+static uint32_t s_frame_bits;
+static uint32_t s_u16_write_calls;
 static uint8_t s_hal_stream_active;
 static uint8_t s_fail_write;
 static uint8_t s_fail_end;
@@ -71,7 +73,7 @@ void hal_spi_fifo_set_tmod_tx(uint8_t device)
 void hal_spi_fifo_set_frame_bits(uint8_t device, uint32_t bits)
 {
     (void)device;
-    (void)bits;
+    s_frame_bits = bits;
 }
 
 uint8_t hal_spi_fifo_send_bytes_until(
@@ -109,6 +111,14 @@ uint8_t hal_spi_fifo_tx_write_until(
     s_stream_write_calls++;
     s_stream_bytes += (uint32_t)len;
     return 1U;
+}
+
+uint8_t hal_spi_fifo_tx_write_u16be_until(
+    uint8_t device, const uint8_t *data, size_t len,
+    uint64_t deadline_us)
+{
+    s_u16_write_calls++;
+    return hal_spi_fifo_tx_write_until(device, data, len, deadline_us);
 }
 
 uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us)
@@ -152,6 +162,8 @@ static void reset_fixture(void)
     s_stream_end_calls = 0U;
     s_stream_abort_calls = 0U;
     s_stream_bytes = 0U;
+    s_frame_bits = 0U;
+    s_u16_write_calls = 0U;
     s_hal_stream_active = 0U;
     s_fail_write = 0U;
     s_fail_end = 0U;
@@ -170,12 +182,15 @@ static void test_one_stream_for_many_slices(void)
                  "full-frame stream must begin");
     require_true(s_one_shot_calls == 5U && s_stream_begin_calls == 1U,
                  "window commands must precede exactly one pixel stream");
+    require_true(s_frame_bits == 16U,
+                 "pixel stream must use packed 16-bit frames");
     for(uint8_t index = 0U; index < 20U; index++)
         require_true(lcd_st7789_transport_write(
                          pixels, sizeof(pixels), deadline, NULL) == HK_OK,
                      "each bounded slice must join the active stream");
     require_true(s_stream_begin_calls == 1U && s_stream_end_calls == 0U &&
                  s_stream_write_calls == 20U &&
+                 s_u16_write_calls == 20U &&
                  s_stream_bytes == 20U * sizeof(pixels),
                  "slices must not restart or prematurely end SPI");
     require_true(lcd_st7789_transport_end(deadline, NULL) == HK_OK &&

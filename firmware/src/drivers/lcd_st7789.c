@@ -152,7 +152,7 @@ hk_result_t lcd_st7789_transport_begin(
     if(!data_until(coordinates, sizeof(coordinates), deadline) ||
        !command_until(0x2CU, deadline))
         return transfer_failure(deadline);
-    hal_spi_fifo_set_frame_bits(LCD_SPI, 8U);
+    hal_spi_fifo_set_frame_bits(LCD_SPI, 16U);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1U);
     if(!hal_spi_fifo_tx_begin_until(
            LCD_SPI, LCD_CS, transport_deadline(deadline)))
@@ -176,7 +176,7 @@ hk_result_t lcd_st7789_transport_write(
         return HK_ERR_INVALID_STATE;
     if(!pixels || size_bytes == 0U)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!hal_spi_fifo_tx_write_until(
+    if(!hal_spi_fifo_tx_write_u16be_until(
            LCD_SPI, pixels, size_bytes, transport_deadline(deadline)))
     {
         lcd_st7789_transport_abort();

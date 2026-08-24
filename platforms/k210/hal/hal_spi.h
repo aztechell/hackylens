@@ -33,6 +33,11 @@ uint8_t hal_spi_fifo_tx_begin_until(
 uint8_t hal_spi_fifo_tx_write_until(
     uint8_t device, const uint8_t *data, size_t len,
     uint64_t deadline_us);
+/* Writes big-endian byte pairs as 16-bit SPI frames.  The caller must have
+ * selected a 16-bit frame size before beginning the active transaction. */
+uint8_t hal_spi_fifo_tx_write_u16be_until(
+    uint8_t device, const uint8_t *data, size_t len,
+    uint64_t deadline_us);
 uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us);
 void hal_spi_fifo_tx_abort(uint8_t device);
 uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out);

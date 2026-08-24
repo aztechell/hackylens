@@ -216,6 +216,59 @@ uint8_t hal_spi_fifo_tx_write_until(
     return 1U;
 }
 
+uint8_t hal_spi_fifo_tx_write_u16be_until(
+    uint8_t device, const uint8_t *data, size_t len,
+    uint64_t deadline_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+    uint64_t deadline_cycles = UINT64_MAX;
+    size_t i = 0U;
+
+    if(!spi || device >= 4U || !fifo_tx_active(device) ||
+       (len && !data) || (len & 1U))
+        return 0U;
+    if(deadline_us != UINT64_MAX)
+    {
+        uint64_t now_cycles = read_cycle();
+        uint64_t now_us = hal_time_us();
+        uint64_t remaining_us;
+        uint64_t cycles_per_us;
+
+        if(now_us >= deadline_us)
+            return 0U;
+        remaining_us = deadline_us - now_us;
+        cycles_per_us = sysctl_clock_get_freq(SYSCTL_CLOCK_CPU) / 1000000U;
+        if(cycles_per_us && cycles_per_us <= UINT16_MAX &&
+           remaining_us <= (UINT64_MAX >> 16))
+        {
+            uint64_t delta_cycles = remaining_us * cycles_per_us;
+            if(delta_cycles <= UINT64_MAX - now_cycles)
+                deadline_cycles = now_cycles + delta_cycles;
+        }
+    }
+
+    while(i < len)
+    {
+        size_t fifo_len = 32U - spi->txflr;
+        if(deadline_cycles != UINT64_MAX && read_cycle() >= deadline_cycles)
+        {
+            hal_spi_fifo_tx_abort(device);
+            return 0U;
+        }
+        if(!fifo_len)
+            continue;
+        if(fifo_len > (len - i) / 2U)
+            fifo_len = (len - i) / 2U;
+        while(fifo_len--)
+        {
+            spi->dr[0] = ((uint32_t)data[i] << 8) | data[i + 1U];
+            i += 2U;
+        }
+    }
+
+    return 1U;
+}
+
 uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us)
 {
     volatile spi_t *spi = hal_spi_regs(device);
