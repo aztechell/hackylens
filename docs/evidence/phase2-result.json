@@ -4,7 +4,7 @@
     "capability_absent_diagnostics": {
       "hackylens.cap.display": {
         "absent_capability": "hackylens.cap.display",
-        "attestation_sha256": "44ff8b0705a6ccad7eacaf64be02d9b00c88f3dea65c04f295731ef7c741b09d",
+        "attestation_sha256": "f40af8970d7a86a007c948bffbf0656412100c5451ef9a1de0743f19a5a61838",
         "board": "huskylens-sen0305",
         "build_attempted": true,
         "build_profile": "hackylens-feature-modified",
@@ -26,10 +26,10 @@
         ],
         "elf": {
           "bss_bytes": 199048,
-          "data_bytes": 157132,
-          "sha256": "c63a6142f51d04efb59c29a0d93d107036972181f311573ffefa3a962add24c0",
-          "static_ram_bytes": 356180,
-          "text_bytes": 953867
+          "data_bytes": 157116,
+          "sha256": "1dc51c10389b13a00b04a2af4d14b22eaa4a048556a321af88c1c2b365a6dcbe",
+          "static_ram_bytes": 356164,
+          "text_bytes": 953955
         },
         "entry_ids": [
           "hackylens.cap.time",
@@ -42,8 +42,8 @@
         ],
         "image": {
           "flash_occupied_bytes": 1114112,
-          "raw_bytes": 1111096,
-          "sha256": "506d204b9f33aed1dc3acfcb22e41fc833832d3bbfed820a70e07ec7502be267"
+          "raw_bytes": 1111160,
+          "sha256": "60171a8a1730de9677771eda9942e969e837528e2e3eaaf176539a1e216846fc"
         },
         "kind": "capability-absent-diagnostic",
         "outcome": "built",
@@ -53,7 +53,7 @@
       },
       "hackylens.cap.external-link": {
         "absent_capability": "hackylens.cap.external-link",
-        "attestation_sha256": "f7c35edba0d1910ea447ab60914bea25415e70580b4eb85a26e2da36301ba9d0",
+        "attestation_sha256": "ebfc24f29e3d1a2eaf50aa7e789a46e0213fe210b2b77b882ddb8870d3f75edb",
         "board": "huskylens-sen0305",
         "build_attempted": true,
         "build_profile": "hackylens-feature-modified",
@@ -64,10 +64,10 @@
         ],
         "elf": {
           "bss_bytes": 2421128,
-          "data_bytes": 158768,
-          "sha256": "accdd7c67642f59c6ed1891cd28e0cbc0f1300cfe3ddce71cbe565b8799dbdc0",
-          "static_ram_bytes": 2579896,
-          "text_bytes": 1182687
+          "data_bytes": 158720,
+          "sha256": "cd851b42f5e43be69bd2b9e12af2533202beb8744669110b2421ff95ba1dd126",
+          "static_ram_bytes": 2579848,
+          "text_bytes": 1182991
         },
         "entry_ids": [
           "hackylens.cap.time",
@@ -80,8 +80,8 @@
         ],
         "image": {
           "flash_occupied_bytes": 1343488,
-          "raw_bytes": 1341560,
-          "sha256": "2cf7018a77a05b2e4369810b884f998f2d1caa7b2a6e2a9171baea64831abc47"
+          "raw_bytes": 1341816,
+          "sha256": "9b2af36328e0e0731a0d119e5e04327275150e96bc2ce1d62907f33956523779"
         },
         "kind": "capability-absent-diagnostic",
         "outcome": "built",
@@ -91,7 +91,7 @@
       },
       "hackylens.cap.input": {
         "absent_capability": "hackylens.cap.input",
-        "attestation_sha256": "be645e62fb7abff09e1e52b643114f6a2398700fb0a756a9ce78233a3bb13517",
+        "attestation_sha256": "3d066a778118ade4a26202c0367e2c8421db2f2867aaac19acc8b8765c5b63d7",
         "board": "huskylens-sen0305",
         "build_attempted": true,
         "build_profile": "hackylens-feature-modified",
@@ -113,10 +113,10 @@
         ],
         "elf": {
           "bss_bytes": 1427320,
-          "data_bytes": 157196,
-          "sha256": "add1c2fc8ce9988c20b87fa0359f9fbcc9080eac187bd63368588dfa4b7621e5",
-          "static_ram_bytes": 1584516,
-          "text_bytes": 960267
+          "data_bytes": 157212,
+          "sha256": "4bfac82892ab349ca44654ec9f172bbc70e4d8ab02381191493e00f3258e7f7a",
+          "static_ram_bytes": 1584532,
+          "text_bytes": 960579
         },
         "entry_ids": [
           "hackylens.cap.time",
@@ -129,8 +129,8 @@
         ],
         "image": {
           "flash_occupied_bytes": 1118208,
-          "raw_bytes": 1117560,
-          "sha256": "2d5369808ff1a2d9772d791c2d5a11c476ad79bb59031013a6470d99719166eb"
+          "raw_bytes": 1117880,
+          "sha256": "390b4164ab0d640e43057013d164b1794a6d35da17c61b5938a8dbf879d9b4fa"
         },
         "kind": "capability-absent-diagnostic",
         "outcome": "built",
@@ -140,7 +140,7 @@
       },
       "hackylens.cap.lights": {
         "absent_capability": "hackylens.cap.lights",
-        "attestation_sha256": "c380ab1318a5b903f1b2d6abb452e13c03b78e757d7ba149c12dd44ce63a5d01",
+        "attestation_sha256": "0eac3dcacd816393576640bee881112584eadab2bd39f7bed9b13f0758d780e7",
         "board": "huskylens-sen0305",
         "build_attempted": true,
         "build_profile": "hackylens-feature-modified",
@@ -159,9 +159,9 @@
         "elf": {
           "bss_bytes": 2131824,
           "data_bytes": 157212,
-          "sha256": "90a5af705e922a38dc993e322597f24984c94fb008818425f532f0c58a3d012a",
+          "sha256": "c2c0d96a922b77ff8c2ae6e172c77a3f6240ed812da198906b11fcd5964eed50",
           "static_ram_bytes": 2289036,
-          "text_bytes": 994743
+          "text_bytes": 995055
         },
         "entry_ids": [
           "hackylens.cap.time",
@@ -174,8 +174,8 @@
         ],
         "image": {
           "flash_occupied_bytes": 1155072,
-          "raw_bytes": 1152056,
-          "sha256": "49c1dc42cd6601aa58e2c1bd23527c6c113224d1775cb1124b56fb3c13227cc4"
+          "raw_bytes": 1152376,
+          "sha256": "af09501f59a57100fa96eb4ebebb2aad14044e115466620a0698ca2e8bff6a5a"
         },
         "kind": "capability-absent-diagnostic",
         "outcome": "built",
@@ -185,7 +185,7 @@
       },
       "hackylens.cap.time": {
         "absent_capability": "hackylens.cap.time",
-        "attestation_sha256": "d7d20830e2ba93f36de88dedc48c2fc1fc68071890ee64ba330d55869b8fef89",
+        "attestation_sha256": "84c759e70b94ca679d211a6f1a8acfd09d167846724dbf16d97e03144be01517",
         "board": "huskylens-sen0305",
         "build_attempted": true,
         "build_profile": "hackylens-feature-modified",
@@ -204,9 +204,9 @@
         "elf": {
           "bss_bytes": 1675576,
           "data_bytes": 158728,
-          "sha256": "9389a70c1657c6cf2b50f2e57b499d3f2ef1b882a0a0a9f376423397c73bab18",
+          "sha256": "36343931fa14c3c59ed32204437506c535cfca996e99a1839c6eca0cf983bf88",
           "static_ram_bytes": 1834304,
-          "text_bytes": 1021531
+          "text_bytes": 1021843
         },
         "entry_ids": [
           "hackylens.cap.input",
@@ -219,8 +219,8 @@
         ],
         "image": {
           "flash_occupied_bytes": 1183744,
-          "raw_bytes": 1180344,
-          "sha256": "483ca24431e5315a3e2d185802dea7e3ca47a604caffe0f80ed9169895c496c1"
+          "raw_bytes": 1180664,
+          "sha256": "9b509e424fbdac8f006021c76d50f542bf818e39050ebadb37a6da0add846b87"
         },
         "kind": "capability-absent-diagnostic",
         "outcome": "built",
