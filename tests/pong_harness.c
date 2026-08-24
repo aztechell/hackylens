@@ -48,7 +48,8 @@ hk_result_t hk_time_acquire(
     hk_owner_t owner, const hk_capability_request_t *request,
     hk_time_t *handle)
 {
-    (void)request;
+    assert(request != NULL);
+    assert(request->required_features == HK_TIME_FEATURE_MONOTONIC_US);
     handle->lease = (hk_lease_t){1U, 1U, owner, HK_CAPABILITY_ID_TIME};
     return HK_OK;
 }

@@ -43,10 +43,11 @@ static hk_owner_t s_pong_time_owner;
 
 static uint64_t pong_time_now_us(void)
 {
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
     hk_owner_t owner = capability_client_current_owner();
     uint64_t value = 0U;
 
+    request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
     if(hk_owner_is_zero(owner))
         return 0U;
     if(owner.slot != s_pong_time_owner.slot ||

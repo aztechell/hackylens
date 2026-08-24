@@ -43,7 +43,12 @@ void menu_draw_chrome(const char *title)
 
 void menu_draw_title(const char *title)
 {
-    hk_ui_display_fill_rect(52, 2, 190, MENU_BAR_H - 4 - MENU_LINE, COLOR_BLACK);
+    const uint16_t title_x = 52U;
+    const uint16_t sd_status_x = HK_DISPLAY_REQUIRED_WIDTH - 23U;
+
+    hk_ui_display_fill_rect(
+        title_x, 2U, sd_status_x - title_x,
+        MENU_BAR_H - 4U - MENU_LINE, COLOR_BLACK);
     hk_ui_display_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
