@@ -12,6 +12,31 @@
 
 static uint8_t s_fifo_tx_active_mask;
 
+static uint64_t deadline_to_cpu_cycles(uint64_t deadline_us)
+{
+    uint64_t frequency;
+    uint64_t seconds;
+    uint64_t cycles;
+
+    if(deadline_us == UINT64_MAX)
+        return UINT64_MAX;
+    frequency = sysctl_clock_get_freq(SYSCTL_CLOCK_CPU);
+    seconds = deadline_us / 1000000ULL;
+    if(!frequency || seconds > UINT64_MAX / frequency)
+        return UINT64_MAX;
+    cycles = seconds * frequency;
+    deadline_us %= 1000000ULL;
+    if(deadline_us > (UINT64_MAX - cycles) / frequency)
+        return UINT64_MAX;
+    return cycles + deadline_us * frequency / 1000000ULL;
+}
+
+static uint8_t cpu_cycle_deadline_reached(uint64_t deadline_cycles)
+{
+    return (uint8_t)(deadline_cycles != UINT64_MAX &&
+                     read_cycle() >= deadline_cycles);
+}
+
 static uint8_t fifo_tx_active(uint8_t device)
 {
     return (uint8_t)(device < 4U &&
@@ -191,6 +216,7 @@ uint8_t hal_spi_fifo_tx_write_until(
     uint64_t deadline_us)
 {
     volatile spi_t *spi = hal_spi_regs(device);
+    uint64_t deadline_cycles = deadline_to_cpu_cycles(deadline_us);
     size_t i = 0U;
 
     if(!spi || device >= 4U ||
@@ -200,7 +226,7 @@ uint8_t hal_spi_fifo_tx_write_until(
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
-        if(hal_time_us() >= deadline_us)
+        if(cpu_cycle_deadline_reached(deadline_cycles))
         {
             hal_spi_fifo_tx_abort(device);
             return 0U;
@@ -221,36 +247,16 @@ uint8_t hal_spi_fifo_tx_write_u16be_until(
     uint64_t deadline_us)
 {
     volatile spi_t *spi = hal_spi_regs(device);
-    uint64_t deadline_cycles = UINT64_MAX;
+    uint64_t deadline_cycles = deadline_to_cpu_cycles(deadline_us);
     size_t i = 0U;
 
     if(!spi || device >= 4U || !fifo_tx_active(device) ||
        (len && !data) || (len & 1U))
         return 0U;
-    if(deadline_us != UINT64_MAX)
-    {
-        uint64_t now_cycles = read_cycle();
-        uint64_t now_us = hal_time_us();
-        uint64_t remaining_us;
-        uint64_t cycles_per_us;
-
-        if(now_us >= deadline_us)
-            return 0U;
-        remaining_us = deadline_us - now_us;
-        cycles_per_us = sysctl_clock_get_freq(SYSCTL_CLOCK_CPU) / 1000000U;
-        if(cycles_per_us && cycles_per_us <= UINT16_MAX &&
-           remaining_us <= (UINT64_MAX >> 16))
-        {
-            uint64_t delta_cycles = remaining_us * cycles_per_us;
-            if(delta_cycles <= UINT64_MAX - now_cycles)
-                deadline_cycles = now_cycles + delta_cycles;
-        }
-    }
-
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
-        if(deadline_cycles != UINT64_MAX && read_cycle() >= deadline_cycles)
+        if(cpu_cycle_deadline_reached(deadline_cycles))
         {
             hal_spi_fifo_tx_abort(device);
             return 0U;
