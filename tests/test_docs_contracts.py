@@ -382,6 +382,75 @@ class DocumentationContractsTest(unittest.TestCase):
         self.assertTrue(any("HMPY host version 2" in found.message for found in issues))
         self.assertFalse(any("7" in found.message and "HMPY" in found.message for found in issues))
 
+    def test_phase3_incompatible_contract_version_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-phase3-version-") as temp:
+            root = Path(temp)
+            runtime = write(
+                root / "docs" / "spec" / "APP_RUNTIME.md",
+                contract(
+                    "hackylens.app-runtime",
+                    version="0.2.0",
+                    extra=(
+                        "phase: 3\n"
+                        "compatibility-app-manifest: >=0.1.0,<0.2.0\n"
+                        "compatibility-capability-api: >=0.1.0,<0.2.0\n"
+                    ),
+                ),
+            )
+            manifest = write(
+                root / "docs" / "spec" / "APP_MANIFEST.md",
+                contract(
+                    "hackylens.native-app-manifest",
+                    extra=(
+                        "phase: 3\n"
+                        "schema-major: 1\n"
+                        "format-scope: native-app-build\n"
+                        "runtime-parsed: false\n"
+                        "compatibility-app-runtime: >=0.1.0,<0.2.0\n"
+                        "compatibility-capability-api: >=0.1.0,<0.2.0\n"
+                    ),
+                ),
+            )
+            sdk = write(
+                root / "docs" / "spec" / "APP_SDK.md",
+                contract(
+                    "hackylens.feature-app-sdk",
+                    extra=(
+                        "phase: 3\n"
+                        "compatibility-app-runtime: >=0.1.0,<0.2.0\n"
+                        "compatibility-app-manifest: >=0.1.0,<0.2.0\n"
+                        "compatibility-capability-api: >=0.1.0,<0.2.0\n"
+                    ),
+                ),
+            )
+            capability = write(
+                root / "docs" / "spec" / "CAPABILITY_API.md",
+                contract("hackylens.capability-api"),
+            )
+            _, contracts = CHECK_DOCS.validate_contract_documents(
+                root, [runtime, manifest, sdk, capability]
+            )
+            issues = CHECK_DOCS.check_phase3_contracts(root, contracts)
+        messages = [found.message for found in issues]
+        self.assertTrue(any("must remain on initial version 0.1.0" in item
+                            for item in messages))
+        self.assertTrue(any("does not accept hackylens.app-runtime version" in item
+                            for item in messages))
+
+    def test_phase3_forbidden_project_scope_is_rejected(self) -> None:
+        manifest = ROOT / "docs" / "spec" / "APP_MANIFEST.md"
+        text = manifest.read_text(encoding="utf-8")
+        for forbidden in (
+            '\n[runtime]\nruntime = "micropython"\nheap_bytes = 131072\n',
+            "\nFirmware MUST parse app.toml at runtime.\n",
+            "\ndynamic_loading = true\n",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertTrue(any(
+                    pattern.search(text + forbidden)
+                    for pattern in CHECK_DOCS.PHASE4_SCHEMA_PATTERNS
+                ))
+
     def test_malformed_adr_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-") as temp:
             root = Path(temp)

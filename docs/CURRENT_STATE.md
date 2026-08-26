@@ -107,11 +107,11 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | Firmware | 0.4.0; Phase 2 Capability Platform completed on SEN0305 |
 | Board Port Contract | 0.1.0 experimental |
 | HMPY Contract | 1.1.0 experimental; wire-major 1 |
-| Versioning Policy | 0.4.0 |
+| Versioning Policy | 0.5.0 |
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App SDK | Deferred to Phase 3 |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; implementation deferred to Phase 3.2+ |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -129,6 +129,13 @@ and collisions, generated-file freshness, canonical flash-layout bytes,
 architecture boundaries, board-aware composition, sidecar safety, and CLI
 rejection paths. CI compile-checks the Cube BSP and builds SEN0305 full and
 feature-disabled configurations.
+
+Phase 3.1 adds contract/version/scope negatives, generic SDK/runtime/manifest/
+generated-registry layer rules, and the reproducible
+[Phase 3 baseline](PHASE3_BASELINE.md). Its full and MicroPython-disabled
+resource deltas against the exact Phase 2 closure are both zero; host legacy
+dispatch reproduction remains below the approved 100 us p99 ceiling. This
+governance package changes no firmware behavior and requires no physical rerun.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -181,8 +188,10 @@ backing store, while retained command batches remain transactional. Phase 2
 records physical display observations and explicitly retains the missing
 matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
-Public App Runtime/context, app manifests, App SDK, and public storage, camera,
-vision, and AI capabilities remain Phase 3+.
+Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
+at `0.1.0 experimental` by the Phase 3.1 governance baseline. Their runtime,
+generator, manifests, SDK headers, and migrations remain Phase 3.2+ work. Public
+storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,
 full project/package management, multi-project IDE workflows, formal

@@ -1,0 +1,98 @@
+{
+  "baseline": {
+    "board": "huskylens-sen0305",
+    "closure": {
+      "automated_result": {
+        "path": "docs/evidence/phase2-candidate-result.json",
+        "sha256": "02f17cdb9ad3449336d1e60c9501e6b0643281f9a708e275cbc0510cbff89457"
+      },
+      "closure_commit": "ed2adcebb757ccf4c8bdaf5b7ba3f0b9c596eedb",
+      "closure_result": {
+        "path": "docs/evidence/phase2-closure-result.json",
+        "sha256": "2821369661d605f78f823b6357196e865d5312ecf4d99d41e6723bdcbe1c0cdb"
+      },
+      "implementation_commit": "f8b76f441d25a7be02bf8c804736750306b8f2b7"
+    },
+    "dispatch": {
+      "harness_path": "tests/phase3_dispatch_baseline_harness.c",
+      "harness_sha256": "548418171147f744510e5e62d5fc0a3b43cc06b6d12ae6efb04ee0565c03f1e2",
+      "iterations_per_sample": 1000,
+      "measurement_scope": "host legacy input lookup and callback dispatch; callback body and provider I/O excluded",
+      "observed_host_p99_ns": 10,
+      "recorded_runs": 10,
+      "samples_per_run": 101,
+      "source_path": "firmware/src/core/hk_dispatch.c",
+      "source_sha256": "df71b7980497890620dafef20a59cb13bbff436c234c7c385d434e63081823cb"
+    },
+    "firmware_version": "0.4.0",
+    "profiles": {
+      "full": {
+        "attestation_sha256": "7d08c68006c263b9f73289825ff8fe4127de2e62940a5161fd5e6dfa5427efb7",
+        "build_profile": "hackylens-full",
+        "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
+        "composition_sha256": "9d8bdceb42fc9d832f443d8acf394453ee42c4aa41eb82ca4fb4ec58944da4d9",
+        "disabled_apps": [],
+        "elf": {
+          "bss_bytes": 2698896,
+          "data_bytes": 158856,
+          "sha256": "4635b11be3ba60b661af311bcefb97aa7bb929d700c3ea7e5205f5a01ce801bb",
+          "static_ram_bytes": 2857752,
+          "text_bytes": 1384958
+        },
+        "image": {
+          "flash_occupied_bytes": 1544192,
+          "raw_bytes": 1543928,
+          "sha256": "d6fe174892d05a1403a9418dcd8acdaa368a020938d267a4c41f1bc4d5a46938"
+        },
+        "release_qualified": true
+      },
+      "micropython-disabled": {
+        "attestation_sha256": "add4a322f47558f377a30b79c9cde8c409c346a83df6ccdd2da864a431b4fc8d",
+        "build_profile": "hackylens-feature-modified",
+        "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
+        "composition_sha256": "ee6541218c1cb45a79608700d5175e2482c168327289f4683b13e8b94d83aa86",
+        "disabled_apps": [
+          "micropython"
+        ],
+        "elf": {
+          "bss_bytes": 2421880,
+          "data_bytes": 158880,
+          "sha256": "c9833aa75cc11d79ed1734f27bcd42b7091289c6d19b5f46e404d072f4300eda",
+          "static_ram_bytes": 2580760,
+          "text_bytes": 1191671
+        },
+        "image": {
+          "flash_occupied_bytes": 1351680,
+          "raw_bytes": 1350648,
+          "sha256": "74b2bedc956a33ad8369d53a7546233d0fb421ad3ecf5342830e965f05a0c5d8"
+        },
+        "release_qualified": false
+      }
+    },
+    "target": "full",
+    "toolchain": {
+      "archive_sha256": "ec8aa2bd3f1a42f4d227696c0d6d9baf32bef0e725d24d23b8e955521d4ae89e",
+      "kendryte_standalone_sdk_revision": "02576ba67e8797444f3ee3f34c625b5ed048e707",
+      "kendryte_toolchain": "v8.2.0-20190409"
+    }
+  },
+  "budgets": {
+    "additional_full_framebuffers_max": 0,
+    "erase_rounded_flash_delta_max_bytes": 65536,
+    "hardware_dispatch_p99_max_us": 100,
+    "host_dispatch_p99_delta_max_us": 50,
+    "host_dispatch_p99_max_us": 100,
+    "new_background_tasks_max": 0,
+    "new_general_queues_max": 0,
+    "new_heap_allocations_max": 0,
+    "new_runtime_cores_max": 0,
+    "runtime_stack_frame_max_bytes": 32768,
+    "static_ram_delta_max_bytes": 16384
+  },
+  "formulas": {
+    "dispatch_delta": "measured_host_p99_us - baseline_observed_host_p99_us",
+    "flash_occupied": "ceil((raw_image_bytes + 37) / erase_size) * erase_size",
+    "static_ram": "data_bytes + bss_bytes"
+  },
+  "schema": 1
+}

@@ -137,7 +137,7 @@ Native app manifest и будущий project manifest — разные конт
 
 ## 3.1 — Governance, contracts и Phase 3 baseline
 
-Статус пакета: `not_started`.
+Статус пакета: `completed`.
 
 ### Цель
 
@@ -146,24 +146,24 @@ Phase 2 closure как baseline.
 
 ### Scope
 
-- [ ] Добавить normative contracts `APP_RUNTIME.md`, `APP_MANIFEST.md` и
+- [x] Добавить normative contracts `APP_RUNTIME.md`, `APP_MANIFEST.md` и
   `APP_SDK.md` с metadata `0.1.0 experimental`.
-- [ ] Добавить ADR для lifecycle/context ownership и ADR для manifest-generated
+- [x] Добавить ADR для lifecycle/context ownership и ADR для manifest-generated
   composition.
-- [ ] Нормативно закрепить SDK/Capability API boundary: Feature App SDK является
+- [x] Нормативно закрепить SDK/Capability API boundary: Feature App SDK является
   app-facing entry surface, использует public capability types и не открывает
   implementation/provider/platform headers.
-- [ ] Зафиксировать state machine, callback ordering, failure unwind, stop reason,
+- [x] Зафиксировать state machine, callback ordering, failure unwind, stop reason,
   cleanup и stale-callback semantics.
-- [ ] Зафиксировать teardown ordering: idempotent `stop`, app cleanup at most once
+- [x] Зафиксировать teardown ordering: idempotent `stop`, app cleanup at most once
   при валидном context, обязательный runtime owner cleanup, provider quarantine
   при его failure, затем handle/context invalidation и state reuse.
-- [ ] Зафиксировать разницу native app manifest и Phase 4 project format.
-- [ ] Снять Phase 3 flash/static RAM/dispatch baseline с exact Phase 2 closure и
+- [x] Зафиксировать разницу native app manifest и Phase 4 project format.
+- [x] Снять Phase 3 flash/static RAM/dispatch baseline с exact Phase 2 closure и
   утвердить численные budgets до runtime implementation.
-- [ ] Расширить architecture layer map для `sdk`, `app-runtime`, `manifest` и
+- [x] Расширить architecture layer map для `sdk`, `app-runtime`, `manifest` и
   `generated-app-registry` без allowlist для конкретных apps.
-- [ ] Добавить docs/contract negative tests для forbidden Phase 4 scope и
+- [x] Добавить docs/contract negative tests для forbidden Phase 4 scope и
   несовместимых contract versions.
 
 ### Не входит

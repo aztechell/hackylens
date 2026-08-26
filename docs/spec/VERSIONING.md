@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.versioning-policy
 owner: platform-architecture
-version: 0.4.0
+version: 0.5.0
 stability: experimental
 ---
 
@@ -28,13 +28,17 @@ promote any firmware, protocol, API, or format to stable.
 | Firmware | `0.4.0` | Technology preview; physical qualification in progress | `VERSION` |
 | HMPY | `1.1.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
 | Board Port Contract | `0.1.0` | Experimental | `BOARD_PORT.md` and board descriptors |
-| Platform API | Unpublished | No public contract | Future Platform API spec |
-| App SDK | Unpublished | No public contract | Future App SDK spec |
+| Capability API | `0.1.0` | Experimental | `CAPABILITY_API.md` |
+| App Runtime | `0.1.0` | Experimental | `APP_RUNTIME.md` |
+| Native App Manifest | `0.1.0` (schema major `1`) | Experimental; build-time-only | `APP_MANIFEST.md` |
+| Feature App SDK | `0.1.0` | Experimental | `APP_SDK.md` |
 | Project Format | Unpublished | No public contract | Future Project Format spec |
 
-The first published experimental Platform API, App SDK, or Project Format
-contract starts at `0.1.0`. A version change on one axis MUST NOT implicitly
-change any other axis.
+The first published experimental Capability API, App Runtime, Native App
+Manifest, Feature App SDK, or Project Format contract starts at `0.1.0`. A
+version change on one axis MUST NOT implicitly change any other axis. Native App
+Manifest schema major `1` is independently encoded and is not the future Project
+Format schema.
 
 Additional existing technical contracts retain their own compatibility lines:
 

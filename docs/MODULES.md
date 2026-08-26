@@ -30,7 +30,9 @@ native and MicroPython consumers share the same providers and lifecycle core.
 `runtime/capability_owner_runtime.c` privately binds generation-checked owners
 around menu entry/exit callbacks without changing `hk_app_t`. Deterministic
 fakes and K210 providers run the same normative contract suites. Public storage,
-camera, vision, AI, app-context, and manifest capabilities remain Phase 3+.
+camera, vision, and AI capabilities remain Phase 3+. Phase 3.1 publishes the App
+Runtime, Native App Manifest, and Feature App SDK contracts without yet changing
+firmware behavior.
 
 Compile-time app flags are generated into `hk_config.h` by
 `tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`.
@@ -86,3 +88,8 @@ symbols, generated-only provider inventory, and identical provider objects in
 full and MicroPython-disabled profiles. The `public-capability` layer contains
 the public headers and the five common lifecycle frontends; provider bindings,
 private state machines, and K210 adapters remain `capability-implementation`.
+The Phase 3 map additionally reserves generic `sdk`, `app-runtime`, `manifest`,
+and `generated-app-registry` layers. SDK headers may depend on
+`public-capability` only; runtime and generated descriptors cannot acquire a
+board/HAL/driver policy edge. The rules use path families and contain no
+allowlist for concrete apps.

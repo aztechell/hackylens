@@ -28,6 +28,10 @@ REFERENCE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\[([^\]]*)\]")
 REFERENCE_DEFINITION_RE = re.compile(r"^\s{0,3}\[([^\]]+)\]:\s*(.+?)\s*$")
 ADR_REFERENCE_RE = re.compile(r"^\d{4}$")
 HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+COMPATIBILITY_RANGE_RE = re.compile(
+    r"^>=((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)),"
+    r"<((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$"
+)
 
 STABILITIES = {"experimental", "stable", "deprecated"}
 
@@ -83,6 +87,41 @@ ADR_SECTIONS = (
     "Compatibility and Migration",
     "Evidence",
     "References",
+)
+
+PHASE3_CONTRACTS = {
+    "hackylens.app-runtime": {
+        "path": Path("docs/spec/APP_RUNTIME.md"),
+        "compatibility": {
+            "compatibility-app-manifest": "hackylens.native-app-manifest",
+            "compatibility-capability-api": "hackylens.capability-api",
+        },
+    },
+    "hackylens.native-app-manifest": {
+        "path": Path("docs/spec/APP_MANIFEST.md"),
+        "compatibility": {
+            "compatibility-app-runtime": "hackylens.app-runtime",
+            "compatibility-capability-api": "hackylens.capability-api",
+        },
+    },
+    "hackylens.feature-app-sdk": {
+        "path": Path("docs/spec/APP_SDK.md"),
+        "compatibility": {
+            "compatibility-app-runtime": "hackylens.app-runtime",
+            "compatibility-app-manifest": "hackylens.native-app-manifest",
+            "compatibility-capability-api": "hackylens.capability-api",
+        },
+    },
+}
+
+PHASE4_SCHEMA_PATTERNS = (
+    re.compile(r"(?m)^\s*\[runtime\]\s*$"),
+    re.compile(r"(?m)^\s*runtime\s*=\s*[\"']micropython[\"']\s*$"),
+    re.compile(r"(?m)^\s*entry\s*=\s*[\"']main\.py[\"']\s*$"),
+    re.compile(r"(?m)^\s*heap_bytes\s*="),
+    re.compile(r"(?m)^\s*(?:dynamic_loading|program_manager|project_format|"
+               r"ide_workspace|runtime_toml_parser)\s*=\s*true\s*$"),
+    re.compile(r"(?i)firmware\s+(?:must|shall)\s+parse\s+app\.toml\s+at\s+runtime"),
 )
 
 
@@ -647,6 +686,103 @@ def check_canonical_versions(
     return issues
 
 
+def release_version_tuple(value: str) -> tuple[int, int, int] | None:
+    if RELEASE_SEMVER_RE.fullmatch(value) is None:
+        return None
+    major, minor, patch = value.split(".")
+    return int(major), int(minor), int(patch)
+
+
+def check_phase3_contracts(
+    root: Path, contracts: dict[str, tuple[Path, FrontMatter]]
+) -> list[Issue]:
+    """Keep the initial Phase 3 contract set mutually compatible and in scope."""
+
+    issues: list[Issue] = []
+    expected_version = (0, 1, 0)
+    expected_range = ">=0.1.0,<0.2.0"
+
+    for contract_id, policy in PHASE3_CONTRACTS.items():
+        if contract_id not in contracts:
+            issues.append(issue(
+                root, root / policy["path"], 1,
+                f"missing Phase 3 contract {contract_id!r}",
+            ))
+            continue
+        path, front = contracts[contract_id]
+        expected_path = (root / policy["path"]).resolve()
+        if path.resolve() != expected_path:
+            issues.append(issue(
+                root, path, 1,
+                f"{contract_id} must live at {policy['path'].as_posix()}",
+            ))
+        if release_version_tuple(front.values.get("version", "")) != expected_version:
+            issues.append(issue(
+                root, path, front.lines.get("version", 1),
+                f"{contract_id} must remain on initial version 0.1.0",
+            ))
+        if front.values.get("stability") != "experimental":
+            issues.append(issue(
+                root, path, front.lines.get("stability", 1),
+                f"{contract_id} must remain experimental",
+            ))
+        if front.values.get("phase") != "3":
+            issues.append(issue(
+                root, path, front.lines.get("phase", 1),
+                f"{contract_id} must declare phase 3",
+            ))
+
+        for field, target_id in policy["compatibility"].items():
+            value = front.values.get(field, "")
+            match = COMPATIBILITY_RANGE_RE.fullmatch(value)
+            if match is None or value != expected_range:
+                issues.append(issue(
+                    root, path, front.lines.get(field, 1),
+                    f"{field} must be the initial experimental range {expected_range}",
+                ))
+                continue
+            target = contracts.get(target_id)
+            target_version = (
+                release_version_tuple(target[1].values.get("version", ""))
+                if target else None
+            )
+            lower = release_version_tuple(match.group(1))
+            upper = release_version_tuple(match.group(2))
+            if target_version is None or lower is None or upper is None or not (
+                lower <= target_version < upper
+            ):
+                issues.append(issue(
+                    root, path, front.lines.get(field, 1),
+                    f"{field} does not accept {target_id} version",
+                ))
+
+        text = read_text(path)
+        for pattern in PHASE4_SCHEMA_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                line = text.count("\n", 0, match.start()) + 1
+                issues.append(issue(
+                    root, path, line,
+                    "Phase 3 native-app contract contains forbidden Phase 4 scope",
+                ))
+
+    manifest = contracts.get("hackylens.native-app-manifest")
+    if manifest:
+        path, front = manifest
+        required = {
+            "schema-major": "1",
+            "format-scope": "native-app-build",
+            "runtime-parsed": "false",
+        }
+        for field, expected in required.items():
+            if front.values.get(field) != expected:
+                issues.append(issue(
+                    root, path, front.lines.get(field, 1),
+                    f"native app manifest {field} must be {expected}",
+                ))
+    return issues
+
+
 def check_adrs(root: Path) -> list[Issue]:
     issues: list[Issue] = []
     adr_dir = root / "docs" / "adr"
@@ -758,6 +894,7 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_preview_markers(root, (root / path for path in ENTRY_DOCUMENTS)))
     issues.extend(check_forbidden_claims(root, (root / path for path in CLAIM_SURFACES)))
     issues.extend(check_canonical_versions(root, contracts))
+    issues.extend(check_phase3_contracts(root, contracts))
     issues.extend(check_adrs(root))
     return sorted(issues, key=lambda item: (str(item.path), item.line, item.message))
 

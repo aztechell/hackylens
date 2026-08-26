@@ -77,6 +77,7 @@ jobs:
           Invoke-NativeChecked git diff --check $diffRange
           Invoke-NativeChecked python tools/check_docs.py
           Invoke-NativeChecked python tools/check_phase2_evidence.py
+          Invoke-NativeChecked python tools/check_phase3_baseline.py --measure-dispatch
           if (Test-Path -LiteralPath docs/evidence/phase2-hardware-smoke.json) {
             Invoke-NativeChecked python tools/check_phase2_hardware.py
           }
@@ -123,6 +124,7 @@ jobs:
           Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython
           Invoke-NativeChecked python tools/check_arch.py --verify-build-profile micropython-disabled
           Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile micropython-disabled
+          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile micropython-disabled
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile micropython-disabled
 
@@ -138,13 +140,9 @@ jobs:
           Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305
           Invoke-NativeChecked python tools/check_arch.py --verify-build-profile full
           Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile full
+          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile full
-          Invoke-NativeChecked python tools/check_phase2_resources.py --check-result
-          Invoke-NativeChecked python tools/check_phase2_exit.py --mode pre-hardware
-          if (Test-Path -LiteralPath docs/evidence/phase2-closure-result.json) {
-            Invoke-NativeChecked python tools/check_phase2_exit.py --mode closure
-          }
 
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'

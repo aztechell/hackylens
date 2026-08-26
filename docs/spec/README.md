@@ -30,6 +30,12 @@ are not inferred from the semantic-version MAJOR component.
 - [Versioning Policy](VERSIONING.md)
 - [Board Port Contract](BOARD_PORT.md)
 
+## Native app contracts
+
+- [App Runtime](APP_RUNTIME.md)
+- [Native App Manifest](APP_MANIFEST.md)
+- [Feature App SDK](APP_SDK.md)
+
 ## Capability contracts
 
 - [Capability API](CAPABILITY_API.md)
@@ -60,7 +66,7 @@ governance baseline.
 - `platform-architecture`: architecture direction, terminology, and governance.
 - `device-protocols`: device/host and external wire protocols.
 - `micropython-runtime`: the public MicroPython programming surface.
-- `firmware-runtime`: the current native firmware lifecycle contract.
+- `firmware-runtime`: the legacy and lifecycle-v2 native runtime contracts.
 - `ai-runtime`: AI model package and model-runtime contracts.
 
 Owner identifiers name stable components, not individual maintainers.

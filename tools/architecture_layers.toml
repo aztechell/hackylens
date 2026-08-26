@@ -1,13 +1,19 @@
 schema = 1
 source_roots = [
+  "sdk/include",
   "firmware/include",
   "firmware/src",
+  "firmware/generated",
   "firmware/assets",
   "firmware/config",
   "firmware/targets",
   "boards",
   "platforms",
 ]
+
+[[layers]]
+name = "sdk"
+paths = ["sdk/include/**"]
 
 [[layers]]
 name = "public-capability"
@@ -22,7 +28,36 @@ paths = [
 
 [[layers]]
 name = "app"
-paths = ["firmware/src/apps/**"]
+paths = [
+  "firmware/src/apps/*.c",
+  "firmware/src/apps/*.cc",
+  "firmware/src/apps/*.cpp",
+  "firmware/src/apps/*.cxx",
+  "firmware/src/apps/*.h",
+  "firmware/src/apps/*.hh",
+  "firmware/src/apps/*.hpp",
+  "firmware/src/apps/*.hxx",
+  "firmware/src/apps/**/*.c",
+  "firmware/src/apps/**/*.cc",
+  "firmware/src/apps/**/*.cpp",
+  "firmware/src/apps/**/*.cxx",
+  "firmware/src/apps/**/*.h",
+  "firmware/src/apps/**/*.hh",
+  "firmware/src/apps/**/*.hpp",
+  "firmware/src/apps/**/*.hxx",
+]
+
+[[layers]]
+name = "manifest"
+paths = ["firmware/src/apps/*/app.toml"]
+
+[[layers]]
+name = "app-runtime"
+paths = ["firmware/src/app_runtime/**"]
+
+[[layers]]
+name = "generated-app-registry"
+paths = ["firmware/generated/app_registry/**"]
 
 [[layers]]
 name = "adapter"
@@ -93,8 +128,61 @@ paths = ["firmware/third_party/**"]
 
 [[forbidden_edges]]
 from = ["app"]
-to = ["board", "platform-hal", "driver", "capability-implementation"]
+to = [
+  "board",
+  "platform-hal",
+  "driver",
+  "capability-implementation",
+  "app-runtime",
+  "manifest",
+  "generated-app-registry",
+]
 reason = "apps must use public capabilities or portable boundaries"
+
+[[forbidden_edges]]
+from = ["sdk"]
+to = [
+  "app",
+  "adapter",
+  "manifest",
+  "app-runtime",
+  "generated-app-registry",
+  "capability-implementation",
+  "service",
+  "storage",
+  "driver",
+  "board",
+  "platform-hal",
+  "platform-startup",
+  "runtime",
+  "controller",
+  "ui",
+  "core",
+  "config",
+  "asset",
+  "third-party",
+]
+reason = "the public SDK may depend only on public capability contracts"
+
+[[forbidden_edges]]
+from = ["app-runtime"]
+to = ["app", "manifest", "board", "platform-hal", "driver"]
+reason = "app runtime consumes generated descriptors and portable boundaries"
+
+[[forbidden_edges]]
+from = ["generated-app-registry"]
+to = [
+  "manifest",
+  "app-runtime",
+  "capability-implementation",
+  "service",
+  "storage",
+  "driver",
+  "board",
+  "platform-hal",
+  "platform-startup",
+]
+reason = "generated app descriptors contain no implementation or hardware policy"
 
 [[forbidden_edges]]
 from = ["adapter"]
