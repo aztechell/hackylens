@@ -28,8 +28,7 @@ loading.
 
 The initial semantic contract is `0.1.0 experimental`; its independently
 encoded manifest schema major is `1`. Unknown schema values and unknown fields
-are errors. Detailed schema-1 field grammar and canonicalization are introduced
-by Phase 3.2 without weakening the constraints in this document.
+are errors. Schema 1 field grammar and canonicalization are defined below.
 
 ## Required properties
 
@@ -59,6 +58,107 @@ Zero, negative, overflowed, sentinel-as-unbounded, or omitted identity/resource
 policy is invalid. Paths are resolved against the real app directory and MUST
 NOT escape it through `..`, absolute paths, symlinks, junctions, case folding,
 alternate separators, or equivalent path tricks.
+
+## Schema 1 grammar
+
+The root is one TOML table with exactly these fields; every field is required
+and there are no implicit defaults:
+
+| Field | Schema 1 value |
+| --- | --- |
+| `schema` | integer `1` |
+| `id` | lowercase kebab ID, at most 63 UTF-8 bytes |
+| `name` | non-empty trimmed display text, at most 96 UTF-8 bytes |
+| `version` | canonical SemVer with no leading-zero numeric identifiers |
+| `entry` | C symbol naming the lifecycle entry |
+| `generated_symbol` | C symbol reserved for the generated descriptor |
+| `lifecycle` | exactly `legacy` or `v2` |
+| `sources` | non-empty array of app-relative C/C++ source files |
+| `private_includes` | explicit array of app-relative private include directories; it may be empty |
+| `menu` | table with explicit `visible` boolean and positive uint16 `order` |
+| `autostart` | table with explicit `eligible` boolean and uint16 `id` |
+| `capabilities` | table with explicit `required` and `optional` request arrays |
+| `services` | explicit array of app-scoped service declarations; it may be empty |
+| `limits` | complete finite resource and scheduling policy table |
+| `metadata` | non-empty bounded `help` and `debug` strings |
+| `tests` | host-source and build-composition test metadata |
+
+Canonical app and requirement tokens use lowercase ASCII kebab form. An app ID
+starts with a lowercase ASCII letter and then uses lowercase letters, digits,
+and single hyphen-separated non-empty components; capability IDs add the
+`hackylens.cap.` prefix and service IDs add `hackylens.service.`. `entry` and
+`generated_symbol` use ordinary C identifier syntax. Every menu order is
+unique, including for a non-visible entry, so enabling it cannot silently
+reorder another app. An autostart-eligible app has a non-zero stable uint16 ID;
+an ineligible app explicitly uses ID zero. The validator collision-checks app
+ID, entry, generated symbol, menu order, and every non-zero autostart ID across
+the complete input set.
+
+Each capability request contains exactly:
+
+```toml
+id = "hackylens.cap.input"
+instance = 0
+minimum = "0.1.0"
+maximum_exclusive = "0.2.0"
+features = ["events", "state"]
+```
+
+Versions are canonical numeric `MAJOR.MINOR.PATCH` values whose components fit
+`hk_version_t`. `minimum` is inclusive, precedes the exclusive maximum, and
+the same `(id, instance)` cannot occur twice or be both required and optional.
+The feature array is explicit, duplicate-free, and may be empty. An optional
+request has one additional required lowercase-kebab `fallback` field. This is
+the same range and required-feature-set model as `hk_capability_request_t`; the
+validator does not replace missing bounds with a current provider version.
+
+Each service declaration contains exactly `id` and `namespace`. A namespace is
+one or more lowercase-kebab components below `<app-id>.`, which makes service
+state app-scoped before any service handle is generated. Schema validation does
+not assert that a selected board provides the service; build composition makes
+that decision later.
+
+The `limits` table contains exactly these positive integers:
+
+| Field | Portable schema-1 ceiling | Additional rule |
+| --- | ---: | --- |
+| `static_ram_bytes` | 8,388,608 | includes fixed app state and other app-owned static data |
+| `stack_bytes` | 32,768 | stack expectation, not a request for a new task |
+| `state_bytes` | 1,048,576 | cannot exceed `static_ram_bytes` |
+| `tick_interval_us` | 60,000,000 | finite positive interval |
+| `tick_budget_us` | 1,000,000 | cannot exceed `tick_interval_us` |
+| `render_budget_us` | 1,000,000 | finite positive render budget |
+
+Zero, negative, boolean, string sentinel, overflow, omitted, and above-ceiling
+values are invalid. These are schema ceilings, not reservations and not
+permission to exceed a selected board/build profile budget. The values neither
+create tasks nor make a timeout infinite.
+
+`tests.host_sources` is a non-empty array of app-relative `.c`, `.cc`, `.cpp`,
+`.cxx`, or `.py` files. `tests.build_profiles` is a non-empty duplicate-free
+subset of `standalone`, `full`, and `disabled`. Test metadata is composition
+input only; it is not runtime discovery metadata.
+
+All declared paths use `/`, contain only canonical relative components, exist
+with exact filesystem case, have the required file/directory kind, and resolve
+inside the real manifest directory. Drive-qualified, UNC, absolute, `.`/`..`,
+backslash, missing, case-aliased, symlink/junction escape, and wrong-suffix paths
+are rejected before compilation.
+
+## Canonical model and command
+
+`python tools/check_app_manifests.py --scan-root <directory>` recursively
+validates every `app.toml` below the directory and emits canonical UTF-8 JSON.
+`--output <path>` writes the same bytes to a file. An empty input is an error.
+The model records only scan-root-relative directories and manifest-relative
+paths, never workspace absolute paths. Apps sort by ID; source/include/test
+paths, capabilities, features, services, and profile names use stable explicit
+keys. Consequently identical input trees at different host paths produce
+byte-identical canonical models.
+
+The command is a pre-compile build gate. Firmware does not read its TOML input
+or this host JSON model; later generation consumes the validated in-memory
+model and gives firmware immutable descriptors only.
 
 ## Generated composition
 

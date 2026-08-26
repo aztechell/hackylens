@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; implementation deferred to Phase 3.2+ |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 build-time manifest validator present; production composition/runtime deferred to Phase 3.3+ |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -138,6 +138,14 @@ dispatch reproduction remains below the approved 100 us p99 ceiling. This
 governance package changes no firmware behavior and requires no physical rerun.
 Its CI gate also source-diffs the exact closure and rejects every new heap,
 background-task, general-queue, runtime-core, or full-framebuffer creation site.
+
+Phase 3.2 defines the complete strict Native App Manifest schema and provides a
+build-time-only validator with path-independent canonical JSON output. CI runs
+it against committed lifecycle-v2 and legacy positive fixtures. Host negatives
+cover unknown/missing fields, version/range/fallback rules, finite resource
+ceilings, app-scoped service namespaces, real-directory path confinement, and
+ID/entry/autostart/menu/generated-symbol collisions. Existing app composition,
+the manual registry, and firmware behavior remain unchanged until Phase 3.3.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -191,8 +199,9 @@ records physical display observations and explicitly retains the missing
 matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
 Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
-at `0.1.0 experimental` by the Phase 3.1 governance baseline. Their runtime,
-generator, manifests, SDK headers, and migrations remain Phase 3.2+ work. Public
+at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
+schema validation is implemented; generated composition, production manifests,
+runtime, SDK headers, generator, and migrations remain Phase 3.3+ work. Public
 storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

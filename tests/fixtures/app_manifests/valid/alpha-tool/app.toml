@@ -1,0 +1,44 @@
+schema = 1
+id = "alpha-tool"
+name = "Alpha Tool"
+version = "0.1.0"
+entry = "alpha_tool_app"
+generated_symbol = "hk_generated_app_alpha_tool"
+lifecycle = "v2"
+sources = ["src/alpha_tool.c"]
+private_includes = ["include"]
+services = [
+  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },
+]
+
+[menu]
+visible = true
+order = 10
+
+[autostart]
+eligible = true
+id = 42
+
+[capabilities]
+required = [
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events"] },
+]
+optional = [
+  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["rgb565", "base-plane"], fallback = "headless" },
+]
+
+[limits]
+static_ram_bytes = 4096
+stack_bytes = 2048
+state_bytes = 256
+tick_interval_us = 10000
+tick_budget_us = 1000
+render_budget_us = 2000
+
+[metadata]
+help = "Exercises the schema-1 lifecycle-v2 surface."
+debug = "alpha-status"
+
+[tests]
+host_sources = ["tests/alpha_tool_test.c"]
+build_profiles = ["standalone", "full", "disabled"]

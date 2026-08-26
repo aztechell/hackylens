@@ -179,7 +179,7 @@ layer policy machine-checkable; firmware behavior не изменён.
 
 ## 3.2 — Native app manifest schema и validator
 
-Статус пакета: `not_started`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

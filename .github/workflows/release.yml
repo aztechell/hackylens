@@ -76,6 +76,7 @@ jobs:
           }
           Invoke-NativeChecked git diff --check $diffRange
           Invoke-NativeChecked python tools/check_docs.py
+          Invoke-NativeChecked python tools/check_app_manifests.py --scan-root tests/fixtures/app_manifests/valid --output build/app-manifests.json
           Invoke-NativeChecked python tools/check_phase2_evidence.py
           Invoke-NativeChecked python tools/check_phase3_baseline.py --measure-dispatch
           if (Test-Path -LiteralPath docs/evidence/phase2-hardware-smoke.json) {

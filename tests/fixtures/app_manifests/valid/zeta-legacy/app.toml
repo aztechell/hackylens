@@ -1,0 +1,38 @@
+schema = 1
+id = "zeta-legacy"
+name = "Zeta Legacy"
+version = "0.4.0-compat.1"
+entry = "zeta_legacy_enter"
+generated_symbol = "hk_generated_app_zeta_legacy"
+lifecycle = "legacy"
+sources = ["src/zeta_view.c", "src/zeta_legacy.c"]
+private_includes = ["include"]
+services = []
+
+[menu]
+visible = true
+order = 20
+
+[autostart]
+eligible = false
+id = 0
+
+[capabilities]
+required = []
+optional = []
+
+[limits]
+static_ram_bytes = 2048
+stack_bytes = 1024
+state_bytes = 128
+tick_interval_us = 5000
+tick_budget_us = 500
+render_budget_us = 1000
+
+[metadata]
+help = "Exercises the explicit legacy lifecycle adapter kind."
+debug = "zeta-status"
+
+[tests]
+host_sources = ["tests/zeta_legacy_test.py"]
+build_profiles = ["full", "disabled"]

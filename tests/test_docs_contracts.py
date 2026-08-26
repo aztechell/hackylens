@@ -498,6 +498,39 @@ class DocumentationContractsTest(unittest.TestCase):
                     expected in found.message for found in issues
                 ))
 
+    def test_native_app_manifest_schema_safety_rules_are_normative(self) -> None:
+        relative = Path("docs/spec/APP_MANIFEST.md")
+        original = (ROOT / relative).read_text(encoding="utf-8")
+        mutations = (
+            (
+                "every field is required",
+                "fields may be omitted",
+                "exact fields without defaults",
+            ),
+            (
+                "symlink/junction escape",
+                "ordinary path",
+                "real-directory path confinement",
+            ),
+            (
+                "Firmware does not read its TOML input",
+                "Firmware may read its TOML input",
+                "remain build-time-only",
+            ),
+        )
+        for old, new, expected in mutations:
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory(
+                prefix="hackylens-app-manifest-doc-"
+            ) as temp:
+                root = Path(temp)
+                changed = original.replace(old, new, 1)
+                self.assertNotEqual(original, changed)
+                write(root / relative, changed)
+                issues = CHECK_DOCS.check_app_manifest_schema(root)
+                self.assertTrue(any(
+                    expected in found.message for found in issues
+                ))
+
     def test_completed_phase2_rejects_stale_firmware_status(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-phase2-status-") as temp:
             root = Path(temp)

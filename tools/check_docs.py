@@ -181,6 +181,42 @@ TEARDOWN_DEADLINE_REQUIREMENTS = {
     ),
 }
 
+APP_MANIFEST_SCHEMA_REQUIREMENTS = (
+    (
+        r"root\s+is\s+one\s+TOML\s+table\s+with\s+exactly\s+these\s+"
+        r"fields[\s\S]*every\s+field\s+is\s+required[\s\S]*no\s+implicit\s+defaults",
+        "Native App Manifest schema must keep exact fields without defaults",
+    ),
+    (
+        r"generated_symbol[\s\S]*collision-checks\s+app\s+ID,\s+entry,\s+"
+        r"generated\s+symbol,\s+menu\s+order[\s\S]*autostart\s+ID",
+        "Native App Manifest schema must keep every identity collision guard",
+    ),
+    (
+        r"minimum`?\s+is\s+inclusive[\s\S]*exclusive\s+maximum[\s\S]*"
+        r"optional\s+request[\s\S]*required[\s\S]*fallback",
+        "Native App Manifest schema must preserve capability range and fallback rules",
+    ),
+    (
+        r"static_ram_bytes[\s\S]*stack_bytes[\s\S]*state_bytes[\s\S]*"
+        r"tick_interval_us[\s\S]*tick_budget_us[\s\S]*render_budget_us",
+        "Native App Manifest schema must keep the complete finite limits table",
+    ),
+    (
+        r"symlink/junction\s+escape[\s\S]*rejected\s+before\s+compilation",
+        "Native App Manifest schema must preserve real-directory path confinement",
+    ),
+    (
+        r"check_app_manifests\.py\s+--scan-root[\s\S]*canonical\s+UTF-8\s+JSON",
+        "Native App Manifest contract must name the deterministic validator command",
+    ),
+    (
+        r"Firmware\s+does\s+not\s+read\s+its\s+TOML\s+input[\s\S]*"
+        r"immutable\s+descriptors\s+only",
+        "Native App Manifest schema must remain build-time-only",
+    ),
+)
+
 
 class Issue(NamedTuple):
     path: Path
@@ -856,6 +892,20 @@ def check_phase3_teardown_deadline(root: Path) -> list[Issue]:
     return issues
 
 
+def check_app_manifest_schema(root: Path) -> list[Issue]:
+    """Keep the schema-1 build-time grammar and safety rules normative."""
+
+    path = root / "docs" / "spec" / "APP_MANIFEST.md"
+    if not path.is_file():
+        return [issue(root, path, 1, "Native App Manifest contract is missing")]
+    text = read_text(path)
+    issues: list[Issue] = []
+    for pattern, message in APP_MANIFEST_SCHEMA_REQUIREMENTS:
+        if re.search(pattern, text, flags=re.IGNORECASE) is None:
+            issues.append(issue(root, path, 1, message))
+    return issues
+
+
 def check_phase2_status_consistency(root: Path) -> list[Issue]:
     """Prevent the version table from reopening completed SEN0305 acceptance."""
 
@@ -1005,6 +1055,7 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_forbidden_claims(root, (root / path for path in CLAIM_SURFACES)))
     issues.extend(check_canonical_versions(root, contracts))
     issues.extend(check_phase3_contracts(root, contracts))
+    issues.extend(check_app_manifest_schema(root))
     issues.extend(check_phase3_teardown_deadline(root))
     issues.extend(check_phase2_status_consistency(root))
     issues.extend(check_adrs(root))
