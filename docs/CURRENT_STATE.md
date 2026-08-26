@@ -136,6 +136,8 @@ generated-registry layer rules, and the reproducible
 resource deltas against the exact Phase 2 closure are both zero; host legacy
 dispatch reproduction remains below the approved 100 us p99 ceiling. This
 governance package changes no firmware behavior and requires no physical rerun.
+Its CI gate also source-diffs the exact closure and rejects every new heap,
+background-task, general-queue, runtime-core, or full-framebuffer creation site.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-

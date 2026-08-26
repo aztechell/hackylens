@@ -137,7 +137,7 @@ Native app manifest и будущий project manifest — разные конт
 
 ## 3.1 — Governance, contracts и Phase 3 baseline
 
-Статус пакета: `completed`.
+Статус пакета: `in_progress`.
 
 ### Цель
 

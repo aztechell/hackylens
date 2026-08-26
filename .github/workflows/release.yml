@@ -143,6 +143,7 @@ jobs:
           Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile full
+          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-resources
 
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'

@@ -40,6 +40,18 @@ provider quarantine after failed provider cleanup, handle and deferred-token
 invalidation, context-generation invalidation, and only then state reuse. A
 failure at one unwind step is retained but cannot skip a later step.
 
+The runtime creates one finite absolute monotonic teardown deadline when
+teardown begins. Its finite positive budget comes from runtime policy, not the
+app manifest, and its time origin comes through the existing public Time
+Capability provider and one `hk_time_deadline_after_us` call with a private
+runtime owner rather than a raw or parallel clock. `stop`, app cleanup, and
+owner-wide cleanup share that stored deadline; it is never refreshed per stage,
+provider, retry, or affinity handoff. The borrowed context exposes the same
+value through the SDK so app cleanup can pass it to public release operations.
+Expiration or app-cleanup failure still leads to owner-wide cleanup with the
+same already-expired deadline, provider quarantine where Phase 2 cleanup cannot
+reach safety, and deterministic invalidation/state retirement.
+
 Deferred provider work uses a bounded runtime-owned slot/generation/epoch token.
 An old completion is discarded before app code or state access. Generation
 values retire on exhaustion instead of wrapping into a live instance.

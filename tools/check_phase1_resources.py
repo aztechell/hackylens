@@ -303,7 +303,14 @@ def _function_regions(code: str) -> list[tuple[str, int, int, int]]:
     return regions
 
 
-def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
+def _runtime_sites(
+    snapshot: dict[str, str],
+    *,
+    direct_runtime_calls: set[str] | None = None,
+    wrapper_runtime_markers: tuple[str, ...] | None = None,
+    include_cxx_new: bool = True,
+    include_std_thread: bool = True,
+) -> list[dict[str, str | int]]:
     """Conservatively find creation sites and their tainted wrappers.
 
     This is a lexical policy guard, not a full C/C++ semantic analyser.  It
@@ -314,9 +321,17 @@ def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
 
     files: dict[str, tuple[str, str, list[tuple[str, int, int, int]]]] = {}
     functions: list[dict[str, object]] = []
+    runtime_calls = (
+        DIRECT_RUNTIME_CALLS
+        if direct_runtime_calls is None else direct_runtime_calls
+    )
+    wrapper_markers = (
+        WRAPPER_RUNTIME_MARKERS
+        if wrapper_runtime_markers is None else wrapper_runtime_markers
+    )
     primitive_names = {
         name.lstrip(":").rsplit("::", 1)[-1].lower()
-        for name in DIRECT_RUNTIME_CALLS
+        for name in runtime_calls
     }
     for relative, source in sorted(snapshot.items()):
         code = _strip_c_comments_and_literals(source)
@@ -383,8 +398,8 @@ def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
             }
             if (
                 calls & known
-                or CXX_NEW_RE.search(body)
-                or STD_THREAD_OBJECT_RE.search(body)
+                or (include_cxx_new and CXX_NEW_RE.search(body))
+                or (include_std_thread and STD_THREAD_OBJECT_RE.search(body))
             ):
                 if name not in tainted:
                     tainted.add(name)
@@ -438,7 +453,7 @@ def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
                     basename not in primitive_names
                     and basename not in tainted_base
                     and basename not in file_aliases
-                    and not any(marker in basename for marker in WRAPPER_RUNTIME_MARKERS)
+                    and not any(marker in basename for marker in wrapper_markers)
                 ):
                     continue
                 absolute = body_start + match.start()
@@ -446,22 +461,26 @@ def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
                     f"call:{raw_name}", relative, code, absolute, name,
                     _expression_fingerprint(code, absolute),
                 )
-            for match in CXX_NEW_RE.finditer(body):
-                absolute = body_start + match.start()
-                add_site(
-                    "cxx:new", relative, code, absolute, name,
-                    _expression_fingerprint(code, absolute),
-                )
-            for match in STD_THREAD_OBJECT_RE.finditer(body):
-                absolute = body_start + match.start()
-                add_site(
-                    "call:std::thread", relative, code, absolute, name,
-                    _expression_fingerprint(code, absolute),
-                )
-        for matcher, signature in (
-            (CXX_NEW_RE, "cxx:new"),
-            (STD_THREAD_OBJECT_RE, "call:std::thread"),
-        ):
+            if include_cxx_new:
+                for match in CXX_NEW_RE.finditer(body):
+                    absolute = body_start + match.start()
+                    add_site(
+                        "cxx:new", relative, code, absolute, name,
+                        _expression_fingerprint(code, absolute),
+                    )
+            if include_std_thread:
+                for match in STD_THREAD_OBJECT_RE.finditer(body):
+                    absolute = body_start + match.start()
+                    add_site(
+                        "call:std::thread", relative, code, absolute, name,
+                        _expression_fingerprint(code, absolute),
+                    )
+        file_scope_matchers = []
+        if include_cxx_new:
+            file_scope_matchers.append((CXX_NEW_RE, "cxx:new"))
+        if include_std_thread:
+            file_scope_matchers.append((STD_THREAD_OBJECT_RE, "call:std::thread"))
+        for matcher, signature in file_scope_matchers:
             for match in matcher.finditer(code):
                 if any(body_start <= match.start() < body_end
                        for _name, _definition, body_start, body_end in regions):
@@ -482,8 +501,7 @@ def _runtime_sites(snapshot: dict[str, str]) -> list[dict[str, str | int]]:
                 basename not in primitive_names
                 and basename not in tainted_base
                 and basename not in file_aliases
-                and not any(marker in basename
-                            for marker in WRAPPER_RUNTIME_MARKERS)
+                and not any(marker in basename for marker in wrapper_markers)
             ):
                 continue
             add_site(
@@ -549,11 +567,25 @@ def _current_source_snapshot(*, root: Path) -> dict[str, str]:
     return snapshot
 
 
-def added_runtime_objects(commit: str, *, root: Path = ROOT) -> list[str]:
-    """Report current creation sites not grandfathered by a baseline site."""
+def added_runtime_objects_from_snapshots(
+    baseline_snapshot: dict[str, str],
+    current_snapshot: dict[str, str],
+    *,
+    direct_runtime_calls: set[str] | None = None,
+    wrapper_runtime_markers: tuple[str, ...] | None = None,
+    include_cxx_new: bool = True,
+    include_std_thread: bool = True,
+) -> list[str]:
+    """Report creation sites not grandfathered by an exact source snapshot."""
 
-    baseline = _runtime_sites(_baseline_source_snapshot(commit, root=root))
-    current = _runtime_sites(_current_source_snapshot(root=root))
+    scanner_options = {
+        "direct_runtime_calls": direct_runtime_calls,
+        "wrapper_runtime_markers": wrapper_runtime_markers,
+        "include_cxx_new": include_cxx_new,
+        "include_std_thread": include_std_thread,
+    }
+    baseline = _runtime_sites(baseline_snapshot, **scanner_options)
+    current = _runtime_sites(current_snapshot, **scanner_options)
     baseline_file_paths: dict[str, set[str]] = {}
     for site in baseline:
         baseline_file_paths.setdefault(str(site["file_hash"]), set()).add(
@@ -596,6 +628,15 @@ def added_runtime_objects(commit: str, *, root: Path = ROOT) -> list[str]:
             f"in {site['function']}"
         )
     return sorted(findings)
+
+
+def added_runtime_objects(commit: str, *, root: Path = ROOT) -> list[str]:
+    """Report current creation sites not grandfathered by a baseline site."""
+
+    return added_runtime_objects_from_snapshots(
+        _baseline_source_snapshot(commit, root=root),
+        _current_source_snapshot(root=root),
+    )
 
 
 def _exact_fields(value: Any, expected: set[str], field: str) -> dict[str, Any]:

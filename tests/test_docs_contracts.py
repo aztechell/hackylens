@@ -451,6 +451,82 @@ class DocumentationContractsTest(unittest.TestCase):
                     for pattern in CHECK_DOCS.PHASE4_SCHEMA_PATTERNS
                 ))
 
+    def test_phase3_teardown_deadline_origin_and_no_refresh_are_required(self) -> None:
+        originals = {
+            relative: (ROOT / relative).read_text(encoding="utf-8")
+            for relative in CHECK_DOCS.TEARDOWN_DEADLINE_REQUIREMENTS
+        }
+        mutations = (
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "creates\nexactly one finite absolute monotonic teardown deadline",
+                "creates\nan unspecified teardown limit",
+                "single teardown-deadline origin",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "MUST NOT be refreshed between stages",
+                "may be refreshed between stages",
+                "prohibit stage/provider deadline refresh",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "hk_time_deadline_after_us",
+                "an unspecified clock helper",
+                "derive the deadline exactly once through Time API",
+            ),
+            (
+                Path("docs/spec/APP_SDK.md"),
+                "Repeated calls return the same",
+                "Repeated calls may return a different",
+                "preserve the no-refresh rule",
+            ),
+        )
+        for relative, old, new, expected in mutations:
+            with self.subTest(relative=relative, expected=expected):
+                with tempfile.TemporaryDirectory(
+                    prefix="hackylens-phase3-deadline-"
+                ) as temp:
+                    root = Path(temp)
+                    for path, text in originals.items():
+                        write(root / path, text)
+                    changed = originals[relative].replace(old, new, 1)
+                    self.assertNotEqual(changed, originals[relative])
+                    write(root / relative, changed)
+                    issues = CHECK_DOCS.check_phase3_teardown_deadline(root)
+                self.assertTrue(any(
+                    expected in found.message for found in issues
+                ))
+
+    def test_completed_phase2_rejects_stale_firmware_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-phase2-status-") as temp:
+            root = Path(temp)
+            write(
+                root / "docs" / "CURRENT_STATE.md",
+                "Phase 2 is complete.\n",
+            )
+            write(
+                root / "docs" / "ROADMAP.md",
+                "Статус: **DONE**.\n",
+            )
+            versioning = root / "docs" / "spec" / "VERSIONING.md"
+            write(
+                versioning,
+                "Firmware 0.4.0: physical qualification in progress.\n",
+            )
+            stale = CHECK_DOCS.check_phase2_status_consistency(root)
+            write(
+                versioning,
+                "Firmware 0.4.0: Phase 2 physically accepted on SEN0305; "
+                "Maix Cube compile-conformance-only; general hardware "
+                "portability not claimed.\n",
+            )
+            current = CHECK_DOCS.check_phase2_status_consistency(root)
+        self.assertTrue(any(
+            "contradicts completed Phase 2" in found.message for found in stale
+        ))
+        self.assertEqual(current, [])
+
     def test_malformed_adr_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-adr-") as temp:
             root = Path(temp)

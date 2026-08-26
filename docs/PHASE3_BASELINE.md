@@ -50,6 +50,14 @@ per-run p99 of 10 ns. This host observation is diagnostic rather than K210
 timing. The portable gate therefore uses conservative absolute and delta
 ceilings; lifecycle implementation later adds matched v2 and SEN0305 evidence.
 
+The five zero-resource limits are source-difference gates against the exact
+Phase 2 closure commit, not declarations inferred from static-RAM size. The
+checker fingerprints direct and transitively wrapped heap, task, and queue
+creation sites, counts runtime core starts, and counts full-display framebuffer
+allocation expressions. Renames of byte-identical source are tolerated; a new
+site or a delete/add replacement is not. Both profile receipts and the current
+full artifact are checked before the zero-resource result is accepted.
+
 ## Reproduction
 
 With the pinned host compiler and dependencies available:
@@ -58,14 +66,18 @@ With the pinned host compiler and dependencies available:
 python tools/check_phase3_baseline.py --measure-dispatch
 python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython
 python tools/check_phase3_baseline.py --verify-profile micropython-disabled
+python tools/check_phase2_resources.py --capture-profile micropython-disabled
 python tools/build_firmware.py full --board huskylens-sen0305
 python tools/check_phase3_baseline.py --verify-profile full
+python tools/check_phase2_resources.py --capture-profile full
+python tools/check_phase3_baseline.py --verify-resources
 ```
 
 The checker validates canonical JSON, Git ancestry, historical closure bytes,
 the immutable Phase 2 evidence chain, normalized dispatch source/harness hashes,
-attested board/profile identity, formulas, and numerical limits. CI executes the
-same checks.
+attested board/profile identity, formulas, numerical limits, zero-resource
+source deltas, build receipts, and current full artifact identity. CI executes
+the same checks after both required profile receipts exist.
 
 ## Hardware impact
 

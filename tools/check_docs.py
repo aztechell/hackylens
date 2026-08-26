@@ -124,6 +124,63 @@ PHASE4_SCHEMA_PATTERNS = (
     re.compile(r"(?i)firmware\s+(?:must|shall)\s+parse\s+app\.toml\s+at\s+runtime"),
 )
 
+TEARDOWN_DEADLINE_REQUIREMENTS = {
+    Path("docs/spec/APP_RUNTIME.md"): (
+        (
+            r"creates\s+exactly\s+one\s+finite\s+absolute\s+monotonic\s+"
+            r"teardown\s+deadline",
+            "App Runtime must define the single teardown-deadline origin",
+        ),
+        (
+            r"same\s+composed\s+public\s+Time\s+Capability\s+provider",
+            "App Runtime teardown must reuse the public Time provider",
+        ),
+        (
+            r"hk_time_deadline_after_us[\s\S]*exactly\s+once",
+            "App Runtime must derive the deadline exactly once through Time API",
+        ),
+        (
+            r"hk_app_context_teardown_deadline",
+            "App Runtime must expose teardown deadline through app context",
+        ),
+        (
+            r"MUST\s+NOT\s+be\s+refreshed\s+between\s+stages[\s\S]*providers",
+            "App Runtime must prohibit stage/provider deadline refresh",
+        ),
+        (
+            r"owner-wide\s+cleanup\s+MUST\s+still\s+be\s+attempted[\s\S]*"
+            r"same\s+already-expired\s+absolute\s+deadline",
+            "expired app cleanup must not skip owner-wide cleanup",
+        ),
+    ),
+    Path("docs/spec/APP_SDK.md"): (
+        (
+            r"hk_app_context_teardown_deadline",
+            "Feature App SDK must expose the teardown-deadline accessor",
+        ),
+        (
+            r"Repeated\s+calls\s+return\s+the\s+same[\s\S]*MUST\s+NOT\s+"
+            r"refresh",
+            "Feature App SDK accessor must preserve the no-refresh rule",
+        ),
+        (
+            r"already-expired\s+value[\s\S]*later\s+owner-wide\s+cleanup",
+            "Feature App SDK must preserve expired deadline propagation",
+        ),
+    ),
+    Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"): (
+        (
+            r"creates\s+one\s+finite\s+absolute\s+monotonic\s+teardown\s+"
+            r"deadline",
+            "ADR-0007 must record the teardown-deadline decision",
+        ),
+        (
+            r"never\s+refreshed\s+per\s+stage,\s+provider",
+            "ADR-0007 must record the no-refresh decision",
+        ),
+    ),
+}
+
 
 class Issue(NamedTuple):
     path: Path
@@ -783,6 +840,59 @@ def check_phase3_contracts(
     return issues
 
 
+def check_phase3_teardown_deadline(root: Path) -> list[Issue]:
+    """Keep the single runtime-owned teardown deadline fully specified."""
+
+    issues: list[Issue] = []
+    for relative, requirements in TEARDOWN_DEADLINE_REQUIREMENTS.items():
+        path = root / relative
+        if not path.is_file():
+            issues.append(issue(root, path, 1, "teardown deadline document is missing"))
+            continue
+        text = read_text(path)
+        for pattern, message in requirements:
+            if re.search(pattern, text, flags=re.IGNORECASE) is None:
+                issues.append(issue(root, path, 1, message))
+    return issues
+
+
+def check_phase2_status_consistency(root: Path) -> list[Issue]:
+    """Prevent the version table from reopening completed SEN0305 acceptance."""
+
+    current_path = root / "docs" / "CURRENT_STATE.md"
+    roadmap_path = root / "docs" / "ROADMAP.md"
+    versioning_path = root / "docs" / "spec" / "VERSIONING.md"
+    required = (current_path, roadmap_path, versioning_path)
+    if any(not path.is_file() for path in required):
+        return []
+    current = plain_text(read_text(current_path))
+    roadmap = plain_text(read_text(roadmap_path))
+    if "phase 2 is complete" not in current or "статус: **done**" not in roadmap:
+        return []
+    versioning = plain_text(read_text(versioning_path))
+    issues: list[Issue] = []
+    if "physical qualification in progress" in versioning:
+        issues.append(issue(
+            root,
+            versioning_path,
+            1,
+            "Firmware status contradicts completed Phase 2 physical acceptance",
+        ))
+    for required_status in (
+        "physically accepted on sen0305",
+        "maix cube compile-conformance-only",
+        "general hardware portability not claimed",
+    ):
+        if required_status not in versioning:
+            issues.append(issue(
+                root,
+                versioning_path,
+                1,
+                f"Firmware status must state {required_status!r}",
+            ))
+    return issues
+
+
 def check_adrs(root: Path) -> list[Issue]:
     issues: list[Issue] = []
     adr_dir = root / "docs" / "adr"
@@ -895,6 +1005,8 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_forbidden_claims(root, (root / path for path in CLAIM_SURFACES)))
     issues.extend(check_canonical_versions(root, contracts))
     issues.extend(check_phase3_contracts(root, contracts))
+    issues.extend(check_phase3_teardown_deadline(root))
+    issues.extend(check_phase2_status_consistency(root))
     issues.extend(check_adrs(root))
     return sorted(issues, key=lambda item: (str(item.path), item.line, item.message))
 

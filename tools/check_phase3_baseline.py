@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from typing import Any
 
+import check_phase1_resources
 import check_phase2_resources
 
 
@@ -90,6 +91,30 @@ EXPECTED_FORMULAS = {
         "ceil((raw_image_bytes + 37) / erase_size) * erase_size",
     "static_ram": "data_bytes + bss_bytes",
 }
+
+HEAP_CREATION_CALLS = {
+    "malloc", "calloc", "realloc", "aligned_alloc", "pvportmalloc",
+    "strdup", "_strdup", "make_unique", "make_shared",
+}
+TASK_CREATION_CALLS = {
+    "xtaskcreate", "xtaskcreatestatic", "pthread_create", "thrd_create",
+    "std::thread",
+}
+QUEUE_CREATION_CALLS = {"xqueuecreate", "xqueuecreatestatic"}
+PROFILE_RECEIPT_FIELDS = PROFILE_FIELDS | {
+    "board", "disabled_capabilities", "flash_delta_bytes", "kind", "profile",
+    "schema", "static_ram_delta_bytes",
+}
+
+_WIDTH_FACTOR = r"(?:LCD_W|HK_DISPLAY_REQUIRED_WIDTH|320(?:U|UL|ULL)?)"
+_HEIGHT_FACTOR = r"(?:LCD_H|HK_DISPLAY_REQUIRED_HEIGHT|240(?:U|UL|ULL)?)"
+_PIXEL_FACTOR = rf"(?:{_WIDTH_FACTOR}\s*\*\s*{_HEIGHT_FACTOR}|{_HEIGHT_FACTOR}\s*\*\s*{_WIDTH_FACTOR})"
+_TWO_BYTE_FACTOR = r"(?:2(?:U|UL|ULL)?|sizeof\s*\(\s*uint16_t\s*\))"
+FULL_FRAMEBUFFER_PATTERNS = (
+    re.compile(rf"{_PIXEL_FACTOR}\s*\*\s*{_TWO_BYTE_FACTOR}"),
+    re.compile(rf"{_TWO_BYTE_FACTOR}\s*\*\s*{_PIXEL_FACTOR}"),
+    re.compile(rf"\[\s*{_PIXEL_FACTOR}\s*\]"),
+)
 
 
 def canonical_json_bytes(document: Any) -> bytes:
@@ -345,6 +370,171 @@ def verify_profile(document: dict[str, Any], profile_name: str) -> tuple[int, in
     )
 
 
+def _new_resource_sites(
+    historical: dict[str, str],
+    current: dict[str, str],
+    calls: set[str],
+    *,
+    include_cxx_new: bool = False,
+    include_std_thread: bool = False,
+) -> list[str]:
+    return check_phase1_resources.added_runtime_objects_from_snapshots(
+        historical,
+        current,
+        direct_runtime_calls=calls,
+        wrapper_runtime_markers=(),
+        include_cxx_new=include_cxx_new,
+        include_std_thread=include_std_thread,
+    )
+
+
+def _full_framebuffer_expression_count(snapshot: dict[str, str]) -> int:
+    count = 0
+    for source in snapshot.values():
+        code = check_phase1_resources._strip_c_comments_and_literals(source)
+        count += sum(
+            len(pattern.findall(code)) for pattern in FULL_FRAMEBUFFER_PATTERNS
+        )
+    return count
+
+
+def zero_resource_observation(
+    historical: dict[str, str], current: dict[str, str]
+) -> dict[str, Any]:
+    """Compare current creation sites with the exact Phase 2 closure source."""
+
+    return {
+        "new_heap_allocation_sites": _new_resource_sites(
+            historical, current, HEAP_CREATION_CALLS, include_cxx_new=True
+        ),
+        "new_background_task_sites": _new_resource_sites(
+            historical,
+            current,
+            TASK_CREATION_CALLS,
+            include_std_thread=True,
+        ),
+        "new_general_queue_sites": _new_resource_sites(
+            historical, current, QUEUE_CREATION_CALLS
+        ),
+        "new_runtime_core_starts": _new_resource_sites(
+            historical, current, {"hal_core1_start"}
+        ),
+        "additional_full_framebuffer_expressions": max(
+            0,
+            _full_framebuffer_expression_count(current)
+            - _full_framebuffer_expression_count(historical),
+        ),
+    }
+
+
+def enforce_zero_resource_rules(
+    document: dict[str, Any],
+    historical: dict[str, str],
+    current: dict[str, str],
+) -> dict[str, Any]:
+    observation = zero_resource_observation(historical, current)
+    budget_fields = {
+        "new_heap_allocation_sites": "new_heap_allocations_max",
+        "new_background_task_sites": "new_background_tasks_max",
+        "new_general_queue_sites": "new_general_queues_max",
+        "new_runtime_core_starts": "new_runtime_cores_max",
+        "additional_full_framebuffer_expressions":
+            "additional_full_framebuffers_max",
+    }
+    failures: list[str] = []
+    for observed_field, budget_field in budget_fields.items():
+        observed = observation[observed_field]
+        count = len(observed) if isinstance(observed, list) else observed
+        limit = document["budgets"][budget_field]
+        if count > limit:
+            detail = ", ".join(observed) if isinstance(observed, list) else str(observed)
+            failures.append(f"{observed_field}={count} ({detail})")
+    if failures:
+        raise RuntimeError("Phase 3 zero-resource gate failed: " + "; ".join(failures))
+    return observation
+
+
+def _profile_receipt(
+    document: dict[str, Any], profile_name: str
+) -> tuple[int, int, dict[str, Any]]:
+    path = check_phase2_resources.receipt_path("profile", profile_name)
+    receipt = check_phase2_resources.read_canonical_json(
+        path, f"Phase 3 {profile_name} profile receipt"
+    )
+    if set(receipt) != PROFILE_RECEIPT_FIELDS:
+        raise RuntimeError(f"{profile_name} profile receipt fields are invalid")
+    if (
+        receipt.get("schema") != 1
+        or receipt.get("kind") != "firmware-profile"
+        or receipt.get("profile") != profile_name
+        or receipt.get("board") != document["baseline"]["board"]
+        or receipt.get("disabled_capabilities") != []
+    ):
+        raise RuntimeError(f"{profile_name} profile receipt identity mismatch")
+    expected_disabled = [] if profile_name == "full" else ["micropython"]
+    expected_build_profile = (
+        "hackylens-full"
+        if profile_name == "full" else "hackylens-feature-modified"
+    )
+    expected_release = profile_name == "full"
+    if (
+        receipt.get("disabled_apps") != expected_disabled
+        or receipt.get("build_profile") != expected_build_profile
+        or receipt.get("release_qualified") is not expected_release
+    ):
+        raise RuntimeError(f"{profile_name} profile receipt composition mismatch")
+    measured = {field: receipt[field] for field in PROFILE_FIELDS}
+    validate_profile(measured, f"{profile_name} profile receipt")
+    flash_delta, static_delta = profile_budget_deltas(
+        document["baseline"]["profiles"][profile_name],
+        measured,
+        document["budgets"],
+    )
+    return flash_delta, static_delta, receipt
+
+
+def verify_zero_resources(document: dict[str, Any]) -> dict[str, Any]:
+    closure_commit = document["baseline"]["closure"]["closure_commit"]
+    historical = check_phase1_resources._baseline_source_snapshot(
+        closure_commit, root=ROOT
+    )
+    current = check_phase1_resources._current_source_snapshot(root=ROOT)
+    observation = enforce_zero_resource_rules(document, historical, current)
+
+    profile_deltas: dict[str, dict[str, int]] = {}
+    full_receipt: dict[str, Any] | None = None
+    for profile_name in ("micropython-disabled", "full"):
+        flash_delta, static_delta, receipt = _profile_receipt(
+            document, profile_name
+        )
+        profile_deltas[profile_name] = {
+            "flash_delta_bytes": flash_delta,
+            "static_ram_delta_bytes": static_delta,
+        }
+        if profile_name == "full":
+            full_receipt = receipt
+
+    current_measurement = check_phase2_resources.artifact_measurement(
+        check_phase2_resources.artifact_paths()
+    )
+    assert full_receipt is not None
+    for field in (
+        "attestation_sha256", "capabilities_sha256", "composition_sha256",
+        "elf", "image",
+    ):
+        if full_receipt[field] != current_measurement[field]:
+            raise RuntimeError("full profile receipt does not match current build artifacts")
+
+    stack_limit = check_phase2_resources.compiler_stack_frame_limit()
+    if stack_limit > document["budgets"]["runtime_stack_frame_max_bytes"]:
+        raise RuntimeError("compiler stack-frame guard exceeds Phase 3 budget")
+    return {
+        "source": observation,
+        "profiles": profile_deltas,
+        "runtime_stack_frame_limit_bytes": stack_limit,
+    }
+
+
 def compiler() -> str:
     candidate = os.environ.get("CC")
     if candidate and Path(candidate).is_file():
@@ -393,6 +583,7 @@ def main() -> int:
     parser.add_argument(
         "--verify-profile", choices=("full", "micropython-disabled")
     )
+    parser.add_argument("--verify-resources", action="store_true")
     parser.add_argument("--measure-dispatch", action="store_true")
     args = parser.parse_args()
     try:
@@ -406,6 +597,18 @@ def main() -> int:
             )
         if args.measure_dispatch:
             details.append(f"host_dispatch_p99_ns={measure_dispatch(document)}")
+        if args.verify_resources:
+            resources = verify_zero_resources(document)
+            full = resources["profiles"]["full"]
+            disabled = resources["profiles"]["micropython-disabled"]
+            details.append(
+                "zero_resources=passed "
+                f"full_flash_delta={full['flash_delta_bytes']} "
+                f"full_static_ram_delta={full['static_ram_delta_bytes']} "
+                f"micropython_disabled_flash_delta={disabled['flash_delta_bytes']} "
+                "micropython_disabled_static_ram_delta="
+                f"{disabled['static_ram_delta_bytes']}"
+            )
     except (RuntimeError, OSError, KeyError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"[FAIL] Phase 3 baseline: {exc}")
         return 1

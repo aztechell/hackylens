@@ -120,6 +120,49 @@ stage. An error from `stop` does not skip app cleanup. An error from app cleanup
 does not skip runtime owner-wide cleanup. App cleanup is invoked at most once,
 while the context and its owner-scoped handles are still valid.
 
+## Teardown deadline
+
+When teardown is accepted and before entering `STOPPING`, the runtime creates
+exactly one finite absolute monotonic teardown deadline. It obtains monotonic
+time through the same composed public Time Capability provider used by the
+firmware; App Runtime MUST NOT read a raw platform clock or introduce another
+time implementation. Using its private runtime owner and the one composed Time
+handle, it calls public `hk_time_deadline_after_us` exactly once with the finite
+positive `teardown_budget_us` policy value and stores the resulting
+`hk_deadline_t` in the instance context. This runtime handle is not an app grant
+and does not depend on whether the app declared Time. The policy is
+runtime-controlled, build-time validated, and not configurable by `app.toml`,
+an app callback, a provider, or a per-stage setting.
+
+The public SDK exposes the stored value without reading time again:
+
+```c
+hk_result_t hk_app_context_teardown_deadline(
+    const hk_app_context_t *ctx,
+    hk_deadline_t *deadline);
+```
+
+The accessor returns the instance's exact stored deadline during `stop` and app
+`cleanup`; outside teardown it returns `HK_ERR_INVALID_STATE`. It uses the
+public Capability API `hk_deadline_t` directly and does not create an SDK time
+type or a second clock path. If the initial Time Capability observation or
+finite deadline calculation fails, teardown records that diagnostic, stores
+`HK_DEADLINE_IMMEDIATE` as the single already-expired deadline, and continues
+the full sequence.
+
+That one deadline covers `stop(ctx)`, app `cleanup(ctx)`, and runtime owner-wide
+capability/service cleanup together. It MUST NOT be refreshed between stages,
+leases, services, providers, retries, affinity dispatches, or cleanup calls.
+The runtime passes the same stored absolute value to every release and
+owner-close operation even after it expires.
+
+If `stop` or app cleanup consumes or exceeds the deadline, runtime owner-wide
+cleanup MUST still be attempted with the same already-expired absolute
+deadline. A provider that cannot reach its bounded safe state follows Phase 2
+logical-close and quarantine semantics. Timeout or failure cannot skip handle
+and token invalidation, context invalidation, deterministic state clearing, or
+slot retirement/reuse according to the generation rules.
+
 ## Normative teardown order
 
 Teardown order is fixed and MUST NOT be reordered:
@@ -133,10 +176,11 @@ Teardown order is fixed and MUST NOT be reordered:
 6. invalidate the context generation;
 7. make the cleared app state slot reusable.
 
-Provider cleanup is non-cancellable and preserves the original absolute
-teardown deadline. Failed provider cleanup logically closes its leases and
+Provider cleanup is non-cancellable and receives the single stored teardown
+deadline defined above. Failed provider cleanup logically closes its leases and
 quarantines the provider before any new owner can acquire it. State reuse MUST
-NOT occur early merely because app cleanup returned an error.
+NOT occur early merely because app cleanup returned an error or exceeded the
+deadline.
 
 ## Context and handle ownership
 

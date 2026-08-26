@@ -50,6 +50,30 @@ peripheral instance, route, board ID inference, HAL object, or driver pointer.
 Absence and optional fallback are explicit results, never guessed from hardware
 identity.
 
+## Lifecycle teardown deadline access
+
+The SDK declares:
+
+```c
+hk_result_t hk_app_context_teardown_deadline(
+    const hk_app_context_t *ctx,
+    hk_deadline_t *deadline);
+```
+
+During `stop` and app `cleanup`, this accessor returns the one finite absolute
+monotonic deadline stored by App Runtime when teardown began. It returns
+`HK_ERR_INVALID_STATE` outside teardown. Repeated calls return the same
+`hk_deadline_t`; the accessor MUST NOT refresh, extend, partition, or derive a
+per-stage or per-provider deadline.
+
+Stop and cleanup code passes this value unchanged to deadline-aware capability
+and service release operations. It does not call a raw clock, choose a hardware
+timer, or acquire a second Time implementation. App Runtime creates the value
+exactly once through public `hk_time_deadline_after_us`, its private runtime
+owner, the one composed Time Capability provider, and a runtime-controlled
+finite policy budget; the manifest and app cannot configure or extend it. An
+already-expired value remains the required value for later owner-wide cleanup.
+
 ## Ownership and memory
 
 Contexts, handles, surfaces, events, and state views are borrowed for the

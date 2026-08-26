@@ -25,7 +25,7 @@ promote any firmware, protocol, API, or format to stable.
 
 | Axis | Current version | Stability/maturity | Canonical source |
 | --- | --- | --- | --- |
-| Firmware | `0.4.0` | Technology preview; physical qualification in progress | `VERSION` |
+| Firmware | `0.4.0` | Technology preview; Phase 2 physically accepted on SEN0305; Maix Cube compile-conformance-only; general hardware portability not claimed | `VERSION` |
 | HMPY | `1.1.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
 | Board Port Contract | `0.1.0` | Experimental | `BOARD_PORT.md` and board descriptors |
 | Capability API | `0.1.0` | Experimental | `CAPABILITY_API.md` |
