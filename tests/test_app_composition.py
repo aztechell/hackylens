@@ -110,6 +110,9 @@ class AppCompositionTests(unittest.TestCase):
         self.assertIn("check_app_manifests.py --scan-root firmware/src/apps", workflow)
         self.assertIn("gen_app_composition.py --check", workflow)
         self.assertGreaterEqual(workflow.count("check_app_composition.py"), 4)
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("firmware/generated/app_composition/*.json text eol=lf", attributes)
+        self.assertIn("firmware/config/app_config_defaults.h text eol=lf", attributes)
 
 
 if __name__ == "__main__":

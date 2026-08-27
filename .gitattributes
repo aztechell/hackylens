@@ -3,3 +3,5 @@ boards/*/flash_layout.json text eol=lf
 docs/evidence/phase1-*.json text eol=lf
 docs/evidence/phase2-*.json text eol=lf
 docs/evidence/phase3-*.json text eol=lf
+firmware/generated/app_composition/*.json text eol=lf
+firmware/config/app_config_defaults.h text eol=lf
