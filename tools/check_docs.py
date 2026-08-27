@@ -203,6 +203,11 @@ APP_MANIFEST_SCHEMA_REQUIREMENTS = (
         "Native App Manifest schema must keep the complete finite limits table",
     ),
     (
+        r"metadata\.help`?\s+and\s+`?metadata\.debug[\s\S]{0,240}"
+        r"1024\s+UTF-8\s+bytes",
+        "Native App Manifest schema must specify the metadata string bounds",
+    ),
+    (
         r"symlink/junction\s+escape[\s\S]*rejected\s+before\s+compilation",
         "Native App Manifest schema must preserve real-directory path confinement",
     ),

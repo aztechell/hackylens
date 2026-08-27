@@ -160,9 +160,6 @@ def _app_version(value: Any, label: str) -> str:
     match = APP_VERSION_RE.fullmatch(text)
     if match is None:
         raise ManifestError(f"{label}: expected canonical SemVer")
-    core = tuple(int(part) for part in match.groups()[:3])
-    if any(part > 0xFFFF for part in core):
-        raise ManifestError(f"{label}: component exceeds uint16")
     prerelease = match.group(4)
     if prerelease is not None:
         for identifier in prerelease.split("."):

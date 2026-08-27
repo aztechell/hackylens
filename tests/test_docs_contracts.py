@@ -517,6 +517,11 @@ class DocumentationContractsTest(unittest.TestCase):
                 "Firmware may read its TOML input",
                 "remain build-time-only",
             ),
+            (
+                "1024 UTF-8 bytes",
+                "an implementation-defined number of bytes",
+                "metadata string bounds",
+            ),
         )
         for old, new, expected in mutations:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory(

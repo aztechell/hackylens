@@ -80,7 +80,7 @@ and there are no implicit defaults:
 | `capabilities` | table with explicit `required` and `optional` request arrays |
 | `services` | explicit array of app-scoped service declarations; it may be empty |
 | `limits` | complete finite resource and scheduling policy table |
-| `metadata` | non-empty bounded `help` and `debug` strings |
+| `metadata` | table with required `help` and `debug` strings; exact bounds below |
 | `tests` | host-source and build-composition test metadata |
 
 Canonical app and requirement tokens use lowercase ASCII kebab form. An app ID
@@ -94,6 +94,10 @@ an ineligible app explicitly uses ID zero. The validator collision-checks app
 ID, entry, generated symbol, menu order, and every non-zero autostart ID across
 the complete input set.
 
+`metadata.help` and `metadata.debug` are required non-empty trimmed UTF-8
+strings without control characters. Each is limited independently to at most
+1024 UTF-8 bytes.
+
 Each capability request contains exactly:
 
 ```toml
@@ -104,9 +108,10 @@ maximum_exclusive = "0.2.0"
 features = ["events", "state"]
 ```
 
-Versions are canonical numeric `MAJOR.MINOR.PATCH` values whose components fit
-`hk_version_t`. `minimum` is inclusive, precedes the exclusive maximum, and
-the same `(id, instance)` cannot occur twice or be both required and optional.
+Capability request versions are canonical numeric `MAJOR.MINOR.PATCH` values
+whose components fit `hk_version_t`. `minimum` is inclusive, precedes the
+exclusive maximum, and the same `(id, instance)` cannot occur twice or be both
+required and optional.
 The feature array is explicit, duplicate-free, and may be empty. An optional
 request has one additional required lowercase-kebab `fallback` field. This is
 the same range and required-feature-set model as `hk_capability_request_t`; the

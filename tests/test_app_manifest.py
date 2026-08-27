@@ -186,7 +186,24 @@ class AppManifestSchemaTests(unittest.TestCase):
             with self.subTest(old=old, new=new):
                 self.reject_alpha(old, new, expected)
 
-    def test_app_and_capability_versions_are_canonical_and_bounded(self) -> None:
+    def test_app_version_accepts_semver_components_above_uint16(self) -> None:
+        with tempfile.TemporaryDirectory(
+            prefix="hackylens-app-manifest-version-"
+        ) as temp:
+            root = self.copy_fixtures(Path(temp))
+            path = root / ALPHA
+            source = path.read_text(encoding="utf-8")
+            path.write_text(
+                source.replace(
+                    'version = "0.1.0"', 'version = "65536.0.0"', 1
+                ),
+                encoding="utf-8",
+            )
+            model = MANIFEST.validate_tree(root)
+        alpha = next(app for app in model["apps"] if app["id"] == "alpha-tool")
+        self.assertEqual(alpha["version"], "65536.0.0")
+
+    def test_versions_are_canonical_and_capability_versions_are_bounded(self) -> None:
         mutations = (
             ('version = "0.1.0"', 'version = "01.1.0"', "canonical SemVer"),
             ('version = "0.1.0"', 'version = "0.1"', "canonical SemVer"),
@@ -297,6 +314,16 @@ class AppManifestSchemaTests(unittest.TestCase):
                 "unknown=runtime-install",
             ),
             ('help = "Exercises the schema-1 lifecycle-v2 surface."', 'help = ""', "trimmed string"),
+            (
+                'help = "Exercises the schema-1 lifecycle-v2 surface."',
+                'help = "' + ("h" * 1025) + '"',
+                "metadata.help: exceeds 1024 UTF-8 bytes",
+            ),
+            (
+                'debug = "alpha-status"',
+                'debug = "' + ("d" * 1025) + '"',
+                "metadata.debug: exceeds 1024 UTF-8 bytes",
+            ),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
