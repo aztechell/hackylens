@@ -216,7 +216,7 @@ canonical model; malformed manifest падает до compile.
 
 ## 3.3 — Manifest-driven build composition
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -229,18 +229,18 @@ tooling.
 
 ### Scope
 
-- [ ] Добавить manifests для всех текущих feature apps с сохранением stable IDs,
+- [x] Добавить manifests для всех текущих feature apps с сохранением stable IDs,
   menu order, autostart IDs и текущих enable/disable defaults.
-- [ ] Генерировать app source/include set и `HK_ENABLE_APP_*` из manifests.
-- [ ] Перенести данные `firmware/app_requirements.toml` в manifests и удалить его
+- [x] Генерировать app source/include set и `HK_ENABLE_APP_*` из manifests.
+- [x] Перенести данные `firmware/app_requirements.toml` в manifests и удалить его
   как production source of truth.
-- [ ] Capability composition должен читать тот же canonical manifest model, а не
+- [x] Capability composition должен читать тот же canonical manifest model, а не
   собственную копию schema.
-- [ ] Сохранить `--disable-app` и `--require-app`; добавить понятные diagnostics
+- [x] Сохранить `--disable-app` и `--require-app`; добавить понятные diagnostics
   для absent required capability/service.
-- [ ] Доказывать полное исчезновение disabled app sources, private symbols,
+- [x] Доказывать полное исчезновение disabled app sources, private symbols,
   third-party dependencies и resource sections.
-- [ ] Добавить generated-file freshness и deterministic-order checks.
+- [x] Добавить generated-file freshness и deterministic-order checks.
 
 ### Exit gate
 
