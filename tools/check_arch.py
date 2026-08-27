@@ -740,7 +740,8 @@ def layout_failures() -> list[str]:
         ROOT / "tests" / "capability_fake_display.c",
         ROOT / "tests" / "display_contract_harness.c",
         ROOT / "tests" / "test_display_contract.py",
-        ROOT / "firmware" / "app_requirements.toml",
+        ROOT / "firmware" / "generated" / "app_composition" / "composition.json",
+        ROOT / "firmware" / "config" / "app_config_defaults.h",
         ROOT / "firmware" / "capability_consumers.toml",
         ROOT / "platforms" / "k210" / "capabilities.toml",
         ROOT / "tools" / "gen_capability_inventory.py",
@@ -806,9 +807,8 @@ def layout_failures() -> list[str]:
             failures.append(f"apps/{directory}: feature directory is missing")
         if not (module / public).is_file():
             failures.append(f"apps/{directory}/{public}: public app header is missing")
-        marker = f'"{name}": Path("firmware/src/apps/{directory}")'
-        if marker not in manifest:
-            failures.append(f"tools/build_firmware.py: {name} is not directory-gated")
+        if not (module / "app.toml").is_file():
+            failures.append(f"apps/{directory}/app.toml: manifest composition is missing")
     for path in (SRC / "apps").glob("*.[ch]"):
         if path.name not in {"app_registry.c"}:
             failures.append(f"apps/{path.name}: flat app source is forbidden")
@@ -816,6 +816,10 @@ def layout_failures() -> list[str]:
         failures.append("tools/build_firmware.py: quirc is not gated by QR-CAMERA")
     if 'if "apriltag" not in disabled_apps:' not in manifest:
         failures.append("tools/build_firmware.py: AprilTag third party is not gated")
+    if "APP_MANIFEST_MODEL = app_composition.load_model()" not in manifest:
+        failures.append("tools/build_firmware.py: app composition must come from manifests")
+    if (ROOT / "firmware" / "app_requirements.toml").exists():
+        failures.append("firmware/app_requirements.toml: replaced composition source must be removed")
     for path in AI_MODEL_SHARED:
         if not (SRC / path).is_file():
             failures.append(f"{path}: shared AI platform file is missing")

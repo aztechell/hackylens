@@ -220,6 +220,17 @@ APP_MANIFEST_SCHEMA_REQUIREMENTS = (
         r"immutable\s+descriptors\s+only",
         "Native App Manifest schema must remain build-time-only",
     ),
+    (
+        r"hackylens\.service\.legacy-<driver-kind>[\s\S]*"
+        r"MUST\s+NOT\s+generate\s+an\s+SDK/runtime\s+handle[\s\S]*"
+        r"forbidden\s+for\s+lifecycle\s+`v2`",
+        "Native App Manifest must confine transitional legacy services to build composition",
+    ),
+    (
+        r"gen_app_composition\.py\s+--check[\s\S]*missing\s+or\s+stale[\s\S]*"
+        r"same\s+in-memory\s+canonical\s+model",
+        "Native App Manifest must require composition freshness from one canonical model",
+    ),
 )
 
 

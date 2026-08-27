@@ -19,10 +19,11 @@ if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from board_contract import Board, ContractError, load_board
+import app_composition
 
 
 CATALOG_PATH = ROOT / "platforms" / "k210" / "capabilities.toml"
-APP_REQUIREMENTS_PATH = ROOT / "firmware" / "app_requirements.toml"
+APP_MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
 CONSUMER_REQUIREMENTS_PATH = ROOT / "firmware" / "capability_consumers.toml"
 CAPABILITY_ID_RE = re.compile(r"^hackylens\.cap\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 IDENTIFIER_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
@@ -215,46 +216,60 @@ def _request_array(value: Any, label: str, *, optional: bool) -> tuple[Capabilit
     return result
 
 
-def load_app_requirements(path: Path = APP_REQUIREMENTS_PATH,
-                          expected_apps: set[str] | None = None) -> dict[str, Requirements]:
-    raw = _load_toml(path)
-    _strict(raw, {"schema", "apps"}, "app requirements")
-    if raw["schema"] != 2 or isinstance(raw["schema"], bool):
-        raise CapabilityError("app requirements.schema: expected integer 2")
-    apps = raw["apps"]
-    if not isinstance(apps, dict):
-        raise CapabilityError("app requirements.apps: expected table")
+def _manifest_request(value: Mapping[str, Any]) -> CapabilityRequest:
+    return CapabilityRequest(
+        id=str(value["id"]),
+        instance=int(value["instance"]),
+        minimum=parse_version(value["minimum"], "manifest capability minimum"),
+        maximum_exclusive=parse_version(
+            value["maximum_exclusive"], "manifest capability maximum_exclusive"
+        ),
+        features=tuple(str(item) for item in value["features"]),
+        fallback=(str(value["fallback"]) if "fallback" in value else None),
+    )
+
+
+def requirements_from_manifest_model(
+    model: Mapping[str, Any],
+    expected_apps: set[str] | None = None,
+) -> dict[str, Requirements]:
+    apps = {str(app["id"]): app for app in model["apps"]}
     if expected_apps is not None and set(apps) != expected_apps:
-        raise CapabilityError("app requirements: apps must exactly match build app modules")
+        raise CapabilityError("app manifests must exactly match build app modules")
     result: dict[str, Requirements] = {}
-    for app, table in apps.items():
-        _string(app, "app requirements key", IDENTIFIER_RE)
-        if not isinstance(table, dict):
-            raise CapabilityError(f"app requirements {app}: expected table")
-        _strict(table, {"requires", "required_capabilities", "optional_capabilities"},
-                f"app requirements {app}")
-        required = _request_array(table["required_capabilities"],
-                                  f"app requirements {app}.required_capabilities",
-                                  optional=False)
-        optional = _request_array(table["optional_capabilities"],
-                                  f"app requirements {app}.optional_capabilities",
-                                  optional=True)
-        overlap = {(item.id, item.instance) for item in required} & {
-            (item.id, item.instance) for item in optional
-        }
-        if overlap:
-            raise CapabilityError(f"app requirements {app}: request is both required and optional")
+    for app_id, app in apps.items():
+        required = tuple(
+            _manifest_request(item) for item in app["capabilities"]["required"]
+        )
+        optional = tuple(
+            _manifest_request(item) for item in app["capabilities"]["optional"]
+        )
         if len(required) + len(optional) > 16:
             raise CapabilityError(
-                f"app requirements {app}: exceeds fixed 16-grant owner capacity"
+                f"app manifest {app_id}: exceeds fixed 16-grant owner capacity"
             )
-        result[app] = Requirements(
-            legacy=_string_array(table["requires"],
-                                 f"app requirements {app}.requires", IDENTIFIER_RE),
+        legacy = tuple(sorted(
+            str(service["id"])[len(app_composition.LEGACY_SERVICE_PREFIX):]
+            for service in app["services"]
+            if str(service["id"]).startswith(app_composition.LEGACY_SERVICE_PREFIX)
+        ))
+        result[app_id] = Requirements(
+            legacy=legacy,
             required=required,
             optional=optional,
         )
     return result
+
+
+def load_app_requirements(
+    manifest_root: Path = APP_MANIFEST_ROOT,
+    expected_apps: set[str] | None = None,
+) -> dict[str, Requirements]:
+    try:
+        model = app_composition.load_model(manifest_root)
+    except app_composition.CompositionError as exc:
+        raise CapabilityError(str(exc)) from exc
+    return requirements_from_manifest_model(model, expected_apps)
 
 
 def load_consumer_requirements(path: Path = CONSUMER_REQUIREMENTS_PATH) -> dict[str, Requirements]:
@@ -499,7 +514,8 @@ def compose(
     disabled_capabilities: set[str],
     *,
     allow_required_consumer_exclusion: bool = False,
-    app_requirements_path: Path = APP_REQUIREMENTS_PATH,
+    app_manifest_root: Path = APP_MANIFEST_ROOT,
+    app_requirements: Mapping[str, Requirements] | None = None,
     consumer_requirements_path: Path = CONSUMER_REQUIREMENTS_PATH,
     catalog_path: Path = CATALOG_PATH,
     root: Path = ROOT,
@@ -513,7 +529,13 @@ def compose(
     conflict = sorted(required_apps & disabled_apps)
     if conflict:
         raise CapabilityError("app is both disabled and required: " + ", ".join(conflict))
-    apps = load_app_requirements(app_requirements_path, app_ids)
+    apps = (
+        dict(app_requirements)
+        if app_requirements is not None
+        else load_app_requirements(app_manifest_root, app_ids)
+    )
+    if set(apps) != app_ids:
+        raise CapabilityError("app requirements must exactly match build app modules")
     consumers = load_consumer_requirements(consumer_requirements_path)
     catalog = load_catalog(catalog_path, root=root)
     known_requests = {(item.id, item.instance) for item in catalog}

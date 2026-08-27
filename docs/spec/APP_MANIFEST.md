@@ -123,6 +123,16 @@ state app-scoped before any service handle is generated. Schema validation does
 not assert that a selected board provides the service; build composition makes
 that decision later.
 
+Until the corresponding public service/capability migration exists, a
+`lifecycle = "legacy"` app MAY declare a transitional build-only service named
+`hackylens.service.legacy-<driver-kind>`. It preserves an existing Phase 2
+driver-availability exclusion while the legacy implementation remains linked.
+Such a declaration MUST NOT generate an SDK/runtime handle, grant raw hardware
+access, or publish a future Camera/Storage API. It is forbidden for lifecycle
+`v2`; migration removes it in favour of the versioned public capability or
+app-scoped service. This compatibility form is the only representation of the
+former private `firmware/app_requirements.toml` `requires` values.
+
 The `limits` table contains exactly these positive integers:
 
 | Field | Portable schema-1 ceiling | Additional rule |
@@ -180,6 +190,12 @@ Generated output is deterministic, ordered by explicit stable keys, and checked
 for freshness. Descriptors are read-only for the entire boot and expose no
 board routes, pins, peripheral instances, provider vtables, drivers, or HAL
 objects.
+
+`python tools/gen_app_composition.py --check` validates the production manifest
+set, recomputes the source/include and `HK_ENABLE_APP_*` composition, and fails
+when a committed generated composition file is missing or stale. Capability
+composition consumes this same in-memory canonical model; it does not parse a
+second app-requirements schema.
 
 ## Native app manifest versus Phase 4 Project Format
 

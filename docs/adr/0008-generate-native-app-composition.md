@@ -71,10 +71,11 @@ This adds `hackylens.native-app-manifest` `0.1.0 experimental`, schema major `1`
 compatible with App Runtime, Feature App SDK, and Capability API `0.1.x` through
 exclusive upper bound `0.2.0`.
 
-The private Phase 2 requirements schema and manual registry remain unchanged in
-package 3.1. Packages 3.2-3.4 replace them only after validators, generated
-composition, and legacy-adapter parity pass. Project Format remains unpublished
-and independent.
+The private Phase 2 requirements schema and manual registry remained unchanged
+in package 3.1. Package 3.3 replaces the requirements schema and manual app
+source/enable lists after validator and disabled-build parity; the manual
+registry remains until generated-descriptor/legacy-adapter parity in 3.4.
+Project Format remains unpublished and independent.
 
 ## Evidence
 
@@ -84,8 +85,9 @@ and independent.
   Phase 3 contract metadata.
 - Architecture policy names manifest and generated-registry layers without an
   app-specific allowlist.
-- Generator determinism, disabled-source isolation, and registry parity are
-  required in later packages before manual tables are removed.
+- Package 3.3 checks generator freshness and deterministic order and proves
+  disabled source/third-party isolation. Registry parity remains the 3.4 gate
+  before the manual registry is removed.
 
 ## References
 

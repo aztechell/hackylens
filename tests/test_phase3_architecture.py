@@ -22,6 +22,8 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
             "firmware/src/apps/example/app.toml": "manifest",
             "firmware/generated/app_registry/registry.c":
                 "generated-app-registry",
+            "firmware/generated/app_composition/composition.json":
+                "generated-app-composition",
             "firmware/src/apps/example/example_app.c": "app",
         }
         for path, layer in expected.items():

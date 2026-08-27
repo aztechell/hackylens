@@ -60,6 +60,10 @@ name = "generated-app-registry"
 paths = ["firmware/generated/app_registry/**"]
 
 [[layers]]
+name = "generated-app-composition"
+paths = ["firmware/generated/app_composition/**"]
+
+[[layers]]
 name = "adapter"
 paths = ["firmware/src/adapters/**"]
 
@@ -136,6 +140,7 @@ to = [
   "app-runtime",
   "manifest",
   "generated-app-registry",
+  "generated-app-composition",
 ]
 reason = "apps must use public capabilities or portable boundaries"
 
@@ -147,6 +152,7 @@ to = [
   "manifest",
   "app-runtime",
   "generated-app-registry",
+  "generated-app-composition",
   "capability-implementation",
   "service",
   "storage",

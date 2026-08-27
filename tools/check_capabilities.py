@@ -38,10 +38,10 @@ def validate(root: Path = ROOT) -> list[str]:
     failures: list[str] = []
     try:
         catalog_path = root / "platforms" / "k210" / "capabilities.toml"
-        apps_path = root / "firmware" / "app_requirements.toml"
+        apps_root = root / "firmware" / "src" / "apps"
         consumers_path = root / "firmware" / "capability_consumers.toml"
         catalog = generator.load_catalog(catalog_path, root=root)
-        apps = generator.load_app_requirements(apps_path)
+        apps = generator.load_app_requirements(apps_root)
         generator.load_consumer_requirements(consumers_path)
         if {item.id for item in catalog} != INITIAL_IDS:
             failures.append("platform capability catalog must contain exactly the five initial IDs")
@@ -52,14 +52,14 @@ def validate(root: Path = ROOT) -> list[str]:
             board = load_board(board_id, root=root)
             first = generator.compose(
                 board, set(apps), set(), set(), set(),
-                app_requirements_path=apps_path,
+                app_manifest_root=apps_root,
                 consumer_requirements_path=consumers_path,
                 catalog_path=catalog_path,
                 root=root,
             )
             second = generator.compose(
                 board, set(apps), set(), set(), set(),
-                app_requirements_path=apps_path,
+                app_manifest_root=apps_root,
                 consumer_requirements_path=consumers_path,
                 catalog_path=catalog_path,
                 root=root,
@@ -109,7 +109,7 @@ def validate(root: Path = ROOT) -> list[str]:
             "hackylens.cap.time"
         ]:
             failures.append("Cube conformance inventory must keep Input absent")
-        for app, requirements in generator.load_app_requirements(apps_path).items():
+        for app, requirements in generator.load_app_requirements(apps_root).items():
             if "display" in requirements.legacy:
                 failures.append(f"{app}: private display requirement survived Phase 2.8")
             if not any(
@@ -121,7 +121,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 failures.append(f"{app}: private buttons requirement survived Phase 2.5")
             if not any(
                 request.id == "hackylens.cap.input"
-                and request.features == ("state", "events", "debounced-buttons")
+                and set(request.features) == {"state", "events", "debounced-buttons"}
                 for request in requirements.required
             ):
                 failures.append(f"{app}: canonical required Input capability is missing")
@@ -129,7 +129,7 @@ def validate(root: Path = ROOT) -> list[str]:
             "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "settings", "sleep", "micropython",
         }
-        for app, requirements in generator.load_app_requirements(apps_path).items():
+        for app, requirements in generator.load_app_requirements(apps_root).items():
             if "lights" in requirements.legacy:
                 failures.append(f"{app}: private lights requirement survived Phase 2.6")
             if app in lights_apps and not any(

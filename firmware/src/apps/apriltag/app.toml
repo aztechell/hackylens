@@ -1,0 +1,45 @@
+schema = 1
+id = "apriltag"
+name = "APRILTAG"
+version = "0.1.0"
+entry = "apriltag_enter"
+generated_symbol = "hk_generated_app_apriltag"
+lifecycle = "legacy"
+sources = ["apriltag_app.c", "apriltag_controller.c", "apriltag_detector.c", "apriltag_settings.c", "apriltag_settings_menu.c", "apriltag_view.c"]
+private_includes = []
+services = [
+  { id = "hackylens.service.legacy-camera", namespace = "apriltag.legacy-camera" },
+]
+
+[menu]
+visible = true
+order = 5
+
+[autostart]
+eligible = true
+id = 5
+
+[capabilities]
+required = [
+  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+  { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
+]
+optional = []
+
+[limits]
+static_ram_bytes = 1048576
+stack_bytes = 16384
+state_bytes = 262144
+tick_interval_us = 1000
+tick_budget_us = 1000
+render_budget_us = 10000
+
+[metadata]
+help = "APRILTAG legacy feature app."
+debug = "HKTAG/HKTAGINFO"
+
+[tests]
+host_sources = ["apriltag_app.c"]
+build_profiles = ["full", "disabled"]

@@ -97,9 +97,10 @@ experimental`. Board Port remains `0.1.0` because descriptors, required files,
 and public board semantics do not change. HMPY remains `1.1.0` with wire-major
 `1`; `HELLO.board` remains identity only.
 
-`app_requirements.toml` schema 2 is private build metadata, not a public app
-manifest. Phase 3 may generate equivalent requests from its future manifest
-without changing the Capability API inventory or acquisition semantics.
+`app_requirements.toml` schema 2 was private build metadata, not a public app
+manifest. Phase 3.3 removed it after moving equivalent requests into canonical
+Native App Manifests; this does not change the Capability API inventory or
+acquisition semantics.
 
 ## Evidence
 

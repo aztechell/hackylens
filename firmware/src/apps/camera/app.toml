@@ -1,0 +1,46 @@
+schema = 1
+id = "camera"
+name = "CAMERA"
+version = "0.1.0"
+entry = "camera_enter"
+generated_symbol = "hk_generated_app_camera"
+lifecycle = "legacy"
+sources = ["camera_app.c", "camera_controller.c", "camera_photo_capture.c", "camera_photo_controller.c", "camera_photo_encode.c", "camera_photo_format.c", "camera_photo_path.c", "camera_photo_service.c", "camera_photo_writer.c", "camera_settings.c", "camera_settings_menu.c", "camera_view.c"]
+private_includes = []
+services = [
+  { id = "hackylens.service.legacy-camera", namespace = "camera.legacy-camera" },
+  { id = "hackylens.service.legacy-sd-card", namespace = "camera.legacy-sd-card" },
+]
+
+[menu]
+visible = true
+order = 2
+
+[autostart]
+eligible = true
+id = 2
+
+[capabilities]
+required = [
+  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+  { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
+]
+optional = []
+
+[limits]
+static_ram_bytes = 1048576
+stack_bytes = 16384
+state_bytes = 262144
+tick_interval_us = 1000
+tick_budget_us = 1000
+render_budget_us = 10000
+
+[metadata]
+help = "CAMERA legacy feature app."
+debug = "HKCAMERA"
+
+[tests]
+host_sources = ["camera_app.c"]
+build_profiles = ["full", "disabled"]

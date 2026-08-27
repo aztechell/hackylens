@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,7 +37,7 @@ class CapabilityCompositionTests(unittest.TestCase):
 
     def fixture(self, directory: str, *, required: str = "",
                 optional: str = "", provider_symbol: bool = True,
-                catalog_suffix: str = "", routes: str = "[]") -> tuple[Path, Path, Path, Path]:
+                catalog_suffix: str = "", routes: str = "[]") -> tuple[Path, Path, dict[str, generator.Requirements], Path]:
         root = Path(directory)
         source = root / "platforms" / "k210" / "capabilities" / "time_adapter.c"
         source.parent.mkdir(parents=True)
@@ -70,13 +71,23 @@ max_leases = 16
             catalog_text + catalog_suffix,
             encoding="utf-8",
         )
-        apps = root / "apps.toml"
-        apps.write_text(
-            "schema = 2\n[apps.test]\nrequires = []\n"
-            f"required_capabilities = [{required}]\n"
-            f"optional_capabilities = [{optional}]\n",
-            encoding="utf-8",
-        )
+        required_values = tomllib.loads(
+            f"values = [{required}]\n"
+        )["values"] if required else []
+        optional_values = tomllib.loads(
+            f"values = [{optional}]\n"
+        )["values"] if optional else []
+        apps = {
+            "test": generator.Requirements(
+                legacy=(),
+                required=generator._request_array(
+                    required_values, "fixture.required", optional=False
+                ),
+                optional=generator._request_array(
+                    optional_values, "fixture.optional", optional=True
+                ),
+            )
+        }
         consumers = root / "consumers.toml"
         consumers.write_text(
             "schema = 1\n[consumers.runtime]\nkind = \"runtime\"\n"
@@ -85,14 +96,14 @@ max_leases = 16
         )
         return root, catalog, apps, consumers
 
-    def compose_fixture(self, fixture: tuple[Path, Path, Path, Path],
+    def compose_fixture(self, fixture: tuple[Path, Path, dict[str, generator.Requirements], Path],
                         *, required_apps: set[str] | None = None,
                         disabled_capabilities: set[str] | None = None):
         root, catalog, apps, consumers = fixture
         return generator.compose(
             self.runtime, {"test"}, set(), required_apps or set(),
             disabled_capabilities or set(), root=root, catalog_path=catalog,
-            app_requirements_path=apps,
+            app_requirements=apps,
             consumer_requirements_path=consumers,
         )
 

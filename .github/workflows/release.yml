@@ -77,6 +77,9 @@ jobs:
           Invoke-NativeChecked git diff --check $diffRange
           Invoke-NativeChecked python tools/check_docs.py
           Invoke-NativeChecked python tools/check_app_manifests.py --scan-root tests/fixtures/app_manifests/valid --output build/app-manifests.json
+          Invoke-NativeChecked python tools/check_app_manifests.py --scan-root firmware/src/apps --output build/firmware-app-manifests.json
+          Invoke-NativeChecked python tools/gen_app_composition.py --check
+          Invoke-NativeChecked python tools/check_app_composition.py
           Invoke-NativeChecked python tools/check_phase2_evidence.py
           Invoke-NativeChecked python tools/check_phase3_baseline.py --measure-dispatch
           if (Test-Path -LiteralPath docs/evidence/phase2-hardware-smoke.json) {
@@ -110,6 +113,7 @@ jobs:
             Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-capability $capability
             Invoke-NativeChecked python tools/check_phase2_resources.py --capture-diagnostic $capability
           }
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
           Invoke-NativeChecked python tools/build_firmware.py conformance --board sipeed-maix-cube
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-conformance
 
@@ -127,6 +131,7 @@ jobs:
           Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile micropython-disabled
           Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile micropython-disabled
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile micropython-disabled
 
       - name: Build full firmware and verify feature symbols
@@ -143,6 +148,7 @@ jobs:
           Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile full
           Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
           Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile full
           Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-resources
 

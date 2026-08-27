@@ -283,6 +283,11 @@ class AppManifestSchemaTests(unittest.TestCase):
                 "services.*invalid value",
             ),
             (
+                'id = "hackylens.service.settings"',
+                'id = "hackylens.service.legacy-camera"',
+                "transitional legacy services require lifecycle=legacy",
+            ),
+            (
                 'namespace = "alpha-tool.settings"',
                 'namespace = "other-app.settings"',
                 "must be scoped below",

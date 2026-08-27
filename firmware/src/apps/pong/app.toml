@@ -1,0 +1,42 @@
+schema = 1
+id = "pong"
+name = "PONG"
+version = "0.1.0"
+entry = "pong_enter"
+generated_symbol = "hk_generated_app_pong"
+lifecycle = "legacy"
+sources = ["pong_app.c", "pong_controller.c", "pong_view.c"]
+private_includes = []
+services = []
+
+[menu]
+visible = true
+order = 9
+
+[autostart]
+eligible = true
+id = 8
+
+[capabilities]
+required = [
+  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
+  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
+  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
+]
+optional = []
+
+[limits]
+static_ram_bytes = 1048576
+stack_bytes = 16384
+state_bytes = 262144
+tick_interval_us = 10000
+tick_budget_us = 1000
+render_budget_us = 10000
+
+[metadata]
+help = "PONG legacy feature app."
+debug = "No app-specific debug commands."
+
+[tests]
+host_sources = ["pong_app.c"]
+build_profiles = ["full", "disabled"]

@@ -27,6 +27,7 @@ from firmware_attestation import (
 )
 from gen_board import generate as generate_board
 from gen_flash_layout import load_validated, partition_by_name
+import app_composition
 import gen_capability_inventory as capability_inventory
 
 WORKSPACE = ROOT.parent
@@ -45,50 +46,42 @@ SEMVER_RE = re.compile(
     r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 )
 
+APP_MANIFEST_MODEL = app_composition.load_model()
+APP_MANIFESTS = app_composition.app_map(APP_MANIFEST_MODEL)
 APP_MODULES = {
-    "terminal": "HK_ENABLE_APP_TERMINAL",
-    "camera": "HK_ENABLE_APP_CAMERA",
-    "qr-camera": "HK_ENABLE_APP_QR_CAMERA",
-    "face-detect": "HK_ENABLE_APP_FACE_DETECT",
-    "apriltag": "HK_ENABLE_APP_APRILTAG",
-    "object-detect": "HK_ENABLE_APP_OBJECT_DETECT",
-    "files": "HK_ENABLE_APP_FILES",
-    "buttons": "HK_ENABLE_APP_BUTTONS",
-    "pong": "HK_ENABLE_APP_PONG",
-    "settings": "HK_ENABLE_APP_SETTINGS",
-    "sleep": "HK_ENABLE_APP_SLEEP",
-    "micropython": "HK_ENABLE_APP_MICROPYTHON",
+    app_id: app_composition.enable_definition(app_id)
+    for app_id in APP_MANIFESTS
 }
-
 APP_SOURCE_DIRS = {
-    "terminal": Path("firmware/src/apps/terminal"),
-    "camera": Path("firmware/src/apps/camera"),
-    "qr-camera": Path("firmware/src/apps/qr_camera"),
-    "face-detect": Path("firmware/src/apps/face_detect"),
-    "apriltag": Path("firmware/src/apps/apriltag"),
-    "object-detect": Path("firmware/src/apps/object_detect"),
-    "files": Path("firmware/src/apps/files"),
-    "buttons": Path("firmware/src/apps/buttons"),
-    "pong": Path("firmware/src/apps/pong"),
-    "settings": Path("firmware/src/apps/settings"),
-    "sleep": Path("firmware/src/apps/sleep"),
-    "micropython": Path("firmware/src/apps/micropython"),
+    app_id: Path("firmware/src/apps") / str(app["directory"])
+    for app_id, app in APP_MANIFESTS.items()
+}
+APP_SOURCE_FILES = {
+    app_id: frozenset(directory / source for source in APP_MANIFESTS[app_id]["sources"])
+    for app_id, directory in APP_SOURCE_DIRS.items()
 }
 if set(APP_MODULES) != ATTESTED_FULL_APP_IDS:
     raise RuntimeError(
         "build app registry does not match firmware-attestation full composition"
     )
 
-APP_REQUIREMENTS_PATH = ROOT / "firmware" / "app_requirements.toml"
-
-
-def load_app_requirements(path: Path = APP_REQUIREMENTS_PATH) -> dict[str, set[str]]:
-    """Compatibility view of schema-2 legacy private resource requirements."""
+def load_app_requirements() -> dict[str, set[str]]:
+    """Compatibility view of manifest-declared legacy build requirements."""
 
     requirements = capability_inventory.load_app_requirements(
-        path, set(APP_MODULES)
+        app_composition.MANIFEST_ROOT, set(APP_MODULES)
     )
     return {app: set(value.legacy) for app, value in requirements.items()}
+
+
+def apps_requiring_legacy(requirement: str) -> frozenset[str]:
+    return frozenset(
+        app_id for app_id, requirements in load_app_requirements().items()
+        if requirement in requirements
+    )
+
+
+CAMERA_APP_IDS = apps_requiring_legacy("camera")
 
 
 def compose_capabilities(
@@ -468,11 +461,11 @@ def copy_tree_files(src: Path, dst: Path) -> None:
 
 def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
     disabled_dirs = {APP_SOURCE_DIRS[app] for app in disabled_apps}
-    camera_feature_enabled = ("camera" not in disabled_apps or
-                              "qr-camera" not in disabled_apps or
-                              "face-detect" not in disabled_apps or
-                              "apriltag" not in disabled_apps or
-                              "object-detect" not in disabled_apps)
+    enabled_app_sources = set().union(*(
+        APP_SOURCE_FILES[app]
+        for app in APP_MODULES if app not in disabled_apps
+    )) if set(APP_MODULES) - disabled_apps else set()
+    camera_feature_enabled = bool(CAMERA_APP_IDS - disabled_apps)
     camera_ai_input_enabled = ("face-detect" not in disabled_apps or
                                "object-detect" not in disabled_apps)
     core1_executor_enabled = ("apriltag" not in disabled_apps or
@@ -483,11 +476,18 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
         if not path.is_file():
             continue
         rel = path.relative_to(ROOT)
-        if rel.suffix == ".inc":
+        if rel.suffix in {".inc", ".toml"}:
             continue
         if any(rel.is_relative_to(disabled_dir) for disabled_dir in disabled_dirs):
             print(f"[SKIP] disabled app source {rel}")
             continue
+        containing_apps = [
+            app for app, directory in APP_SOURCE_DIRS.items()
+            if rel.is_relative_to(directory)
+        ]
+        if containing_apps and rel.suffix.casefold() in {".c", ".cc", ".cpp", ".cxx"}:
+            if rel not in enabled_app_sources:
+                raise RuntimeError(f"undeclared app translation unit: {rel}")
         if not camera_ai_input_enabled and rel in CAMERA_AI_INPUT_SOURCE_MODULES:
             print(f"[SKIP] unused camera AI input source {rel}")
             continue
@@ -511,11 +511,7 @@ def stage_platform_sources(
     disabled_apps: set[str],
     capability_composition: capability_inventory.Composition,
 ) -> None:
-    camera_feature_enabled = ("camera" not in disabled_apps or
-                              "qr-camera" not in disabled_apps or
-                              "face-detect" not in disabled_apps or
-                              "apriltag" not in disabled_apps or
-                              "object-detect" not in disabled_apps)
+    camera_feature_enabled = bool(CAMERA_APP_IDS - disabled_apps)
     micropython_feature_enabled = "micropython" not in disabled_apps
     provider_sources = {
         Path(item.provider_source) for item in capability_inventory.load_catalog()
@@ -604,6 +600,10 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
         shutil.copy2(header, stage / header.name)
     shutil.copy2(ROOT / "firmware" / "config" / "hk_config_default.h", stage / "hk_config_default.h")
+    shutil.copy2(
+        app_composition.GENERATED_DEFAULTS,
+        stage / "app_config_defaults.h",
+    )
 
     if "qr-camera" not in disabled_apps:
         quirc = ROOT / "firmware" / "third_party" / "quirc"

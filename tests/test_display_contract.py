@@ -114,10 +114,9 @@ class DisplayContractTests(unittest.TestCase):
             self.assertIn(required, contract)
 
     def test_phase_2_8_enters_production_through_the_capability(self) -> None:
-        for manifest in (
-            ROOT / "firmware" / "app_requirements.toml",
-            ROOT / "firmware" / "capability_consumers.toml",
-        ):
+        manifests = list((ROOT / "firmware" / "src" / "apps").glob("*/app.toml"))
+        manifests.append(ROOT / "firmware" / "capability_consumers.toml")
+        for manifest in manifests:
             self.assertIn(
                 "hackylens.cap.display",
                 manifest.read_text(encoding="utf-8"),

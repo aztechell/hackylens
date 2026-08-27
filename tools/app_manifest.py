@@ -18,6 +18,7 @@ CAPABILITY_ID_RE = re.compile(
 SERVICE_ID_RE = re.compile(
     r"^hackylens\.service\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
 )
+LEGACY_SERVICE_PREFIX = "hackylens.service.legacy-"
 TOKEN_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 C_SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 RELEASE_VERSION_RE = re.compile(
@@ -378,6 +379,18 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
             f"{path}: capability cannot be both required and optional"
         )
 
+    lifecycle = _string(
+        table["lifecycle"], f"{path}: lifecycle", pattern=TOKEN_RE
+    )
+    services = _services(table["services"], f"{path}: services", app_id)
+    if lifecycle != "legacy" and any(
+        service["id"].startswith(LEGACY_SERVICE_PREFIX)
+        for service in services
+    ):
+        raise ManifestError(
+            f"{path}: transitional legacy services require lifecycle=legacy"
+        )
+
     limits = _strict(table["limits"], LIMIT_FIELDS, f"{path}: limits")
     static_ram = _integer(
         limits["static_ram_bytes"], f"{path}: limits.static_ram_bytes",
@@ -441,9 +454,7 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
             table["generated_symbol"], f"{path}: generated_symbol",
             pattern=C_SYMBOL_RE,
         ),
-        "lifecycle": _string(
-            table["lifecycle"], f"{path}: lifecycle", pattern=TOKEN_RE
-        ),
+        "lifecycle": lifecycle,
         "sources": sources,
         "private_includes": private_includes,
         "menu": {
@@ -452,7 +463,7 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         },
         "autostart": {"eligible": autostart_eligible, "id": autostart_id},
         "capabilities": {"required": required, "optional": optional},
-        "services": _services(table["services"], f"{path}: services", app_id),
+        "services": services,
         "limits": {
             "static_ram_bytes": static_ram,
             "stack_bytes": stack,

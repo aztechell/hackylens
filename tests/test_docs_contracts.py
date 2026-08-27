@@ -522,6 +522,16 @@ class DocumentationContractsTest(unittest.TestCase):
                 "an implementation-defined number of bytes",
                 "metadata string bounds",
             ),
+            (
+                "MUST NOT generate an SDK/runtime handle",
+                "may generate a runtime handle",
+                "confine transitional legacy services",
+            ),
+            (
+                "python tools/gen_app_composition.py --check",
+                "an unspecified generator command",
+                "composition freshness from one canonical model",
+            ),
         )
         for old, new, expected in mutations:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory(

@@ -109,10 +109,10 @@ Platform phase.
 
 Runtime needs such as time and boot/recovery use private internal C facades.
 They are not versioned public contracts, capabilities, SDK APIs, or discovery
-surfaces. The separate `firmware/app_requirements.toml` is build-time-only: it
-may exclude an incompatible app with a machine-readable reason, but MUST NOT
-provide runtime hardware access. `--require-app` turns such an exclusion into
-a build error.
+surfaces. Native App Manifests are the sole app-composition input. Transitional
+`hackylens.service.legacy-*` declarations preserve only the former Phase 2
+driver-availability exclusions; they MUST NOT provide runtime hardware access.
+`--require-app` turns such an exclusion into a build error.
 
 ## Layout and artifact safety
 

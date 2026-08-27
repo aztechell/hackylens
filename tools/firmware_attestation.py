@@ -15,6 +15,7 @@ import re
 from typing import Any
 
 from board_contract import Board
+import app_composition
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,20 +24,9 @@ ATTESTATION_TYPE = "hackylens-firmware-build"
 FULL_BUILD_PROFILE = "hackylens-full"
 FEATURE_BUILD_PROFILE = "hackylens-feature-modified"
 FAULT_BUILD_PROFILE = "hackylens-wdt-fault-injection"
-FULL_APP_IDS = frozenset({
-    "terminal",
-    "camera",
-    "qr-camera",
-    "face-detect",
-    "apriltag",
-    "object-detect",
-    "files",
-    "buttons",
-    "pong",
-    "settings",
-    "sleep",
-    "micropython",
-})
+FULL_APP_IDS = frozenset(
+    app["id"] for app in app_composition.load_model()["apps"]
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ROOT_FIELDS = {
     "schema",

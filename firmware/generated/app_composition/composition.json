@@ -1,0 +1,815 @@
+{
+  "apps": [
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us",
+              "sleep-until"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/apriltag",
+      "enable_definition": "HK_ENABLE_APP_APRILTAG",
+      "id": "apriltag",
+      "legacy_requirements": [
+        "camera"
+      ],
+      "private_includes": [
+        "firmware/src/apps/apriltag"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-camera",
+          "namespace": "apriltag.legacy-camera"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/apriltag/apriltag_app.c",
+        "firmware/src/apps/apriltag/apriltag_controller.c",
+        "firmware/src/apps/apriltag/apriltag_detector.c",
+        "firmware/src/apps/apriltag/apriltag_settings.c",
+        "firmware/src/apps/apriltag/apriltag_settings_menu.c",
+        "firmware/src/apps/apriltag/apriltag_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/buttons",
+      "enable_definition": "HK_ENABLE_APP_BUTTONS",
+      "id": "buttons",
+      "legacy_requirements": [],
+      "private_includes": [
+        "firmware/src/apps/buttons"
+      ],
+      "services": [],
+      "sources": [
+        "firmware/src/apps/buttons/buttons_app.c",
+        "firmware/src/apps/buttons/buttons_controller.c",
+        "firmware/src/apps/buttons/buttons_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us",
+              "sleep-until"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/camera",
+      "enable_definition": "HK_ENABLE_APP_CAMERA",
+      "id": "camera",
+      "legacy_requirements": [
+        "camera",
+        "sd-card"
+      ],
+      "private_includes": [
+        "firmware/src/apps/camera"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-camera",
+          "namespace": "camera.legacy-camera"
+        },
+        {
+          "id": "hackylens.service.legacy-sd-card",
+          "namespace": "camera.legacy-sd-card"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/camera/camera_app.c",
+        "firmware/src/apps/camera/camera_controller.c",
+        "firmware/src/apps/camera/camera_photo_capture.c",
+        "firmware/src/apps/camera/camera_photo_controller.c",
+        "firmware/src/apps/camera/camera_photo_encode.c",
+        "firmware/src/apps/camera/camera_photo_format.c",
+        "firmware/src/apps/camera/camera_photo_path.c",
+        "firmware/src/apps/camera/camera_photo_service.c",
+        "firmware/src/apps/camera/camera_photo_writer.c",
+        "firmware/src/apps/camera/camera_settings.c",
+        "firmware/src/apps/camera/camera_settings_menu.c",
+        "firmware/src/apps/camera/camera_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/face_detect",
+      "enable_definition": "HK_ENABLE_APP_FACE_DETECT",
+      "id": "face-detect",
+      "legacy_requirements": [
+        "camera",
+        "sd-card"
+      ],
+      "private_includes": [
+        "firmware/src/apps/face_detect"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-camera",
+          "namespace": "face-detect.legacy-camera"
+        },
+        {
+          "id": "hackylens.service.legacy-sd-card",
+          "namespace": "face-detect.legacy-sd-card"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/face_detect/face_detect_app.c",
+        "firmware/src/apps/face_detect/face_detect_controller.c",
+        "firmware/src/apps/face_detect/face_detect_detector.c",
+        "firmware/src/apps/face_detect/face_detect_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/files",
+      "enable_definition": "HK_ENABLE_APP_FILES",
+      "id": "files",
+      "legacy_requirements": [
+        "sd-card"
+      ],
+      "private_includes": [
+        "firmware/src/apps/files"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-sd-card",
+          "namespace": "files.legacy-sd-card"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/files/file_browser_state.c",
+        "firmware/src/apps/files/file_delete.c",
+        "firmware/src/apps/files/file_dir.c",
+        "firmware/src/apps/files/file_preview.c",
+        "firmware/src/apps/files/files_actions.c",
+        "firmware/src/apps/files/files_app.c",
+        "firmware/src/apps/files/files_backend.c",
+        "firmware/src/apps/files/files_controller.c",
+        "firmware/src/apps/files/files_presenter.c",
+        "firmware/src/apps/files/files_view.c",
+        "firmware/src/apps/files/image_decode_bmp.c",
+        "firmware/src/apps/files/image_decode_common.c",
+        "firmware/src/apps/files/image_decode_gif.c",
+        "firmware/src/apps/files/image_decode_png.c",
+        "firmware/src/apps/files/image_decode_png_inflate.c",
+        "firmware/src/apps/files/image_decode_ppm.c",
+        "firmware/src/apps/files/image_decode_raw.c",
+        "firmware/src/apps/files/image_viewer.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "i2c-controller",
+              "uart"
+            ],
+            "id": "hackylens.cap.external-link",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us",
+              "sleep-until"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/micropython",
+      "enable_definition": "HK_ENABLE_APP_MICROPYTHON",
+      "id": "micropython",
+      "legacy_requirements": [
+        "internal-flash"
+      ],
+      "private_includes": [
+        "firmware/src/apps/micropython"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-internal-flash",
+          "namespace": "micropython.legacy-internal-flash"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/micropython/micropython_app.c",
+        "firmware/src/apps/micropython/micropython_bindings.c",
+        "firmware/src/apps/micropython/micropython_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/object_detect",
+      "enable_definition": "HK_ENABLE_APP_OBJECT_DETECT",
+      "id": "object-detect",
+      "legacy_requirements": [
+        "camera",
+        "sd-card"
+      ],
+      "private_includes": [
+        "firmware/src/apps/object_detect"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-camera",
+          "namespace": "object-detect.legacy-camera"
+        },
+        {
+          "id": "hackylens.service.legacy-sd-card",
+          "namespace": "object-detect.legacy-sd-card"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/object_detect/object_detect_app.c",
+        "firmware/src/apps/object_detect/object_detect_controller.c",
+        "firmware/src/apps/object_detect/object_detect_detector.c",
+        "firmware/src/apps/object_detect/object_detect_labels.c",
+        "firmware/src/apps/object_detect/object_detect_postprocess.c",
+        "firmware/src/apps/object_detect/object_detect_settings.c",
+        "firmware/src/apps/object_detect/object_detect_settings_menu.c",
+        "firmware/src/apps/object_detect/object_detect_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/pong",
+      "enable_definition": "HK_ENABLE_APP_PONG",
+      "id": "pong",
+      "legacy_requirements": [],
+      "private_includes": [
+        "firmware/src/apps/pong"
+      ],
+      "services": [],
+      "sources": [
+        "firmware/src/apps/pong/pong_app.c",
+        "firmware/src/apps/pong/pong_controller.c",
+        "firmware/src/apps/pong/pong_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/qr_camera",
+      "enable_definition": "HK_ENABLE_APP_QR_CAMERA",
+      "id": "qr-camera",
+      "legacy_requirements": [
+        "camera",
+        "sd-card"
+      ],
+      "private_includes": [
+        "firmware/src/apps/qr_camera"
+      ],
+      "services": [
+        {
+          "id": "hackylens.service.legacy-camera",
+          "namespace": "qr-camera.legacy-camera"
+        },
+        {
+          "id": "hackylens.service.legacy-sd-card",
+          "namespace": "qr-camera.legacy-sd-card"
+        }
+      ],
+      "sources": [
+        "firmware/src/apps/qr_camera/qr_camera_app.c",
+        "firmware/src/apps/qr_camera/qr_camera_controller.c",
+        "firmware/src/apps/qr_camera/qr_camera_frame_adapter.c",
+        "firmware/src/apps/qr_camera/qr_camera_view.c",
+        "firmware/src/apps/qr_camera/qr_decoder_engine.c",
+        "firmware/src/apps/qr_camera/qr_luma.c",
+        "firmware/src/apps/qr_camera/qr_result_controller.c",
+        "firmware/src/apps/qr_camera/qr_result_state.c",
+        "firmware/src/apps/qr_camera/qr_result_view.c",
+        "firmware/src/apps/qr_camera/qr_service.c",
+        "firmware/src/apps/qr_camera/qr_settings.c",
+        "firmware/src/apps/qr_camera/qr_settings_menu.c",
+        "firmware/src/apps/qr_camera/qr_text_path.c",
+        "firmware/src/apps/qr_camera/qr_text_writer.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [
+          {
+            "fallback": "hide-external-link-menu",
+            "features": [
+              "i2c-target",
+              "uart"
+            ],
+            "id": "hackylens.cap.external-link",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "backlight",
+              "illumination",
+              "rgb"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/settings",
+      "enable_definition": "HK_ENABLE_APP_SETTINGS",
+      "id": "settings",
+      "legacy_requirements": [],
+      "private_includes": [
+        "firmware/src/apps/settings"
+      ],
+      "services": [],
+      "sources": [
+        "firmware/src/apps/settings/settings_app.c",
+        "firmware/src/apps/settings/settings_controller.c",
+        "firmware/src/apps/settings/settings_menu.c",
+        "firmware/src/apps/settings/settings_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "backlight"
+            ],
+            "id": "hackylens.cap.lights",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "monotonic-us"
+            ],
+            "id": "hackylens.cap.time",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/sleep",
+      "enable_definition": "HK_ENABLE_APP_SLEEP",
+      "id": "sleep",
+      "legacy_requirements": [],
+      "private_includes": [
+        "firmware/src/apps/sleep"
+      ],
+      "services": [],
+      "sources": [
+        "firmware/src/apps/sleep/sleep_app.c",
+        "firmware/src/apps/sleep/sleep_controller.c",
+        "firmware/src/apps/sleep/sleep_view.c"
+      ]
+    },
+    {
+      "capabilities": {
+        "optional": [],
+        "required": [
+          {
+            "features": [
+              "base-plane",
+              "borrowed-surface",
+              "dirty-regions",
+              "rgb565"
+            ],
+            "id": "hackylens.cap.display",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          },
+          {
+            "features": [
+              "debounced-buttons",
+              "events",
+              "state"
+            ],
+            "id": "hackylens.cap.input",
+            "instance": 0,
+            "maximum_exclusive": "0.2.0",
+            "minimum": "0.1.0"
+          }
+        ]
+      },
+      "directory": "firmware/src/apps/terminal",
+      "enable_definition": "HK_ENABLE_APP_TERMINAL",
+      "id": "terminal",
+      "legacy_requirements": [],
+      "private_includes": [
+        "firmware/src/apps/terminal"
+      ],
+      "services": [],
+      "sources": [
+        "firmware/src/apps/terminal/terminal_app.c",
+        "firmware/src/apps/terminal/terminal_buffer.c",
+        "firmware/src/apps/terminal/terminal_controller.c",
+        "firmware/src/apps/terminal/terminal_view.c"
+      ]
+    }
+  ],
+  "manifest_model_sha256": "19abf3aa78e2cb85446008cfdd8bdcf8d074c4e41985b9f2b7698cff67a5d870",
+  "manifest_schema": 1,
+  "schema": 1
+}
