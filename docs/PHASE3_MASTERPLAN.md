@@ -179,7 +179,7 @@ layer policy machine-checkable; firmware behavior не изменён.
 
 ## 3.2 — Native app manifest schema и validator
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -191,21 +191,21 @@ layer policy machine-checkable; firmware behavior не изменён.
 
 ### Scope
 
-- [ ] Определить schema 1: `id`, `name`, `version`, `entry`, lifecycle kind,
+- [x] Определить schema 1: `id`, `name`, `version`, `entry`, lifecycle kind,
   source/include declarations, menu metadata, stable autostart ID, required и
   optional capabilities, app-scoped services, limits и test metadata.
-- [ ] Использовать canonical app ID rules и запретить collision по ID, entry,
+- [x] Использовать canonical app ID rules и запретить collision по ID, entry,
   autostart ID, menu order и generated symbol.
-- [ ] Версии capabilities задавать minimum/maximum-exclusive и required feature
+- [x] Версии capabilities задавать minimum/maximum-exclusive и required feature
   set, совместимо с Phase 2 inventory semantics.
-- [ ] Optional requirements обязаны иметь декларативный fallback.
-- [ ] Limits описывают static RAM, stack expectation, tick/render budget и app
+- [x] Optional requirements обязаны иметь декларативный fallback.
+- [x] Limits описывают static RAM, stack expectation, tick/render budget и app
   state size; нулевые/отрицательные/unbounded значения запрещены.
-- [ ] Paths разрешаются относительно app directory, не могут покинуть его через
+- [x] Paths разрешаются относительно app directory, не могут покинуть его через
   `..`, symlink или case/path trick.
-- [ ] Validator отклоняет unknown fields и не делает silent defaults для
+- [x] Validator отклоняет unknown fields и не делает silent defaults для
   identity, capability или resource policy.
-- [ ] Добавить positive fixtures и exhaustive negative schema/path/version tests.
+- [x] Добавить positive fixtures и exhaustive negative schema/path/version tests.
 
 ### Exit gate
 
