@@ -7,8 +7,6 @@
 #include "settings_controller.h"
 #include "settings_view.h"
 
-const char g_settings_debug_help[] = "HKSETTINGS";
-
 void settings_enter(const hk_input_snapshot_t *input)
 {
     settings_controller_enter(input);
@@ -44,3 +42,13 @@ void settings_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     settings_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t settings_legacy_entry = {
+    .screen = SCREEN_SETTINGS,
+    .enter = settings_enter,
+    .exit = settings_exit,
+    .tick = settings_tick,
+    .handle_input = settings_handle_buttons,
+    .draw_icon = settings_draw_icon,
+    .handle_debug_command = settings_handle_debug_command,
+};

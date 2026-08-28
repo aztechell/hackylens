@@ -127,7 +127,6 @@ FEATURES = {
 }
 FEATURE_DIRS = {f"apps/{directory}/": (name, public)
                 for name, (directory, public) in FEATURES.items()}
-REGISTRY = "apps/app_registry.c"
 
 LEGACY_PATHS = {
     "apps/app_terminal.c", "apps/app_terminal.h",
@@ -658,9 +657,7 @@ def feature_include_violation(path: str, target: str | None) -> str | None:
     target_prefix, target_name, target_public = target_feature
     if source_feature and source_feature[0] == target_prefix:
         return None
-    if path == REGISTRY and target == f"{target_prefix}{target_public}":
-        return None
-    return f"only app registry may include the public {target_name} app header"
+    return f"only the owning app may include the public {target_name} app header"
 
 
 def settings_menu_violation(path: str, target: str | None) -> str | None:
@@ -810,8 +807,11 @@ def layout_failures() -> list[str]:
         if not (module / "app.toml").is_file():
             failures.append(f"apps/{directory}/app.toml: manifest composition is missing")
     for path in (SRC / "apps").glob("*.[ch]"):
-        if path.name not in {"app_registry.c"}:
-            failures.append(f"apps/{path.name}: flat app source is forbidden")
+        failures.append(f"apps/{path.name}: flat app source is forbidden")
+    if not (ROOT / "firmware" / "generated" / "app_registry" / "registry.c").is_file():
+        failures.append("generated app registry source is missing")
+    if not (SRC / "core" / "hk_app_registry.c").is_file():
+        failures.append("generic app registry runtime is missing")
     if 'if "qr-camera" not in disabled_apps:' not in manifest:
         failures.append("tools/build_firmware.py: quirc is not gated by QR-CAMERA")
     if 'if "apriltag" not in disabled_apps:' not in manifest:

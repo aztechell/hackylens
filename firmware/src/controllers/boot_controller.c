@@ -43,7 +43,7 @@ static void boot_log_banner(void)
     printf("[SETTINGS] flash slots 0x%06X/0x%06X\r\n", (unsigned)SETTINGS_FLASH_SLOT0, (unsigned)SETTINGS_FLASH_SLOT1);
     printf("[APP] count=%u\r\n", (unsigned)MENU_ITEM_COUNT);
     for(uint8_t i = 0; i < MENU_ITEM_COUNT; i++)
-        printf("[APP] %u title=%s\r\n", (unsigned)i, g_menu_items[i].title);
+        printf("[APP] %u title=%s\r\n", (unsigned)i, g_menu_items[i]->title);
 }
 
 void boot_controller_startup(void)

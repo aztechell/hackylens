@@ -2,7 +2,7 @@ schema = 1
 id = "files"
 name = "FILES"
 version = "0.1.0"
-entry = "files_enter"
+entry = "files_legacy_entry"
 generated_symbol = "hk_generated_app_files"
 lifecycle = "legacy"
 sources = ["file_browser_state.c", "file_delete.c", "file_dir.c", "file_preview.c", "files_actions.c", "files_app.c", "files_backend.c", "files_controller.c", "files_presenter.c", "files_view.c", "image_decode_bmp.c", "image_decode_common.c", "image_decode_gif.c", "image_decode_png.c", "image_decode_png_inflate.c", "image_decode_ppm.c", "image_decode_raw.c", "image_viewer.c"]
@@ -31,7 +31,7 @@ optional = []
 static_ram_bytes = 1048576
 stack_bytes = 16384
 state_bytes = 262144
-tick_interval_us = 10000
+tick_interval_us = 20000
 tick_budget_us = 1000
 render_budget_us = 10000
 

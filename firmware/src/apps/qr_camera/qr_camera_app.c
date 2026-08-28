@@ -10,8 +10,6 @@
 #include "qr_service.h"
 #include "qr_camera_view.h"
 
-const char g_qr_camera_debug_help[] = "HKQRINFO HKQR/HKQRCAM HKQRDECODE";
-
 void qr_camera_enter(const hk_input_snapshot_t *input) { qr_camera_controller_enter(input); }
 void qr_camera_exit(void) { qr_camera_controller_exit(); }
 void qr_camera_tick(const hk_input_snapshot_t *input) { qr_camera_controller_tick(input); }
@@ -62,3 +60,15 @@ void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     qr_camera_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t qr_camera_legacy_entry = {
+    .screen = SCREEN_QR_CAMERA,
+    .enter = qr_camera_enter,
+    .exit = qr_camera_exit,
+    .tick = qr_camera_tick,
+    .handle_input = qr_camera_handle_buttons,
+    .owns_screen = qr_camera_owns_screen,
+    .draw_icon = qr_camera_draw_icon,
+    .blocks_sd_poll = 1U,
+    .handle_debug_command = qr_camera_handle_debug_command,
+};

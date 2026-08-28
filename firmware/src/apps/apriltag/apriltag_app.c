@@ -13,8 +13,6 @@
 #include "apriltag_settings.h"
 #include "apriltag_view.h"
 
-const char g_apriltag_debug_help[] = "HKTAG/HKTAGINFO";
-
 void apriltag_enter(const hk_input_snapshot_t *input) { apriltag_controller_enter(input); }
 void apriltag_exit(void) { apriltag_controller_exit(); }
 void apriltag_tick(const hk_input_snapshot_t *input) { apriltag_controller_tick(input); }
@@ -63,3 +61,14 @@ void apriltag_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     apriltag_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t apriltag_legacy_entry = {
+    .screen = SCREEN_APRILTAG,
+    .enter = apriltag_enter,
+    .exit = apriltag_exit,
+    .tick = apriltag_tick,
+    .handle_input = apriltag_handle_buttons,
+    .draw_icon = apriltag_draw_icon,
+    .background_tick = apriltag_background_tick,
+    .handle_debug_command = apriltag_handle_debug_command,
+};

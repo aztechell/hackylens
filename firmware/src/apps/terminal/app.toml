@@ -2,7 +2,7 @@ schema = 1
 id = "terminal"
 name = "TERMINAL"
 version = "0.1.0"
-entry = "terminal_enter"
+entry = "terminal_legacy_entry"
 generated_symbol = "hk_generated_app_terminal"
 lifecycle = "legacy"
 sources = ["terminal_app.c", "terminal_buffer.c", "terminal_controller.c", "terminal_view.c"]
@@ -28,7 +28,7 @@ optional = []
 static_ram_bytes = 1048576
 stack_bytes = 16384
 state_bytes = 262144
-tick_interval_us = 10000
+tick_interval_us = 20000
 tick_budget_us = 1000
 render_budget_us = 10000
 

@@ -385,6 +385,8 @@ def _new_resource_sites(
         wrapper_runtime_markers=(),
         include_cxx_new=include_cxx_new,
         include_std_thread=include_std_thread,
+        site_line_sensitive=False,
+        site_context_sensitive=False,
     )
 
 

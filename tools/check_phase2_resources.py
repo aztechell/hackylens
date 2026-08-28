@@ -200,10 +200,10 @@ def artifact_measurement(paths: dict[str, Path]) -> dict[str, Any]:
 
 
 def capture_profile(
-    profile_name: str, baseline: dict[str, Any]
+    profile_name: str, baseline: dict[str, Any], *, phase3_receipt: bool = False
 ) -> dict[str, Any]:
     flash_delta, static_delta = check_phase2_evidence.verify_profile_artifacts(
-        baseline, profile_name
+        baseline, profile_name, enforce_phase2_budget=not phase3_receipt
     )
     paths = artifact_paths()
     composition = read_json(paths["composition"], "profile composition")
@@ -638,12 +638,21 @@ def main(argv: list[str] | None = None) -> int:
     actions.add_argument("--write-result", type=Path, nargs="?", const=DEFAULT_RESULT)
     actions.add_argument("--check-result", type=Path, nargs="?", const=DEFAULT_RESULT)
     parser.add_argument("--baseline", type=Path, default=DEFAULT_BASELINE)
+    parser.add_argument(
+        "--phase3-receipt", action="store_true",
+        help="capture attested measurements for the later Phase 3 budget gate",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.phase3_receipt and not args.capture_profile:
+            raise RuntimeError("--phase3-receipt requires --capture-profile")
         baseline = check_phase2_evidence.load_baseline(args.baseline)
         check_phase2_evidence.verify_provenance(baseline)
         if args.capture_profile:
-            value = capture_profile(args.capture_profile, baseline)
+            value = capture_profile(
+                args.capture_profile, baseline,
+                phase3_receipt=args.phase3_receipt,
+            )
             target = receipt_path("profile", args.capture_profile)
             write_receipt(target, value)
             print(f"[OK] captured {args.capture_profile} profile: {target}")

@@ -6,8 +6,6 @@
 #include "camera_controller.h"
 #include "camera_view.h"
 
-const char g_camera_debug_help[] = "HKCAMERA";
-
 void camera_enter(const hk_input_snapshot_t *input) { camera_controller_enter(input); }
 void camera_exit(void) { camera_controller_exit(); }
 void camera_tick(const hk_input_snapshot_t *input) { camera_controller_tick(input); }
@@ -33,3 +31,15 @@ void camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     camera_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t camera_legacy_entry = {
+    .screen = SCREEN_CAMERA,
+    .enter = camera_enter,
+    .exit = camera_exit,
+    .tick = camera_tick,
+    .handle_input = camera_handle_buttons,
+    .owns_screen = camera_owns_screen,
+    .draw_icon = camera_draw_icon,
+    .blocks_sd_poll = 1U,
+    .handle_debug_command = camera_handle_debug_command,
+};

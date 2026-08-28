@@ -11,7 +11,15 @@ This document describes the lifecycle shipped by firmware `0.2.0`. The matching
 version is historical and does not permanently couple firmware releases to the
 future App SDK or runtime contract.
 
-Apps are described by `hk_app_t`: `id`, `title`, `screen`, stable `autostart_id`, `enter`, optional `exit`, optional `tick`, optional `handle_input`, optional `owns_screen`, optional `draw_icon`, optional `background_tick(input)`, optional `handle_sd_event`, optional SD-poll blocking, optional tick interval, optional `handle_debug_command`, and optional `debug_help`. Registry entries use designated initializers so optional fields are independent of structure order. SETTINGS and SLEEP retain the zero/OFF autostart ID and cannot be selected as boot targets.
+Apps are described by immutable generated `hk_app_t` descriptors. Identity,
+title, menu order, stable autostart ID, help/debug text, tick policy, limits,
+and capability/service requests come from canonical `app.toml`. A legacy
+descriptor points to one app-owned const `hk_legacy_app_entry_t` binding with
+its screen, `enter`, optional `exit`, optional `tick`, optional `handle_input`,
+optional `owns_screen`, optional `draw_icon`, optional
+`background_tick(input)`, optional `handle_sd_event`, optional SD-poll blocking,
+and optional `handle_debug_command`. SETTINGS and SLEEP retain the zero/OFF
+autostart ID and cannot be selected as boot targets.
 
 `runtime/hk_main.c` runs the firmware superloop: it processes debug input, polls buttons, dispatches shell input, ticks the menu and active app, runs the system tick, then sleeps for the configured camera or non-camera interval. `SCREEN_MENU` opens the selected registry entry through its `enter` callback. `SCREEN_CAMERA_SETTINGS` remains a service screen owned by CAMERA/QR-CAMERA rather than a top-level app.
 
@@ -33,7 +41,16 @@ Reusable settings menus are neutral child sessions rather than screens or applic
 
 CAMERA and QR each own a settings child session and descriptor table. `owns_screen` maps their shared `SCREEN_CAMERA_SETTINGS` secondary screen back to the correct active app. BACK closes the child session and preserves the existing camera resume, QR resume, or size-reinitialization path. System SETTINGS uses edit-on-OK rows; BACK first commits and leaves edit mode, while a second BACK exits. Its app `exit` callback closes the session so `HKMENU` also commits an active edit.
 
-Every app lives in a self-contained `apps/<feature>/` directory; `apps/app_registry.c` includes only public app entry points. The registry dispatches secondary screens, background ticks with the current input snapshot, SD events, debug commands, and `HKHELP` tokens generically. FILES closes preview/GIF state through `exit` and owns SD insertion/removal handling. CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, and OBJECT DETECT stop their own camera sessions in `exit`, so BACK and `HKMENU` share one cleanup path. SLEEP owns both explicit sleep/wake and menu auto-sleep through its background callback.
+Every app lives in a self-contained `apps/<feature>/` directory and owns its
+legacy binding object. `firmware/generated/app_registry/registry.c` is the only
+production descriptor table; `core/hk_app_registry.c` contains no concrete app
+names and iterates it to dispatch secondary screens, background ticks with the
+current input snapshot, SD events, debug commands, and `HKHELP` tokens
+generically. FILES closes preview/GIF state through `exit` and owns SD
+insertion/removal handling. CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, and OBJECT
+DETECT stop their own camera sessions in `exit`, so BACK and `HKMENU` share one
+cleanup path. SLEEP owns both explicit sleep/wake and menu auto-sleep through
+its background callback.
 
 FACE DETECT starts the shared camera session and asks its `ai_model_runtime_t`
 instance to load `/hackylens.kmodels/detect.kmodel` on entry. The runtime

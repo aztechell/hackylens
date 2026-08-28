@@ -37,3 +37,13 @@ void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     files_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t files_legacy_entry = {
+    .screen = SCREEN_FILES,
+    .enter = files_enter,
+    .exit = files_exit,
+    .tick = files_tick,
+    .handle_input = files_handle_buttons,
+    .draw_icon = files_draw_icon,
+    .handle_sd_event = files_handle_sd_event,
+};

@@ -41,7 +41,7 @@ static void menu_draw_title_if_ready(const char *title)
 static void menu_draw_registry_item(uint8_t index)
 {
     if(s_menu_view.draw_item_at)
-        s_menu_view.draw_item_at(index, &g_menu_items[index], (uint8_t)(index == s_menu_index));
+        s_menu_view.draw_item_at(index, g_menu_items[index], (uint8_t)(index == s_menu_index));
 }
 
 uint8_t hk_menu_index_get(void)
@@ -52,7 +52,12 @@ uint8_t hk_menu_index_get(void)
 void menu_render(void)
 {
     hk_back_exit_set_armed(0);
-    menu_draw_chrome_if_ready(g_menu_items[s_menu_index].title);
+    if(MENU_ITEM_COUNT == 0U)
+    {
+        menu_draw_chrome_if_ready("NO APPS");
+        return;
+    }
+    menu_draw_chrome_if_ready(g_menu_items[s_menu_index]->title);
     for(uint8_t index = 0; index < MENU_ITEM_COUNT; index++)
         menu_draw_registry_item(index);
 }
@@ -60,38 +65,40 @@ void menu_render(void)
 void shell_show_menu(void)
 {
     const hk_app_t *app = hk_app_for_screen(hk_screen_get());
+    const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
 
-    if(app && app->exit)
-        app->exit();
+    if(entry && entry->exit)
+        entry->exit();
     if(s_owner_hooks.exit)
         s_owner_hooks.exit(app);
     hk_screen_set(SCREEN_MENU);
     hk_back_exit_set_armed(0);
     menu_render();
     activity_note();
-    printf("[SHELL] screen MENU item=%s\r\n", g_menu_items[s_menu_index].title);
+    printf("[SHELL] screen MENU item=%s\r\n",
+           MENU_ITEM_COUNT ? g_menu_items[s_menu_index]->title : "NO APPS");
 }
 
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
+    const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
     uint8_t index;
 
-    if(!app || !app->enter)
+    if(!entry || !entry->enter)
         return 0U;
     for(index = 0U; index < g_menu_item_count; index++)
     {
-        if(&g_menu_items[index] == app)
+        if(g_menu_items[index] == app)
             break;
     }
-    if(index >= g_menu_item_count)
-        return 0U;
-    s_menu_index = index;
+    if(index < g_menu_item_count)
+        s_menu_index = index;
     s_menu_repeat_button = 0;
     s_menu_repeat_ticks = 0;
     printf("[MENU] open %s\r\n", app->title);
     if(s_owner_hooks.enter && !s_owner_hooks.enter(app))
         return 0U;
-    app->enter(input);
+    entry->enter(input);
     return 1U;
 }
 
@@ -105,12 +112,16 @@ void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks)
 
 void shell_open_selected(const hk_input_snapshot_t *input)
 {
-    (void)shell_open_app(&g_menu_items[s_menu_index], input);
+    if(MENU_ITEM_COUNT)
+        (void)shell_open_app(g_menu_items[s_menu_index], input);
 }
 
 void menu_select_delta(int8_t delta)
 {
     uint8_t previous = s_menu_index;
+
+    if(MENU_ITEM_COUNT == 0U)
+        return;
 
     if(delta < 0)
         s_menu_index = s_menu_index == 0 ? MENU_ITEM_COUNT - 1 : s_menu_index - 1;
@@ -119,24 +130,27 @@ void menu_select_delta(int8_t delta)
 
     if(previous != s_menu_index)
     {
-        menu_draw_title_if_ready(g_menu_items[s_menu_index].title);
+        menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
         menu_draw_registry_item(previous);
         menu_draw_registry_item(s_menu_index);
     }
-    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index].title);
+    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
 }
 
 void menu_select_vertical(void)
 {
     uint8_t previous = s_menu_index;
+
+    if(MENU_ITEM_COUNT == 0U)
+        return;
     s_menu_index = (uint8_t)((s_menu_index + MENU_GRID_COLS) % MENU_ITEM_COUNT);
     if(previous != s_menu_index)
     {
-        menu_draw_title_if_ready(g_menu_items[s_menu_index].title);
+        menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
         menu_draw_registry_item(previous);
         menu_draw_registry_item(s_menu_index);
     }
-    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index].title);
+    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
 }
 
 void menu_repeat_reset(void)

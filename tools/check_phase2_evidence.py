@@ -321,15 +321,15 @@ def verify_profile_budget(
     bss_bytes: int,
     erase_size: int,
 ) -> tuple[int, int]:
-    profile = document["baseline"]["profiles"][profile_name]
-    acceptance = document["acceptance"]
-    occupied = math.ceil(
-        (raw_bytes + build_firmware.K210_IMAGE_OVERHEAD) / erase_size
-    ) * erase_size
-    flash_delta = occupied - profile["image"]["flash_occupied_bytes"]
-    static_ram_delta = (
-        data_bytes + bss_bytes - profile["elf"]["static_ram_bytes"]
+    flash_delta, static_ram_delta = profile_deltas(
+        document,
+        profile_name,
+        raw_bytes=raw_bytes,
+        data_bytes=data_bytes,
+        bss_bytes=bss_bytes,
+        erase_size=erase_size,
     )
+    acceptance = document["acceptance"]
     if flash_delta > acceptance["flash_delta_max_bytes"]:
         raise RuntimeError(
             f"{profile_name} flash delta {flash_delta} exceeds Phase 2 budget "
@@ -343,8 +343,31 @@ def verify_profile_budget(
     return flash_delta, static_ram_delta
 
 
+def profile_deltas(
+    document: dict[str, Any],
+    profile_name: str,
+    *,
+    raw_bytes: int,
+    data_bytes: int,
+    bss_bytes: int,
+    erase_size: int,
+) -> tuple[int, int]:
+    """Measure against immutable Phase 2 data without applying its old gate."""
+
+    profile = document["baseline"]["profiles"][profile_name]
+    occupied = math.ceil(
+        (raw_bytes + build_firmware.K210_IMAGE_OVERHEAD) / erase_size
+    ) * erase_size
+    flash_delta = occupied - profile["image"]["flash_occupied_bytes"]
+    static_ram_delta = (
+        data_bytes + bss_bytes - profile["elf"]["static_ram_bytes"]
+    )
+    return flash_delta, static_ram_delta
+
+
 def verify_profile_artifacts(
-    document: dict[str, Any], profile_name: str, *, root: Path = ROOT
+    document: dict[str, Any], profile_name: str, *, root: Path = ROOT,
+    enforce_phase2_budget: bool = True,
 ) -> tuple[int, int]:
     profile = document["baseline"]["profiles"][profile_name]
     image = root / profile["image"]["path"]
@@ -394,7 +417,8 @@ def verify_profile_artifacts(
 
     board = load_board(document["baseline"]["board"], root=root)
     flash, _ = load_validated(board.flash_layout_path)
-    return verify_profile_budget(
+    measure = verify_profile_budget if enforce_phase2_budget else profile_deltas
+    return measure(
         document,
         profile_name,
         raw_bytes=image_size,

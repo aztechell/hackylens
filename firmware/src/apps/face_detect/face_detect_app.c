@@ -8,8 +8,6 @@
 #include "face_detect_detector.h"
 #include "face_detect_view.h"
 
-const char g_face_detect_debug_help[] = "HKFACEINFO";
-
 void face_detect_enter(const hk_input_snapshot_t *input) { face_detect_controller_enter(input); }
 void face_detect_exit(void) { face_detect_controller_exit(); }
 void face_detect_tick(const hk_input_snapshot_t *input) { face_detect_controller_tick(input); }
@@ -35,3 +33,15 @@ void face_detect_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     face_detect_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t face_detect_legacy_entry = {
+    .screen = SCREEN_FACE_DETECT,
+    .enter = face_detect_enter,
+    .exit = face_detect_exit,
+    .tick = face_detect_tick,
+    .handle_input = face_detect_handle_buttons,
+    .draw_icon = face_detect_draw_icon,
+    .background_tick = face_detect_background_tick,
+    .blocks_sd_poll = 1U,
+    .handle_debug_command = face_detect_handle_debug_command,
+};

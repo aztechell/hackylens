@@ -633,6 +633,10 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     shutil.copy2(Path(target["target_source"]), stage / "main.c")
     stage_firmware_sources(stage, disabled_apps)
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
+    copy_tree_files(
+        app_composition.GENERATED_REGISTRY_ROOT,
+        stage / "firmware" / "generated" / "app_registry",
+    )
     stage_platform_sources(stage, disabled_apps, capability_composition)
     stage_board_port(stage, board)
 

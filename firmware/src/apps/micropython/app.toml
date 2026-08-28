@@ -2,7 +2,7 @@ schema = 1
 id = "micropython"
 name = "MICRO-PYTHON"
 version = "0.1.0"
-entry = "micropython_enter"
+entry = "micropython_legacy_entry"
 generated_symbol = "hk_generated_app_micropython"
 lifecycle = "legacy"
 sources = ["micropython_app.c", "micropython_bindings.c", "micropython_view.c"]
@@ -39,7 +39,7 @@ render_budget_us = 10000
 
 [metadata]
 help = "MICRO-PYTHON legacy feature app."
-debug = "MicroPython runtime and HMPY diagnostics."
+debug = "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST HKMPFORMAT-CONFIRM"
 
 [tests]
 host_sources = ["micropython_app.c"]

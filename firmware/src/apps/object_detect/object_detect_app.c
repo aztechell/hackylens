@@ -12,8 +12,6 @@
 #include "object_detect_settings.h"
 #include "object_detect_view.h"
 
-const char g_object_detect_debug_help[] = "HKOBJECT/HKOBJECTINFO";
-
 void object_detect_enter(const hk_input_snapshot_t *input)
 {
     object_detect_controller_enter(input);
@@ -80,3 +78,15 @@ void object_detect_draw_icon(uint16_t x, uint16_t y,
 {
     object_detect_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t object_detect_legacy_entry = {
+    .screen = SCREEN_OBJECT_DETECT,
+    .enter = object_detect_enter,
+    .exit = object_detect_exit,
+    .tick = object_detect_tick,
+    .handle_input = object_detect_handle_buttons,
+    .draw_icon = object_detect_draw_icon,
+    .background_tick = object_detect_background_tick,
+    .blocks_sd_poll = 1U,
+    .handle_debug_command = object_detect_handle_debug_command,
+};

@@ -23,3 +23,12 @@ void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     sleep_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t sleep_legacy_entry = {
+    .screen = SCREEN_SLEEP,
+    .enter = sleep_enter,
+    .handle_input = sleep_handle_buttons,
+    .draw_icon = sleep_draw_icon,
+    .background_tick = sleep_background_tick,
+    .blocks_sd_poll = 1U,
+};

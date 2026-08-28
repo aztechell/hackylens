@@ -237,6 +237,17 @@ APP_MANIFEST_SCHEMA_REQUIREMENTS = (
         r"undeclared\s+header\s+directory\s+MUST\s+NOT\s+enter",
         "Native App Manifest must govern C/C++ ownership and private include roots",
     ),
+    (
+        r"lifecycle\s*=\s*\"legacy\"[\s\S]*hk_legacy_app_entry_t[\s\S]*"
+        r"lifecycle\s*=\s*\"v2\"[\s\S]*hk_app_v2_entry_t[\s\S]*"
+        r"never\s+guesses\s+callback",
+        "Native App Manifest must define typed legacy/v2 entry objects",
+    ),
+    (
+        r"no\s+manual\s+central\s+app\s+descriptor\s+table[\s\S]*"
+        r"only\s+iterates\s+generated\s+const\s+arrays",
+        "Native App Manifest must keep generated descriptors as the sole registry",
+    ),
 )
 
 

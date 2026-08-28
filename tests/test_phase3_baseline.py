@@ -101,10 +101,42 @@ class Phase3BaselineTests(unittest.TestCase):
                         document, historical, current
                     )
 
+    def test_const_descriptor_binding_is_not_a_new_resource_alias(self) -> None:
+        historical = {
+            "firmware/app.c": (
+                "void *app_enter(void) { return malloc(64U); }\n"
+            ),
+        }
+        current = {
+            **historical,
+            "firmware/registry.c": (
+                "struct entry { void *(*enter)(void); };\n"
+                "const struct entry app_entry = {.enter = app_enter};\n"
+            ),
+        }
+        observation = CHECKER.zero_resource_observation(historical, current)
+        self.assertEqual(observation["new_heap_allocation_sites"], [])
+
+        current["firmware/registry.c"] += (
+            "void wire(struct entry *entry) { entry->enter = app_enter; }\n"
+        )
+        self.assertTrue(
+            CHECKER.zero_resource_observation(historical, current)[
+                "new_heap_allocation_sites"
+            ]
+        )
+
     def test_release_workflow_runs_resource_gate_after_profile_receipts(self) -> None:
         workflow = (
             ROOT / ".github" / "workflows" / "release.yml"
         ).read_text(encoding="utf-8")
+        self.assertIn(
+            "--capture-profile micropython-disabled --phase3-receipt", workflow
+        )
+        self.assertIn("--capture-profile full --phase3-receipt", workflow)
+        self.assertNotIn(
+            "check_phase2_evidence.py --verify-profile", workflow
+        )
         disabled_capture = workflow.index(
             "check_phase2_resources.py --capture-profile micropython-disabled"
         )

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
+import app_registry
 from app_manifest import (
     LEGACY_SERVICE_PREFIX,
     ManifestError,
@@ -21,10 +22,10 @@ MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
 GENERATED_ROOT = ROOT / "firmware" / "generated" / "app_composition"
 GENERATED_JSON = GENERATED_ROOT / "composition.json"
 GENERATED_DEFAULTS = ROOT / "firmware" / "config" / "app_config_defaults.h"
+GENERATED_REGISTRY_ROOT = ROOT / "firmware" / "generated" / "app_registry"
+GENERATED_REGISTRY_HEADER = GENERATED_REGISTRY_ROOT / "registry.h"
+GENERATED_REGISTRY_SOURCE = GENERATED_REGISTRY_ROOT / "registry.c"
 TRANSLATION_UNIT_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
-# The manual central registry is runtime composition infrastructure, not an app
-# package. Phase 3.4 replaces it with generated descriptors.
-CENTRAL_COMPOSITION_TRANSLATION_UNITS = frozenset({"app_registry.c"})
 
 
 class CompositionError(ValueError):
@@ -70,8 +71,6 @@ def load_model(manifest_root: Path = MANIFEST_ROOT) -> dict[str, Any]:
             continue
         relative = path.relative_to(manifest_root)
         if "tests" in relative.parts:
-            continue
-        if relative.as_posix() in CENTRAL_COMPOSITION_TRANSLATION_UNITS:
             continue
         owners = [
             directory for directory in manifest_directories
@@ -153,9 +152,16 @@ def generated_files(
     manifest_root: Path = MANIFEST_ROOT,
 ) -> dict[Path, bytes]:
     model = load_model(manifest_root)
+    try:
+        registry_header = app_registry.generated_header(model)
+        registry_source = app_registry.generated_source(model, enable_definition)
+    except app_registry.RegistryGenerationError as exc:
+        raise CompositionError(str(exc)) from exc
     return {
         GENERATED_JSON: canonical_json_bytes(generated_document(model)),
         GENERATED_DEFAULTS: generated_defaults(model).encode("utf-8"),
+        GENERATED_REGISTRY_HEADER: registry_header.encode("utf-8"),
+        GENERATED_REGISTRY_SOURCE: registry_source.encode("utf-8"),
     }
 
 

@@ -5,6 +5,7 @@
 #include "settings_snapshot.h"
 
 #include "../config/settings_config.h"
+#include "../core/hk_app_registry.h"
 #include "settings_service.h"
 #include "settings_app_data.h"
 #include "hk_config.h"
@@ -185,7 +186,7 @@ hk_autostart_id_t settings_autostart_id(void)
 
 void settings_set_autostart_id(hk_autostart_id_t id)
 {
-    g_autostart_id = id >= HK_AUTOSTART_OFF && id < HK_AUTOSTART_COUNT ?
+    g_autostart_id = hk_app_autostart_id_is_persistable(id) ?
                      id : HK_AUTOSTART_OFF;
 }
 

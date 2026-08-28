@@ -2,7 +2,7 @@ schema = 1
 id = "sleep"
 name = "SLEEP"
 version = "0.1.0"
-entry = "sleep_enter"
+entry = "sleep_legacy_entry"
 generated_symbol = "hk_generated_app_sleep"
 lifecycle = "legacy"
 sources = ["sleep_app.c", "sleep_controller.c", "sleep_view.c"]
@@ -30,7 +30,7 @@ optional = []
 static_ram_bytes = 1048576
 stack_bytes = 16384
 state_bytes = 262144
-tick_interval_us = 10000
+tick_interval_us = 20000
 tick_budget_us = 1000
 render_budget_us = 10000
 

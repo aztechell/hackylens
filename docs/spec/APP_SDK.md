@@ -106,9 +106,12 @@ experimental breaking change increments MINOR. Publishing this SDK does not
 change Firmware `0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle
 `0.2.0`, or MicroPython API `1.0.0`.
 
-The legacy adapter is runtime implementation, not a second public SDK. Existing
-legacy apps remain compatible while migrated apps use the SDK; all apps remain
-subject to manifest composition and architecture guards.
+The legacy adapter is runtime implementation, not a second public SDK. A legacy
+manifest `entry` names an app-owned const `hk_legacy_app_entry_t` binding object;
+the generated private descriptor references it and the generic registry invokes
+it. That type and binding are unavailable from `sdk/include`. Existing legacy
+apps remain compatible while migrated apps use the SDK; all apps remain subject
+to manifest composition and architecture guards.
 
 ## References
 

@@ -35,7 +35,9 @@ Runtime, Native App Manifest, and Feature App SDK contracts without yet changing
 firmware behavior.
 
 Compile-time app flags are generated into `hk_config.h` by
-`tools/build_firmware.py`. The app registry lives in `apps/app_registry.c`.
+`tools/build_firmware.py`. Canonical manifests generate immutable descriptors
+and menu views in `firmware/generated/app_registry/registry.*`; the app-neutral
+lookup and dispatch implementation lives in `core/hk_app_registry.c`.
 Every `--disable-app <name>` omits the corresponding complete
 `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling
 APRILTAG omits its vendored detector core and TAG36H11 table. The shared core-1
@@ -51,7 +53,7 @@ Key public interfaces:
   and the instance-based load/run/stop/unload API. `storage/ai_model_storage.h`
   and `platforms/k210/hal/hal_kpu.h` are implementation boundaries used by the runtime, not
   feature APIs. See `docs/AI_MODELS.md` for the SD manifest and conversion lab.
-- `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for app metadata, stable autostart IDs, lookup, and screen model. Registry enumeration is the only source of enabled autostart choices; SETTINGS and SLEEP have no autostart ID.
+- `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for private generated descriptor/legacy-binding metadata, stable autostart lookup, and the screen model. Registry enumeration is the only source of enabled autostart choices; SETTINGS and SLEEP have no autostart ID.
 - `apps/camera/camera_app.h`, `apps/qr_camera/qr_camera_app.h`, `apps/files/files_app.h`, `apps/buttons/buttons_app.h`, `apps/settings/settings_app.h`, and `apps/sleep/sleep_app.h` are the sole public contracts for the newly isolated modules. Their private controllers, adapters, decoders, views, and configuration are not shared APIs.
 - `controllers/settings_menu_controller.h` for reusable instance-based settings menus. Owners supply item descriptors and callbacks; the component owns navigation, edit/cycle interaction, static or dynamic choices, partial redraw, repeat, and commit notification but never persistence or application lifecycle. CAMERA, QR, APRILTAG, OBJECT DETECT, and system SETTINGS are current consumers.
 - `core/pixel_source.h` for a neutral pixel-reader contract.

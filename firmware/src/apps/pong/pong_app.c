@@ -23,3 +23,11 @@ void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     pong_view_draw_icon(x, y, color, bg);
 }
+
+const hk_legacy_app_entry_t pong_legacy_entry = {
+    .screen = HK_PONG_SCREEN,
+    .enter = pong_enter,
+    .tick = pong_tick,
+    .handle_input = pong_handle_buttons,
+    .draw_icon = pong_draw_icon,
+};

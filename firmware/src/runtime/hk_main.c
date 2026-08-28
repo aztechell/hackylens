@@ -87,10 +87,11 @@ int hk_main(void)
     while(1)
     {
         const hk_app_t *app;
+        const hk_legacy_app_entry_t *entry;
         hk_input_snapshot_t input;
         uint64_t now_us;
         uint64_t sleep_us;
-        uint8_t tick_interval_ms;
+        uint32_t tick_interval_us;
 
         input = (hk_input_snapshot_t){0U, 0U, 0U};
         if(runtime_input_sample(&input.state) != HK_OK)
@@ -117,15 +118,18 @@ int hk_main(void)
         if(hk_screen_get() == SCREEN_MENU)
             menu_tick(&input);
         app = hk_app_for_screen(hk_screen_get());
-        if(app && app->tick)
-            app->tick(&input);
+        entry = hk_app_legacy_entry(app);
+        if(entry && entry->tick)
+            entry->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
         app = hk_app_for_screen(hk_screen_get());
-        tick_interval_ms = app && app->screen == hk_screen_get() && app->tick_interval_ms ?
-                           app->tick_interval_ms : 20U;
-        next_dispatch_us = now_us + (uint64_t)tick_interval_ms * 1000U;
-        sleep_us = (uint64_t)tick_interval_ms * 1000U;
+        entry = hk_app_legacy_entry(app);
+        tick_interval_us = app && entry && entry->screen == hk_screen_get() &&
+                           app->limits.tick_interval_us ?
+                           app->limits.tick_interval_us : 20000U;
+        next_dispatch_us = now_us + tick_interval_us;
+        sleep_us = tick_interval_us;
         if(sleep_us > HK_INPUT_SAMPLE_INTERVAL_US)
             sleep_us = HK_INPUT_SAMPLE_INTERVAL_US;
         hal_sleep_ms((uint32_t)((sleep_us + 999U) / 1000U));

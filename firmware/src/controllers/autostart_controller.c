@@ -1,6 +1,7 @@
 #include "autostart_controller.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
@@ -33,15 +34,6 @@ void autostart_controller_start(void)
         return;
     }
 
-#if HK_ENABLE_APP_MICROPYTHON
-    if(id == HK_AUTOSTART_MICROPYTHON && hal_watchdog_reset_detected())
-    {
-        printf("[BOOT] MicroPython autostart suppressed after WDT1 reset\r\n");
-        shell_show_menu();
-        return;
-    }
-#endif
-
     app = hk_app_for_autostart_id(id);
     if(!app)
     {
@@ -49,6 +41,15 @@ void autostart_controller_start(void)
         shell_show_menu();
         return;
     }
+
+#if HK_ENABLE_APP_MICROPYTHON
+    if(strcmp(app->id, "micropython") == 0 && hal_watchdog_reset_detected())
+    {
+        printf("[BOOT] MicroPython autostart suppressed after WDT1 reset\r\n");
+        shell_show_menu();
+        return;
+    }
+#endif
 
     printf("[BOOT] autostart=%u app=%s\r\n", (unsigned)id, app->title);
     if(!shell_open_app(app, &startup_input))

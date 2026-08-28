@@ -9,5 +9,6 @@ void files_tick(const hk_input_snapshot_t *input);
 void files_handle_buttons(const hk_input_snapshot_t *input);
 void files_handle_sd_event(hk_sd_event_t event);
 void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+extern const hk_legacy_app_entry_t files_legacy_entry;
 
 #endif

@@ -127,6 +127,39 @@ class Phase2EvidenceTest(unittest.TestCase):
                 erase_size=erase_size,
             )
 
+    def test_profile_deltas_measure_without_weakening_phase2_budget(self) -> None:
+        document = CHECKER.load_baseline()
+        profile = document["baseline"]["profiles"]["full"]
+        acceptance = document["acceptance"]
+        erase_size = 4096
+        overage = acceptance["flash_delta_max_bytes"] + erase_size
+        raw_bytes = (
+            profile["image"]["flash_occupied_bytes"]
+            + overage
+            - CHECKER.build_firmware.K210_IMAGE_OVERHEAD
+        )
+
+        self.assertEqual(
+            CHECKER.profile_deltas(
+                document,
+                "full",
+                raw_bytes=raw_bytes,
+                data_bytes=profile["elf"]["data_bytes"],
+                bss_bytes=profile["elf"]["bss_bytes"],
+                erase_size=erase_size,
+            ),
+            (overage, 0),
+        )
+        with self.assertRaisesRegex(RuntimeError, "flash delta"):
+            CHECKER.verify_profile_budget(
+                document,
+                "full",
+                raw_bytes=raw_bytes,
+                data_bytes=profile["elf"]["data_bytes"],
+                bss_bytes=profile["elf"]["bss_bytes"],
+                erase_size=erase_size,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

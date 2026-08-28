@@ -38,11 +38,14 @@ class CiContractsTest(unittest.TestCase):
             "python tools/run_tests.py",
             "python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython",
             "python tools/check_arch.py --verify-build-profile micropython-disabled",
-            "python tools/check_phase2_evidence.py --verify-profile micropython-disabled",
+            "python tools/check_phase3_baseline.py --verify-profile micropython-disabled",
+            "python tools/check_phase2_resources.py --capture-profile micropython-disabled --phase3-receipt",
             "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent",
             "python tools/build_firmware.py full --board huskylens-sen0305",
             "python tools/check_arch.py --verify-build-profile full",
-            "python tools/check_phase2_evidence.py --verify-profile full",
+            "python tools/check_phase3_baseline.py --verify-profile full",
+            "python tools/check_phase2_resources.py --capture-profile full --phase3-receipt",
+            "python tools/check_phase3_baseline.py --verify-resources",
             "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present",
             'python tools/package_release.py --board huskylens-sen0305 --tag "${{ github.ref_name }}"',
         )
@@ -152,7 +155,7 @@ class CiContractsTest(unittest.TestCase):
             "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython"
         )
         disabled_verify = workflow.index(
-            "Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile micropython-disabled"
+            "Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile micropython-disabled"
         )
         disabled_symbols = workflow.index(
             "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent"
@@ -163,7 +166,7 @@ class CiContractsTest(unittest.TestCase):
             "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305\n"
         )
         full_verify = workflow.index(
-            "Invoke-NativeChecked python tools/check_phase2_evidence.py --verify-profile full"
+            "Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full"
         )
         full_symbols = workflow.index(
             "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present"

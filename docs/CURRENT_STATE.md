@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources, enable definitions, capability requirements and legacy compatibility exclusions; generated registry/runtime deferred to Phase 3.4+ |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources, immutable registry descriptors, menu/autostart/help/debug/limits metadata, capability/service requests, enable definitions, and explicit legacy entry bindings; lifecycle-v2 runtime remains Phase 3.5 |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -154,8 +154,16 @@ driver-availability exclusions. The separate `firmware/app_requirements.toml`
 and manual app/source maps are removed. Generated composition/default files are
 deterministic and freshness-checked; representative disabled builds prove app
 private sources and app-specific third-party inputs leave staging. The manual
-runtime registry remains intentionally unchanged for Phase 3.4, so this package
-does not change firmware runtime behavior or require a physical rerun.
+runtime registry was intentionally retained for replacement in Phase 3.4, so
+Phase 3.3 did not change firmware runtime behavior or require a physical rerun.
+
+Phase 3.4 replaces that manual descriptor table with deterministic immutable
+generated descriptors and menu views. Each current app owns one explicit const
+legacy entry binding named by its manifest; generic core code contains no
+concrete app table and performs lookup/iteration/dispatch. Stable persisted
+autostart IDs do not depend on menu or array order. Host fixtures cover empty,
+single, all-enabled, disabled, and mixed legacy/v2 composition, plus current
+screen, menu, autostart, SD, debug, tick, capability, and service parity.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -210,9 +218,9 @@ matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
 Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
 at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
-schema validation, production manifests, and generated build composition are
-implemented; generated registry, runtime, SDK headers, app generator, and
-migrations remain Phase 3.4+ work. Public
+schema validation, production manifests, generated build composition, and the
+generated registry/legacy adapter are implemented; lifecycle-v2 runtime, SDK
+headers, app generator, and migrations remain Phase 3.5+ work. Public
 storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

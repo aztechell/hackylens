@@ -16,9 +16,6 @@
 #include "micropython_config.h"
 #include "micropython_view.h"
 
-const char g_micropython_debug_help[] =
-    "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST HKMPFORMAT-CONFIRM";
-
 static const char g_smoke_script[] =
     "print('MP_OK', sum(range(10)))\n"
     "for i in range(5):\n"
@@ -1202,3 +1199,14 @@ uint8_t micropython_handle_debug_command(const char *command)
     }
     return 0U;
 }
+
+const hk_legacy_app_entry_t micropython_legacy_entry = {
+    .screen = HK_MICROPYTHON_SCREEN,
+    .enter = micropython_enter,
+    .exit = micropython_exit,
+    .tick = micropython_tick,
+    .handle_input = micropython_handle_buttons,
+    .draw_icon = micropython_draw_icon,
+    .background_tick = micropython_background_tick,
+    .handle_debug_command = micropython_handle_debug_command,
+};

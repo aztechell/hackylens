@@ -70,7 +70,7 @@ and there are no implicit defaults:
 | `id` | lowercase kebab ID, at most 63 UTF-8 bytes |
 | `name` | non-empty trimmed display text, at most 96 UTF-8 bytes |
 | `version` | canonical SemVer with no leading-zero numeric identifiers |
-| `entry` | C symbol naming the lifecycle entry |
+| `entry` | C symbol naming the typed lifecycle entry object |
 | `generated_symbol` | C symbol reserved for the generated descriptor |
 | `lifecycle` | exactly `legacy` or `v2` |
 | `sources` | non-empty array of app-relative C/C++ source files |
@@ -87,7 +87,12 @@ Canonical app and requirement tokens use lowercase ASCII kebab form. An app ID
 starts with a lowercase ASCII letter and then uses lowercase letters, digits,
 and single hyphen-separated non-empty components; capability IDs add the
 `hackylens.cap.` prefix and service IDs add `hackylens.service.`. `entry` and
-`generated_symbol` use ordinary C identifier syntax. Every menu order is
+`generated_symbol` use ordinary C identifier syntax. For `lifecycle =
+"legacy"`, `entry` names one app-owned immutable `hk_legacy_app_entry_t`
+binding object containing that app's existing callbacks and screen adapter; for
+`lifecycle = "v2"`, it names one immutable `hk_app_v2_entry_t` lifecycle object.
+The generator emits typed references to those objects and never guesses callback
+symbol names. Every menu order is
 unique, including for a non-visible entry, so enabling it cannot silently
 reorder another app. An autostart-eligible app has a non-zero stable uint16 ID;
 an ineligible app explicitly uses ID zero. The validator collision-checks app
@@ -191,6 +196,15 @@ for freshness. Descriptors are read-only for the entire boot and expose no
 board routes, pins, peripheral instances, provider vtables, drivers, or HAL
 objects.
 
+The private generated descriptor contains manifest identity/version,
+menu visibility and order, stable autostart identity, lifecycle kind and typed
+entry reference, help/debug text, finite limits, and capability/service request
+metadata. A canonical descriptor array is ordered by canonical app ID; the
+separate menu view is ordered only by explicit `menu.order`. Conditional build
+flags remove a disabled descriptor and its entry reference without renumbering
+persisted autostart IDs. Empty and single-app compositions remain bounded const
+tables rather than runtime registration special cases.
+
 `python tools/gen_app_composition.py --check` validates the production manifest
 set, recomputes the source/include and `HK_ENABLE_APP_*` composition, and fails
 when a committed generated composition file is missing or stale. Capability
@@ -199,9 +213,10 @@ second app-requirements schema.
 
 Composition discovers app ownership only from that recursively validated
 canonical model. It treats `.c`, `.cc`, `.cpp`, and `.cxx` uniformly and rejects
-every app-package production translation unit without a manifest owner. The
-manual central `app_registry.c` remains non-app runtime composition
-infrastructure until its Phase 3.4 replacement. For each enabled app, only its
+every app-package production translation unit without a manifest owner. There
+is no manual central app descriptor table: the small core registry only
+iterates generated const arrays and dispatches through the typed entry binding.
+For each enabled app, only its
 app root and directories explicitly named by `private_includes` MAY become
 private compiler include roots. Build tooling MUST remove other app header
 directories promoted by recursive legacy-SDK discovery; an undeclared header

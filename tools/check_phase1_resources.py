@@ -303,6 +303,20 @@ def _function_regions(code: str) -> list[tuple[str, int, int, int]]:
     return regions
 
 
+def _is_designated_initializer_alias(code: str, alias_start: int) -> bool:
+    """Distinguish `.field = function` data from a function-pointer alias."""
+
+    cursor = alias_start - 1
+    while cursor >= 0 and code[cursor].isspace():
+        cursor -= 1
+    if cursor < 0 or code[cursor] != ".":
+        return False
+    cursor -= 1
+    while cursor >= 0 and code[cursor].isspace():
+        cursor -= 1
+    return cursor >= 0 and code[cursor] in "{,"
+
+
 def _runtime_sites(
     snapshot: dict[str, str],
     *,
@@ -354,6 +368,8 @@ def _runtime_sites(
     for relative, (code, _digest, _regions) in files.items():
         file_aliases: set[str] = set()
         for match in ALIAS_RE.finditer(code):
+            if _is_designated_initializer_alias(code, match.start()):
+                continue
             target = match.group("target").lstrip(":").rsplit("::", 1)[-1].lower()
             if target in primitive_names:
                 file_aliases.add(match.group("alias"))
@@ -425,6 +441,8 @@ def _runtime_sites(
     for relative, (code, _digest, regions) in files.items():
         file_aliases = global_aliases
         for match in ALIAS_RE.finditer(code):
+            if _is_designated_initializer_alias(code, match.start()):
+                continue
             target = match.group("target").lstrip(":").rsplit("::", 1)[-1].lower()
             if target in primitive_names or target in tainted_base:
                 add_site(
@@ -575,6 +593,8 @@ def added_runtime_objects_from_snapshots(
     wrapper_runtime_markers: tuple[str, ...] | None = None,
     include_cxx_new: bool = True,
     include_std_thread: bool = True,
+    site_line_sensitive: bool = True,
+    site_context_sensitive: bool = True,
 ) -> list[str]:
     """Report creation sites not grandfathered by an exact source snapshot."""
 
@@ -592,29 +612,27 @@ def added_runtime_objects_from_snapshots(
             str(site["path"])
         )
 
-    def keys(
-        site: dict[str, str | int]
-    ) -> set[tuple[str, str, str, str, str, int]]:
+    def identity(
+        site: dict[str, str | int], path: str
+    ) -> tuple[object, ...]:
         signature = str(site["signature"])
         function = str(site["function"])
         fingerprint = str(site["fingerprint"])
         context = str(site["context"])
-        line = int(site["line"])
+        common = (signature, path, function, fingerprint)
+        if site_context_sensitive:
+            common += (context,)
+        return common + (int(site["line"]),) if site_line_sensitive else common
+
+    def keys(site: dict[str, str | int]) -> set[tuple[object, ...]]:
         paths = {str(site["path"])}
         # Exact normalized file content may be renamed without manufacturing a
         # new runtime object. Modified/copy-pasted files do not get this waiver.
         paths.update(baseline_file_paths.get(str(site["file_hash"]), set()))
-        return {
-            (signature, path, function, fingerprint, context, line)
-            for path in paths
-        }
+        return {identity(site, path) for path in paths}
 
     baseline_keys = Counter(
-        (
-            str(site["signature"]), str(site["path"]),
-            str(site["function"]), str(site["fingerprint"]),
-            str(site["context"]), int(site["line"]),
-        )
+        identity(site, str(site["path"]))
         for site in baseline
     )
     findings: list[str] = []

@@ -22,6 +22,12 @@ parse TOML, discover apps on a filesystem, register apps during boot, load
 native code dynamically, or provide the Phase 4 Project Format and Program
 Manager. The existing [legacy lifecycle](../APP_LIFECYCLE.md) remains a separate
 compatibility surface until each app is migrated through an explicit adapter.
+For a legacy manifest, its `entry` symbol names one app-owned immutable
+`hk_legacy_app_entry_t` binding object. The generated descriptor stores a typed
+pointer to that object; generic registry code does not copy callback symbols or
+select concrete apps. A lifecycle-v2 manifest instead produces the typed v2
+descriptor branch consumed by the runtime defined here. The legacy binding is
+private firmware compatibility machinery, not an SDK ABI.
 
 ## Public lifecycle
 
@@ -96,6 +102,12 @@ The generated descriptor declares private state size and alignment. The runtime
 binds one fixed-capacity state slot, clears it before `PROBING`, and does not
 return it to `REUSABLE` until invalidation is complete. App state is never
 allocated from a heap and is not shared between generations.
+
+Descriptor identity, lifecycle kind, finite limits, capability/service
+requests, menu/autostart metadata, and help/debug text are immutable generated
+data. The runtime may retain a descriptor pointer for one instance but MUST NOT
+modify it, construct a replacement, register another descriptor at boot, or
+derive identity from registry/menu position.
 
 Only `RUNNING` accepts ordinary dispatch. Once teardown is requested, no new
 `event`, `tick`, or `render` callback may begin. A callback already on the

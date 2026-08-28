@@ -537,6 +537,16 @@ class DocumentationContractsTest(unittest.TestCase):
                 "an undeclared header\ndirectory MAY enter",
                 "govern C/C++ ownership and private include roots",
             ),
+            (
+                "never guesses callback\nsymbol names",
+                "guesses callback\nsymbol names",
+                "define typed legacy/v2 entry objects",
+            ),
+            (
+                "no manual central app descriptor table",
+                "a manual central app descriptor table is also maintained",
+                "generated descriptors as the sole registry",
+            ),
         )
         for old, new, expected in mutations:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory(

@@ -73,8 +73,9 @@ All twelve menu applications are self-contained modules: `apps/terminal/`,
 `apps/object_detect/`, `apps/micropython/`, `apps/files/`, `apps/buttons/`,
 `apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point,
 controller, view, icon, feature configuration, and feature-specific
-state/services. The only public header of a module is its `*_app.h`, and only
-`apps/app_registry.c` may include it.
+state/services. The only public header of a module is its `*_app.h`, and the app
+implementation owns its legacy binding. Generated registry code uses typed
+extern entry objects and does not include app-private headers.
 
 The build manifest maps each app ID to its whole directory. `--disable-app`
 therefore removes every source and private header of that feature. Shared camera
@@ -84,7 +85,11 @@ only for FACE/OBJECT. The shared core-1 executor is retained while APRILTAG or
 MICROPYTHON needs it. With no camera consumer, sensor/DVP/camera runtime sources
 are omitted while the general KPU HAL remains available.
 
-The registry dispatches primary and secondary screen ownership, lifecycle callbacks, background ticks, SD events, menu icons, and debug commands. Shared screen, SD, debug, boot, and system-tick controllers do not include feature headers or select features with conditionals.
+Canonical manifests generate the immutable descriptor and menu arrays. The
+small app-neutral core registry dispatches primary and secondary screen
+ownership, legacy lifecycle callbacks, background ticks, SD events, menu icons,
+and debug commands. Shared screen, SD, debug, boot, and system-tick controllers
+do not include feature headers or select features with conditionals.
 
 CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
 

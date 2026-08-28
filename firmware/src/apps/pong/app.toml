@@ -2,7 +2,7 @@ schema = 1
 id = "pong"
 name = "PONG"
 version = "0.1.0"
-entry = "pong_enter"
+entry = "pong_legacy_entry"
 generated_symbol = "hk_generated_app_pong"
 lifecycle = "legacy"
 sources = ["pong_app.c", "pong_controller.c", "pong_view.c"]
@@ -29,7 +29,7 @@ optional = []
 static_ram_bytes = 1048576
 stack_bytes = 16384
 state_bytes = 262144
-tick_interval_us = 10000
+tick_interval_us = 20000
 tick_budget_us = 1000
 render_budget_us = 10000
 

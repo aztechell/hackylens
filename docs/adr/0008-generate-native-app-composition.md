@@ -35,10 +35,12 @@ filesystem discovery, mutable registration table, board-ID inference, or
 dynamic code loader. Stable identity and ordering are explicit manifest values,
 not directory, array, object, or link order.
 
-Legacy apps name an explicit legacy entry adapter in their manifests until
-migration. They do not retain a separate production registry or requirements
-table. Generated policy uses layer-generic rules and contains no per-app
-architecture allowlist.
+Legacy apps name an explicit app-owned const `hk_legacy_app_entry_t` binding
+object in their manifests until migration. Generated descriptors reference
+that typed object; callback symbols are not guessed or repeated in a central C
+table. Lifecycle-v2 entries use the separate typed descriptor branch. Apps do
+not retain a separate production registry or requirements table. Generated
+policy uses layer-generic rules and contains no per-app architecture allowlist.
 
 ## Alternatives
 
@@ -72,9 +74,10 @@ compatible with App Runtime, Feature App SDK, and Capability API `0.1.x` through
 exclusive upper bound `0.2.0`.
 
 The private Phase 2 requirements schema and manual registry remained unchanged
-in package 3.1. Package 3.3 replaces the requirements schema and manual app
-source/enable lists after validator and disabled-build parity; the manual
-registry remains until generated-descriptor/legacy-adapter parity in 3.4.
+in package 3.1. Package 3.3 replaced the requirements schema and manual app
+source/enable lists after validator and disabled-build parity. Package 3.4
+replaced the manual registry with immutable generated descriptors, app-owned
+legacy bindings, and a small generic registry runtime after parity tests.
 Project Format remains unpublished and independent.
 
 ## Evidence
@@ -86,8 +89,11 @@ Project Format remains unpublished and independent.
 - Architecture policy names manifest and generated-registry layers without an
   app-specific allowlist.
 - Package 3.3 checks generator freshness and deterministic order and proves
-  disabled source/third-party isolation. Registry parity remains the 3.4 gate
-  before the manual registry is removed.
+  disabled source/third-party isolation.
+- Package 3.4 checks empty, single, all-enabled, disabled, and mixed legacy/v2
+  generation; host runtime tests preserve menu, autostart, screen, SD, debug,
+  tick, capability, and service dispatch while the architecture guard rejects
+  manual registry reintroduction and board/HAL/driver policy in generated code.
 
 ## References
 

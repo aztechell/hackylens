@@ -65,9 +65,12 @@ void debug_uart_handle_command(const char *cmd)
 #endif
         for(uint8_t i = 0; i < g_menu_item_count; i++)
         {
-            if(g_menu_items[i].debug_help)
+            const hk_app_t *app = g_menu_items[i];
+            const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
+
+            if(entry && entry->handle_debug_command && app->debug_help)
             {
-                debug_console_write_text(g_menu_items[i].debug_help);
+                debug_console_write_text(app->debug_help);
                 debug_console_write_text(" ");
             }
         }

@@ -8,5 +8,6 @@ void terminal_exit(void);
 void terminal_tick(const hk_input_snapshot_t *input);
 void terminal_handle_buttons(const hk_input_snapshot_t *input);
 void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+extern const hk_legacy_app_entry_t terminal_legacy_entry;
 
 #endif

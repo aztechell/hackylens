@@ -2,7 +2,7 @@ schema = 1
 id = "buttons"
 name = "BUTTONS"
 version = "0.1.0"
-entry = "buttons_enter"
+entry = "buttons_legacy_entry"
 generated_symbol = "hk_generated_app_buttons"
 lifecycle = "legacy"
 sources = ["buttons_app.c", "buttons_controller.c", "buttons_view.c"]
@@ -28,7 +28,7 @@ optional = []
 static_ram_bytes = 1048576
 stack_bytes = 16384
 state_bytes = 262144
-tick_interval_us = 10000
+tick_interval_us = 20000
 tick_budget_us = 1000
 render_budget_us = 10000
 
