@@ -231,6 +231,12 @@ APP_MANIFEST_SCHEMA_REQUIREMENTS = (
         r"same\s+in-memory\s+canonical\s+model",
         "Native App Manifest must require composition freshness from one canonical model",
     ),
+    (
+        r"\.c`,\s+`\.cc`,\s+`\.cpp`,\s+and\s+`\.cxx`[\s\S]*"
+        r"without\s+a\s+manifest\s+owner[\s\S]*"
+        r"undeclared\s+header\s+directory\s+MUST\s+NOT\s+enter",
+        "Native App Manifest must govern C/C++ ownership and private include roots",
+    ),
 )
 
 

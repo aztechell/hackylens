@@ -197,6 +197,16 @@ when a committed generated composition file is missing or stale. Capability
 composition consumes this same in-memory canonical model; it does not parse a
 second app-requirements schema.
 
+Composition discovers app ownership only from that recursively validated
+canonical model. It treats `.c`, `.cc`, `.cpp`, and `.cxx` uniformly and rejects
+every app-package production translation unit without a manifest owner. The
+manual central `app_registry.c` remains non-app runtime composition
+infrastructure until its Phase 3.4 replacement. For each enabled app, only its
+app root and directories explicitly named by `private_includes` MAY become
+private compiler include roots. Build tooling MUST remove other app header
+directories promoted by recursive legacy-SDK discovery; an undeclared header
+directory MUST NOT enter the compiler include search path.
+
 ## Native app manifest versus Phase 4 Project Format
 
 The native app manifest describes C sources compiled into one firmware image.

@@ -532,6 +532,11 @@ class DocumentationContractsTest(unittest.TestCase):
                 "an unspecified generator command",
                 "composition freshness from one canonical model",
             ),
+            (
+                "an undeclared header\ndirectory MUST NOT enter",
+                "an undeclared header\ndirectory MAY enter",
+                "govern C/C++ ownership and private include roots",
+            ),
         )
         for old, new, expected in mutations:
             with self.subTest(expected=expected), tempfile.TemporaryDirectory(

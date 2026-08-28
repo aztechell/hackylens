@@ -54,6 +54,25 @@ def validate_build(board_id: str) -> list[str]:
         return failures + [f"firmware stage is unavailable: {stage}"]
     config_path = stage / "hk_config.h"
     config = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
+    project_path = stage / "project.cmake"
+    project = project_path.read_text(encoding="utf-8") if project_path.is_file() else ""
+    include_block = (
+        project.split("target_include_directories(${PROJECT_NAME} PRIVATE", 1)[1]
+        .split(")", 1)[0]
+        if "target_include_directories(${PROJECT_NAME} PRIVATE" in project
+        else ""
+    )
+    allowed_includes, forbidden_includes = build_firmware.app_include_sets(stage, disabled)
+    for include in allowed_includes:
+        encoded = build_firmware.cmake_path(include)
+        if encoded not in include_block:
+            failures.append(f"manifest app include root is absent from CMake: {encoded}")
+    for include in forbidden_includes:
+        encoded = build_firmware.cmake_path(include)
+        if encoded in include_block:
+            failures.append(f"undeclared app header directory is an include root: {encoded}")
+        if encoded not in project:
+            failures.append(f"implicit app header directory is not pruned: {encoded}")
 
     for app_id, app in apps.items():
         relative = Path("firmware/src/apps") / str(app["directory"])

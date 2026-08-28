@@ -21,6 +21,10 @@ MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
 GENERATED_ROOT = ROOT / "firmware" / "generated" / "app_composition"
 GENERATED_JSON = GENERATED_ROOT / "composition.json"
 GENERATED_DEFAULTS = ROOT / "firmware" / "config" / "app_config_defaults.h"
+TRANSLATION_UNIT_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
+# The manual central registry is runtime composition infrastructure, not an app
+# package. Phase 3.4 replaces it with generated descriptors.
+CENTRAL_COMPOSITION_TRANSLATION_UNITS = frozenset({"app_registry.c"})
 
 
 class CompositionError(ValueError):
@@ -54,29 +58,40 @@ def load_model(manifest_root: Path = MANIFEST_ROOT) -> dict[str, Any]:
     except ManifestError as exc:
         raise CompositionError(str(exc)) from exc
 
-    manifest_directories = {app["directory"] for app in model["apps"]}
-    source_directories = {
-        path.relative_to(manifest_root).as_posix()
-        for path in manifest_root.iterdir()
-        if path.is_dir() and any(path.rglob("*.c"))
+    manifest_directories = {
+        Path(str(app["directory"])): app for app in model["apps"]
     }
-    if manifest_directories != source_directories:
-        missing = sorted(source_directories - manifest_directories)
-        extra = sorted(manifest_directories - source_directories)
+    present_by_directory: dict[Path, set[str]] = {
+        directory: set() for directory in manifest_directories
+    }
+    orphans: list[str] = []
+    for path in manifest_root.rglob("*"):
+        if not path.is_file() or path.suffix.casefold() not in TRANSLATION_UNIT_SUFFIXES:
+            continue
+        relative = path.relative_to(manifest_root)
+        if "tests" in relative.parts:
+            continue
+        if relative.as_posix() in CENTRAL_COMPOSITION_TRANSLATION_UNITS:
+            continue
+        owners = [
+            directory for directory in manifest_directories
+            if relative.is_relative_to(directory)
+        ]
+        if not owners:
+            orphans.append(relative.as_posix())
+            continue
+        owner = max(owners, key=lambda item: len(item.parts))
+        present_by_directory[owner].add(relative.relative_to(owner).as_posix())
+    if orphans:
         raise CompositionError(
-            "manifest/app directory mismatch: "
-            f"missing={missing}, extra={extra}"
+            "orphan app translation units have no canonical manifest owner: "
+            f"{sorted(orphans)}"
         )
 
     for app in model["apps"]:
-        directory = manifest_root / app["directory"]
+        relative_directory = Path(str(app["directory"]))
         declared = set(app["sources"])
-        present = {
-            path.relative_to(directory).as_posix()
-            for path in directory.rglob("*")
-            if path.is_file() and path.suffix.casefold() in {".c", ".cc", ".cpp", ".cxx"}
-            and "tests" not in path.relative_to(directory).parts
-        }
+        present = present_by_directory[relative_directory]
         if declared != present:
             raise CompositionError(
                 f"{app['id']}: manifest sources must exactly cover app translation units; "
