@@ -252,7 +252,7 @@ composition имеет один source of truth; ручное добавлени
 
 ## 3.4 — Generated registry и legacy adapter
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -265,17 +265,17 @@ composition имеет один source of truth; ручное добавлени
 
 ### Scope
 
-- [ ] Генерировать immutable registry descriptors из canonical manifests.
-- [ ] Генерировать menu title/order, stable autostart lookup, help/debug metadata,
+- [x] Генерировать immutable registry descriptors из canonical manifests.
+- [x] Генерировать menu title/order, stable autostart lookup, help/debug metadata,
   tick policy и capability/service requests.
-- [ ] Оставить маленький generic registry runtime для lookup/iteration/dispatch.
-- [ ] Добавить explicit `legacy` entry adapter для ещё не мигрированных apps.
-- [ ] Legacy callback symbols указываются manifest entry metadata и не копируются
+- [x] Оставить маленький generic registry runtime для lookup/iteration/dispatch.
+- [x] Добавить explicit `legacy` entry adapter для ещё не мигрированных apps.
+- [x] Legacy callback symbols указываются manifest entry metadata и не копируются
   вручную в central C table.
-- [ ] Удалить manual descriptor table из `apps/app_registry.c`; generated code не
+- [x] Удалить manual descriptor table из `apps/app_registry.c`; generated code не
   должен содержать board/HAL/driver policy.
-- [ ] Сохранить persisted autostart compatibility независимо от menu order.
-- [ ] Проверить empty registry, single app, all apps, disabled app и mixed
+- [x] Сохранить persisted autostart compatibility независимо от menu order.
+- [x] Проверить empty registry, single app, all apps, disabled app и mixed
   legacy/v2 compositions.
 
 ### Exit gate
