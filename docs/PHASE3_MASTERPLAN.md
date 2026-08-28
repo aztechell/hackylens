@@ -216,7 +216,7 @@ canonical model; malformed manifest падает до compile.
 
 ## 3.3 — Manifest-driven build composition
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
