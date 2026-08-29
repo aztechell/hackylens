@@ -70,6 +70,97 @@ class AppRegistryTests(unittest.TestCase):
                 )
         return result.stdout
 
+    def compile_fixture_registry(self, *, hidden_enabled: bool) -> str:
+        buttons = copy.deepcopy(next(
+            app for app in self.model["apps"] if app["id"] == "buttons"
+        ))
+        terminal = copy.deepcopy(next(
+            app for app in self.model["apps"] if app["id"] == "terminal"
+        ))
+        buttons["menu"] = {"visible": False, "order": 65000}
+        buttons["autostart"] = {"eligible": True, "id": 42}
+        terminal["autostart"] = {"eligible": True, "id": 1}
+        model = {"schema": 1, "apps": [buttons, terminal]}
+
+        with tempfile.TemporaryDirectory(prefix="hackylens-app-registry-fixture-") as directory:
+            temporary = Path(directory)
+            core = temporary / "firmware/src/core"
+            generated = temporary / "firmware/generated/app_registry"
+            core.mkdir(parents=True)
+            generated.mkdir(parents=True)
+            for name in ("hk_app_registry.c", "hk_app_registry.h", "hk_app.h", "hk_events.h"):
+                shutil.copy2(ROOT / "firmware/src/core" / name, core / name)
+            (generated / "registry.h").write_text(
+                app_registry.generated_header(model), encoding="utf-8"
+            )
+            (generated / "registry.c").write_text(
+                app_registry.generated_source(
+                    model, app_composition.enable_definition
+                ),
+                encoding="utf-8",
+            )
+            (temporary / "hk_config.h").write_text(
+                "#define HK_ENABLE_APP_BUTTONS "
+                f"{1 if hidden_enabled else 0}\n"
+                "#define HK_ENABLE_APP_TERMINAL 1\n",
+                encoding="utf-8",
+            )
+            harness = temporary / "fixture.c"
+            harness.write_text(r'''
+#include <stdio.h>
+#include <string.h>
+#include "hk_config.h"
+#include "firmware/generated/app_registry/registry.h"
+#include "firmware/src/core/hk_app_registry.h"
+
+const hk_legacy_app_entry_t buttons_legacy_entry = {0};
+const hk_legacy_app_entry_t terminal_legacy_entry = {0};
+
+int main(void)
+{
+    if(g_hk_reserved_autostart_id_count != 2U ||
+       g_hk_reserved_autostart_ids[0] != 1U ||
+       g_hk_reserved_autostart_ids[1] != 42U ||
+       !hk_app_autostart_id_is_persistable(0U) ||
+       !hk_app_autostart_id_is_persistable(1U) ||
+       !hk_app_autostart_id_is_persistable(42U) ||
+       hk_app_autostart_id_is_persistable(17U) ||
+       hk_app_autostart_id_is_persistable(41U))
+        return 1;
+#if HK_ENABLE_APP_BUTTONS
+    if(g_menu_item_count != 1U || hk_app_autostart_count() != 2U ||
+       !hk_app_for_autostart_id(42U) ||
+       strcmp(hk_app_autostart_at(0U)->id, "buttons") != 0)
+        return 2;
+#else
+    if(g_menu_item_count != 1U || hk_app_autostart_count() != 1U ||
+       hk_app_for_autostart_id(42U) != NULL ||
+       !hk_app_autostart_id_is_persistable(42U))
+        return 3;
+#endif
+    puts("FIXTURE_REGISTRY_OK");
+    return 0;
+}
+''', encoding="utf-8")
+            executable = temporary / (
+                "fixture_registry.exe" if os.name == "nt" else "fixture_registry"
+            )
+            subprocess.run([
+                self.compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                f"-I{temporary}", str(generated / "registry.c"),
+                str(core / "hk_app_registry.c"), str(harness), "-o", str(executable),
+            ], cwd=ROOT, check=True)
+            result = subprocess.run(
+                [str(executable)], cwd=ROOT, check=False, capture_output=True,
+                text=True, timeout=30,
+            )
+            if result.returncode != 0:
+                self.fail(
+                    f"fixture registry failed ({result.returncode}): "
+                    f"stdout={result.stdout!r} stderr={result.stderr!r}"
+                )
+        return result.stdout
+
     def test_all_apps_registry_runtime(self) -> None:
         self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
             micropython=True
@@ -86,8 +177,9 @@ class AppRegistryTests(unittest.TestCase):
         empty_source = app_registry.generated_source(
             empty, app_composition.enable_definition
         )
-        self.assertIn("#define HK_AUTOSTART_COUNT 1U", empty_header)
+        self.assertIn("g_hk_reserved_autostart_ids", empty_header)
         self.assertEqual(empty_source.count("    NULL,"), 2)
+        self.assertIn("    HK_AUTOSTART_OFF,", empty_source)
         self.assertNotIn("extern const hk_legacy_app_entry_t", empty_source)
 
         terminal = next(
@@ -119,6 +211,17 @@ class AppRegistryTests(unittest.TestCase):
         self.assertNotIn("&hk_generated_app_buttons,", menu)
         self.assertIn(".autostart_id = 42U", source)
         self.assertIn(".autostart_eligible = 1U", source)
+        self.assertIn("    42U,", source)
+
+    def test_sparse_ids_reject_holes_and_hidden_app_remains_enumerable(self) -> None:
+        self.assertIn(
+            "FIXTURE_REGISTRY_OK", self.compile_fixture_registry(hidden_enabled=True)
+        )
+
+    def test_disabled_app_keeps_reserved_persisted_identity(self) -> None:
+        self.assertIn(
+            "FIXTURE_REGISTRY_OK", self.compile_fixture_registry(hidden_enabled=False)
+        )
 
     def test_mixed_legacy_and_v2_entries_are_typed(self) -> None:
         terminal = copy.deepcopy(next(
@@ -176,6 +279,21 @@ class AppRegistryTests(unittest.TestCase):
             self.assertNotIn(forbidden, first.casefold())
         self.assertIn("hide-external-link-menu", first)
         self.assertIn("hackylens.service.legacy-camera", first)
+
+    def test_autostart_persistence_contract_is_documented(self) -> None:
+        manifest = (ROOT / "docs/spec/APP_MANIFEST.md").read_text(encoding="utf-8")
+        adr = (ROOT / "docs/adr/0008-generate-native-app-composition.md").read_text(
+            encoding="utf-8"
+        )
+        lifecycle = (ROOT / "docs/APP_LIFECYCLE.md").read_text(encoding="utf-8")
+        baseline = (ROOT / "docs/PHASE3_BASELINE.md").read_text(encoding="utf-8")
+        for document in (manifest, adr):
+            self.assertIn("immutable reserved-ID set", document)
+            self.assertIn("exact set membership", document)
+            self.assertIn("Settings schema v5", document)
+            self.assertIn("schema-v4 uint8", document)
+        self.assertIn("independent of\nmenu visibility/order", lifecycle)
+        self.assertEqual(baseline.count("--phase3-receipt"), 2)
 
     def test_current_legacy_menu_autostart_debug_and_callback_parity(self) -> None:
         expected_order = [

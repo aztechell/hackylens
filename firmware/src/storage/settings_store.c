@@ -107,9 +107,42 @@ typedef struct
     uint32_t crc32;
 } settings_record_v3_t;
 
+typedef struct
+{
+    uint8_t led_enabled;
+    uint8_t led_brightness;
+    uint8_t rgb_enabled;
+    uint8_t rgb_brightness;
+    uint8_t screen_brightness;
+    uint8_t camera_review_after_shot;
+    uint8_t auto_sleep_minutes;
+    uint8_t camera_format_rgb_red;
+    uint8_t camera_size_rgb_green;
+    uint8_t camera_schema_mark;
+    uint8_t rgb_red_light_mode;
+    uint8_t rgb_green;
+    uint8_t rgb_blue;
+    uint8_t rgb_schema_mark;
+    uint8_t fps_rgb_blue;
+    uint8_t qr_rate_fps_mark;
+    uint8_t app_data[SETTINGS_APP_DATA_SIZE];
+    uint8_t autostart_id;
+} settings_payload_v4_t;
+
+typedef struct
+{
+    uint32_t magic;
+    uint16_t version;
+    uint16_t payload_size;
+    uint32_t sequence;
+    settings_payload_v4_t payload;
+    uint32_t crc32;
+} settings_record_v4_t;
+
 typedef union
 {
     settings_record_t current;
+    settings_record_v4_t v4;
     settings_record_v3_t v3;
     settings_record_v2_t v2;
     settings_record_v1_t legacy;
@@ -121,6 +154,8 @@ _Static_assert(sizeof(settings_payload_v2_t) == 96U, "settings v2 payload layout
 _Static_assert(sizeof(settings_record_v2_t) == 112U, "settings v2 record layout changed");
 _Static_assert(sizeof(settings_payload_v3_t) == 97U, "settings v3 payload layout changed");
 _Static_assert(sizeof(settings_record_v3_t) == 116U, "settings v3 record layout changed");
+_Static_assert(sizeof(settings_payload_v4_t) == 105U, "settings v4 payload layout changed");
+_Static_assert(sizeof(settings_record_v4_t) == 124U, "settings v4 record layout changed");
 
 static internal_flash_partition_id_t flash_slot_partition(uint8_t slot)
 {
@@ -207,10 +242,31 @@ static uint8_t settings_record_v3_valid(const settings_record_v3_t *record)
            record->crc32 == settings_record_v3_crc(record);
 }
 
+static uint32_t settings_record_v4_crc(const settings_record_v4_t *record)
+{
+    uint32_t crc = 0;
+    crc = crc32_update(crc, (const uint8_t *)&record->magic, sizeof(record->magic));
+    crc = crc32_update(crc, (const uint8_t *)&record->version, sizeof(record->version));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload_size, sizeof(record->payload_size));
+    crc = crc32_update(crc, (const uint8_t *)&record->sequence, sizeof(record->sequence));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload, sizeof(record->payload));
+    return crc;
+}
+
+static uint8_t settings_record_v4_valid(const settings_record_v4_t *record)
+{
+    return record->magic == SETTINGS_MAGIC &&
+           record->version == SETTINGS_STORAGE_V4_VERSION &&
+           record->payload_size == sizeof(settings_payload_v4_t) &&
+           record->crc32 == settings_record_v4_crc(record);
+}
+
 static uint8_t settings_slot_valid(const settings_slot_t *slot)
 {
     if(slot->current.version == SETTINGS_STORAGE_VERSION)
         return settings_record_valid(&slot->current);
+    if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
+        return settings_record_v4_valid(&slot->v4);
     if(slot->v3.version == SETTINGS_STORAGE_V3_VERSION)
         return settings_record_v3_valid(&slot->v3);
     if(slot->v2.version == SETTINGS_STORAGE_V2_VERSION)
@@ -222,6 +278,8 @@ static uint32_t settings_slot_sequence(const settings_slot_t *slot)
 {
     if(slot->current.version == SETTINGS_STORAGE_VERSION)
         return slot->current.sequence;
+    if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
+        return slot->v4.sequence;
     if(slot->v3.version == SETTINGS_STORAGE_V3_VERSION)
         return slot->v3.sequence;
     if(slot->v2.version == SETTINGS_STORAGE_V2_VERSION)
@@ -234,6 +292,13 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
     memset(payload, 0, sizeof(*payload));
     if(slot->current.version == SETTINGS_STORAGE_VERSION)
         *payload = slot->current.payload;
+    else if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
+    {
+        memcpy(payload, &slot->v4.payload, sizeof(settings_payload_v1_t));
+        memcpy(payload->app_data, slot->v4.payload.app_data,
+               sizeof(slot->v4.payload.app_data));
+        payload->autostart_id = slot->v4.payload.autostart_id;
+    }
     else if(slot->v3.version == SETTINGS_STORAGE_V3_VERSION)
     {
         memcpy(payload, &slot->v3.payload, sizeof(settings_payload_v1_t));

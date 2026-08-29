@@ -25,6 +25,12 @@ autostart ID and cannot be selected as boot targets.
 
 After settings load, boot UI, and SD mount, startup resolves the persisted autostart ID through the registry and calls the target's normal `enter` with an empty input snapshot. The menu index is set to the target before entry, so BACK returns with that item selected. OFF or a target omitted by the current build opens the menu; an omitted target remains persisted and becomes active again when a later build restores it. `HKMENU` and ordinary exits never retrigger autostart.
 
+Autostart identity is a stable uint16 manifest value. Settings schema v5 stores
+it without narrowing and migrates schema-v4 uint8 values by zero extension.
+Only OFF or exact membership in the generated reserved-ID set is persisted;
+numeric holes are rejected. The enabled autostart-choice view is independent of
+menu visibility/order, while a disabled app keeps only its reserved identity.
+
 Screen state is exposed through `core/hk_screen.h`. Apps and controllers receive
 the existing `hk_input_snapshot_t` ABI from the runtime loop. The loop adapts
 sequenced `hackylens.cap.input` events; apps and controllers must not access the

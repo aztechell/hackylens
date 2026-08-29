@@ -202,8 +202,17 @@ entry reference, help/debug text, finite limits, and capability/service request
 metadata. A canonical descriptor array is ordered by canonical app ID; the
 separate menu view is ordered only by explicit `menu.order`. Conditional build
 flags remove a disabled descriptor and its entry reference without renumbering
-persisted autostart IDs. Empty and single-app compositions remain bounded const
-tables rather than runtime registration special cases.
+persisted autostart IDs. The generator also emits an immutable reserved-ID set
+of all non-zero uint16 autostart IDs before applying app enable flags.
+Persistence accepts only OFF or exact set membership; it never treats
+`max(id) + 1` as a dense range. Enabled autostart choices are enumerated from
+the canonical descriptor array, independently of menu visibility and menu
+order, so a hidden eligible app remains selectable. A disabled app has no
+runtime target or choice but keeps its reserved persisted identity for a later
+build that restores it. Settings schema v5 stores the full uint16 identity;
+loading schema-v4 uint8 IDs 0–10 zero-extends them without renumbering.
+Empty and single-app compositions remain bounded const tables rather than
+runtime registration special cases.
 
 `python tools/gen_app_composition.py --check` validates the production manifest
 set, recomputes the source/include and `HK_ENABLE_APP_*` composition, and fails

@@ -6,8 +6,6 @@
 
 #include "../../src/core/hk_app.h"
 
-#define HK_AUTOSTART_COUNT 11U
-
 extern const hk_app_t hk_generated_app_apriltag;
 extern const hk_app_t hk_generated_app_buttons;
 extern const hk_app_t hk_generated_app_camera;
@@ -23,6 +21,8 @@ extern const hk_app_t hk_generated_app_terminal;
 
 extern const hk_app_t *const g_hk_generated_apps[];
 extern const uint8_t g_hk_generated_app_count;
+extern const hk_autostart_id_t g_hk_reserved_autostart_ids[];
+extern const uint8_t g_hk_reserved_autostart_id_count;
 extern const hk_app_t *const g_menu_items[];
 extern const uint8_t g_menu_item_count;
 

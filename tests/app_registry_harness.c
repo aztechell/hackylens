@@ -124,13 +124,23 @@ int main(void)
     CHECK(strcmp(g_menu_items[10]->id, "sleep") == 0);
     CHECK(hk_app_for_autostart_id(10U) == NULL);
 #endif
+    CHECK(hk_app_autostart_id_is_persistable(HK_AUTOSTART_OFF) == 1U);
+    CHECK(hk_app_autostart_id_is_persistable(10U) == 1U);
+    CHECK(hk_app_autostart_id_is_persistable(11U) == 0U);
+    CHECK(hk_app_autostart_id_is_persistable(65535U) == 0U);
     CHECK(strcmp(g_hk_generated_apps[0]->id, "apriltag") == 0);
     CHECK(strcmp(g_hk_generated_apps[g_hk_generated_app_count - 1U]->id,
                  "terminal") == 0);
     CHECK(strcmp(g_menu_items[0]->id, "terminal") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(6U)->id, "files") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(9U)->id, "object-detect") == 0);
-    CHECK(strcmp(hk_app_autostart_at(5U)->id, "object-detect") == 0);
+    CHECK(strcmp(hk_app_autostart_at(5U)->id,
+#if HK_ENABLE_APP_MICROPYTHON
+                 "micropython"
+#else
+                 "object-detect"
+#endif
+                 ) == 0);
     CHECK(hk_app_autostart_count() ==
 #if HK_ENABLE_APP_MICROPYTHON
           10U

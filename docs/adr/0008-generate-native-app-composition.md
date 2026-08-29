@@ -35,6 +35,13 @@ filesystem discovery, mutable registration table, board-ID inference, or
 dynamic code loader. Stable identity and ordering are explicit manifest values,
 not directory, array, object, or link order.
 
+Every non-zero uint16 autostart ID is emitted into an immutable reserved-ID set
+before app enable flags are applied. Persisted validity is exact set membership,
+not a dense numeric range; disabled apps retain their reserved identity.
+Autostart choices enumerate enabled eligible canonical descriptors without
+using menu visibility or menu order. Settings schema v5 stores the complete
+uint16 value and migrates schema-v4 uint8 IDs by zero extension.
+
 Legacy apps name an explicit app-owned const `hk_legacy_app_entry_t` binding
 object in their manifests until migration. Generated descriptors reference
 that typed object; callback symbols are not guessed or repeated in a central C
@@ -94,6 +101,9 @@ Project Format remains unpublished and independent.
   generation; host runtime tests preserve menu, autostart, screen, SD, debug,
   tick, capability, and service dispatch while the architecture guard rejects
   manual registry reintroduction and board/HAL/driver policy in generated code.
+- Package 3.4 correction tests IDs above 255 across settings save/load, exact
+  sparse-ID membership, hidden eligible enumeration, disabled-ID reservation,
+  and schema-v4 settings migration without changing the 124-byte record size.
 
 ## References
 

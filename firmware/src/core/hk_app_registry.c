@@ -27,7 +27,7 @@ const hk_app_t *hk_app_for_screen(screen_t screen)
 
 const hk_app_t *hk_app_for_autostart_id(hk_autostart_id_t id)
 {
-    if(id <= HK_AUTOSTART_OFF || id >= HK_AUTOSTART_COUNT)
+    if(id == HK_AUTOSTART_OFF)
         return NULL;
     for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
     {
@@ -41,23 +41,30 @@ const hk_app_t *hk_app_for_autostart_id(hk_autostart_id_t id)
 
 uint8_t hk_app_autostart_id_is_persistable(hk_autostart_id_t id)
 {
-    return id < HK_AUTOSTART_COUNT ? 1U : 0U;
+    if(id == HK_AUTOSTART_OFF)
+        return 1U;
+    for(uint8_t i = 0U; i < g_hk_reserved_autostart_id_count; i++)
+    {
+        if(g_hk_reserved_autostart_ids[i] == id)
+            return 1U;
+    }
+    return 0U;
 }
 
 uint8_t hk_app_autostart_count(void)
 {
     uint8_t count = 0U;
 
-    for(uint8_t i = 0U; i < g_menu_item_count; i++)
-        count += g_menu_items[i]->autostart_eligible ? 1U : 0U;
+    for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
+        count += g_hk_generated_apps[i]->autostart_eligible ? 1U : 0U;
     return count;
 }
 
 const hk_app_t *hk_app_autostart_at(uint8_t index)
 {
-    for(uint8_t i = 0U; i < g_menu_item_count; i++)
+    for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
     {
-        const hk_app_t *app = g_menu_items[i];
+        const hk_app_t *app = g_hk_generated_apps[i];
 
         if(!app->autostart_eligible)
             continue;

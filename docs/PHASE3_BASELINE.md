@@ -66,10 +66,10 @@ With the pinned host compiler and dependencies available:
 python tools/check_phase3_baseline.py --measure-dispatch
 python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython
 python tools/check_phase3_baseline.py --verify-profile micropython-disabled
-python tools/check_phase2_resources.py --capture-profile micropython-disabled
+python tools/check_phase2_resources.py --capture-profile micropython-disabled --phase3-receipt
 python tools/build_firmware.py full --board huskylens-sen0305
 python tools/check_phase3_baseline.py --verify-profile full
-python tools/check_phase2_resources.py --capture-profile full
+python tools/check_phase2_resources.py --capture-profile full --phase3-receipt
 python tools/check_phase3_baseline.py --verify-resources
 ```
 

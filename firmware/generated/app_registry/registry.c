@@ -1035,6 +1035,23 @@ const uint8_t g_hk_generated_app_count =
     (uint8_t)((sizeof(g_hk_generated_apps) /
                sizeof(g_hk_generated_apps[0])) - 1U);
 
+const hk_autostart_id_t g_hk_reserved_autostart_ids[] = {
+    1U,
+    2U,
+    3U,
+    4U,
+    5U,
+    6U,
+    7U,
+    8U,
+    9U,
+    10U,
+    HK_AUTOSTART_OFF,
+};
+const uint8_t g_hk_reserved_autostart_id_count =
+    (uint8_t)((sizeof(g_hk_reserved_autostart_ids) /
+               sizeof(g_hk_reserved_autostart_ids[0])) - 1U);
+
 const hk_app_t *const g_menu_items[] = {
 #if HK_ENABLE_APP_TERMINAL
     &hk_generated_app_terminal,

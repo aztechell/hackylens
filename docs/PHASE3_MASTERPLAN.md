@@ -252,7 +252,7 @@ composition имеет один source of truth; ручное добавлени
 
 ## 3.4 — Generated registry и legacy adapter
 
-Статус пакета: `completed`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

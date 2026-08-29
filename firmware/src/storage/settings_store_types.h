@@ -24,7 +24,7 @@ typedef struct
     uint8_t fps_rgb_blue;
     uint8_t qr_rate_fps_mark;
     uint8_t app_data[SETTINGS_APP_DATA_SIZE];
-    uint8_t autostart_id;
+    uint16_t autostart_id;
 } settings_payload_t;
 
 typedef struct
@@ -37,7 +37,7 @@ typedef struct
     uint32_t crc32;
 } settings_record_t;
 
-_Static_assert(sizeof(settings_payload_t) == 105U, "settings v4 payload layout changed");
-_Static_assert(sizeof(settings_record_t) == 124U, "settings v4 record layout changed");
+_Static_assert(sizeof(settings_payload_t) == 106U, "settings v5 payload layout changed");
+_Static_assert(sizeof(settings_record_t) == 124U, "settings v5 record layout changed");
 
 #endif
