@@ -287,7 +287,7 @@ autostart, debug dispatch и current apps работают как до migration
 
 ## 3.5 — App Runtime v2 lifecycle engine
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -300,28 +300,28 @@ production menu.
 
 ### Scope
 
-- [ ] Реализовать states `inactive`, `injecting`, `probed`, `prepared`, `running`,
+- [x] Реализовать states `inactive`, `injecting`, `probed`, `prepared`, `running`,
   `stopping`, `cleaning`, `faulted`. Provider quarantine остаётся отдельным
   состоянием capability provider и не используется как app-runtime state.
-- [ ] Реализовать callbacks `probe`, `prepare`, `start`, `event`, `tick`, `render`,
+- [x] Реализовать callbacks `probe`, `prepare`, `start`, `event`, `tick`, `render`,
   `stop`, `cleanup` в нормативном порядке.
-- [ ] `prepare` failure вызывает полный unwind; `start` не вызывается без
+- [x] `prepare` failure вызывает полный unwind; `start` не вызывается без
   successful injection/probe/prepare.
-- [ ] `stop` идемпотентен; app `cleanup` выполняется не более одного раза для
+- [x] `stop` идемпотентен; app `cleanup` выполняется не более одного раза для
   normal close, BACK, timeout, exception/failure и forced switch.
-- [ ] Реализовать точный teardown: `stop(ctx)` → app `cleanup(ctx)` при валидных
+- [x] Реализовать точный teardown: `stop(ctx)` → app `cleanup(ctx)` при валидных
   declared handles → обязательный runtime owner-wide capability/service cleanup
   → provider quarantine по Phase 2 при failed provider cleanup → invalidate
   owner handles → invalidate context generation → разрешить state reuse.
-- [ ] Ошибка app cleanup не останавливает runtime owner-wide cleanup; deferred
+- [x] Ошибка app cleanup не останавливает runtime owner-wide cleanup; deferred
   work использует generation/epoch token и не влияет на следующий run.
-- [ ] Reentrant switch/callback и callback после context generation invalidation
+- [x] Reentrant switch/callback и callback после context generation invalidation
   возвращают deterministic error.
-- [ ] App state остаётся private fixed storage; descriptor size/alignment
+- [x] App state остаётся private fixed storage; descriptor size/alignment
   проверяются против manifest limits.
-- [ ] Добавить host fake apps, fault injection на каждом transition и transition
+- [x] Добавить host fake apps, fault injection на каждом transition и transition
   table tests.
-- [ ] Проверить отсутствие heap/tasks/queues и bounded transition latency.
+- [x] Проверить отсутствие heap/tasks/queues и bounded transition latency.
 
 ### Exit gate
 
