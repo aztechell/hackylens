@@ -26,8 +26,9 @@ Current ownership:
   when APRILTAG is enabled. KPU output post-processing remains on core 0.
 
 The settings record grows from the legacy 16-byte payload through the 96-byte
-v2 payload and 97-byte v3 payload to a 105-byte v4 payload. V4 contains 88
-opaque app bytes plus the existing autostart ID; its aligned 124-byte record
-still fits in one flash page. Build guard: `hackylens.bin` must remain below
+v2 payload, 97-byte v3 payload, and 105-byte v4 payload to a 106-byte v5
+payload. V5 retains 88 opaque app bytes and widens stable autostart identity to
+uint16; alignment keeps the record at 124 bytes, so it still fits in one flash
+page. Build guard: `hackylens.bin` must remain below
 `0x007FE000`, preserving the two 4 KB settings slots at `0x007FE000` and
 `0x007FF000`.

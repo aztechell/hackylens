@@ -112,11 +112,13 @@ format with class IDs `0..19`.
 
 Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log-sink lifecycle. The shared logging service exposes only a generic optional sink and remains independent of Terminal. Font selection remains in reserved feature bits inherited from the legacy settings payload, so old records and erased flash continue to decode as `TERMINAL_FONT_NORMAL`.
 
-Settings record v4 retains the v3 prefix and autostart ID, and extends opaque
-app data from 80 to 88 bytes. Bytes `0..79` remain APRILTAG's preferences and
-587-bit selected-ID map; OBJECT DETECT owns bytes `80..87`. The storage layer
-validates and migrates v1, v2, and v3 records without changing CAMERA,
-external-link, APRILTAG, or autostart data.
+Settings record v5 retains the v4 data layout and widens the stable autostart
+ID from uint8 to uint16 without increasing the aligned 124-byte record. The 88
+opaque app bytes remain unchanged: bytes `0..79` contain APRILTAG preferences
+and its 587-bit selected-ID map; OBJECT DETECT owns bytes `80..87`. The storage
+layer validates and migrates v1, v2, v3, and v4 records. V4 autostart values are
+zero-extended, so existing IDs `0..10` and all CAMERA, external-link, APRILTAG,
+and OBJECT data remain unchanged.
 
 ## Architecture guard
 

@@ -67,7 +67,7 @@ Key public interfaces:
 - `apps/object_detect/object_detect_app.h` is the sole public OBJECT DETECT interface. The module owns VOC20 decoding, class labels, overlays, settings, persistence, and diagnostics. Its SD package is `/hackylens.kmodels/object20/`.
 - `services/camera_ai_input.h` owns the single aligned planar DVP/KPU input and exact frame-boundary handoff shared by FACE and OBJECT. `services/core1_executor.h` owns APRILTAG's reusable core-1 job slot.
 - `services/camera_session_preferences.h` supplies optional per-session FPS and LED/RGB overrides. APRILTAG and OBJECT use independent values; CAMERA and QR continue to read their normal persisted profile after the override is cleared.
-- Settings storage v4 keeps APRILTAG's original 80-byte app block, appends eight OBJECT bytes, and retains the autostart ID. The loader accepts v1/v2/v3 and preserves all previous settings.
+- Settings storage v5 keeps APRILTAG's original 80-byte app block and OBJECT's eight-byte extension, widens stable autostart identity to uint16, and keeps the aligned record at 124 bytes. The loader accepts v1/v2/v3/v4; v4 IDs are zero-extended without changing previous settings.
 - `ui/display_binding.h` for the private native-view binding to a typed Display
   BASE handle. `capabilities/display.c` owns the public dispatch boundary,
   `platforms/k210/capabilities/display_adapter.c` owns plane state and bounded
