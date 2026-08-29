@@ -98,10 +98,12 @@ REUSABLE
   -> REUSABLE
 ```
 
-The generated descriptor declares private state size and alignment. The runtime
-binds one fixed-capacity state slot, clears it before `PROBING`, and does not
-return it to `REUSABLE` until invalidation is complete. App state is never
-allocated from a heap and is not shared between generations.
+The generated descriptor declares the manifest-derived private state size and
+the fixed Feature App ABI alignment. A lifecycle-v2 entry binds app-owned
+fixed-capacity storage. Before `PROBING`, runtime checks its capacity and address
+against those immutable descriptor values, clears the declared byte range, and
+does not return that storage to `REUSABLE` until invalidation is complete. App
+state is never allocated from a heap and is not shared between generations.
 
 Descriptor identity, lifecycle kind, finite limits, capability/service
 requests, menu/autostart metadata, and help/debug text are immutable generated

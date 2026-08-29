@@ -287,7 +287,7 @@ autostart, debug dispatch и current apps работают как до migration
 
 ## 3.5 — App Runtime v2 lifecycle engine
 
-Статус пакета: `not_started`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

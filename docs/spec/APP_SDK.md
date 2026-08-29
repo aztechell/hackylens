@@ -86,6 +86,9 @@ SDK functions are bounded and allocation-free. They do not create tasks,
 queues, cores, general background work, or hidden heap storage. Large buffers
 remain explicit borrows. App state is descriptor-sized fixed storage and is
 reused only after the normative runtime teardown and generation invalidation.
+The build-generated descriptor supplies manifest `state_bytes` and the fixed
+`HK_APP_STATE_ALIGNMENT` ABI policy; alignment is not a runtime request or an
+app-manifest tuning field.
 
 ## Host fake and portability
 

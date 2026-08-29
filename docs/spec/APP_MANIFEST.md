@@ -154,6 +154,14 @@ values are invalid. These are schema ceilings, not reservations and not
 permission to exceed a selected board/build profile budget. The values neither
 create tasks nor make a timeout infinite.
 
+Schema 1 deliberately has no app-selectable state-alignment field. The
+generated immutable descriptor combines manifest `state_bytes` with the fixed
+Feature App ABI alignment `HK_APP_STATE_ALIGNMENT`. A lifecycle-v2 entry binds
+app-owned fixed storage; before `probe`, runtime rejects a storage capacity
+smaller than the generated `state_bytes`, an unsupported descriptor alignment,
+or a storage address that does not satisfy that alignment. This check does not
+allocate state or create a second resource-policy source.
+
 `tests.host_sources` is a non-empty array of app-relative `.c`, `.cc`, `.cpp`,
 `.cxx`, or `.py` files. `tests.build_profiles` is a non-empty duplicate-free
 subset of `standalone`, `full`, and `disabled`. Test metadata is composition

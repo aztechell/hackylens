@@ -91,10 +91,14 @@ typedef struct
     uint32_t static_ram_bytes;
     uint32_t stack_bytes;
     uint32_t state_bytes;
+    uint32_t state_alignment;
     uint32_t tick_interval_us;
     uint32_t tick_budget_us;
     uint32_t render_budget_us;
 } hk_app_limits_t;
+
+/* Schema 1 keeps alignment as a runtime ABI policy, not a manifest knob. */
+#define HK_APP_STATE_ALIGNMENT 16U
 
 #define HK_APP_DESCRIPTOR_VERSION 1U
 
