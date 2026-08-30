@@ -73,20 +73,22 @@ typedef struct
     uint32_t epoch;
 } hk_app_runtime_token_t;
 
-typedef hk_result_t (*hk_app_probe_fn)(hk_app_context_t *ctx);
-typedef hk_result_t (*hk_app_prepare_fn)(hk_app_context_t *ctx);
-typedef hk_result_t (*hk_app_start_fn)(hk_app_context_t *ctx);
+typedef hk_result_t (*hk_app_probe_fn)(const hk_app_context_t *ctx);
+typedef hk_result_t (*hk_app_prepare_fn)(const hk_app_context_t *ctx);
+typedef hk_result_t (*hk_app_start_fn)(const hk_app_context_t *ctx);
 typedef hk_result_t (*hk_app_event_fn)(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *event);
-typedef hk_result_t (*hk_app_tick_fn)(hk_app_context_t *ctx, uint64_t now_us);
+typedef hk_result_t (*hk_app_tick_fn)(
+    const hk_app_context_t *ctx,
+    uint64_t now_us);
 typedef hk_result_t (*hk_app_render_fn)(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_runtime_surface_t *surface);
 typedef hk_result_t (*hk_app_stop_fn)(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_stop_reason_t reason);
-typedef hk_result_t (*hk_app_cleanup_fn)(hk_app_context_t *ctx);
+typedef hk_result_t (*hk_app_cleanup_fn)(const hk_app_context_t *ctx);
 
 struct hk_app_v2_entry
 {
@@ -149,9 +151,11 @@ typedef struct hk_app_runtime
 {
     hk_app_runtime_ops_t ops;
     const hk_app_t *descriptor;
+    hk_owner_t owner;
     hk_app_context_t context;
     hk_capability_request_t
         resolved_capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
+    uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];
     hk_deadline_t teardown_deadline;
     hk_app_runtime_state_t state;
     hk_app_runtime_stage_t stage;

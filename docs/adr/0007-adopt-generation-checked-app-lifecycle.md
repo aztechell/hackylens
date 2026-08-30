@@ -33,7 +33,10 @@ The runtime binds descriptor-sized private state from fixed storage. Before
 `probe`, it preflights every immutable manifest capability/service declaration
 against the composed inventory without opening an owner or acquiring a lease.
 Missing/incompatible required grants exclude the app; optional absence selects
-only the named manifest fallback. After a successful `probe`, runtime opens one
+only the named manifest fallback. Preflight availability is stable: if later
+acquisition of an available optional fails, launch fails and owner-wide unwind
+runs instead of changing the status observed by `probe`. After a successful
+`probe`, runtime opens one
 generation-checked owner and injects only those preflighted grants before
 `prepare`. Undeclared access returns `HK_ERR_NOT_DECLARED` without reaching a
 provider. `start` occurs only after successful injection and preparation.
@@ -44,6 +47,14 @@ generation, one owner, and inline tables capped at 16 capability grants and 16
 app-scoped service handles. It has no runtime, provider, driver, HAL, board, or
 platform pointer and reuses public Capability API handle types directly.
 Manifest validation and runtime binding both reject count overflow.
+Lifecycle callbacks receive a const context and obtain writable app state
+through the state accessor.
+
+The context owner and grant tables are read-only snapshots. Runtime retains the
+authoritative owner and preflight availability in private instance state;
+acquisition, owner cleanup, and invalidation never trust fields read back from
+the callback-visible context. Context corruption therefore cannot suppress
+owner-wide cleanup.
 
 Teardown is one irreversible sequence: idempotent stop, app cleanup at most once
 while context and handles remain valid, mandatory runtime owner-wide cleanup,

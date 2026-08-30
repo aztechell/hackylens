@@ -172,9 +172,12 @@ absence exposes only its manifest fallback. One owner scopes every injected
 capability/service handle from `prepare` through app cleanup, after which
 owner-wide cleanup precedes generation invalidation and state reuse. Host fake
 inventory tests cover undeclared access, partial injection unwind, owner
-exhaustion, and stale copied contexts/handles. The engine remains unwired from
-the production firmware loop, so this package changes no production runtime
-behavior and needs no physical rerun.
+exhaustion, stable preflight availability, callback-snapshot corruption, and
+stale copied contexts/handles. Lifecycle callbacks receive a const context;
+the authoritative owner and resolved availability remain private, so callback
+corruption cannot suppress owner-wide cleanup or change injected grants. The
+engine remains unwired from the production firmware loop, so this package
+changes no production runtime behavior and needs no physical rerun.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-

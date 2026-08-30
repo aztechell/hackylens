@@ -208,6 +208,23 @@ APP_CONTEXT_GRANT_REQUIREMENTS = {
             r"[\s\S]*handles\s+and\s+the\s+context\s+invalidated",
             "grant invalidation must follow app and owner-wide cleanup",
         ),
+        (
+            r"lifecycle\s+callback\s+receives[\s\S]{0,120}"
+            r"const\s+hk_app_context_t\s*\*",
+            "App Runtime callbacks must receive a const app context",
+        ),
+        (
+            r"availability\s+is\s+stable\s+for\s+the\s+launch[\s\S]*"
+            r"acquisition[\s\S]*launch\s+fails[\s\S]*MUST\s+NOT[\s\S]*"
+            r"fallback\s+after\s+`probe`",
+            "probe-observed optional availability must not become fallback",
+        ),
+        (
+            r"authoritative\s+owner\s+and\s+preflight\s+availability[\s\S]*"
+            r"private\s+instance\s+state[\s\S]*never\s+fields\s+read\s+back"
+            r"[\s\S]*cannot\s+suppress\s+owner-wide\s+cleanup",
+            "owner and preflight authority must remain private",
+        ),
     ),
     Path("docs/spec/APP_SDK.md"): (
         (
@@ -225,6 +242,23 @@ APP_CONTEXT_GRANT_REQUIREMENTS = {
             r"later\s+generation",
             "Feature App SDK must reject copied stale authority",
         ),
+        (
+            r"Lifecycle\s+callbacks\s+receive[\s\S]{0,120}"
+            r"const\s+hk_app_context_t\s*\*",
+            "Feature App SDK callbacks must receive a const app context",
+        ),
+        (
+            r"Availability\s+observed\s+by\s+`probe`\s+is\s+stable[\s\S]*"
+            r"failure\s+to\s+acquire[\s\S]*fails\s+launch[\s\S]*"
+            r"cannot\s+become\s+an\s+implicit\s+fallback",
+            "Feature App SDK must keep probe availability stable",
+        ),
+        (
+            r"authoritative\s+owner\s+and\s+resolved\s+availability\s+are\s+"
+            r"private[\s\S]*cleanup\s+never\s+trusts\s+owner\s+data\s+read\s+"
+            r"back",
+            "Feature App SDK must keep runtime grant authority private",
+        ),
     ),
     Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"): (
         (
@@ -236,6 +270,18 @@ APP_CONTEXT_GRANT_REQUIREMENTS = {
             r"After\s+a\s+successful\s+`probe`[\s\S]*opens\s+one[\s\S]*owner"
             r"[\s\S]*injects\s+only\s+those\s+preflighted\s+grants",
             "ADR-0007 must record post-probe exact grant injection",
+        ),
+        (
+            r"Preflight\s+availability\s+is\s+stable[\s\S]*"
+            r"acquisition[\s\S]*launch\s+fails[\s\S]*owner-wide\s+unwind"
+            r"[\s\S]*instead\s+of\s+changing\s+the\s+status",
+            "ADR-0007 must keep probe availability stable",
+        ),
+        (
+            r"authoritative\s+owner\s+and\s+preflight\s+availability[\s\S]*"
+            r"private\s+instance\s+state[\s\S]*never\s+trust\s+fields\s+read\s+"
+            r"back[\s\S]*cannot\s+suppress\s+owner-wide\s+cleanup",
+            "ADR-0007 must keep runtime grant authority private",
         ),
     ),
 }

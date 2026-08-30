@@ -49,7 +49,9 @@ All callbacks execute on the runtime dispatch context and MUST be synchronous,
 bounded, non-blocking except for operations bounded by an injected capability
 deadline, and free of heap allocation. A callback MUST NOT create a task, queue,
 core, hidden loop, or unbounded retry. `HK_PENDING` is not a valid lifecycle
-callback result.
+callback result. Every lifecycle callback receives
+`const hk_app_context_t *`; writable app state is obtained only through the
+bounded state accessor.
 
 Before `probe`, the runtime resolves every generated manifest declaration
 against the composed inventory. This is a resource-free preflight: it records
@@ -58,7 +60,11 @@ uses its named fallback, but creates neither an app owner nor a lease. A missing
 required capability, incompatible version, unavailable required feature, or
 unresolved service excludes the app before any lifecycle callback. An optional
 capability is either recorded available or recorded absent with exactly its
-manifest fallback; there is no hardware-derived fallback.
+manifest fallback; there is no hardware-derived fallback. This availability is
+stable for the launch. If acquisition of a capability recorded available later
+fails for any reason, launch fails, `prepare` is not called, and runtime performs
+owner-wide unwind. Runtime MUST NOT silently change it to fallback after
+`probe` has observed it.
 
 `probe` may inspect immutable app identity and this declared availability but
 MUST NOT acquire or retain resources. Only after successful `probe` does the
@@ -231,6 +237,14 @@ platform pointer. During `probe` its owner is zero and only declaration status
 access is legal. From `prepare` through app `cleanup`, acquired handles carry
 that same owner and context generation. Runtime owner-wide cleanup follows app
 cleanup; only then are handles and the context invalidated.
+
+The public owner, grant availability, leases, counts, and service handles are a
+read-only callback snapshot. App Runtime keeps the authoritative owner and
+preflight availability in private instance state. Acquisition, owner-wide
+cleanup, and invalidation use only that private authority, never fields read
+back from the public context. Consequently, even accidental corruption through
+a cast cannot suppress owner-wide cleanup or change which grants runtime tries
+to acquire.
 
 Injected capability handles retain the public Capability API ABI. They are
 owner-scoped and generation-checked; the App SDK does not wrap them in parallel

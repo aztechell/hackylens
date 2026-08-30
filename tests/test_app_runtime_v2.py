@@ -92,6 +92,32 @@ class AppRuntimeV2Tests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, runtime)
 
+    def test_owner_and_preflight_authority_stay_private(self) -> None:
+        private_header = (
+            ROOT / "firmware/src/app_runtime/runtime_private.h"
+        ).read_text(encoding="utf-8")
+        runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertRegex(
+            private_header,
+            r"typedef hk_result_t \(\*hk_app_cleanup_fn\)\("
+            r"const hk_app_context_t \*ctx\);",
+        )
+        self.assertIn("hk_owner_t owner;", private_header)
+        self.assertIn(
+            "uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];",
+            private_header,
+        )
+        self.assertIn("runtime->ops.user,\n            runtime->owner,", runtime)
+        self.assertNotRegex(
+            runtime,
+            r"owner_cleanup\([\s\S]{0,160}runtime->context\.owner",
+        )
+        self.assertNotIn("is_optional_runtime_unavailable", runtime)
+        self.assertIn("if(!runtime->resolved_available[index])", runtime)
+
     def test_generated_descriptor_carries_manifest_state_size_and_abi_alignment(self) -> None:
         generated = (ROOT / "firmware/generated/app_registry/registry.c").read_text(
             encoding="utf-8"

@@ -524,9 +524,39 @@ class DocumentationContractsTest(unittest.TestCase):
             ),
             (
                 Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"),
-                "After a successful `probe`, runtime opens one",
+                "After a successful\n`probe`, runtime opens one",
                 "Before `probe`, runtime opens one",
                 "post-probe exact grant injection",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "This availability is\nstable for the launch.",
+                "This availability may change during the launch.",
+                "optional availability must not become fallback",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "authoritative owner and\npreflight availability in private instance state",
+                "owner and availability in the public context",
+                "authority must remain private",
+            ),
+            (
+                Path("docs/spec/APP_SDK.md"),
+                "Lifecycle callbacks receive the context through a\n`const hk_app_context_t *`",
+                "Lifecycle callbacks receive a mutable context",
+                "callbacks must receive a const app context",
+            ),
+            (
+                Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"),
+                "Preflight availability is stable",
+                "Preflight availability may change",
+                "keep probe availability stable",
+            ),
+            (
+                Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"),
+                "authoritative owner and preflight availability in private instance state",
+                "owner and availability in the public context",
+                "grant authority private",
             ),
         )
         for relative, old, new, expected in mutations:

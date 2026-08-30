@@ -77,7 +77,7 @@ static void trace(char value)
     }
 }
 
-static hk_result_t callback_state(hk_app_context_t *ctx)
+static hk_result_t callback_state(const hk_app_context_t *ctx)
 {
     void *state = NULL;
     uint32_t size = 0U;
@@ -88,7 +88,7 @@ static hk_result_t callback_state(hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t fake_probe(hk_app_context_t *ctx)
+static hk_result_t fake_probe(const hk_app_context_t *ctx)
 {
     hk_deadline_t deadline;
 
@@ -104,7 +104,7 @@ static hk_result_t fake_probe(hk_app_context_t *ctx)
     return s_fixture->fail == FAIL_PROBE ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t fake_prepare(hk_app_context_t *ctx)
+static hk_result_t fake_prepare(const hk_app_context_t *ctx)
 {
     trace('A');
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_INJECTING ||
@@ -116,7 +116,7 @@ static hk_result_t fake_prepare(hk_app_context_t *ctx)
     return s_fixture->fail == FAIL_PREPARE ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t fake_start(hk_app_context_t *ctx)
+static hk_result_t fake_start(const hk_app_context_t *ctx)
 {
     hk_app_runtime_event_t event = {0U, 0U};
 
@@ -138,7 +138,7 @@ static hk_result_t fake_start(hk_app_context_t *ctx)
 }
 
 static hk_result_t fake_event(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *event)
 {
     (void)event;
@@ -161,7 +161,7 @@ static hk_result_t fake_event(
     return s_fixture->fail == FAIL_EVENT ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t fake_tick(hk_app_context_t *ctx, uint64_t now_us)
+static hk_result_t fake_tick(const hk_app_context_t *ctx, uint64_t now_us)
 {
     (void)now_us;
     trace('T');
@@ -173,7 +173,7 @@ static hk_result_t fake_tick(hk_app_context_t *ctx, uint64_t now_us)
 }
 
 static hk_result_t fake_render(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_runtime_surface_t *surface)
 {
     (void)surface;
@@ -186,7 +186,7 @@ static hk_result_t fake_render(
 }
 
 static hk_result_t fake_stop(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_stop_reason_t reason)
 {
     trace('X');
@@ -204,7 +204,7 @@ static hk_result_t fake_stop(
     return s_fixture->fail == FAIL_STOP ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t fake_cleanup(hk_app_context_t *ctx)
+static hk_result_t fake_cleanup(const hk_app_context_t *ctx)
 {
     trace('C');
     s_fixture->cleanup_calls++;
@@ -656,14 +656,14 @@ static int compare_u64(const void *left, const void *right)
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-static hk_result_t benchmark_callback(hk_app_context_t *ctx)
+static hk_result_t benchmark_callback(const hk_app_context_t *ctx)
 {
     (void)ctx;
     return HK_OK;
 }
 
 static hk_result_t benchmark_event(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *event)
 {
     (void)ctx;
@@ -671,7 +671,9 @@ static hk_result_t benchmark_event(
     return HK_OK;
 }
 
-static hk_result_t benchmark_tick(hk_app_context_t *ctx, uint64_t now_us)
+static hk_result_t benchmark_tick(
+    const hk_app_context_t *ctx,
+    uint64_t now_us)
 {
     (void)ctx;
     (void)now_us;
@@ -679,7 +681,7 @@ static hk_result_t benchmark_tick(hk_app_context_t *ctx, uint64_t now_us)
 }
 
 static hk_result_t benchmark_render(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_runtime_surface_t *surface)
 {
     (void)ctx;
@@ -688,7 +690,7 @@ static hk_result_t benchmark_render(
 }
 
 static hk_result_t benchmark_stop(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_stop_reason_t reason)
 {
     (void)ctx;

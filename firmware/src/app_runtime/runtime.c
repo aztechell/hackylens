@@ -147,12 +147,6 @@ static uint8_t is_optional_absence(hk_result_t result)
                      result == HK_ERR_NOT_DECLARED);
 }
 
-static uint8_t is_optional_runtime_unavailable(hk_result_t result)
-{
-    return (uint8_t)(is_optional_absence(result) || result == HK_ERR_BUSY ||
-                     result == HK_ERR_INVALID_STATE || result == HK_ERR_LIMIT);
-}
-
 static hk_result_t resolve_declared_surface(hk_app_runtime_t *runtime)
 {
     const hk_app_t *descriptor = runtime->descriptor;
@@ -182,11 +176,13 @@ static hk_result_t resolve_declared_surface(hk_app_runtime_t *runtime)
         if(result == HK_OK)
         {
             grant->available = 1U;
+            runtime->resolved_available[index] = 1U;
             continue;
         }
         if(declaration->optional && is_optional_absence(result))
         {
             grant->available = 0U;
+            runtime->resolved_available[index] = 0U;
             continue;
         }
         return result;
@@ -211,45 +207,37 @@ static hk_result_t inject_declared_surface(hk_app_runtime_t *runtime)
 {
     uint16_t index;
 
-    for(index = 0U; index < runtime->context.capability_count; index++)
+    for(index = 0U; index < runtime->descriptor->capability_count; index++)
     {
         hk_app_capability_grant_t *grant =
             &runtime->context.capabilities[index];
         hk_lease_t lease = HK_LEASE_NONE;
         hk_result_t result;
 
-        if(!grant->available)
+        if(!runtime->resolved_available[index])
             continue;
         result = runtime->ops.acquire_capability(
-            runtime->ops.user, runtime->context.owner,
+            runtime->ops.user, runtime->owner,
             &runtime->resolved_capabilities[index], &lease);
         if(result != HK_OK)
-        {
-            if(grant->optional && hk_lease_is_zero(&lease) &&
-               is_optional_runtime_unavailable(result))
-            {
-                grant->available = 0U;
-                continue;
-            }
             return result;
-        }
         if(hk_lease_is_zero(&lease) ||
-           !owner_equal(lease.owner, runtime->context.owner) ||
+           !owner_equal(lease.owner, runtime->owner) ||
            lease.capability_id != grant->id)
             return HK_ERR_INTERNAL;
         grant->lease = lease;
     }
-    for(index = 0U; index < runtime->context.service_count; index++)
+    for(index = 0U; index < runtime->descriptor->service_count; index++)
     {
         const hk_app_service_request_t *declaration =
             &runtime->descriptor->services[index];
         hk_result_t result = runtime->ops.acquire_service(
-            runtime->ops.user, runtime->context.owner, declaration);
+            runtime->ops.user, runtime->owner, declaration);
         hk_app_service_t *handle = &runtime->context.services[index];
 
         if(result != HK_OK)
             return result;
-        handle->owner = runtime->context.owner;
+        handle->owner = runtime->owner;
         handle->context_generation = runtime->context.generation;
     }
     return HK_OK;
@@ -270,6 +258,7 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     runtime->stage = HK_APP_STAGE_INVALIDATING;
     runtime->context_valid = 0U;
     runtime->teardown_deadline_valid = 0U;
+    runtime->owner = HK_OWNER_NONE;
     runtime->context.owner = HK_OWNER_NONE;
     memset(entry->state_storage, 0, runtime->descriptor->limits.state_bytes);
     if(runtime->context_generation == UINT32_MAX ||
@@ -285,6 +274,8 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     runtime->descriptor = NULL;
     memset(runtime->resolved_capabilities, 0,
            sizeof(runtime->resolved_capabilities));
+    memset(runtime->resolved_available, 0,
+           sizeof(runtime->resolved_available));
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
     runtime->prepare_entered = 0U;
@@ -364,12 +355,12 @@ static hk_result_t teardown(
         }
     }
 
-    if(!hk_owner_is_zero(runtime->context.owner))
+    if(!hk_owner_is_zero(runtime->owner))
     {
         runtime->stage = HK_APP_STAGE_OWNER_CLEANUP;
         result = runtime->ops.owner_cleanup(
             runtime->ops.user,
-            runtime->context.owner,
+            runtime->owner,
             runtime->teardown_deadline);
         retain_error(runtime, result);
     }
@@ -435,6 +426,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->context.struct_size = sizeof(runtime->context);
     runtime->context.struct_version = HK_APP_CONTEXT_VERSION;
     runtime->context.app_id = descriptor->id;
+    runtime->owner = HK_OWNER_NONE;
     runtime->context.owner = HK_OWNER_NONE;
     runtime->context.generation = runtime->context_generation;
     runtime->context_valid = 1U;
@@ -458,6 +450,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->stage = HK_APP_STAGE_INJECTING;
     runtime->state = HK_APP_RUNTIME_INJECTING;
     result = runtime->ops.owner_open(runtime->ops.user, descriptor, &owner);
+    runtime->owner = owner;
     runtime->context.owner = owner;
     if(result != HK_OK)
     {

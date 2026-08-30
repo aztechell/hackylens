@@ -55,7 +55,9 @@ size/version fields, immutable app identity, one generation-checked owner, and
 inline fixed-capacity tables for at most 16 declared capability grants and 16
 app-scoped service handles. It contains no runtime-private or hardware pointer.
 The tables are runtime-owned observations, not mutable app registration or
-discovery surfaces.
+discovery surfaces. Lifecycle callbacks receive the context through a
+`const hk_app_context_t *`; writable app state remains available through
+`hk_app_context_state` rather than by making the context mutable.
 
 During `probe`, identity and declaration status accessors are valid while the
 owner remains zero; typed handle access returns `HK_ERR_INVALID_STATE` because
@@ -65,7 +67,9 @@ declared `(id, instance)`. An absent optional returns
 `HK_ERR_CAPABILITY_ABSENT` and its status accessor returns the exact manifest
 fallback. An undeclared capability or service returns `HK_ERR_NOT_DECLARED`
 without calling a provider. App-scoped service handles carry the same owner and
-context generation.
+context generation. Availability observed by `probe` is stable: failure to
+acquire a grant reported available fails launch and triggers owner-wide unwind;
+it cannot become an implicit fallback before `prepare`.
 
 ## Lifecycle teardown deadline access
 
@@ -101,6 +105,11 @@ after teardown. Handles remain valid during app `cleanup`; runtime then attempts
 owner-wide cleanup before invalidating handles and context. Copying either the
 context or a handle does not extend its lifetime or allow access to a later
 generation.
+
+Context owner and grant fields are snapshots only. The runtime's authoritative
+owner and resolved availability are private and cannot be changed through the
+SDK object; cleanup never trusts owner data read back from the callback
+snapshot.
 
 SDK functions are bounded and allocation-free. They do not create tasks,
 queues, cores, general background work, or hidden heap storage. Large buffers

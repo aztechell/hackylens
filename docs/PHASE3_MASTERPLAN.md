@@ -332,7 +332,7 @@ Lifecycle normative suite полностью проходит на host; product
 
 ## 3.6 — Public app context и capability injection
 
-Статус пакета: `completed`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 
@@ -349,12 +349,12 @@ Lifecycle normative suite полностью проходит на host; product
   capability handles и app-scoped service handles.
 - [x] Required grants разрешаются до `probe`; missing/incompatible grant не
   запускает app.
-- [x] Optional grant либо присутствует, либо возвращает manifest fallback state.
+- [ ] Optional grant либо присутствует, либо возвращает manifest fallback state.
 - [x] App не может запросить capability, не объявленную manifest.
 - [x] Все acquired handles принадлежат одному runtime owner. Они остаются
   валидными во время app cleanup, затем runtime выполняет owner-wide cleanup и
   только после этого инвалидирует handles и context generation.
-- [x] Failure app cleanup не пропускает owner-wide cleanup; provider quarantine
+- [ ] Failure app cleanup не пропускает owner-wide cleanup; provider quarantine
   применяется только если cleanup соответствующего provider не смог установить
   safe state. Stale copied context/handle не получает доступ при следующем run.
 - [x] Добавить fake inventory/grant tests, version/feature mismatch, partial

@@ -21,8 +21,10 @@ typedef enum
     MODE_VERSION_MISMATCH,
     MODE_FEATURE_MISMATCH,
     MODE_OPTIONAL_ABSENT,
+    MODE_OPTIONAL_ACQUIRE_BUSY,
     MODE_PARTIAL_INJECTION,
     MODE_OWNER_EXHAUSTED,
+    MODE_CORRUPT_PUBLIC_OWNER,
 } mode_t;
 
 typedef struct
@@ -81,7 +83,7 @@ static const hk_app_service_request_t s_services[] = {
     {"hackylens.service.settings", "fixture.settings"},
 };
 
-static hk_result_t probe(hk_app_context_t *ctx)
+static hk_result_t probe(const hk_app_context_t *ctx)
 {
     const char *app_id = NULL;
     const char *fallback = NULL;
@@ -110,7 +112,7 @@ static hk_result_t probe(hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t prepare(hk_app_context_t *ctx)
+static hk_result_t prepare(const hk_app_context_t *ctx)
 {
     hk_input_t input = {0};
     hk_lights_t lights = {0};
@@ -142,14 +144,14 @@ static hk_result_t prepare(hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t start(hk_app_context_t *ctx)
+static hk_result_t start(const hk_app_context_t *ctx)
 {
     (void)ctx;
     return HK_OK;
 }
 
 static hk_result_t event(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *runtime_event)
 {
     (void)ctx;
@@ -157,7 +159,7 @@ static hk_result_t event(
     return HK_OK;
 }
 
-static hk_result_t tick(hk_app_context_t *ctx, uint64_t now_us)
+static hk_result_t tick(const hk_app_context_t *ctx, uint64_t now_us)
 {
     (void)ctx;
     (void)now_us;
@@ -165,7 +167,7 @@ static hk_result_t tick(hk_app_context_t *ctx, uint64_t now_us)
 }
 
 static hk_result_t render(
-    hk_app_context_t *ctx,
+    const hk_app_context_t *ctx,
     hk_app_runtime_surface_t *surface)
 {
     (void)ctx;
@@ -173,14 +175,16 @@ static hk_result_t render(
     return HK_OK;
 }
 
-static hk_result_t stop(hk_app_context_t *ctx, hk_app_stop_reason_t reason)
+static hk_result_t stop(
+    const hk_app_context_t *ctx,
+    hk_app_stop_reason_t reason)
 {
     (void)ctx;
     (void)reason;
     return HK_OK;
 }
 
-static hk_result_t cleanup(hk_app_context_t *ctx)
+static hk_result_t cleanup(const hk_app_context_t *ctx)
 {
     hk_time_t time = {0};
 
@@ -189,6 +193,11 @@ static hk_result_t cleanup(hk_app_context_t *ctx)
        hk_app_context_time(ctx, 0U, &time) != HK_OK ||
        time.lease.owner.generation != s_fixture->live_owner.generation)
         return HK_ERR_INTERNAL;
+    if(s_fixture->mode == MODE_CORRUPT_PUBLIC_OWNER)
+    {
+        ((hk_app_context_t *)ctx)->owner = HK_OWNER_NONE;
+        return HK_ERR_IO;
+    }
     return HK_OK;
 }
 
@@ -228,6 +237,82 @@ static hk_app_t descriptor(void)
     return app;
 }
 
+static hk_result_t parse_version(const char *text, hk_version_t *version)
+{
+    uint32_t components[3] = {0U, 0U, 0U};
+
+    if(!text || !version)
+        return HK_ERR_INVALID_ARGUMENT;
+    for(uint32_t index = 0U; index < 3U; index++)
+    {
+        uint32_t digits = 0U;
+
+        while(*text >= '0' && *text <= '9')
+        {
+            components[index] = components[index] * 10U +
+                                (uint32_t)(*text - '0');
+            if(components[index] > UINT16_MAX)
+                return HK_ERR_VERSION_INCOMPATIBLE;
+            text++;
+            digits++;
+        }
+        if(digits == 0U || (index < 2U && *text++ != '.') ||
+           (index == 2U && *text != '\0'))
+            return HK_ERR_VERSION_INCOMPATIBLE;
+    }
+    *version = (hk_version_t){
+        (uint16_t)components[0],
+        (uint16_t)components[1],
+        (uint16_t)components[2],
+        0U,
+    };
+    return HK_OK;
+}
+
+static int version_compare(hk_version_t left, hk_version_t right)
+{
+    if(left.major != right.major)
+        return left.major < right.major ? -1 : 1;
+    if(left.minor != right.minor)
+        return left.minor < right.minor ? -1 : 1;
+    if(left.patch != right.patch)
+        return left.patch < right.patch ? -1 : 1;
+    return 0;
+}
+
+static hk_capability_id_t capability_id(const char *id)
+{
+    if(strcmp(id, "hackylens.cap.time") == 0)
+        return HK_CAPABILITY_ID_TIME;
+    if(strcmp(id, "hackylens.cap.input") == 0)
+        return HK_CAPABILITY_ID_INPUT;
+    return 0U;
+}
+
+static hk_result_t feature_mask(
+    hk_capability_id_t id,
+    const char *const *features,
+    uint16_t feature_count,
+    uint64_t *mask)
+{
+    *mask = 0U;
+    for(uint16_t index = 0U; index < feature_count; index++)
+    {
+        if(id == HK_CAPABILITY_ID_TIME &&
+           strcmp(features[index], "monotonic-us") == 0)
+            *mask |= HK_TIME_FEATURE_MONOTONIC_US;
+        else if(id == HK_CAPABILITY_ID_TIME &&
+                strcmp(features[index], "sleep-until") == 0)
+            *mask |= HK_TIME_FEATURE_SLEEP_UNTIL;
+        else if(id == HK_CAPABILITY_ID_INPUT &&
+                strcmp(features[index], "state") == 0)
+            *mask |= HK_INPUT_FEATURE_STATE;
+        else
+            return HK_ERR_FEATURE_UNAVAILABLE;
+    }
+    return HK_OK;
+}
+
 static hk_result_t resolve_capability(
     void *user,
     const hk_app_t *app,
@@ -235,28 +320,59 @@ static hk_result_t resolve_capability(
     hk_capability_request_t *request)
 {
     grants_fixture_t *fixture = user;
+    hk_capability_id_t id = capability_id(declaration->id);
+    hk_version_t provider_version = {0U, 1U, 0U, 0U};
+    uint64_t provider_features;
+    uint8_t present = 1U;
+    hk_result_t result;
 
     (void)app;
     fixture->resolve_calls++;
-    if(strcmp(declaration->id, "hackylens.cap.time") == 0)
+    if(id == 0U)
+        return HK_ERR_NOT_DECLARED;
+    memset(request, 0, sizeof(*request));
+    request->struct_size = sizeof(*request);
+    request->struct_version = HK_CAPABILITY_REQUEST_VERSION;
+    request->id = id;
+    request->instance = declaration->instance;
+    result = parse_version(declaration->minimum, &request->minimum);
+    if(result != HK_OK)
+        return result;
+    result = parse_version(
+        declaration->maximum_exclusive, &request->maximum_exclusive);
+    if(result != HK_OK)
+        return result;
+    result = feature_mask(
+        id, declaration->features, declaration->feature_count,
+        &request->required_features);
+    if(result != HK_OK)
+        return result;
+
+    provider_features = id == HK_CAPABILITY_ID_TIME
+                            ? HK_TIME_FEATURES_0_1
+                            : HK_INPUT_FEATURES_0_1;
+    if(id == HK_CAPABILITY_ID_TIME)
     {
-        *request = (hk_capability_request_t)HK_TIME_REQUEST_0_1_INIT;
         if(fixture->mode == MODE_REQUIRED_ABSENT)
-            return HK_ERR_CAPABILITY_ABSENT;
+            present = 0U;
         if(fixture->mode == MODE_VERSION_MISMATCH)
-            return HK_ERR_VERSION_INCOMPATIBLE;
+            provider_version = (hk_version_t){0U, 2U, 0U, 0U};
         if(fixture->mode == MODE_FEATURE_MISMATCH)
-            return HK_ERR_FEATURE_UNAVAILABLE;
-        return HK_OK;
+            provider_features &= ~HK_TIME_FEATURE_SLEEP_UNTIL;
     }
-    if(strcmp(declaration->id, "hackylens.cap.input") == 0)
+    else if(fixture->mode == MODE_OPTIONAL_ABSENT)
     {
-        *request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
-        return fixture->mode == MODE_OPTIONAL_ABSENT
-                   ? HK_ERR_CAPABILITY_ABSENT
-                   : HK_OK;
+        present = 0U;
     }
-    return HK_ERR_NOT_DECLARED;
+    if(!present)
+        return HK_ERR_CAPABILITY_ABSENT;
+    if(version_compare(provider_version, request->minimum) < 0 ||
+       version_compare(provider_version, request->maximum_exclusive) >= 0)
+        return HK_ERR_VERSION_INCOMPATIBLE;
+    if((provider_features & request->required_features) !=
+       request->required_features)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    return HK_OK;
 }
 
 static hk_result_t resolve_service(
@@ -300,6 +416,9 @@ static hk_result_t acquire_capability(
     fixture->acquire_calls++;
     if(!fixture->owner_live || owner.generation != fixture->live_owner.generation)
         return HK_ERR_WRONG_OWNER;
+    if(fixture->mode == MODE_OPTIONAL_ACQUIRE_BUSY &&
+       request->id == HK_CAPABILITY_ID_INPUT)
+        return HK_ERR_BUSY;
     *lease = (hk_lease_t){
         fixture->acquire_calls,
         1U,
@@ -466,6 +585,30 @@ static int check_partial_injection_and_owner_exhaustion(void)
     return 0;
 }
 
+static int check_stable_optional_and_private_owner(void)
+{
+    grants_fixture_t fixture;
+    hk_app_runtime_t runtime;
+    hk_app_t app = descriptor();
+
+    CHECK(init_fixture(&fixture, &runtime) == 0);
+    fixture.mode = MODE_OPTIONAL_ACQUIRE_BUSY;
+    CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_BUSY);
+    CHECK(fixture.probe_calls == 1U);
+    CHECK(fixture.acquire_calls == 2U);
+    CHECK(fixture.service_acquire_calls == 0U);
+    CHECK(fixture.prepare_calls == 0U && fixture.cleanup_calls == 0U);
+    CHECK(fixture.owner_cleanup_calls == 1U && !fixture.owner_live);
+
+    CHECK(init_fixture(&fixture, &runtime) == 0);
+    fixture.mode = MODE_CORRUPT_PUBLIC_OWNER;
+    CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
+    CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_COMPLETED) == HK_ERR_IO);
+    CHECK(fixture.cleanup_calls == 1U);
+    CHECK(fixture.owner_cleanup_calls == 1U && !fixture.owner_live);
+    return 0;
+}
+
 static int check_descriptor_capacity_guards(void)
 {
     grants_fixture_t fixture;
@@ -487,6 +630,7 @@ int main(void)
     CHECK(check_preflight_failures() == 0);
     CHECK(check_grants_and_retirement() == 0);
     CHECK(check_partial_injection_and_owner_exhaustion() == 0);
+    CHECK(check_stable_optional_and_private_owner() == 0);
     CHECK(check_descriptor_capacity_guards() == 0);
     puts("APP_RUNTIME_GRANTS_OK");
     return 0;
