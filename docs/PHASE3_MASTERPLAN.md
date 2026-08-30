@@ -287,7 +287,7 @@ autostart, debug dispatch и current apps работают как до migration
 
 ## 3.5 — App Runtime v2 lifecycle engine
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -317,11 +317,11 @@ production menu.
   work использует generation/epoch token и не влияет на следующий run.
 - [x] Reentrant switch/callback и callback после context generation invalidation
   возвращают deterministic error.
-- [~] App state остаётся private fixed storage; descriptor size/alignment
+- [x] App state остаётся private fixed storage; descriptor size/alignment
   проверяются против manifest limits.
 - [x] Добавить host fake apps, fault injection на каждом transition и transition
   table tests.
-- [~] Проверить отсутствие heap/tasks/queues и bounded transition latency.
+- [x] Проверить отсутствие heap/tasks/queues и bounded transition latency.
 
 ### Exit gate
 
