@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -18,6 +22,7 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
         policy = check_arch.load_layer_policy()
         expected = {
             "sdk/include/hackylens/app.h": "sdk",
+            "sdk/include/hackylens/app/context.h": "sdk",
             "firmware/src/app_runtime/runtime.c": "app-runtime",
             "firmware/src/apps/example/app.toml": "manifest",
             "firmware/generated/app_registry/registry.c":
@@ -42,7 +47,7 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
             )
 
     def test_sdk_can_reuse_public_capability_types_only(self) -> None:
-        sdk = "sdk/include/hackylens/app.h"
+        sdk = "sdk/include/hackylens/app/context.h"
         self.assertIsNone(check_arch.layer_edge_violation(
             sdk, "firmware/include/hackylens/capability/display.h"
         ))
@@ -59,6 +64,49 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIsNotNone(
                     check_arch.layer_edge_violation(sdk, target)
+                )
+
+    def test_public_context_header_is_c_and_cpp_compatible(self) -> None:
+        header = (ROOT / "sdk/include/hackylens/app/context.h").read_text(
+            encoding="utf-8"
+        )
+        for forbidden in (
+            "runtime_private.h", "capability_provider.h", "platforms/",
+            "firmware/src/", "hal_", "driver", "provider_vtable",
+        ):
+            self.assertNotIn(forbidden, header)
+
+        source = (
+            "#include <hackylens/app/context.h>\n"
+            "#ifdef __cplusplus\n"
+            "static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U);\n"
+            "static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U);\n"
+            "int main(void) { hk_app_context_t value = {}; return value.owner.slot; }\n"
+            "#else\n"
+            "_Static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U, \"caps\");\n"
+            "_Static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U, \"services\");\n"
+            "int main(void) { hk_app_context_t value = {0}; return value.owner.slot; }\n"
+            "#endif\n"
+        )
+        compilers = (
+            (os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc"), "c", "c11"),
+            (os.environ.get("CXX") or shutil.which("g++") or shutil.which("c++"), "cc", "c++17"),
+        )
+        with tempfile.TemporaryDirectory(prefix="hackylens-sdk-context-") as temp:
+            for compiler, suffix, standard in compilers:
+                self.assertIsNotNone(compiler, f"host {suffix} compiler is required")
+                path = Path(temp) / f"context.{suffix}"
+                output = Path(temp) / f"context-{suffix}.o"
+                path.write_text(source, encoding="utf-8")
+                subprocess.run(
+                    [
+                        str(compiler), f"-std={standard}", "-Wall", "-Wextra",
+                        "-Werror", f"-I{ROOT / 'sdk' / 'include'}",
+                        f"-I{ROOT / 'firmware' / 'include'}", "-c", str(path),
+                        "-o", str(output),
+                    ],
+                    cwd=ROOT,
+                    check=True,
                 )
 
     def test_runtime_and_generated_registry_do_not_gain_hardware_policy(self) -> None:

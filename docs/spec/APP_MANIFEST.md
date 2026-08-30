@@ -121,12 +121,16 @@ The feature array is explicit, duplicate-free, and may be empty. An optional
 request has one additional required lowercase-kebab `fallback` field. This is
 the same range and required-feature-set model as `hk_capability_request_t`; the
 validator does not replace missing bounds with a current provider version.
+The combined required and optional request count is limited to 16, matching the
+fixed public App Runtime context. The validator rejects overflow rather than
+truncating it or requiring dynamic storage.
 
 Each service declaration contains exactly `id` and `namespace`. A namespace is
 one or more lowercase-kebab components below `<app-id>.`, which makes service
 state app-scoped before any service handle is generated. Schema validation does
 not assert that a selected board provides the service; build composition makes
-that decision later.
+that decision later. A manifest may declare at most 16 services, matching the
+fixed public context table.
 
 Until the corresponding public service/capability migration exists, a
 `lifecycle = "legacy"` app MAY declare a transitional build-only service named

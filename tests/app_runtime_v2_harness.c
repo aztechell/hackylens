@@ -250,16 +250,62 @@ static hk_app_t descriptor(void)
     return app;
 }
 
-static hk_result_t fake_inject(
+static hk_result_t fake_resolve_capability(
     void *user,
     const hk_app_t *app,
-    hk_app_context_t *ctx,
+    const hk_app_capability_request_t *declaration,
+    hk_capability_request_t *request)
+{
+    (void)user;
+    (void)app;
+    (void)declaration;
+    (void)request;
+    return HK_ERR_INTERNAL;
+}
+
+static hk_result_t fake_resolve_service(
+    void *user,
+    const hk_app_t *app,
+    const hk_app_service_request_t *declaration)
+{
+    (void)user;
+    (void)app;
+    (void)declaration;
+    return HK_ERR_INTERNAL;
+}
+
+static hk_result_t fake_acquire_capability(
+    void *user,
+    hk_owner_t owner,
+    const hk_capability_request_t *request,
+    hk_lease_t *lease)
+{
+    (void)user;
+    (void)owner;
+    (void)request;
+    (void)lease;
+    return HK_ERR_INTERNAL;
+}
+
+static hk_result_t fake_acquire_service(
+    void *user,
+    hk_owner_t owner,
+    const hk_app_service_request_t *declaration)
+{
+    (void)user;
+    (void)owner;
+    (void)declaration;
+    return HK_ERR_INTERNAL;
+}
+
+static hk_result_t fake_owner_open(
+    void *user,
+    const hk_app_t *app,
     hk_owner_t *owner)
 {
     fixture_t *fixture = user;
 
     (void)app;
-    (void)ctx;
     trace('I');
     if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_INJECTING ||
        hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_INJECTING)
@@ -315,7 +361,11 @@ static hk_result_t fake_deadline(
 static int reset_fixture(fixture_t *fixture, hk_app_runtime_t *runtime)
 {
     static const hk_app_runtime_ops_t ops_template = {
-        .inject = fake_inject,
+        .resolve_capability = fake_resolve_capability,
+        .resolve_service = fake_resolve_service,
+        .owner_open = fake_owner_open,
+        .acquire_capability = fake_acquire_capability,
+        .acquire_service = fake_acquire_service,
         .owner_cleanup = fake_owner_cleanup,
         .deadline_after_us = fake_deadline,
     };
@@ -646,15 +696,13 @@ static hk_result_t benchmark_stop(
     return HK_OK;
 }
 
-static hk_result_t benchmark_inject(
+static hk_result_t benchmark_owner_open(
     void *user,
     const hk_app_t *descriptor,
-    hk_app_context_t *ctx,
     hk_owner_t *owner)
 {
     (void)user;
     (void)descriptor;
-    (void)ctx;
     *owner = (hk_owner_t){1U, 1U};
     return HK_OK;
 }
@@ -700,7 +748,11 @@ static int check_lifecycle_latency(
         .cleanup = benchmark_callback,
     };
     const hk_app_runtime_ops_t ops = {
-        .inject = benchmark_inject,
+        .resolve_capability = fake_resolve_capability,
+        .resolve_service = fake_resolve_service,
+        .owner_open = benchmark_owner_open,
+        .acquire_capability = fake_acquire_capability,
+        .acquire_service = fake_acquire_service,
         .owner_cleanup = benchmark_owner_cleanup,
         .deadline_after_us = benchmark_deadline,
     };

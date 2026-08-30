@@ -276,6 +276,30 @@ class AppManifestSchemaTests(unittest.TestCase):
             with self.subTest(old=old, new=new):
                 self.reject_alpha(old, new, expected)
 
+    def test_runtime_grant_tables_have_fixed_capacity(self) -> None:
+        capability_rows = ",\n".join(
+            "  { id = \"hackylens.cap.input\", instance = "
+            f"{index}, minimum = \"0.1.0\", maximum_exclusive = \"0.2.0\", "
+            "features = [\"state\"] }"
+            for index in range(MANIFEST.MAX_CAPABILITY_REQUESTS + 1)
+        )
+        self.reject_alpha(
+            'required = [\n  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events"] },\n]',
+            f"required = [\n{capability_rows}\n]",
+            "capabilities exceed fixed runtime capacity 16",
+        )
+
+        service_rows = ",\n".join(
+            "  { id = \"hackylens.service.service-"
+            f"{index}\", namespace = \"alpha-tool.service-{index}\" }}"
+            for index in range(MANIFEST.MAX_SERVICES + 1)
+        )
+        self.reject_alpha(
+            'services = [\n  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },\n]',
+            f"services = [\n{service_rows}\n]",
+            "services exceed fixed runtime capacity 16",
+        )
+
     def test_app_scoped_services_and_test_metadata_are_strict(self) -> None:
         mutations = (
             (

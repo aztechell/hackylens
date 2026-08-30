@@ -498,6 +498,53 @@ class DocumentationContractsTest(unittest.TestCase):
                     expected in found.message for found in issues
                 ))
 
+    def test_phase3_exact_context_grants_are_required(self) -> None:
+        originals = {
+            relative: (ROOT / relative).read_text(encoding="utf-8")
+            for relative in CHECK_DOCS.APP_CONTEXT_GRANT_REQUIREMENTS
+        }
+        mutations = (
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "Before `probe`, the runtime resolves",
+                "After `probe`, the runtime resolves",
+                "preflight grants without an owner before probe",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "`HK_ERR_NOT_DECLARED` is returned before provider access",
+                "undeclared requests may reach provider access",
+                "rejected before provider access",
+            ),
+            (
+                Path("docs/spec/APP_SDK.md"),
+                "Copying either the\ncontext or a handle does not extend",
+                "Copying the context may extend",
+                "reject copied stale authority",
+            ),
+            (
+                Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"),
+                "After a successful `probe`, runtime opens one",
+                "Before `probe`, runtime opens one",
+                "post-probe exact grant injection",
+            ),
+        )
+        for relative, old, new, expected in mutations:
+            with self.subTest(relative=relative, expected=expected):
+                with tempfile.TemporaryDirectory(
+                    prefix="hackylens-phase3-context-"
+                ) as temp:
+                    root = Path(temp)
+                    for path, text in originals.items():
+                        write(root / path, text)
+                    changed = originals[relative].replace(old, new, 1)
+                    self.assertNotEqual(changed, originals[relative])
+                    write(root / relative, changed)
+                    issues = CHECK_DOCS.check_phase3_app_context_grants(root)
+                self.assertTrue(any(
+                    expected in found.message for found in issues
+                ))
+
     def test_native_app_manifest_schema_safety_rules_are_normative(self) -> None:
         relative = Path("docs/spec/APP_MANIFEST.md")
         original = (ROOT / relative).read_text(encoding="utf-8")

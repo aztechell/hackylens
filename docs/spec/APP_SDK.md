@@ -50,6 +50,23 @@ peripheral instance, route, board ID inference, HAL object, or driver pointer.
 Absence and optional fallback are explicit results, never guessed from hardware
 identity.
 
+The public definition is `sdk/include/hackylens/app/context.h`. It has ABI
+size/version fields, immutable app identity, one generation-checked owner, and
+inline fixed-capacity tables for at most 16 declared capability grants and 16
+app-scoped service handles. It contains no runtime-private or hardware pointer.
+The tables are runtime-owned observations, not mutable app registration or
+discovery surfaces.
+
+During `probe`, identity and declaration status accessors are valid while the
+owner remains zero; typed handle access returns `HK_ERR_INVALID_STATE` because
+acquisition has not occurred. From `prepare` through app `cleanup`, typed
+accessors return the existing public Capability API handle for an available
+declared `(id, instance)`. An absent optional returns
+`HK_ERR_CAPABILITY_ABSENT` and its status accessor returns the exact manifest
+fallback. An undeclared capability or service returns `HK_ERR_NOT_DECLARED`
+without calling a provider. App-scoped service handles carry the same owner and
+context generation.
+
 ## Lifecycle teardown deadline access
 
 The SDK declares:
@@ -80,7 +97,10 @@ Contexts, handles, surfaces, events, and state views are borrowed for the
 lifetimes specified by App Runtime and the corresponding capability. Apps MUST
 NOT retain a callback-scoped context or surface after the callback returns.
 Every handle is scoped to the current app owner and generation and is invalid
-after teardown.
+after teardown. Handles remain valid during app `cleanup`; runtime then attempts
+owner-wide cleanup before invalidating handles and context. Copying either the
+context or a handle does not extend its lifetime or allow access to a later
+generation.
 
 SDK functions are bounded and allocation-free. They do not create tasks,
 queues, cores, general background work, or hidden heap storage. Large buffers

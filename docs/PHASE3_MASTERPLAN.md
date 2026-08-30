@@ -332,7 +332,7 @@ Lifecycle normative suite полностью проходит на host; product
 
 ## 3.6 — Public app context и capability injection
 
-Статус пакета: `not_started`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

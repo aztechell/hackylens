@@ -34,6 +34,8 @@ private firmware compatibility machinery, not an SDK ABI.
 The lifecycle order is:
 
 ```text
+validate immutable descriptor
+-> resolve declared capability/service availability
 probe(ctx)
 -> capability/service injection
 -> prepare(ctx)
@@ -49,11 +51,24 @@ deadline, and free of heap allocation. A callback MUST NOT create a task, queue,
 core, hidden loop, or unbounded retry. `HK_PENDING` is not a valid lifecycle
 callback result.
 
-`probe` may inspect immutable app metadata and declared availability but MUST
-NOT acquire or retain resources. Required and available optional handles are
-injected only after a successful probe. `prepare` may initialize app state and
-use injected handles; it MUST NOT leave an effect that its cleanup cannot
-release. `start` is called only after injection and successful `prepare`.
+Before `probe`, the runtime resolves every generated manifest declaration
+against the composed inventory. This is a resource-free preflight: it records
+the exact capability ID/instance request and whether an optional declaration
+uses its named fallback, but creates neither an app owner nor a lease. A missing
+required capability, incompatible version, unavailable required feature, or
+unresolved service excludes the app before any lifecycle callback. An optional
+capability is either recorded available or recorded absent with exactly its
+manifest fallback; there is no hardware-derived fallback.
+
+`probe` may inspect immutable app identity and this declared availability but
+MUST NOT acquire or retain resources. Only after successful `probe` does the
+runtime create the one app owner and acquire the preflighted grants. Required
+and available optional handles plus app-scoped service handles are injected
+before `prepare`. No callback can request an undeclared grant;
+`HK_ERR_NOT_DECLARED` is returned before provider access. `prepare` may
+initialize app state and use injected handles; it MUST NOT leave an effect that
+its cleanup cannot release. `start` is called only after injection and
+successful `prepare`.
 
 `event`, `tick`, and `render` are legal only in `RUNNING`. The runtime supplies
 ordered events, monotonic time, and a bounded rendering surface through public
@@ -111,6 +126,11 @@ data. The runtime may retain a descriptor pointer for one instance but MUST NOT
 modify it, construct a replacement, register another descriptor at boot, or
 derive identity from registry/menu position.
 
+The generated capability and service counts must fit the public context's fixed
+capacities of 16 capability grants and 16 service handles. Both manifest
+validation and runtime descriptor binding reject overflow; truncation and heap
+growth are forbidden.
+
 Only `RUNNING` accepts ordinary dispatch. Once teardown is requested, no new
 `event`, `tick`, or `render` callback may begin. A callback already on the
 synchronous call stack completes or reaches its bounded terminal failure before
@@ -123,7 +143,7 @@ Every terminal failure follows the deepest lifecycle stage reached:
 | Failure point | App `stop` | App `cleanup` | Owner-wide cleanup |
 |---|---:|---:|---:|
 | descriptor/state bind | no | no | no owner, otherwise yes |
-| `probe` | no | no | yes if an owner was issued |
+| declared-surface preflight or `probe` | no | no | no owner exists yet |
 | injection | no | no | yes |
 | `prepare` entered | no | exactly once | yes |
 | `start` entered | exactly once | exactly once | yes |
@@ -203,11 +223,26 @@ only for the current callback and instance generation. It MUST NOT copy the
 context for later use, mutate runtime fields, or derive provider, service,
 driver, HAL, route, peripheral, board, or platform objects from it.
 
+The public context carries ABI size/version, immutable app identity, context
+generation, the one owner after successful `probe`, and fixed-capacity inline
+tables for exactly the generated capability and app-scoped service grants. It
+contains no runtime, provider, service implementation, driver, HAL, board, or
+platform pointer. During `probe` its owner is zero and only declaration status
+access is legal. From `prepare` through app `cleanup`, acquired handles carry
+that same owner and context generation. Runtime owner-wide cleanup follows app
+cleanup; only then are handles and the context invalidated.
+
 Injected capability handles retain the public Capability API ABI. They are
 owner-scoped and generation-checked; the App SDK does not wrap them in parallel
 types without a documented ABI need. A handle not declared by the native app
 manifest is not injected, and acquisition outside generated grants returns
 `HK_ERR_NOT_DECLARED`.
+
+If acquisition fails after any earlier grant was injected, the runtime skips
+`prepare`, performs owner-wide cleanup for the same owner, invalidates every
+partial handle and the context, and clears the state slot. Owner-table
+exhaustion fails launch deterministically. A copied context or handle from an
+old generation cannot become valid when the runtime slot is reused.
 
 ## Stale callbacks and deferred work
 

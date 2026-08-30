@@ -65,6 +65,8 @@ MAX_STATE_BYTES = 1024 * 1024
 MAX_TICK_INTERVAL_US = 60_000_000
 MAX_TICK_BUDGET_US = 1_000_000
 MAX_RENDER_BUDGET_US = 1_000_000
+MAX_CAPABILITY_REQUESTS = 16
+MAX_SERVICES = 16
 
 
 class ManifestError(ValueError):
@@ -378,11 +380,20 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         raise ManifestError(
             f"{path}: capability cannot be both required and optional"
         )
+    if len(capability_keys) > MAX_CAPABILITY_REQUESTS:
+        raise ManifestError(
+            f"{path}: capabilities exceed fixed runtime capacity "
+            f"{MAX_CAPABILITY_REQUESTS}"
+        )
 
     lifecycle = _string(
         table["lifecycle"], f"{path}: lifecycle", pattern=TOKEN_RE
     )
     services = _services(table["services"], f"{path}: services", app_id)
+    if len(services) > MAX_SERVICES:
+        raise ManifestError(
+            f"{path}: services exceed fixed runtime capacity {MAX_SERVICES}"
+        )
     if lifecycle != "legacy" and any(
         service["id"].startswith(LEGACY_SERVICE_PREFIX)
         for service in services

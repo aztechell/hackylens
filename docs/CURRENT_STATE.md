@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources, immutable registry descriptors, menu/autostart/help/debug/limits metadata, capability/service requests, enable definitions, and explicit legacy entry bindings; private fixed-capacity lifecycle-v2 engine is implemented and host-qualified, while public context injection and production switching remain later Phase 3 work |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources and immutable descriptors; the private fixed-capacity lifecycle-v2 engine exposes the public SDK context and preflights/injects exact owner-scoped manifest grants, while production firmware-loop switching remains later Phase 3 work |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -164,6 +164,17 @@ concrete app table and performs lookup/iteration/dispatch. Stable persisted
 autostart IDs do not depend on menu or array order. Host fixtures cover empty,
 single, all-enabled, disabled, and mixed legacy/v2 composition, plus current
 screen, menu, autostart, SD, debug, tick, capability, and service parity.
+
+Phase 3.6 adds the public fixed-capacity `hk_app_context_t` SDK surface and the
+private runtime's exact manifest-grant preflight/injection path. Required
+absence or version/feature mismatch excludes an app before `probe`; optional
+absence exposes only its manifest fallback. One owner scopes every injected
+capability/service handle from `prepare` through app cleanup, after which
+owner-wide cleanup precedes generation invalidation and state reuse. Host fake
+inventory tests cover undeclared access, partial injection unwind, owner
+exhaustion, and stale copied contexts/handles. The engine remains unwired from
+the production firmware loop, so this package changes no production runtime
+behavior and needs no physical rerun.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -220,8 +231,9 @@ Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
 at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
 schema validation, production manifests, generated build composition, the
 generated registry/legacy adapter, and the private lifecycle-v2 state machine
-are implemented. Public SDK context/capability injection, firmware-loop
-switching integration, app generator, and migrations remain later Phase 3 work.
+are implemented. Public SDK context/capability injection is also implemented
+inside that private engine. Firmware-loop switching integration, app generator,
+and migrations remain later Phase 3 work.
 Public storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

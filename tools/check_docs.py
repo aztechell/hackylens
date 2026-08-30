@@ -181,6 +181,65 @@ TEARDOWN_DEADLINE_REQUIREMENTS = {
     ),
 }
 
+APP_CONTEXT_GRANT_REQUIREMENTS = {
+    Path("docs/spec/APP_RUNTIME.md"): (
+        (
+            r"Before\s+`probe`[\s\S]*resource-free\s+preflight[\s\S]*"
+            r"neither\s+an\s+app\s+owner\s+nor\s+a\s+lease",
+            "App Runtime must preflight grants without an owner before probe",
+        ),
+        (
+            r"missing\s+required\s+capability[\s\S]*incompatible\s+version"
+            r"[\s\S]*unavailable\s+required\s+feature[\s\S]*before\s+any\s+"
+            r"lifecycle\s+callback",
+            "required grant mismatches must exclude an app before probe",
+        ),
+        (
+            r"Only\s+after\s+successful\s+`probe`[\s\S]*one\s+app\s+owner"
+            r"[\s\S]*acquire\s+the\s+preflighted\s+grants",
+            "owner and handle acquisition must follow successful probe",
+        ),
+        (
+            r"HK_ERR_NOT_DECLARED[\s\S]*before\s+provider\s+access",
+            "undeclared grants must be rejected before provider access",
+        ),
+        (
+            r"owner-wide\s+cleanup\s+follows\s+app\s+cleanup[\s\S]*only\s+then"
+            r"[\s\S]*handles\s+and\s+the\s+context\s+invalidated",
+            "grant invalidation must follow app and owner-wide cleanup",
+        ),
+    ),
+    Path("docs/spec/APP_SDK.md"): (
+        (
+            r"sdk/include/hackylens/app/context\.h[\s\S]*16\s+declared\s+"
+            r"capability\s+grants[\s\S]*16\s+app-scoped\s+service\s+handles",
+            "Feature App SDK must define fixed public context capacities",
+        ),
+        (
+            r"During\s+`probe`[\s\S]*owner\s+remains\s+zero[\s\S]*"
+            r"HK_ERR_INVALID_STATE",
+            "Feature App SDK must distinguish probe status from handle access",
+        ),
+        (
+            r"Copying\s+either\s+the\s+context\s+or\s+a\s+handle[\s\S]*"
+            r"later\s+generation",
+            "Feature App SDK must reject copied stale authority",
+        ),
+    ),
+    Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"): (
+        (
+            r"Before\s+`probe`[\s\S]*without\s+opening\s+an\s+owner\s+or\s+"
+            r"acquiring\s+a\s+lease",
+            "ADR-0007 must record resource-free preflight before probe",
+        ),
+        (
+            r"After\s+a\s+successful\s+`probe`[\s\S]*opens\s+one[\s\S]*owner"
+            r"[\s\S]*injects\s+only\s+those\s+preflighted\s+grants",
+            "ADR-0007 must record post-probe exact grant injection",
+        ),
+    ),
+}
+
 APP_MANIFEST_SCHEMA_REQUIREMENTS = (
     (
         r"root\s+is\s+one\s+TOML\s+table\s+with\s+exactly\s+these\s+"
@@ -925,6 +984,22 @@ def check_phase3_teardown_deadline(root: Path) -> list[Issue]:
     return issues
 
 
+def check_phase3_app_context_grants(root: Path) -> list[Issue]:
+    """Keep exact manifest grants and one-owner context lifetime normative."""
+
+    issues: list[Issue] = []
+    for relative, requirements in APP_CONTEXT_GRANT_REQUIREMENTS.items():
+        path = root / relative
+        if not path.is_file():
+            issues.append(issue(root, path, 1, "app context document is missing"))
+            continue
+        text = read_text(path)
+        for pattern, message in requirements:
+            if re.search(pattern, text, flags=re.IGNORECASE) is None:
+                issues.append(issue(root, path, 1, message))
+    return issues
+
+
 def check_app_manifest_schema(root: Path) -> list[Issue]:
     """Keep the schema-1 build-time grammar and safety rules normative."""
 
@@ -1090,6 +1165,7 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_phase3_contracts(root, contracts))
     issues.extend(check_app_manifest_schema(root))
     issues.extend(check_phase3_teardown_deadline(root))
+    issues.extend(check_phase3_app_context_grants(root))
     issues.extend(check_phase2_status_consistency(root))
     issues.extend(check_adrs(root))
     return sorted(issues, key=lambda item: (str(item.path), item.line, item.message))

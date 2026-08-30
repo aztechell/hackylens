@@ -13,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AppRuntimeV2Tests(unittest.TestCase):
-    def test_normative_lifecycle_and_latency(self) -> None:
+    def compile_and_run_harness(self, source_name: str) -> subprocess.CompletedProcess[str]:
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-app-runtime-") as temp:
             executable = Path(temp) / (
-                "app_runtime_v2.exe" if os.name == "nt" else "app_runtime_v2"
+                "app_runtime.exe" if os.name == "nt" else "app_runtime"
             )
             subprocess.run(
                 [
@@ -28,9 +28,10 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     "-Wall",
                     "-Wextra",
                     "-Werror",
+                    f"-I{ROOT / 'sdk' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'src'}",
-                    str(ROOT / "tests" / "app_runtime_v2_harness.c"),
+                    str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
                     "-o",
                     str(executable),
@@ -38,7 +39,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 cwd=ROOT,
                 check=True,
             )
-            result = subprocess.run(
+            return subprocess.run(
                 [str(executable)],
                 cwd=ROOT,
                 check=True,
@@ -46,6 +47,9 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 text=True,
                 timeout=30,
             )
+
+    def test_normative_lifecycle_and_latency(self) -> None:
+        result = self.compile_and_run_harness("app_runtime_v2_harness.c")
         match = re.fullmatch(
             r"APP_RUNTIME_V2_OK host_event_p99_ns=(\d+) "
             r"host_launch_p99_ns=(\d+) host_stop_p99_ns=(\d+) limit_us=100 "
@@ -56,6 +60,10 @@ class AppRuntimeV2Tests(unittest.TestCase):
         assert match is not None
         for measured_ns in match.groups():
             self.assertLessEqual(int(measured_ns), 100_000)
+
+    def test_manifest_exact_grants_and_owner_retirement(self) -> None:
+        result = self.compile_and_run_harness("app_runtime_grants_harness.c")
+        self.assertEqual(result.stdout, "APP_RUNTIME_GRANTS_OK\n")
 
     def test_engine_remains_private_and_unwired_from_production_dispatch(self) -> None:
         main = (ROOT / "firmware/src/runtime/hk_main.c").read_text(encoding="utf-8")

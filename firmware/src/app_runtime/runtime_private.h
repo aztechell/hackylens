@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include <hackylens/capability/owner.h>
+#include <hackylens/app/context.h>
 
 #include "../core/hk_app.h"
 
@@ -52,8 +53,6 @@ typedef enum
     HK_APP_STOP_FORCED = 6,
     HK_APP_STOP_SHUTDOWN = 7,
 } hk_app_stop_reason_t;
-
-typedef struct hk_app_context hk_app_context_t;
 
 typedef struct
 {
@@ -103,11 +102,28 @@ struct hk_app_v2_entry
     hk_app_cleanup_fn cleanup;
 };
 
-typedef hk_result_t (*hk_app_runtime_inject_fn)(
+typedef hk_result_t (*hk_app_runtime_resolve_capability_fn)(
     void *user,
     const hk_app_t *descriptor,
-    hk_app_context_t *ctx,
+    const hk_app_capability_request_t *declaration,
+    hk_capability_request_t *request);
+typedef hk_result_t (*hk_app_runtime_resolve_service_fn)(
+    void *user,
+    const hk_app_t *descriptor,
+    const hk_app_service_request_t *declaration);
+typedef hk_result_t (*hk_app_runtime_owner_open_fn)(
+    void *user,
+    const hk_app_t *descriptor,
     hk_owner_t *owner);
+typedef hk_result_t (*hk_app_runtime_acquire_capability_fn)(
+    void *user,
+    hk_owner_t owner,
+    const hk_capability_request_t *request,
+    hk_lease_t *lease);
+typedef hk_result_t (*hk_app_runtime_acquire_service_fn)(
+    void *user,
+    hk_owner_t owner,
+    const hk_app_service_request_t *declaration);
 typedef hk_result_t (*hk_app_runtime_owner_cleanup_fn)(
     void *user,
     hk_owner_t owner,
@@ -120,27 +136,23 @@ typedef hk_result_t (*hk_app_runtime_deadline_after_fn)(
 typedef struct
 {
     void *user;
-    hk_app_runtime_inject_fn inject;
+    hk_app_runtime_resolve_capability_fn resolve_capability;
+    hk_app_runtime_resolve_service_fn resolve_service;
+    hk_app_runtime_owner_open_fn owner_open;
+    hk_app_runtime_acquire_capability_fn acquire_capability;
+    hk_app_runtime_acquire_service_fn acquire_service;
     hk_app_runtime_owner_cleanup_fn owner_cleanup;
     hk_app_runtime_deadline_after_fn deadline_after_us;
 } hk_app_runtime_ops_t;
-
-struct hk_app_context
-{
-    struct hk_app_runtime *runtime;
-    hk_owner_t owner;
-    hk_deadline_t teardown_deadline;
-    uint32_t generation;
-    uint32_t epoch;
-    uint8_t valid;
-    uint8_t teardown_deadline_valid;
-};
 
 typedef struct hk_app_runtime
 {
     hk_app_runtime_ops_t ops;
     const hk_app_t *descriptor;
     hk_app_context_t context;
+    hk_capability_request_t
+        resolved_capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
+    hk_deadline_t teardown_deadline;
     hk_app_runtime_state_t state;
     hk_app_runtime_stage_t stage;
     hk_app_stop_reason_t stop_reason;
@@ -148,6 +160,8 @@ typedef struct hk_app_runtime
     uint64_t teardown_budget_us;
     uint32_t context_generation;
     uint32_t active_epoch;
+    uint8_t context_valid;
+    uint8_t teardown_deadline_valid;
     uint8_t callback_active;
     uint8_t prepare_entered;
     uint8_t start_entered;
@@ -179,13 +193,6 @@ hk_app_runtime_state_t hk_app_runtime_state(const hk_app_runtime_t *runtime);
 hk_app_runtime_stage_t hk_app_runtime_stage(const hk_app_runtime_t *runtime);
 hk_result_t hk_app_runtime_first_error(const hk_app_runtime_t *runtime);
 
-hk_result_t hk_app_context_state(
-    const hk_app_context_t *ctx,
-    void **state,
-    uint32_t *size_bytes);
-hk_result_t hk_app_context_teardown_deadline(
-    const hk_app_context_t *ctx,
-    hk_deadline_t *deadline);
 hk_result_t hk_app_context_deferred_token(
     const hk_app_context_t *ctx,
     hk_app_runtime_token_t *token);

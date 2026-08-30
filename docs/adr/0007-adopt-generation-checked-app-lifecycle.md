@@ -29,16 +29,31 @@ Adopt App Runtime `0.1.0 experimental` with the ordered callbacks
 `probe/prepare/start/event/tick/render/stop/cleanup` and a runtime-owned,
 generation-checked context.
 
-The runtime binds descriptor-sized private state from fixed storage. `probe`
-retains no resources; declared handles are injected before `prepare`; `start`
-occurs only after successful injection and preparation. Ordinary dispatch is
-synchronous and legal only while running.
+The runtime binds descriptor-sized private state from fixed storage. Before
+`probe`, it preflights every immutable manifest capability/service declaration
+against the composed inventory without opening an owner or acquiring a lease.
+Missing/incompatible required grants exclude the app; optional absence selects
+only the named manifest fallback. After a successful `probe`, runtime opens one
+generation-checked owner and injects only those preflighted grants before
+`prepare`. Undeclared access returns `HK_ERR_NOT_DECLARED` without reaching a
+provider. `start` occurs only after successful injection and preparation.
+Ordinary dispatch is synchronous and legal only while running.
+
+The SDK context is a public fixed-capacity ABI object with immutable identity,
+generation, one owner, and inline tables capped at 16 capability grants and 16
+app-scoped service handles. It has no runtime, provider, driver, HAL, board, or
+platform pointer and reuses public Capability API handle types directly.
+Manifest validation and runtime binding both reject count overflow.
 
 Teardown is one irreversible sequence: idempotent stop, app cleanup at most once
 while context and handles remain valid, mandatory runtime owner-wide cleanup,
 provider quarantine after failed provider cleanup, handle and deferred-token
 invalidation, context-generation invalidation, and only then state reuse. A
 failure at one unwind step is retained but cannot skip a later step.
+Partial injection and owner-table exhaustion follow the same deterministic
+unwind rules. Handles remain usable through app cleanup, are invalidated after
+owner-wide cleanup, and copied old-generation contexts/handles never regain
+authority when state is reused.
 
 The runtime creates one finite absolute monotonic teardown deadline when
 teardown begins. Its finite positive budget comes from runtime policy, not the

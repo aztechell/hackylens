@@ -405,6 +405,7 @@ def write_project_cmake(
         "target_include_directories(${PROJECT_NAME} PRIVATE",
         f'    "{cmake_path(stage)}"',
         f'    "{cmake_path(stage / "firmware" / "include")}"',
+        f'    "{cmake_path(stage / "sdk" / "include")}"',
         f'    "{cmake_path(stage / "platforms" / "k210" / "hal")}"',
         *(f'    "{cmake_path(path)}"' for path in allowed_app_includes),
         ")",
@@ -633,6 +634,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     shutil.copy2(Path(target["target_source"]), stage / "main.c")
     stage_firmware_sources(stage, disabled_apps)
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
+    copy_tree_files(ROOT / "sdk" / "include", stage / "sdk" / "include")
     copy_tree_files(
         app_composition.GENERATED_REGISTRY_ROOT,
         stage / "firmware" / "generated" / "app_registry",
