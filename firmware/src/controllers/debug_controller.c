@@ -2,7 +2,7 @@
 
 #include "../config/debug_config.h"
 
-#include "../core/hk_menu.h"
+#include "../core/hk_menu_runtime.h"
 #include "../core/hk_app_registry.h"
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
@@ -48,7 +48,7 @@ void debug_uart_handle_command(const char *cmd)
     if(str_eq_ci(cmd, "HKMENU"))
     {
         activity_note();
-        shell_show_menu();
+        shell_show_menu_reason(HK_APP_STOP_FORCED);
         return;
     }
     if(str_eq_ci(cmd, "HKPING"))

@@ -21,9 +21,15 @@ optional `owns_screen`, optional `draw_icon`, optional
 and optional `handle_debug_command`. SETTINGS and SLEEP retain the zero/OFF
 autostart ID and cannot be selected as boot targets.
 
-`runtime/hk_main.c` runs the firmware superloop: it processes debug input, polls buttons, dispatches shell input, ticks the menu and active app, runs the system tick, then sleeps for the configured camera or non-camera interval. `SCREEN_MENU` opens the selected registry entry through its `enter` callback. `SCREEN_CAMERA_SETTINGS` remains a service screen owned by CAMERA/QR-CAMERA rather than a top-level app.
+`runtime/hk_main.c` runs the firmware superloop: it processes debug input, polls buttons, dispatches shell input, ticks the menu and active app, runs the system tick, then sleeps for the configured camera or non-camera interval. `SCREEN_MENU` opens the selected registry entry through the common fixed-capacity foreground switch. Legacy descriptors then reach their existing `enter` callback through a private adapter; lifecycle-v2 descriptors reach App Runtime. `SCREEN_CAMERA_SETTINGS` remains a service screen owned by CAMERA/QR-CAMERA rather than a top-level app.
 
 After settings load, boot UI, and SD mount, startup resolves the persisted autostart ID through the registry and calls the target's normal `enter` with an empty input snapshot. The menu index is set to the target before entry, so BACK returns with that item selected. OFF or a target omitted by the current build opens the menu; an omitted target remains persisted and becomes active again when a later build restores it. `HKMENU` and ordinary exits never retrigger autostart.
+
+Menu selection, legacy/v2 replacement, BACK, autostart failure, safe-mode BACK
+suppression, and `HKMENU` use that same switch/owner boundary. Legacy behavior
+is unchanged, but an adapter cannot skip owner-wide capability cleanup. A
+lifecycle-v2 app uses private `SCREEN_APP_SLOT_0` only as a shell compatibility
+marker; `screen_t` is not part of the public Feature App SDK.
 
 Autostart identity is a stable uint16 manifest value. Settings schema v5 stores
 it without narrowing and migrates schema-v4 uint8 values by zero extension.

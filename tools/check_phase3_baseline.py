@@ -555,6 +555,7 @@ def measure_dispatch(document: dict[str, Any]) -> int:
         )
         subprocess.run([
             compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+            f"-I{ROOT / 'sdk' / 'include'}",
             f"-I{ROOT / 'firmware' / 'include'}",
             f"-I{ROOT / 'firmware' / 'src'}",
             str(ROOT / dispatch["harness_path"]),

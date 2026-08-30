@@ -104,17 +104,29 @@ hk_result_t capability_owner_runtime_enter(const hk_app_t *app)
 
 hk_result_t capability_owner_runtime_exit(const hk_app_t *app)
 {
-    hk_result_t result;
-
-    result = ensure_initialized();
-    if(result != HK_OK)
-        return result;
     if(hk_owner_is_zero(s_current_owner))
         return HK_OK;
     if(app != s_current_app)
         return HK_ERR_WRONG_OWNER;
+    return capability_owner_runtime_close(
+        s_current_owner, HK_DEADLINE_IMMEDIATE);
+}
+
+hk_result_t capability_owner_runtime_close(
+    hk_owner_t owner,
+    hk_deadline_t deadline)
+{
+    hk_result_t result = ensure_initialized();
+
+    if(result != HK_OK)
+        return result;
+    if(hk_owner_is_zero(owner))
+        return HK_OK;
+    if(owner.slot != s_current_owner.slot ||
+       owner.generation != s_current_owner.generation)
+        return HK_ERR_WRONG_OWNER;
     result = hk_capability_core_owner_close(
-        &s_capability_core, s_current_owner, 0U, HK_DEADLINE_IMMEDIATE);
+        &s_capability_core, owner, 0U, deadline);
     s_current_owner = HK_OWNER_NONE;
     s_current_app = NULL;
     return result;

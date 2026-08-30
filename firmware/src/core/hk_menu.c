@@ -1,4 +1,4 @@
-#include "hk_menu.h"
+#include "hk_menu_runtime.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -62,15 +62,15 @@ void menu_render(void)
         menu_draw_registry_item(index);
 }
 
-void shell_show_menu(void)
+void shell_show_menu_reason(hk_app_stop_reason_t reason)
 {
     const hk_app_t *app = hk_app_for_screen(hk_screen_get());
     const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
 
-    if(entry && entry->exit)
-        entry->exit();
     if(s_owner_hooks.exit)
-        s_owner_hooks.exit(app);
+        s_owner_hooks.exit(app, reason);
+    else if(entry && entry->exit)
+        entry->exit();
     hk_screen_set(SCREEN_MENU);
     hk_back_exit_set_armed(0);
     menu_render();
@@ -79,12 +79,17 @@ void shell_show_menu(void)
            MENU_ITEM_COUNT ? g_menu_items[s_menu_index]->title : "NO APPS");
 }
 
+void shell_show_menu(void)
+{
+    shell_show_menu_reason(HK_APP_STOP_BACK);
+}
+
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
     const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
     uint8_t index;
 
-    if(!entry || !entry->enter)
+    if(!app || (!s_owner_hooks.enter && (!entry || !entry->enter)))
         return 0U;
     for(index = 0U; index < g_menu_item_count; index++)
     {
@@ -96,9 +101,17 @@ uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
     s_menu_repeat_button = 0;
     s_menu_repeat_ticks = 0;
     printf("[MENU] open %s\r\n", app->title);
-    if(s_owner_hooks.enter && !s_owner_hooks.enter(app))
-        return 0U;
-    entry->enter(input);
+    if(s_owner_hooks.enter)
+    {
+        if(!s_owner_hooks.enter(app, input))
+            return 0U;
+    }
+    else
+    {
+        entry->enter(input);
+    }
+    if(app->lifecycle == HK_APP_LIFECYCLE_V2)
+        hk_screen_set(SCREEN_APP_SLOT_0);
     return 1U;
 }
 

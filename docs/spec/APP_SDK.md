@@ -71,6 +71,34 @@ context generation. Availability observed by `probe` is stable: failure to
 acquire a grant reported available fails launch and triggers owner-wide unwind;
 it cannot become an implicit fallback before `prepare`.
 
+The event, stop-reason, wakeup-token, and render-surface definitions are in
+`sdk/include/hackylens/app/runtime.h`. `hk_app_event_t` is a bounded
+size/versioned union for Input, SD/media, Timer, Runtime Close, and Wakeup. Its
+runtime sequence is strictly increasing within one generation. Input embeds
+the public Capability API `hk_input_event_t`; no parallel input or button type
+is introduced. BACK remains runtime navigation and is not delivered as an
+ordinary Input event to the closing app.
+
+`hk_app_context_wakeup_token` creates a fixed slot/context-generation/epoch
+token with one app-private value. Holding the token creates no work and grants
+no authority by itself. A producer may return it only through a runtime-owned
+bounded completion path; stale tokens are rejected before app dispatch.
+
+`hk_app_context_request_render` records a full or rectangular invalidation.
+The fixed limit is eight rectangles. `hk_app_surface_t` is opaque and borrowed
+only for the current `render` callback. Its API permits display information,
+invalidation, clear, rectangle, text, and blit operations; it deliberately has
+no present, batch, plane-ownership, framebuffer-ownership, LCD, driver, HAL, or
+platform operation. Retaining a surface pointer after callback return is an SDK
+contract violation and every use outside that borrow returns a stale-handle
+error when observable by the runtime.
+
+Tick and render intervals/budgets come only from the immutable generated
+descriptor. Apps cannot refresh them or create a catch-up loop. Timer events
+and `tick(ctx, monotonic_now)` run synchronously on the existing firmware loop;
+render runs only for a pending invalidation and runtime owns Display
+begin/present/abort.
+
 ## Lifecycle teardown deadline access
 
 The SDK declares:
@@ -138,7 +166,10 @@ experimental breaking change increments MINOR. Publishing this SDK does not
 change Firmware `0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle
 `0.2.0`, or MicroPython API `1.0.0`.
 
-The legacy adapter is runtime implementation, not a second public SDK. A legacy
+The legacy adapter is runtime implementation, not a second public SDK. The one
+foreground switch boundary is shared by lifecycle-v2 and legacy apps, so menu,
+BACK, autostart, debug forced exit, safe-mode fallback, and rapid switching use
+one close/unwind decision. A legacy
 manifest `entry` names an app-owned const `hk_legacy_app_entry_t` binding object;
 the generated private descriptor references it and the generic registry invokes
 it. That type and binding are unavailable from `sdk/include`. Existing legacy

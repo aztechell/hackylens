@@ -11,6 +11,9 @@ struct hk_app;
 
 hk_result_t capability_owner_runtime_enter(const struct hk_app *app);
 hk_result_t capability_owner_runtime_exit(const struct hk_app *app);
+hk_result_t capability_owner_runtime_close(
+    hk_owner_t owner,
+    hk_deadline_t deadline);
 hk_owner_t capability_owner_runtime_current(const struct hk_app *app);
 hk_result_t capability_owner_runtime_initialize(void);
 #endif

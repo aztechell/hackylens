@@ -5,9 +5,10 @@
 #include <stdint.h>
 
 #include <hackylens/capability/owner.h>
-#include <hackylens/app/context.h>
+#include <hackylens/app/runtime.h>
 
 #include "../core/hk_app.h"
+#include "surface_private.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,53 +43,27 @@ typedef enum
     HK_APP_STAGE_INVALIDATING,
 } hk_app_runtime_stage_t;
 
-typedef enum
-{
-    HK_APP_STOP_COMPLETED = 0,
-    HK_APP_STOP_BACK = 1,
-    HK_APP_STOP_SWITCH = 2,
-    HK_APP_STOP_START_FAILED = 3,
-    HK_APP_STOP_CALLBACK_FAILED = 4,
-    HK_APP_STOP_DEADLINE = 5,
-    HK_APP_STOP_FORCED = 6,
-    HK_APP_STOP_SHUTDOWN = 7,
-} hk_app_stop_reason_t;
-
-typedef struct
-{
-    uint32_t kind;
-    uint32_t value;
-} hk_app_runtime_event_t;
-
-typedef struct
-{
-    void *view;
-    uint32_t flags;
-} hk_app_runtime_surface_t;
-
-typedef struct
-{
-    uint32_t slot;
-    uint32_t context_generation;
-    uint32_t epoch;
-} hk_app_runtime_token_t;
-
 typedef hk_result_t (*hk_app_probe_fn)(const hk_app_context_t *ctx);
 typedef hk_result_t (*hk_app_prepare_fn)(const hk_app_context_t *ctx);
 typedef hk_result_t (*hk_app_start_fn)(const hk_app_context_t *ctx);
 typedef hk_result_t (*hk_app_event_fn)(
     const hk_app_context_t *ctx,
-    const hk_app_runtime_event_t *event);
+    const hk_app_event_t *event);
 typedef hk_result_t (*hk_app_tick_fn)(
     const hk_app_context_t *ctx,
     uint64_t now_us);
 typedef hk_result_t (*hk_app_render_fn)(
     const hk_app_context_t *ctx,
-    hk_app_runtime_surface_t *surface);
+    hk_app_surface_t *surface);
 typedef hk_result_t (*hk_app_stop_fn)(
     const hk_app_context_t *ctx,
     hk_app_stop_reason_t reason);
 typedef hk_result_t (*hk_app_cleanup_fn)(const hk_app_context_t *ctx);
+
+/* Private compatibility names retained for focused lifecycle harnesses. */
+typedef hk_app_event_t hk_app_runtime_event_t;
+typedef hk_app_surface_t hk_app_runtime_surface_t;
+typedef hk_app_wakeup_token_t hk_app_runtime_token_t;
 
 struct hk_app_v2_entry
 {
@@ -156,7 +131,9 @@ typedef struct hk_app_runtime
     hk_capability_request_t
         resolved_capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
     uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];
+    hk_display_rect_t invalidations[HK_APP_MAX_INVALIDATIONS];
     hk_deadline_t teardown_deadline;
+    uint64_t event_sequence;
     hk_app_runtime_state_t state;
     hk_app_runtime_stage_t stage;
     hk_app_stop_reason_t stop_reason;
@@ -172,6 +149,8 @@ typedef struct hk_app_runtime
     uint8_t stop_called;
     uint8_t cleanup_called;
     uint8_t teardown_started;
+    uint8_t invalidation_count;
+    uint8_t full_invalidation;
     uint8_t retired;
 } hk_app_runtime_t;
 
@@ -187,16 +166,25 @@ hk_result_t hk_app_runtime_stop(
     hk_app_stop_reason_t reason);
 hk_result_t hk_app_runtime_event(
     hk_app_runtime_t *runtime,
-    const hk_app_runtime_event_t *event);
+    const hk_app_event_t *event);
 hk_result_t hk_app_runtime_tick(hk_app_runtime_t *runtime, uint64_t now_us);
 hk_result_t hk_app_runtime_render(
     hk_app_runtime_t *runtime,
-    hk_app_runtime_surface_t *surface);
+    hk_app_surface_t *surface);
 
 hk_app_runtime_state_t hk_app_runtime_state(const hk_app_runtime_t *runtime);
 hk_app_runtime_stage_t hk_app_runtime_stage(const hk_app_runtime_t *runtime);
 hk_result_t hk_app_runtime_first_error(const hk_app_runtime_t *runtime);
 
+hk_result_t hk_app_runtime_validate_wakeup_token(
+    const hk_app_runtime_t *runtime,
+    hk_app_wakeup_token_t token);
+uint8_t hk_app_runtime_render_pending(const hk_app_runtime_t *runtime);
+uint16_t hk_app_runtime_invalidations(
+    const hk_app_runtime_t *runtime,
+    const hk_display_rect_t **regions,
+    uint8_t *full);
+void hk_app_runtime_render_committed(hk_app_runtime_t *runtime);
 hk_result_t hk_app_context_deferred_token(
     const hk_app_context_t *ctx,
     hk_app_runtime_token_t *token);

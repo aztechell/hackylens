@@ -82,6 +82,21 @@ Deferred provider work uses a bounded runtime-owned slot/generation/epoch token.
 An old completion is discarded before app code or state access. Generation
 values retire on exhaustion instead of wrapping into a live instance.
 
+Firmware integration uses one fixed-capacity foreground switch for v2 and
+legacy descriptors. Menu selection, BACK, autostart, debug-forced menu,
+safe-mode suppression, rapid replacement, and callback failure all enter the
+same close/open algorithm. Legacy enter/exit remains behavior-compatible behind
+that boundary and uses the same capability-owner cleanup. The runtime consumes
+events from the existing Input and SD paths; it adds no sampler or queue.
+
+The public event ABI is one bounded ordered union for Input, SD/media, Timer,
+Runtime Close, and generation-checked Wakeup. BACK is consumed as navigation.
+Ticks use manifest interval/budget and the composed monotonic Time provider,
+with no catch-up loop. Rendering uses at most eight invalidations and a
+callback-borrowed opaque surface over the injected Display handle; runtime alone
+owns batch begin/present/abort and no public `screen_t`, LCD owner, or raw
+framebuffer is introduced.
+
 ## Alternatives
 
 - Extend `hk_app_t` in place: rejected because screen identity, legacy callbacks,
@@ -105,6 +120,8 @@ baseline budgets.
 
 The legacy registry can coexist only behind an explicit adapter. It receives no
 exception to manifest composition, owner cleanup, or architecture policy.
+The integration adds one fixed switch object and no heap, task, general queue,
+runtime core, second input path, or framebuffer.
 
 ## Compatibility and Migration
 
@@ -124,6 +141,9 @@ unchanged. Firmware, HMPY, Board Port, and MicroPython API versions do not chang
 - Phase 3 baseline pins the exact Phase 2 closure before runtime source changes.
 - Runtime transition/fault-injection tests and measured dispatch evidence are
   required by later implementation packages.
+- Mixed legacy/v2 host tests cover ordered events, render invalidation, rapid
+  switch, BACK during start, deadline excess, render failure, autostart fallback,
+  and stale wakeup rejection.
 
 ## References
 

@@ -68,6 +68,16 @@ typedef struct
 static fixture_t *s_fixture;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[64];
 
+static hk_app_runtime_event_t input_event(void)
+{
+    hk_app_runtime_event_t event = {0};
+
+    event.struct_size = sizeof(event);
+    event.struct_version = HK_APP_EVENT_VERSION;
+    event.kind = HK_APP_EVENT_INPUT;
+    return event;
+}
+
 static void trace(char value)
 {
     if(s_fixture->trace_size + 1U < sizeof(s_fixture->trace))
@@ -118,7 +128,7 @@ static hk_result_t fake_prepare(const hk_app_context_t *ctx)
 
 static hk_result_t fake_start(const hk_app_context_t *ctx)
 {
-    hk_app_runtime_event_t event = {0U, 0U};
+    hk_app_runtime_event_t event = input_event();
 
     trace('S');
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_PREPARED ||
@@ -385,10 +395,12 @@ static int check_normal_lifecycle(void)
 {
     fixture_t fixture;
     hk_app_runtime_t runtime;
-    hk_app_runtime_event_t event = {1U, 2U};
+    hk_app_runtime_event_t event = input_event();
     hk_app_runtime_surface_t surface = {0};
     hk_app_t app = descriptor();
     hk_app_context_t *retained;
+    void *state = NULL;
+    uint32_t state_size = 0U;
 
     CHECK(reset_fixture(&fixture, &runtime) == 0);
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
@@ -396,14 +408,14 @@ static int check_normal_lifecycle(void)
     CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_RUNNING);
     CHECK(hk_app_runtime_stage(&runtime) == HK_APP_STAGE_RUNNING);
     retained = &runtime.context;
-    CHECK(hk_app_context_state(retained, &surface.view, &surface.flags) ==
+    CHECK(hk_app_context_state(retained, &state, &state_size) ==
           HK_ERR_WRONG_CONTEXT);
     CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
     CHECK(hk_app_runtime_validate_token(&runtime, fixture.token) == HK_OK);
     CHECK(hk_app_runtime_tick(&runtime, 123U) == HK_OK);
     CHECK(hk_app_runtime_render(&runtime, &surface) == HK_OK);
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_BACK) == HK_OK);
-    CHECK(strcmp(fixture.trace, "PIASETRDXCO") == 0);
+    CHECK(strcmp(fixture.trace, "PIASETREDXCO") == 0);
     CHECK(fixture.deadline_calls == 1U);
     CHECK(fixture.owner_cleanup_calls == 1U);
     CHECK(fixture.stop_calls == 1U && fixture.cleanup_calls == 1U);
@@ -425,7 +437,7 @@ static int check_normal_lifecycle(void)
     {
         hk_app_runtime_token_t stale = fixture.token;
 
-        fixture.token = (hk_app_runtime_token_t){0U, 0U, 0U};
+        fixture.token = (hk_app_runtime_token_t){0};
         fixture.trace_size = 0U;
         fixture.trace[0] = '\0';
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
@@ -487,7 +499,7 @@ static int check_running_faults(void)
     {
         fixture_t fixture;
         hk_app_runtime_t runtime;
-        hk_app_runtime_event_t event = {0U, 0U};
+        hk_app_runtime_event_t event = input_event();
         hk_app_runtime_surface_t surface = {0};
         hk_app_t app = descriptor();
         hk_result_t result;
@@ -546,7 +558,7 @@ static int check_teardown_faults_and_reentrancy(void)
     {
         fixture_t fixture;
         hk_app_runtime_t runtime;
-        hk_app_runtime_event_t event = {0U, 0U};
+        hk_app_runtime_event_t event = input_event();
         hk_app_t app = descriptor();
 
         CHECK(reset_fixture(&fixture, &runtime) == 0);
@@ -759,7 +771,7 @@ static int check_lifecycle_latency(
         .deadline_after_us = benchmark_deadline,
     };
     hk_app_runtime_t runtime;
-    hk_app_runtime_event_t event = {0U, 0U};
+    hk_app_runtime_event_t event = input_event();
     hk_app_t app = descriptor();
     uint64_t event_samples[SAMPLE_COUNT];
     uint64_t launch_samples[SAMPLE_COUNT];

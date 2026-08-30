@@ -193,6 +193,43 @@ max_leases = 1
             ))
             self.assertNotIn("test", optional.disabled_apps)
             self.assertEqual(optional.optional_fallbacks[0]["fallback"], "legacy-path")
+            self.assertEqual(optional.grants["test"], ())
+            generated_source = generator.generated_c(optional)
+            self.assertIn("s_declared_requests_", generated_source)
+            generated = Path(directory) / "capability_inventory_generated.c"
+            generated.write_text(generated_source, encoding="utf-8")
+            harness = Path(directory) / "optional_absence_harness.c"
+            harness.write_text(
+                """#include \"capability_inventory_binding.h\"\n
+const hk_capability_provider_t hk_test_time_provider = {.max_leases = 16U};\n
+int main(void)\n
+{\n
+    hk_capability_request_t request_value;\n
+    hk_result_t result = hk_generated_capability_request_for(\n
+        \"test\", \"hackylens.cap.time\", 0U, &request_value);\n
+    if(result != HK_ERR_CAPABILITY_ABSENT)\n
+        return 1;\n
+    if(request_value.id != UINT32_C(0x00010001) ||\n
+       request_value.required_features != UINT64_MAX)\n
+        return 2;\n
+    if(hk_generated_capability_request_for(\n
+           \"test\", \"hackylens.cap.time\", 1U, &request_value) !=\n
+       HK_ERR_NOT_DECLARED)\n
+        return 3;\n
+    return 0;\n
+}\n""",
+                encoding="utf-8",
+            )
+            compiler = shutil.which("gcc") or shutil.which("cc")
+            self.assertIsNotNone(compiler)
+            executable = Path(directory) / "optional_absence_harness"
+            subprocess.run([
+                str(compiler), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
+                str(generated), str(harness), "-o", str(executable),
+            ], check=True, cwd=ROOT)
+            subprocess.run([str(executable)], check=True, cwd=ROOT)
         with tempfile.TemporaryDirectory() as directory:
             route_missing = self.compose_fixture(self.fixture(
                 directory, required=request(), routes='["missing-route"]'

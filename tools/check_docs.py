@@ -181,6 +181,83 @@ TEARDOWN_DEADLINE_REQUIREMENTS = {
     ),
 }
 
+APP_RUNTIME_INTEGRATION_REQUIREMENTS = {
+    Path("docs/spec/APP_RUNTIME.md"): (
+        (
+            r"exactly\s+five\s+kinds[\s\S]*Input[\s\S]*SD/media[\s\S]*"
+            r"timer[\s\S]*runtime\s+close[\s\S]*app-private\s+wakeup",
+            "App Runtime must keep the bounded five-kind event model",
+        ),
+        (
+            r"existing\s+`hk_input_event_t`[\s\S]*MUST\s+NOT\s+sample\s+a\s+"
+            r"second\s+button\s+path",
+            "v2 input must use the existing Input event path",
+        ),
+        (
+            r"BACK\s+is\s+runtime\s+navigation[\s\S]*consumed[\s\S]*not\s+"
+            r"delivered\s+as\s+an\s+ordinary\s+Input\s+event",
+            "BACK must remain runtime-consumed navigation",
+        ),
+        (
+            r"strictly\s+increasing\s+runtime\s+sequence[\s\S]*restarts\s+"
+            r"only\s+for\s+a\s+newly\s+launched\s+generation",
+            "app events must remain ordered per generation",
+        ),
+        (
+            r"There\s+is\s+no\s+catch-up\s+loop[\s\S]*completion_now\s*\+\s*"
+            r"tick_interval_us",
+            "tick scheduling must remain bounded without catch-up",
+        ),
+        (
+            r"at\s+most\s+eight\s+fixed-capacity\s+dirty\s+rectangles"
+            r"[\s\S]*Runtime\s+alone\s+presents\s+or\s+aborts",
+            "render invalidation and Display ownership must remain bounded",
+        ),
+        (
+            r"one\s+fixed-capacity\s+foreground\s+switch[\s\S]*menu\s+"
+            r"selection[\s\S]*BACK[\s\S]*autostart[\s\S]*debug-forced"
+            r"[\s\S]*safe-mode",
+            "all foreground entry paths must share one switch algorithm",
+        ),
+        (
+            r"wakeup\s+payload[\s\S]*slot[\s\S]*context\s+generation"
+            r"[\s\S]*instance\s+epoch[\s\S]*rejected\s+before\s+calling\s+"
+            r"app\s+code",
+            "deferred wakeups must remain generation checked",
+        ),
+    ),
+    Path("docs/spec/APP_SDK.md"): (
+        (
+            r"sdk/include/hackylens/app/runtime\.h[\s\S]*bounded[\s\S]*"
+            r"Input[\s\S]*SD/media[\s\S]*Timer[\s\S]*Runtime\s+Close"
+            r"[\s\S]*Wakeup",
+            "Feature App SDK must publish the bounded event ABI",
+        ),
+        (
+            r"hk_app_surface_t[\s\S]*opaque\s+and\s+borrowed[\s\S]*"
+            r"no\s+present[\s\S]*LCD[\s\S]*HAL",
+            "Feature App SDK surface must not expose display ownership",
+        ),
+        (
+            r"foreground\s+switch\s+boundary[\s\S]*legacy[\s\S]*menu"
+            r"[\s\S]*BACK[\s\S]*autostart[\s\S]*safe-mode",
+            "Feature App SDK must preserve one legacy/v2 switch boundary",
+        ),
+    ),
+    Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"): (
+        (
+            r"one\s+fixed-capacity\s+foreground\s+switch\s+for\s+v2\s+and"
+            r"\s+legacy[\s\S]*same\s+close/open\s+algorithm",
+            "ADR-0007 must record the single foreground switch decision",
+        ),
+        (
+            r"bounded\s+ordered\s+union[\s\S]*generation-checked\s+Wakeup"
+            r"[\s\S]*no\s+catch-up\s+loop",
+            "ADR-0007 must record ordered events and bounded scheduling",
+        ),
+    ),
+}
+
 APP_CONTEXT_GRANT_REQUIREMENTS = {
     Path("docs/spec/APP_RUNTIME.md"): (
         (
@@ -1046,6 +1123,22 @@ def check_phase3_app_context_grants(root: Path) -> list[Issue]:
     return issues
 
 
+def check_phase3_app_runtime_integration(root: Path) -> list[Issue]:
+    """Keep the Phase 3.7 event/render/switch contract mechanically present."""
+
+    issues: list[Issue] = []
+    for relative, requirements in APP_RUNTIME_INTEGRATION_REQUIREMENTS.items():
+        path = root / relative
+        if not path.is_file():
+            issues.append(issue(root, path, 1, "app runtime integration document is missing"))
+            continue
+        text = read_text(path)
+        for pattern, message in requirements:
+            if re.search(pattern, text, flags=re.IGNORECASE) is None:
+                issues.append(issue(root, path, 1, message))
+    return issues
+
+
 def check_app_manifest_schema(root: Path) -> list[Issue]:
     """Keep the schema-1 build-time grammar and safety rules normative."""
 
@@ -1212,6 +1305,7 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_app_manifest_schema(root))
     issues.extend(check_phase3_teardown_deadline(root))
     issues.extend(check_phase3_app_context_grants(root))
+    issues.extend(check_phase3_app_runtime_integration(root))
     issues.extend(check_phase2_status_consistency(root))
     issues.extend(check_adrs(root))
     return sorted(issues, key=lambda item: (str(item.path), item.line, item.message))

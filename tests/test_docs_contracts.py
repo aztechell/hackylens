@@ -575,6 +575,63 @@ class DocumentationContractsTest(unittest.TestCase):
                     expected in found.message for found in issues
                 ))
 
+    def test_phase3_event_render_and_switch_contract_is_required(self) -> None:
+        originals = {
+            relative: (ROOT / relative).read_text(encoding="utf-8")
+            for relative in CHECK_DOCS.APP_RUNTIME_INTEGRATION_REQUIREMENTS
+        }
+        mutations = (
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "exactly five\nkinds",
+                "an extensible set of\nkinds",
+                "bounded five-kind event model",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "MUST NOT sample a\nsecond button path",
+                "may sample a\nsecond button path",
+                "existing Input event path",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "There is no catch-up loop",
+                "There may be a catch-up loop",
+                "without catch-up",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "There is one fixed-capacity foreground switch state",
+                "There are independent foreground switch states",
+                "one switch algorithm",
+            ),
+            (
+                Path("docs/spec/APP_SDK.md"),
+                "`hk_app_surface_t` is opaque and borrowed",
+                "`hk_app_surface_t` exposes LCD ownership and is borrowed",
+                "must not expose display ownership",
+            ),
+            (
+                Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"),
+                "one fixed-capacity foreground switch for v2 and\nlegacy",
+                "separate foreground switches for v2 and\nlegacy",
+                "single foreground switch decision",
+            ),
+        )
+        for relative, old, new, expected in mutations:
+            with self.subTest(relative=relative, expected=expected):
+                with tempfile.TemporaryDirectory(
+                    prefix="hackylens-phase3-integration-"
+                ) as temp:
+                    root = Path(temp)
+                    for path, text in originals.items():
+                        write(root / path, text)
+                    changed = originals[relative].replace(old, new, 1)
+                    self.assertNotEqual(changed, originals[relative])
+                    write(root / relative, changed)
+                    issues = CHECK_DOCS.check_phase3_app_runtime_integration(root)
+                self.assertTrue(any(expected in found.message for found in issues))
+
     def test_native_app_manifest_schema_safety_rules_are_normative(self) -> None:
         relative = Path("docs/spec/APP_MANIFEST.md")
         original = (ROOT / relative).read_text(encoding="utf-8")

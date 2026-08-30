@@ -369,7 +369,7 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 
 ## 3.7 — Event, tick, render и switching integration
 
-Статус пакета: `not_started`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

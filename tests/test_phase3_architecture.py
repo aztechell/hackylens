@@ -23,6 +23,7 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
         expected = {
             "sdk/include/hackylens/app.h": "sdk",
             "sdk/include/hackylens/app/context.h": "sdk",
+            "sdk/include/hackylens/app/runtime.h": "sdk",
             "firmware/src/app_runtime/runtime.c": "app-runtime",
             "firmware/src/apps/example/app.toml": "manifest",
             "firmware/generated/app_registry/registry.c":
@@ -66,26 +67,34 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
                     check_arch.layer_edge_violation(sdk, target)
                 )
 
-    def test_public_context_header_is_c_and_cpp_compatible(self) -> None:
-        header = (ROOT / "sdk/include/hackylens/app/context.h").read_text(
-            encoding="utf-8"
+    def test_public_context_and_runtime_headers_are_c_and_cpp_compatible(self) -> None:
+        header = "\n".join(
+            (ROOT / relative).read_text(encoding="utf-8")
+            for relative in (
+                "sdk/include/hackylens/app/context.h",
+                "sdk/include/hackylens/app/runtime.h",
+            )
         )
         for forbidden in (
             "runtime_private.h", "capability_provider.h", "platforms/",
-            "firmware/src/", "hal_", "driver", "provider_vtable",
+            "firmware/src/", "hal_", "driver", "provider_vtable", "screen_t",
         ):
             self.assertNotIn(forbidden, header)
 
         source = (
-            "#include <hackylens/app/context.h>\n"
+            "#include <hackylens/app/runtime.h>\n"
             "#ifdef __cplusplus\n"
             "static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U);\n"
             "static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U);\n"
-            "int main(void) { hk_app_context_t value = {}; return value.owner.slot; }\n"
+            "static_assert(HK_APP_MAX_INVALIDATIONS == 8U);\n"
+            "int main(void) { hk_app_context_t value = {}; hk_app_event_t event = {}; "
+            "return value.owner.slot + static_cast<int>(event.sequence); }\n"
             "#else\n"
             "_Static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U, \"caps\");\n"
             "_Static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U, \"services\");\n"
-            "int main(void) { hk_app_context_t value = {0}; return value.owner.slot; }\n"
+            "_Static_assert(HK_APP_MAX_INVALIDATIONS == 8U, \"invalidations\");\n"
+            "int main(void) { hk_app_context_t value = {0}; "
+            "hk_app_event_t event = {0}; return value.owner.slot + (int)event.sequence; }\n"
             "#endif\n"
         )
         compilers = (

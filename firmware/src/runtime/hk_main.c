@@ -5,9 +5,10 @@
 
 #include <hackylens/capability/input.h>
 
+#include "app_runtime_integration.h"
 #include "../core/hk_app_registry.h"
 #include "../core/hk_dispatch.h"
-#include "../core/hk_menu.h"
+#include "../core/hk_menu_runtime.h"
 #include "../core/hk_screen.h"
 #include "../core/hk_capability_client.h"
 #include "hal_time.h"
@@ -49,17 +50,38 @@ static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
     while((result = hk_input_next_event(
                s_runtime_input_owner, &s_runtime_input, &event)) == HK_OK)
     {
+        uint8_t consumed = 0U;
+
         snapshot->state = event.state;
         snapshot->pressed = event.pressed;
         snapshot->changed = event.changed;
         activity_note();
-        shell_handle_buttons(snapshot);
+        result = app_runtime_integration_input(&event, &consumed);
+        if(result != HK_OK && result != HK_PENDING)
+        {
+            if(hk_screen_get() == SCREEN_APP_SLOT_0)
+                shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
+            return HK_OK;
+        }
+        if(consumed && !app_runtime_integration_active() &&
+           hk_screen_get() == SCREEN_APP_SLOT_0)
+            shell_show_menu_reason(HK_APP_STOP_BACK);
+        if(!consumed)
+            shell_handle_buttons(snapshot);
     }
     if(result == HK_ERR_OVERFLOW)
     {
+        uint8_t consumed = 0U;
+
         snapshot->state = event.state;
         snapshot->pressed = 0U;
         snapshot->changed = 0U;
+        result = app_runtime_integration_input(&event, &consumed);
+        if(result != HK_OK && result != HK_PENDING)
+        {
+            if(hk_screen_get() == SCREEN_APP_SLOT_0)
+                shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
+        }
         return HK_OK;
     }
     return result == HK_PENDING ? HK_OK : result;
@@ -99,7 +121,11 @@ int hk_main(void)
             printf("[INPUT] provider failure\r\n");
             return -1;
         }
-        now_us = hal_time_us();
+        if(app_runtime_integration_now_us(&now_us) != HK_OK)
+        {
+            printf("[TIME] capability failure\r\n");
+            return -1;
+        }
         if(next_dispatch_us != 0U && now_us < next_dispatch_us)
         {
             sleep_us = next_dispatch_us - now_us;
@@ -123,11 +149,20 @@ int hk_main(void)
             entry->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
+        if(app_runtime_integration_poll(now_us) != HK_OK &&
+           hk_screen_get() == SCREEN_APP_SLOT_0)
+            shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
         app = hk_app_for_screen(hk_screen_get());
         entry = hk_app_legacy_entry(app);
-        tick_interval_us = app && entry && entry->screen == hk_screen_get() &&
-                           app->limits.tick_interval_us ?
-                           app->limits.tick_interval_us : 20000U;
+        if(hk_screen_get() == SCREEN_APP_SLOT_0 &&
+           app_runtime_integration_active())
+            tick_interval_us =
+                app_runtime_integration_poll_interval_us(now_us);
+        else
+            tick_interval_us = app && entry &&
+                               entry->screen == hk_screen_get() &&
+                               app->limits.tick_interval_us ?
+                               app->limits.tick_interval_us : 20000U;
         next_dispatch_us = now_us + tick_interval_us;
         sleep_us = tick_interval_us;
         if(sleep_us > HK_INPUT_SAMPLE_INTERVAL_US)

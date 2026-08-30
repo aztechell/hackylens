@@ -50,6 +50,8 @@ const char *screen_label(screen_t screen)
         return "SETTINGS";
     if(screen == SCREEN_SLEEP)
         return "SLEEP";
+    if(screen == SCREEN_APP_SLOT_0)
+        return "APP-V2";
     return "MENU";
 }
 

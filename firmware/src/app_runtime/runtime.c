@@ -16,6 +16,15 @@ static hk_result_t callback_result(hk_result_t result)
     return result == HK_PENDING ? HK_ERR_INVALID_STATE : result;
 }
 
+static uint8_t event_is_valid(const hk_app_event_t *event)
+{
+    return (uint8_t)(event && event->struct_size >= sizeof(*event) &&
+                     event->struct_version == HK_APP_EVENT_VERSION &&
+                     event->reserved == 0U &&
+                     event->kind >= HK_APP_EVENT_INPUT &&
+                     event->kind <= HK_APP_EVENT_WAKEUP);
+}
+
 static void retain_error(hk_app_runtime_t *runtime, hk_result_t result)
 {
     result = callback_result(result);
@@ -276,6 +285,7 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
            sizeof(runtime->resolved_capabilities));
     memset(runtime->resolved_available, 0,
            sizeof(runtime->resolved_available));
+    memset(runtime->invalidations, 0, sizeof(runtime->invalidations));
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
     runtime->prepare_entered = 0U;
@@ -283,6 +293,8 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     runtime->stop_called = 0U;
     runtime->cleanup_called = 0U;
     runtime->teardown_started = 0U;
+    runtime->invalidation_count = 0U;
+    runtime->full_invalidation = 0U;
     runtime->callback_active = 0U;
     if(s_callback_runtime == runtime)
         s_callback_runtime = NULL;
@@ -422,6 +434,7 @@ hk_result_t hk_app_runtime_launch(
     s_live_runtime = runtime;
     runtime->first_error = HK_OK;
     runtime->stop_reason = HK_APP_STOP_COMPLETED;
+    runtime->event_sequence = 0U;
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->context.struct_size = sizeof(runtime->context);
     runtime->context.struct_version = HK_APP_CONTEXT_VERSION;
@@ -495,6 +508,8 @@ hk_result_t hk_app_runtime_launch(
     }
     runtime->stage = HK_APP_STAGE_RUNNING;
     runtime->state = HK_APP_RUNTIME_RUNNING;
+    runtime->full_invalidation = 1U;
+    runtime->invalidation_count = 0U;
     return HK_OK;
 }
 
@@ -510,6 +525,23 @@ hk_result_t hk_app_runtime_stop(
         return HK_OK;
     if(runtime->state != HK_APP_RUNTIME_RUNNING || !runtime->descriptor)
         return HK_ERR_INVALID_STATE;
+    reason = normalized_reason(reason);
+    {
+        hk_app_event_t event = {
+            sizeof(hk_app_event_t), HK_APP_EVENT_VERSION,
+            HK_APP_EVENT_RUNTIME_CLOSE, 0U,
+            ++runtime->event_sequence, 0U,
+            {.close = {reason, 0U}},
+        };
+        hk_result_t result;
+
+        runtime->stage = HK_APP_STAGE_RUNNING;
+        (void)enter_callback(runtime);
+        result = finish_callback(
+            runtime,
+            runtime->descriptor->entry.v2->event(&runtime->context, &event));
+        retain_error(runtime, result);
+    }
     return teardown(runtime, reason);
 }
 
@@ -528,9 +560,11 @@ static hk_result_t dispatch_result(
 
 hk_result_t hk_app_runtime_event(
     hk_app_runtime_t *runtime,
-    const hk_app_runtime_event_t *event)
+    const hk_app_event_t *event)
 {
     if(!runtime || !event)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!event_is_valid(event))
         return HK_ERR_INVALID_ARGUMENT;
     if(runtime->state != HK_APP_RUNTIME_RUNNING || runtime->callback_active)
         return HK_ERR_INVALID_STATE;
@@ -554,7 +588,7 @@ hk_result_t hk_app_runtime_tick(hk_app_runtime_t *runtime, uint64_t now_us)
 
 hk_result_t hk_app_runtime_render(
     hk_app_runtime_t *runtime,
-    hk_app_runtime_surface_t *surface)
+    hk_app_surface_t *surface)
 {
     if(!runtime || !surface)
         return HK_ERR_INVALID_ARGUMENT;
@@ -781,6 +815,14 @@ hk_result_t hk_app_context_deferred_token(
     const hk_app_context_t *ctx,
     hk_app_runtime_token_t *token)
 {
+    return hk_app_context_wakeup_token(ctx, 0U, token);
+}
+
+hk_result_t hk_app_context_wakeup_token(
+    const hk_app_context_t *ctx,
+    uint32_t value,
+    hk_app_wakeup_token_t *token)
+{
     hk_result_t result;
 
     if(!token)
@@ -790,9 +832,26 @@ hk_result_t hk_app_context_deferred_token(
         return result;
     if(s_callback_runtime->state != HK_APP_RUNTIME_RUNNING)
         return HK_ERR_INVALID_STATE;
+    token->struct_size = sizeof(*token);
+    token->struct_version = HK_APP_WAKEUP_TOKEN_VERSION;
     token->slot = HK_APP_RUNTIME_SLOT;
     token->context_generation = ctx->generation;
     token->epoch = s_callback_runtime->active_epoch;
+    token->value = value;
+    return HK_OK;
+}
+
+hk_result_t hk_app_runtime_validate_wakeup_token(
+    const hk_app_runtime_t *runtime,
+    hk_app_wakeup_token_t token)
+{
+    if(!runtime || token.struct_size < sizeof(token) ||
+       token.struct_version != HK_APP_WAKEUP_TOKEN_VERSION ||
+       token.slot != HK_APP_RUNTIME_SLOT ||
+       runtime->state != HK_APP_RUNTIME_RUNNING || !runtime->context_valid ||
+       token.context_generation != runtime->context_generation ||
+       token.epoch != runtime->active_epoch)
+        return HK_ERR_STALE_HANDLE;
     return HK_OK;
 }
 
@@ -800,10 +859,65 @@ hk_result_t hk_app_runtime_validate_token(
     const hk_app_runtime_t *runtime,
     hk_app_runtime_token_t token)
 {
-    if(!runtime || token.slot != HK_APP_RUNTIME_SLOT ||
-       runtime->state != HK_APP_RUNTIME_RUNNING || !runtime->context_valid ||
-       token.context_generation != runtime->context_generation ||
-       token.epoch != runtime->active_epoch)
-        return HK_ERR_STALE_HANDLE;
+    return hk_app_runtime_validate_wakeup_token(runtime, token);
+}
+
+static uint8_t rect_is_valid(const hk_display_rect_t *region)
+{
+    return (uint8_t)(region && region->width > 0U && region->height > 0U);
+}
+
+hk_result_t hk_app_context_request_render(
+    const hk_app_context_t *ctx,
+    const hk_display_rect_t *region)
+{
+    hk_app_runtime_t *runtime = NULL;
+    hk_result_t result = validate_callback_context(ctx, &runtime);
+
+    if(result != HK_OK)
+        return result;
+    if(runtime->state != HK_APP_RUNTIME_RUNNING)
+        return HK_ERR_INVALID_STATE;
+    if(!region)
+    {
+        runtime->full_invalidation = 1U;
+        runtime->invalidation_count = 0U;
+        return HK_OK;
+    }
+    if(!rect_is_valid(region))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(runtime->full_invalidation)
+        return HK_OK;
+    if(runtime->invalidation_count >= HK_APP_MAX_INVALIDATIONS)
+        return HK_ERR_LIMIT;
+    runtime->invalidations[runtime->invalidation_count++] = *region;
     return HK_OK;
+}
+
+uint8_t hk_app_runtime_render_pending(const hk_app_runtime_t *runtime)
+{
+    return (uint8_t)(runtime && runtime->state == HK_APP_RUNTIME_RUNNING &&
+                     (runtime->full_invalidation ||
+                      runtime->invalidation_count > 0U));
+}
+
+uint16_t hk_app_runtime_invalidations(
+    const hk_app_runtime_t *runtime,
+    const hk_display_rect_t **regions,
+    uint8_t *full)
+{
+    if(regions)
+        *regions = runtime ? runtime->invalidations : NULL;
+    if(full)
+        *full = runtime ? runtime->full_invalidation : 0U;
+    return runtime ? runtime->invalidation_count : 0U;
+}
+
+void hk_app_runtime_render_committed(hk_app_runtime_t *runtime)
+{
+    if(!runtime)
+        return;
+    runtime->full_invalidation = 0U;
+    runtime->invalidation_count = 0U;
+    memset(runtime->invalidations, 0, sizeof(runtime->invalidations));
 }

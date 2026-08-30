@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AppRuntimeV2Tests(unittest.TestCase):
-    def compile_and_run_harness(self, source_name: str) -> subprocess.CompletedProcess[str]:
+    def compile_and_run_harness(
+        self, source_name: str, extra_sources: tuple[str, ...] = ()
+    ) -> subprocess.CompletedProcess[str]:
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-app-runtime-") as temp:
@@ -33,6 +35,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     f"-I{ROOT / 'firmware' / 'src'}",
                     str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
+                    *(str(ROOT / source) for source in extra_sources),
                     "-o",
                     str(executable),
                 ],
@@ -65,14 +68,31 @@ class AppRuntimeV2Tests(unittest.TestCase):
         result = self.compile_and_run_harness("app_runtime_grants_harness.c")
         self.assertEqual(result.stdout, "APP_RUNTIME_GRANTS_OK\n")
 
-    def test_engine_remains_private_and_unwired_from_production_dispatch(self) -> None:
+    def test_mixed_runtime_switch_events_and_failure_paths(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_mixed_harness.c",
+            (
+                "firmware/src/app_runtime/surface.c",
+                "firmware/src/app_runtime/switch.c",
+            ),
+        )
+        self.assertEqual(result.stdout, "APP_RUNTIME_MIXED_OK\n")
+
+    def test_engine_stays_private_behind_one_production_switch_boundary(self) -> None:
         main = (ROOT / "firmware/src/runtime/hk_main.c").read_text(encoding="utf-8")
-        menu = (ROOT / "firmware/src/core/hk_app_registry.c").read_text(
+        startup = (ROOT / "firmware/src/runtime/firmware_startup.c").read_text(
             encoding="utf-8"
         )
-        for source in (main, menu):
-            self.assertNotIn("hk_app_runtime_", source)
-            self.assertNotIn("app_runtime/runtime", source)
+        integration = (ROOT / "firmware/src/runtime/app_runtime_integration.c").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("app_runtime_integration_input(&event, &consumed)", main)
+        self.assertIn("app_runtime_integration_poll(now_us)", main)
+        self.assertIn("consumed && !app_runtime_integration_active()", main)
+        self.assertIn("app_runtime_integration_open(app, input)", startup)
+        self.assertIn("hk_app_switch_open", integration)
+        self.assertNotIn("screen_t", integration)
+        self.assertNotIn("hal_", integration)
 
         runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
             encoding="utf-8"

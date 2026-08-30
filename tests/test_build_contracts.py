@@ -90,9 +90,10 @@ class BuildContractsTest(unittest.TestCase):
             "capability_owner_runtime.c"
         ).read_text(encoding="utf-8")
         self.assertNotIn("hk_owner_t", app_header)
-        self.assertIn("s_owner_hooks.exit(app)", menu)
-        self.assertIn("s_owner_hooks.enter(app)", menu)
+        self.assertIn("s_owner_hooks.exit(app, reason)", menu)
+        self.assertIn("s_owner_hooks.enter(app, input)", menu)
         self.assertIn("menu_owner_hooks_set(&owner_hooks)", startup)
+        self.assertIn("app_runtime_integration_open(app, input)", startup)
         self.assertIn(
             "hk_generated_capability_inventory_get(",
             runtime,

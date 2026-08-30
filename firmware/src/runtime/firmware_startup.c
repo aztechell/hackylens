@@ -7,7 +7,9 @@
 
 #include "../controllers/boot_controller.h"
 #include "../controllers/autostart_controller.h"
-#include "../core/hk_menu.h"
+#include "../controllers/sd_event_controller.h"
+#include "app_runtime_integration.h"
+#include "../core/hk_menu_runtime.h"
 #include "../core/hk_screen.h"
 #include "../services/settings_lights.h"
 #include "../services/debug_console_service.h"
@@ -29,29 +31,55 @@ static void firmware_wake_from_sleep(void)
     shell_show_menu();
 }
 
-static uint8_t firmware_capability_owner_enter(const hk_app_t *app)
+static uint8_t firmware_app_enter(
+    const hk_app_t *app,
+    const hk_input_snapshot_t *input)
 {
-    return (uint8_t)(capability_owner_runtime_enter(app) == HK_OK);
+    return (uint8_t)(app_runtime_integration_open(app, input) == HK_OK);
 }
 
-static void firmware_capability_owner_exit(const hk_app_t *app)
+static void firmware_app_exit(
+    const hk_app_t *app,
+    hk_app_stop_reason_t reason)
 {
-    (void)capability_owner_runtime_exit(app);
+    (void)app;
+    (void)app_runtime_integration_close(reason);
+}
+
+static uint8_t firmware_app_media_event(hk_sd_event_t event)
+{
+    static uint32_t generation;
+    hk_app_media_kind_t kind;
+
+    generation++;
+    if(event == HK_SD_EVENT_INSERTED)
+        kind = HK_APP_MEDIA_INSERTED;
+    else if(event == HK_SD_EVENT_REMOVED)
+        kind = HK_APP_MEDIA_REMOVED;
+    else if(event == HK_SD_EVENT_MOUNTED)
+        kind = HK_APP_MEDIA_MOUNTED;
+    else
+        kind = HK_APP_MEDIA_ERROR;
+    return (uint8_t)(
+        app_runtime_integration_media(kind, generation) == HK_OK);
 }
 
 void firmware_startup(void)
 {
     static const hk_menu_owner_hooks_t owner_hooks = {
-        .enter = firmware_capability_owner_enter,
-        .exit = firmware_capability_owner_exit,
+        .enter = firmware_app_enter,
+        .exit = firmware_app_exit,
     };
 
     menu_owner_hooks_set(&owner_hooks);
+    sd_event_controller_set_app_hook(firmware_app_media_event);
     debug_console_init();
     hk_screen_set_wake_handler(firmware_wake_from_sleep);
     platform_bootstrap_init_clocks();
     if(capability_owner_runtime_initialize() != HK_OK)
         printf("[CAPABILITY] owner initialization failed\r\n");
+    if(app_runtime_integration_initialize() != HK_OK)
+        printf("[APP] runtime initialization failed\r\n");
     settings_storage_init();
     platform_bootstrap_init_hardware();
     if(hk_ui_display_prepare() != HK_OK)

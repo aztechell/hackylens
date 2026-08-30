@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources and immutable descriptors; the private fixed-capacity lifecycle-v2 engine exposes the public SDK context and preflights/injects exact owner-scoped manifest grants, while production firmware-loop switching remains later Phase 3 work |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources and immutable descriptors; the fixed-capacity lifecycle-v2 engine is integrated into the production firmware loop through one legacy/v2 foreground switch with ordered events, bounded tick/render, exact owner-scoped grants, and generation-checked wakeups; no current app is migrated to v2 yet |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -175,9 +175,22 @@ inventory tests cover undeclared access, partial injection unwind, owner
 exhaustion, stable preflight availability, callback-snapshot corruption, and
 stale copied contexts/handles. Lifecycle callbacks receive a const context;
 the authoritative owner and resolved availability remain private, so callback
-corruption cannot suppress owner-wide cleanup or change injected grants. The
-engine remains unwired from the production firmware loop, so this package
-changes no production runtime behavior and needs no physical rerun.
+corruption cannot suppress owner-wide cleanup or change injected grants. Phase
+3.6 itself left the engine unwired from production and required no physical
+rerun.
+
+Phase 3.7 connects the private engine to the existing firmware loop without
+migrating a production app. One fixed-capacity switch now owns legacy/v2 open,
+BACK, autostart, debug-forced exit, safe-mode fallback, and failure unwind.
+Input events come from the existing composed Input provider; SD/media events
+come from the existing controller path. Tick and render budgets use the
+composed Time provider, and the opaque SDK surface stages bounded operations on
+the injected Display handle while runtime alone presents or aborts. Host tests
+cover mixed switching, ordered close/input/media/timer/wakeup events, rapid
+switch, BACK during start, timeout, render/present failure, autostart fallback,
+surface invalidation, and stale wakeup rejection. No existing app uses the v2
+branch yet, so targeted physical behavior does not need to be repeated before
+the first migration.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -233,10 +246,10 @@ measurements. Later packages may extend qualification on new hardware.
 Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
 at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
 schema validation, production manifests, generated build composition, the
-generated registry/legacy adapter, and the private lifecycle-v2 state machine
-are implemented. Public SDK context/capability injection is also implemented
-inside that private engine. Firmware-loop switching integration, app generator,
-and migrations remain later Phase 3 work.
+generated registry/legacy adapter, the private lifecycle-v2 state machine, its
+public context/capability injection, and the production foreground switching,
+event, tick, and render integration are implemented. App generator and app
+migrations remain later Phase 3 work.
 Public storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

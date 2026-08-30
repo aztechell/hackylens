@@ -81,6 +81,86 @@ ordered events, monotonic time, and a bounded rendering surface through public
 SDK contracts. The app does not poll a raw button sampler, select a hardware
 clock, or own an LCD driver path.
 
+## Event model
+
+`hk_app_event_t` is a size/versioned fixed union. Version 1 has exactly five
+kinds: Input, SD/media change, timer, runtime close, and app-private wakeup.
+There is no heap-backed event object and no App Runtime queue. Dispatch is
+synchronous on the existing firmware loop. Every accepted event in one app
+generation has a non-zero, strictly increasing runtime sequence; the sequence
+restarts only for a newly launched generation.
+
+Input events copy the existing `hk_input_event_t` produced by the one composed
+Input Capability provider, including provider sequence, monotonic timestamp,
+state transitions, and overflow `dropped` count. The firmware MUST NOT sample a
+second button path for v2 apps. BACK is runtime navigation: while a v2 app is
+active it is consumed by the switch boundary, is not delivered as an ordinary
+Input event, and requests teardown with `HK_APP_STOP_BACK`.
+
+SD/media events contain an insertion/removal/mounted/error kind and a monotonic
+media generation. They are adapted from the existing firmware SD event path;
+they do not expose raw SD blocks, filesystem internals, or platform paths.
+
+A runtime-close event is delivered exactly once immediately before a normal
+running-instance teardown enters `STOPPING`. It contains the retained stop
+reason and is ordered after all previously accepted events. Its failure is
+retained but cannot cancel or skip teardown. Start failure has not reached the
+running event surface and therefore proceeds directly through the documented
+failure unwind.
+
+The wakeup payload contains only a fixed-size token with runtime slot, context
+generation, instance epoch, and app-private value. The runtime validates all
+three authority fields before dispatch. A stale completion is rejected before
+calling app code; it cannot render, write state, or clean up a later app.
+
+## Tick scheduling
+
+After successful `start`, the runtime reads monotonic time through the same
+composed public Time Capability and sets the first due time to
+`now + limits.tick_interval_us`. When due, it dispatches one ordered Timer event
+with scheduled and observed monotonic times, then calls `tick(ctx, now)` once.
+It measures the complete Timer-event plus tick work against
+`limits.tick_budget_us`. There is no catch-up loop: after successful completion
+the next due time is `completion_now + tick_interval_us`. Clock failure,
+backward time, arithmetic overflow, or elapsed budget excess terminates the app
+with `HK_APP_STOP_DEADLINE`; the deadline is not refreshed into retries.
+
+## Render and invalidation
+
+`hk_app_context_request_render` records either a full invalidation or at most
+eight fixed-capacity dirty rectangles. A successful v2 start begins with one
+full invalidation. The app cannot present, begin/abort a Display batch, select
+an LCD plane, obtain a framebuffer owner, or call a driver through this API.
+
+For a render pass the runtime borrows the app's injected public Display handle,
+opens one bounded provider batch, applies the pending invalidations, and passes
+an opaque `hk_app_surface_t` to `render`. The surface exposes bounded clear,
+rectangle, text, blit, information, and invalidation calls only. It is valid
+only during that render callback and is invalidated before any later app work.
+Runtime alone presents or aborts the batch with one absolute deadline derived
+from `limits.render_budget_us`; measured callback time uses the same monotonic
+Time provider. A callback, provider, present, or budget failure aborts the
+batch where possible and enters the common unwind. If an optional Display grant
+is absent, the invalidation is deterministically consumed without opening a
+hardware path; a required absent Display has already failed preflight.
+
+## Foreground switching
+
+There is one fixed-capacity foreground switch state and one transition
+algorithm for menu selection, BACK, autostart, debug-forced menu, safe-mode
+autostart suppression, and callback failure. Opening another app first closes
+the active app through the common boundary. A BACK request received reentrantly
+during `start` is retained, launch finishes its bounded callback, and the same
+instance is immediately unwound; it never becomes an independently dispatchable
+foreground app. Autostart open failure leaves no active instance and the
+existing controller falls back to MENU through that same close/open boundary.
+
+Legacy descriptors use a private adapter at this switch boundary. The adapter
+preserves the existing input snapshot, screen, enter/exit, tick, SD, debug, and
+secondary-screen behavior, while owner creation and owner-wide cleanup use the
+same production capability-owner runtime. It is not a public SDK alternative
+and it does not bypass manifest composition.
+
 ## Stop reasons
 
 The first teardown cause is retained as the stop reason for the instance:
@@ -263,8 +343,9 @@ old generation cannot become valid when the runtime slot is reused.
 The runtime does not provide a general background queue. Deferred provider work
 that already exists may complete only through a bounded runtime-owned token
 containing slot, context generation, and instance epoch. The token is validated
-before touching context or state. Stop initiation retires the epoch; handle
-invalidation retires remaining tokens.
+before touching context or state and is delivered only as the ordered
+app-private Wakeup event described above. Stop initiation retires the epoch;
+handle invalidation retires remaining tokens.
 
 A completion from an old epoch MUST be discarded without calling app code,
 accessing the reused state slot, writing through an old buffer borrow, or using

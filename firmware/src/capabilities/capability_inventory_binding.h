@@ -11,5 +11,10 @@ void hk_generated_capability_inventory_get(
 const hk_capability_grant_t *hk_generated_capability_grants_for(
     const char *consumer_id,
     uint16_t *count);
+hk_result_t hk_generated_capability_request_for(
+    const char *consumer_id,
+    const char *capability_id,
+    uint16_t instance,
+    hk_capability_request_t *request);
 
 #endif
