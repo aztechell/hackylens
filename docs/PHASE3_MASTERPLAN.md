@@ -369,7 +369,7 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 
 ## 3.7 — Event, tick, render и switching integration
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -381,20 +381,20 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 
 ### Scope
 
-- [ ] Определить bounded SDK events для input, SD/media change, timer, runtime
+- [x] Определить bounded SDK events для input, SD/media change, timer, runtime
   close и app-private wakeup token без public `screen_t`.
-- [ ] Перевести input snapshot в ordered app events через existing Input
+- [x] Перевести input snapshot в ordered app events через existing Input
   capability; не создавать вторую button path.
-- [ ] Runtime планирует tick по manifest interval/budget и передаёт monotonic now.
-- [ ] Render получает SDK surface/view contract поверх injected Display handle;
+- [x] Runtime планирует tick по manifest interval/budget и передаёт monotonic now.
+- [x] Render получает SDK surface/view contract поверх injected Display handle;
   app запрашивает invalidation, а не управляет LCD ownership.
-- [ ] Menu open, BACK, autostart, debug forced switch и safe-mode выполняют один
+- [x] Menu open, BACK, autostart, debug forced switch и safe-mode выполняют один
   switch/unwind algorithm.
-- [ ] Legacy adapter сохраняет current behavior, но проходит через общий switch
+- [x] Legacy adapter сохраняет current behavior, но проходит через общий switch
   boundary и owner cleanup.
-- [ ] Deferred work использует generation token; старый app не рисует, не пишет
+- [x] Deferred work использует generation token; старый app не рисует, не пишет
   state и не завершает cleanup нового app.
-- [ ] Добавить rapid-switch, BACK-during-start, timeout, render failure, autostart
+- [x] Добавить rapid-switch, BACK-during-start, timeout, render failure, autostart
   fallback и mixed legacy/v2 tests.
 
 ### Exit gate
