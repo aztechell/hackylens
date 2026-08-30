@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources, immutable registry descriptors, menu/autostart/help/debug/limits metadata, capability/service requests, enable definitions, and explicit legacy entry bindings; lifecycle-v2 runtime remains Phase 3.5 |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources, immutable registry descriptors, menu/autostart/help/debug/limits metadata, capability/service requests, enable definitions, and explicit legacy entry bindings; private fixed-capacity lifecycle-v2 engine is implemented and host-qualified, while public context injection and production switching remain later Phase 3 work |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer
@@ -218,10 +218,11 @@ matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
 Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
 at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
-schema validation, production manifests, generated build composition, and the
-generated registry/legacy adapter are implemented; lifecycle-v2 runtime, SDK
-headers, app generator, and migrations remain Phase 3.5+ work. Public
-storage, camera, vision, and AI capabilities also remain Phase 3+.
+schema validation, production manifests, generated build composition, the
+generated registry/legacy adapter, and the private lifecycle-v2 state machine
+are implemented. Public SDK context/capability injection, firmware-loop
+switching integration, app generator, and migrations remain later Phase 3 work.
+Public storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,
 full project/package management, multi-project IDE workflows, formal

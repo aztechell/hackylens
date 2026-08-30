@@ -20,11 +20,6 @@ static void retain_error(hk_app_runtime_t *runtime, hk_result_t result)
         runtime->first_error = result;
 }
 
-static uint8_t is_power_of_two(uint32_t value)
-{
-    return (uint8_t)(value != 0U && (value & (value - 1U)) == 0U);
-}
-
 static hk_result_t validate_descriptor(const hk_app_t *descriptor)
 {
     const hk_app_v2_entry_t *entry;
@@ -45,8 +40,7 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
        descriptor->limits.tick_budget_us > descriptor->limits.tick_interval_us ||
        descriptor->limits.render_budget_us == 0U ||
        entry->state_capacity_bytes < descriptor->limits.state_bytes ||
-       !is_power_of_two(descriptor->limits.state_alignment) ||
-       descriptor->limits.state_alignment > HK_APP_STATE_ALIGNMENT ||
+       descriptor->limits.state_alignment != HK_APP_STATE_ALIGNMENT ||
        !entry->probe || !entry->prepare || !entry->start || !entry->event ||
        !entry->tick || !entry->render || !entry->stop || !entry->cleanup)
         return HK_ERR_INVALID_ARGUMENT;

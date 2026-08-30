@@ -47,13 +47,15 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 timeout=30,
             )
         match = re.fullmatch(
-            r"APP_RUNTIME_V2_OK host_dispatch_p99_ns=(\d+) limit_us=100 "
+            r"APP_RUNTIME_V2_OK host_event_p99_ns=(\d+) "
+            r"host_launch_p99_ns=(\d+) host_stop_p99_ns=(\d+) limit_us=100 "
             r"samples=101 iterations=1000\n?",
             result.stdout,
         )
         self.assertIsNotNone(match, result.stdout)
         assert match is not None
-        self.assertLessEqual(int(match.group(1)), 100_000)
+        for measured_ns in match.groups():
+            self.assertLessEqual(int(measured_ns), 100_000)
 
     def test_engine_remains_private_and_unwired_from_production_dispatch(self) -> None:
         main = (ROOT / "firmware/src/runtime/hk_main.c").read_text(encoding="utf-8")
@@ -66,6 +68,10 @@ class AppRuntimeV2Tests(unittest.TestCase):
 
         runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
             encoding="utf-8"
+        )
+        self.assertIn(
+            "descriptor->limits.state_alignment != HK_APP_STATE_ALIGNMENT",
+            runtime,
         )
         for forbidden in (
             "malloc(",

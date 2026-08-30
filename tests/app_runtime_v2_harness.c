@@ -1,8 +1,17 @@
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
 #include <time.h>
+#endif
 
 #include "../firmware/src/app_runtime/runtime_private.h"
 
@@ -533,6 +542,9 @@ static int check_stop_reasons_and_descriptor_guards(void)
         app.limits.state_alignment = 32U;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
         app = descriptor();
+        app.limits.state_alignment = 8U;
+        CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
+        app = descriptor();
         app.limits.tick_budget_us = app.limits.tick_interval_us + 1U;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
         app = descriptor();
@@ -563,11 +575,28 @@ static int check_generation_retirement(void)
 
 static uint64_t monotonic_ns(void)
 {
+#ifdef _WIN32
+    LARGE_INTEGER counter;
+    LARGE_INTEGER frequency;
+    uint64_t seconds;
+    uint64_t remainder;
+
+    if(!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0 ||
+       !QueryPerformanceCounter(&counter) || counter.QuadPart < 0)
+        return 0U;
+    seconds = (uint64_t)counter.QuadPart / (uint64_t)frequency.QuadPart;
+    remainder = (uint64_t)counter.QuadPart % (uint64_t)frequency.QuadPart;
+    return seconds * UINT64_C(1000000000) +
+           remainder * UINT64_C(1000000000) /
+               (uint64_t)frequency.QuadPart;
+#else
     struct timespec value;
 
-    (void)timespec_get(&value, TIME_UTC);
+    if(clock_gettime(CLOCK_MONOTONIC, &value) != 0)
+        return 0U;
     return (uint64_t)value.tv_sec * UINT64_C(1000000000) +
            (uint64_t)value.tv_nsec;
+#endif
 }
 
 static int compare_u64(const void *left, const void *right)
@@ -577,35 +606,166 @@ static int compare_u64(const void *left, const void *right)
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-static int check_dispatch_latency(uint64_t *p99_ns)
+static hk_result_t benchmark_callback(hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_event(
+    hk_app_context_t *ctx,
+    const hk_app_runtime_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_tick(hk_app_context_t *ctx, uint64_t now_us)
+{
+    (void)ctx;
+    (void)now_us;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_render(
+    hk_app_context_t *ctx,
+    hk_app_runtime_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_stop(
+    hk_app_context_t *ctx,
+    hk_app_stop_reason_t reason)
+{
+    (void)ctx;
+    (void)reason;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_inject(
+    void *user,
+    const hk_app_t *descriptor,
+    hk_app_context_t *ctx,
+    hk_owner_t *owner)
+{
+    (void)user;
+    (void)descriptor;
+    (void)ctx;
+    *owner = (hk_owner_t){1U, 1U};
+    return HK_OK;
+}
+
+static hk_result_t benchmark_owner_cleanup(
+    void *user,
+    hk_owner_t owner,
+    hk_deadline_t deadline)
+{
+    (void)user;
+    (void)owner;
+    (void)deadline;
+    return HK_OK;
+}
+
+static hk_result_t benchmark_deadline(
+    void *user,
+    uint64_t duration_us,
+    hk_deadline_t *deadline)
+{
+    (void)user;
+    deadline->at_us = duration_us;
+    return HK_OK;
+}
+
+static int check_lifecycle_latency(
+    uint64_t *event_p99_ns,
+    uint64_t *launch_p99_ns,
+    uint64_t *stop_p99_ns)
 {
     enum { SAMPLE_COUNT = 101, ITERATIONS = 1000 };
-    fixture_t fixture;
+    static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t benchmark_state[16];
+    static const hk_app_v2_entry_t benchmark_entry = {
+        .state_storage = benchmark_state,
+        .state_capacity_bytes = sizeof(benchmark_state),
+        .probe = benchmark_callback,
+        .prepare = benchmark_callback,
+        .start = benchmark_callback,
+        .event = benchmark_event,
+        .tick = benchmark_tick,
+        .render = benchmark_render,
+        .stop = benchmark_stop,
+        .cleanup = benchmark_callback,
+    };
+    const hk_app_runtime_ops_t ops = {
+        .inject = benchmark_inject,
+        .owner_cleanup = benchmark_owner_cleanup,
+        .deadline_after_us = benchmark_deadline,
+    };
     hk_app_runtime_t runtime;
     hk_app_runtime_event_t event = {0U, 0U};
     hk_app_t app = descriptor();
-    uint64_t samples[SAMPLE_COUNT];
+    uint64_t event_samples[SAMPLE_COUNT];
+    uint64_t launch_samples[SAMPLE_COUNT];
+    uint64_t stop_samples[SAMPLE_COUNT];
 
-    CHECK(reset_fixture(&fixture, &runtime) == 0);
+    app.entry.v2 = &benchmark_entry;
+    app.limits.static_ram_bytes = sizeof(benchmark_state);
+    app.limits.state_bytes = sizeof(benchmark_state);
+    CHECK(hk_app_runtime_init(
+        &runtime, &ops, HK_APP_RUNTIME_TEARDOWN_BUDGET_US) == HK_OK);
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
     for(uint32_t sample = 0U; sample < SAMPLE_COUNT; sample++)
     {
         uint64_t started = monotonic_ns();
+        CHECK(started != 0U);
         for(uint32_t iteration = 0U; iteration < ITERATIONS; iteration++)
             CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
-        samples[sample] = (monotonic_ns() - started) / ITERATIONS;
+        event_samples[sample] = (monotonic_ns() - started) / ITERATIONS;
     }
-    qsort(samples, SAMPLE_COUNT, sizeof(samples[0]), compare_u64);
-    *p99_ns = samples[99];
-    CHECK(*p99_ns <= UINT64_C(100000));
-    CHECK(fixture.callback_count == SAMPLE_COUNT * ITERATIONS);
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_COMPLETED) == HK_OK);
+
+    for(uint32_t sample = 0U; sample < SAMPLE_COUNT; sample++)
+    {
+        uint64_t launch_total = 0U;
+        uint64_t stop_total = 0U;
+
+        for(uint32_t iteration = 0U; iteration < ITERATIONS; iteration++)
+        {
+            uint64_t started = monotonic_ns();
+            CHECK(started != 0U);
+            CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
+            launch_total += monotonic_ns() - started;
+
+            started = monotonic_ns();
+            CHECK(started != 0U);
+            CHECK(hk_app_runtime_stop(
+                &runtime, HK_APP_STOP_COMPLETED) == HK_OK);
+            stop_total += monotonic_ns() - started;
+        }
+        launch_samples[sample] = launch_total / ITERATIONS;
+        stop_samples[sample] = stop_total / ITERATIONS;
+    }
+
+    qsort(event_samples, SAMPLE_COUNT, sizeof(event_samples[0]), compare_u64);
+    qsort(launch_samples, SAMPLE_COUNT, sizeof(launch_samples[0]), compare_u64);
+    qsort(stop_samples, SAMPLE_COUNT, sizeof(stop_samples[0]), compare_u64);
+    *event_p99_ns = event_samples[99];
+    *launch_p99_ns = launch_samples[99];
+    *stop_p99_ns = stop_samples[99];
+    CHECK(*event_p99_ns <= UINT64_C(100000));
+    CHECK(*launch_p99_ns <= UINT64_C(100000));
+    CHECK(*stop_p99_ns <= UINT64_C(100000));
     return 0;
 }
 
 int main(void)
 {
-    uint64_t p99_ns = 0U;
+    uint64_t event_p99_ns = 0U;
+    uint64_t launch_p99_ns = 0U;
+    uint64_t stop_p99_ns = 0U;
 
     CHECK(check_normal_lifecycle() == 0);
     CHECK(check_launch_faults() == 0);
@@ -613,10 +773,14 @@ int main(void)
     CHECK(check_teardown_faults_and_reentrancy() == 0);
     CHECK(check_stop_reasons_and_descriptor_guards() == 0);
     CHECK(check_generation_retirement() == 0);
-    CHECK(check_dispatch_latency(&p99_ns) == 0);
+    CHECK(check_lifecycle_latency(
+        &event_p99_ns, &launch_p99_ns, &stop_p99_ns) == 0);
     printf(
-        "APP_RUNTIME_V2_OK host_dispatch_p99_ns=%llu limit_us=100 "
+        "APP_RUNTIME_V2_OK host_event_p99_ns=%llu host_launch_p99_ns=%llu "
+        "host_stop_p99_ns=%llu limit_us=100 "
         "samples=101 iterations=1000\n",
-        (unsigned long long)p99_ns);
+        (unsigned long long)event_p99_ns,
+        (unsigned long long)launch_p99_ns,
+        (unsigned long long)stop_p99_ns);
     return 0;
 }
