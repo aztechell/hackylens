@@ -332,7 +332,7 @@ Lifecycle normative suite полностью проходит на host; product
 
 ## 3.6 — Public app context и capability injection
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -344,20 +344,20 @@ Lifecycle normative suite полностью проходит на host; product
 
 ### Scope
 
-- [ ] Определить public `hk_app_context_t` в SDK без platform/private pointers.
-- [ ] Context содержит app identity, generation, owner, declared required/optional
+- [x] Определить public `hk_app_context_t` в SDK без platform/private pointers.
+- [x] Context содержит app identity, generation, owner, declared required/optional
   capability handles и app-scoped service handles.
-- [ ] Required grants разрешаются до `probe`; missing/incompatible grant не
+- [x] Required grants разрешаются до `probe`; missing/incompatible grant не
   запускает app.
-- [ ] Optional grant либо присутствует, либо возвращает manifest fallback state.
-- [ ] App не может запросить capability, не объявленную manifest.
-- [ ] Все acquired handles принадлежат одному runtime owner. Они остаются
+- [x] Optional grant либо присутствует, либо возвращает manifest fallback state.
+- [x] App не может запросить capability, не объявленную manifest.
+- [x] Все acquired handles принадлежат одному runtime owner. Они остаются
   валидными во время app cleanup, затем runtime выполняет owner-wide cleanup и
   только после этого инвалидирует handles и context generation.
-- [ ] Failure app cleanup не пропускает owner-wide cleanup; provider quarantine
+- [x] Failure app cleanup не пропускает owner-wide cleanup; provider quarantine
   применяется только если cleanup соответствующего provider не смог установить
   safe state. Stale copied context/handle не получает доступ при следующем run.
-- [ ] Добавить fake inventory/grant tests, version/feature mismatch, partial
+- [x] Добавить fake inventory/grant tests, version/feature mismatch, partial
   injection unwind и owner exhaustion tests.
 
 ### Exit gate
