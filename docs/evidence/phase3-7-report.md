@@ -1,7 +1,9 @@
 # Phase 3.7 completion report
 
-Пакет: `3.7 — Event, tick, render и switching integration`  
-Статус: `completed`  
+Пакет: `3.7 — Event, tick, render и switching integration`
+
+Статус: `completed`
+
 Ветка: `phase-3-work`
 
 ## Реализованный scope
