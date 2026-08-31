@@ -412,7 +412,10 @@ uint32_t hk_app_switch_poll_interval_us(
 {
     uint64_t remaining;
 
-    if(!active_is_v2(switcher) || switcher->next_tick_us <= now_us)
+    if(!active_is_v2(switcher))
+        return 1U;
+    if(hk_app_runtime_render_pending(&switcher->runtime) ||
+       switcher->next_tick_us <= now_us)
         return 1U;
     remaining = switcher->next_tick_us - now_us;
     return remaining > UINT32_MAX ? UINT32_MAX : (uint32_t)remaining;

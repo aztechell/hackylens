@@ -54,14 +54,17 @@ typedef struct
     uint32_t owner_cleanup_calls;
     uint32_t stop_calls;
     uint32_t cleanup_calls;
+    uint32_t close_event_calls;
     hk_deadline_t stop_deadline;
     hk_deadline_t cleanup_deadline;
     hk_deadline_t owner_deadline;
     hk_app_stop_reason_t observed_reason;
+    hk_app_stop_reason_t close_reason;
     hk_app_runtime_token_t token;
     hk_result_t reentrant_stop;
     hk_result_t reentrant_event;
     uint8_t test_reentrant;
+    uint8_t close_event_fails;
     volatile uint32_t callback_count;
 } fixture_t;
 
@@ -151,14 +154,20 @@ static hk_result_t fake_event(
     const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *event)
 {
-    (void)event;
     trace('E');
     s_fixture->callback_count++;
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_RUNNING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_RUNNING ||
        callback_state(ctx) != HK_OK)
         return HK_ERR_INTERNAL;
-    if(s_fixture->token.slot == 0U &&
+    if(event->kind == HK_APP_EVENT_RUNTIME_CLOSE)
+    {
+        s_fixture->close_event_calls++;
+        s_fixture->close_reason = event->data.close.reason;
+        if(s_fixture->close_event_fails)
+            return HK_ERR_LIMIT;
+    }
+    if(event->kind == HK_APP_EVENT_INPUT && s_fixture->token.slot == 0U &&
        hk_app_context_deferred_token(ctx, &s_fixture->token) != HK_OK)
         return HK_ERR_INTERNAL;
     if(s_fixture->test_reentrant)
@@ -507,6 +516,7 @@ static int check_running_faults(void)
         CHECK(reset_fixture(&fixture, &runtime) == 0);
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
         fixture.fail = failures[index];
+        fixture.close_event_fails = failures[index] == FAIL_TICK;
         if(failures[index] == FAIL_EVENT)
             result = hk_app_runtime_event(&runtime, &event);
         else if(failures[index] == FAIL_TICK)
@@ -514,9 +524,12 @@ static int check_running_faults(void)
         else
             result = hk_app_runtime_render(&runtime, &surface);
         CHECK(result == HK_ERR_IO);
+        CHECK(fixture.close_event_calls == 1U);
+        CHECK(fixture.close_reason == HK_APP_STOP_CALLBACK_FAILED);
         CHECK(fixture.observed_reason == HK_APP_STOP_CALLBACK_FAILED);
         CHECK(fixture.stop_calls == 1U && fixture.cleanup_calls == 1U);
         CHECK(fixture.owner_cleanup_calls == 1U && fixture.deadline_calls == 1U);
+        CHECK(hk_app_runtime_first_error(&runtime) == HK_ERR_IO);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
     }
     return 0;

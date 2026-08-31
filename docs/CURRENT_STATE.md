@@ -188,9 +188,14 @@ composed Time provider, and the opaque SDK surface stages bounded operations on
 the injected Display handle while runtime alone presents or aborts. Host tests
 cover mixed switching, ordered close/input/media/timer/wakeup events, rapid
 switch, BACK during start, timeout, render/present failure, autostart fallback,
-surface invalidation, and stale wakeup rejection. No existing app uses the v2
-branch yet, so targeted physical behavior does not need to be repeated before
-the first migration.
+surface invalidation, and stale wakeup rejection. Callback failure retains its
+original error, emits one callback-failed close event, and still completes the
+common teardown. Render-time invalidation schedules an immediate later pass.
+An executable host harness runs the production `hk_main.c` and
+`app_runtime_integration.c` boundary with deterministic provider fakes,
+including v2 open/input/media/wakeup/tick/render/close and legacy open/close.
+No existing app uses the v2 branch yet, so targeted physical behavior does not
+need to be repeated before the first migration.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-

@@ -27,6 +27,7 @@ typedef struct
     uint8_t deadline_fails;
     uint8_t render_fails;
     uint8_t present_fails;
+    uint8_t render_requests_again;
     uint8_t batch_active;
     uint32_t owner_open_count;
     uint32_t owner_cleanup_count;
@@ -105,13 +106,15 @@ static hk_result_t app_render(
 {
     hk_display_info_t info = {0};
 
-    (void)ctx;
     s_fixture->render_count++;
     s_fixture->borrowed_surface = surface;
     if(hk_app_surface_get_info(surface, &info) != HK_OK ||
        info.width != 320U || info.height != 240U)
         return HK_ERR_INTERNAL;
     if(hk_app_surface_clear(surface, 0U) != HK_OK)
+        return HK_ERR_INTERNAL;
+    if(s_fixture->render_requests_again && s_fixture->render_count == 1U &&
+       hk_app_context_request_render(ctx, NULL) != HK_OK)
         return HK_ERR_INTERNAL;
     return s_fixture->render_fails ? HK_ERR_IO : HK_OK;
 }
@@ -572,6 +575,27 @@ static int check_timeout_and_render_failures(void)
     return 0;
 }
 
+static int check_render_requested_during_render_is_immediate(void)
+{
+    fixture_t fixture;
+    hk_app_t v2 = v2_descriptor();
+
+    CHECK(reset_fixture(&fixture) == 0);
+    fixture.render_requests_again = 1U;
+    CHECK(hk_app_switch_open(&fixture.switcher, &v2, NULL) == HK_OK);
+    CHECK(hk_app_switch_poll_interval_us(&fixture.switcher, 1000U) == 1U);
+    CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
+    CHECK(fixture.render_count == 1U);
+    CHECK(hk_app_runtime_render_pending(&fixture.switcher.runtime));
+    CHECK(hk_app_switch_poll_interval_us(&fixture.switcher, 1000U) == 1U);
+    CHECK(hk_app_switch_poll(&fixture.switcher, 1001U) == HK_OK);
+    CHECK(fixture.render_count == 2U);
+    CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
+    CHECK(hk_app_switch_close(
+        &fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
+    return 0;
+}
+
 static int check_autostart_failure_fallback(void)
 {
     fixture_t fixture;
@@ -595,6 +619,7 @@ int main(void)
     CHECK(check_mixed_switch_and_events() == 0);
     CHECK(check_back_during_start() == 0);
     CHECK(check_timeout_and_render_failures() == 0);
+    CHECK(check_render_requested_during_render_is_immediate() == 0);
     CHECK(check_autostart_failure_fallback() == 0);
     printf("APP_RUNTIME_MIXED_OK\n");
     return 0;

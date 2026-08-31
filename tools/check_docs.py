@@ -225,6 +225,17 @@ APP_RUNTIME_INTEGRATION_REQUIREMENTS = {
             r"app\s+code",
             "deferred wakeups must remain generation checked",
         ),
+        (
+            r"terminal\s+`event`,\s+`tick`,\s+or\s+`render`\s+callback\s+"
+            r"failure[\s\S]*exactly\s+one\s+Runtime\s+Close[\s\S]*cannot\s+"
+            r"replace\s+the\s+original\s+callback\s+diagnostic",
+            "callback failure must deliver one close event without replacing its cause",
+        ),
+        (
+            r"`render`\s+requests\s+another\s+invalidation[\s\S]*schedule\s+"
+            r"the\s+next\s+poll\s+immediately[\s\S]*MUST\s+NOT\s+delay",
+            "render-time invalidation must schedule an immediate later pass",
+        ),
     ),
     Path("docs/spec/APP_SDK.md"): (
         (
@@ -243,6 +254,11 @@ APP_RUNTIME_INTEGRATION_REQUIREMENTS = {
             r"[\s\S]*BACK[\s\S]*autostart[\s\S]*safe-mode",
             "Feature App SDK must preserve one legacy/v2 switch boundary",
         ),
+        (
+            r"invalidation\s+requested\s+from\s+inside\s+`render`[\s\S]*"
+            r"schedules\s+that\s+pending\s+pass\s+immediately",
+            "Feature App SDK must preserve immediate render rescheduling",
+        ),
     ),
     Path("docs/adr/0007-adopt-generation-checked-app-lifecycle.md"): (
         (
@@ -254,6 +270,11 @@ APP_RUNTIME_INTEGRATION_REQUIREMENTS = {
             r"bounded\s+ordered\s+union[\s\S]*generation-checked\s+Wakeup"
             r"[\s\S]*no\s+catch-up\s+loop",
             "ADR-0007 must record ordered events and bounded scheduling",
+        ),
+        (
+            r"callback\s+failure\s+retains\s+its\s+original\s+diagnostic"
+            r"[\s\S]*one\s+Runtime\s+Close[\s\S]*immediate\s+next\s+poll",
+            "ADR-0007 must record callback close and render rescheduling",
         ),
     ),
 }

@@ -391,6 +391,37 @@ static hk_result_t fail_without_teardown(
     return runtime->first_error;
 }
 
+static hk_result_t terminate_running(
+    hk_app_runtime_t *runtime,
+    hk_app_stop_reason_t reason)
+{
+    hk_app_event_t event;
+    hk_result_t result;
+
+    if(!runtime || runtime->state != HK_APP_RUNTIME_RUNNING ||
+       !runtime->descriptor || runtime->callback_active ||
+       runtime->teardown_started)
+        return HK_ERR_INVALID_STATE;
+    reason = normalized_reason(reason);
+    event = (hk_app_event_t){
+        sizeof(hk_app_event_t), HK_APP_EVENT_VERSION,
+        HK_APP_EVENT_RUNTIME_CLOSE, 0U,
+        ++runtime->event_sequence, 0U,
+        {.close = {reason, 0U}},
+    };
+    runtime->stage = HK_APP_STAGE_RUNNING;
+    result = enter_callback(runtime);
+    if(result == HK_OK)
+    {
+        result = finish_callback(
+            runtime,
+            runtime->descriptor->entry.v2->event(
+                &runtime->context, &event));
+    }
+    retain_error(runtime, result);
+    return teardown(runtime, reason);
+}
+
 hk_result_t hk_app_runtime_init(
     hk_app_runtime_t *runtime,
     const hk_app_runtime_ops_t *ops,
@@ -525,24 +556,7 @@ hk_result_t hk_app_runtime_stop(
         return HK_OK;
     if(runtime->state != HK_APP_RUNTIME_RUNNING || !runtime->descriptor)
         return HK_ERR_INVALID_STATE;
-    reason = normalized_reason(reason);
-    {
-        hk_app_event_t event = {
-            sizeof(hk_app_event_t), HK_APP_EVENT_VERSION,
-            HK_APP_EVENT_RUNTIME_CLOSE, 0U,
-            ++runtime->event_sequence, 0U,
-            {.close = {reason, 0U}},
-        };
-        hk_result_t result;
-
-        runtime->stage = HK_APP_STAGE_RUNNING;
-        (void)enter_callback(runtime);
-        result = finish_callback(
-            runtime,
-            runtime->descriptor->entry.v2->event(&runtime->context, &event));
-        retain_error(runtime, result);
-    }
-    return teardown(runtime, reason);
+    return terminate_running(runtime, reason);
 }
 
 static hk_result_t dispatch_result(
@@ -554,7 +568,7 @@ static hk_result_t dispatch_result(
     if(result == HK_OK)
         return HK_OK;
     retain_error(runtime, result);
-    (void)teardown(runtime, HK_APP_STOP_CALLBACK_FAILED);
+    (void)terminate_running(runtime, HK_APP_STOP_CALLBACK_FAILED);
     return result;
 }
 

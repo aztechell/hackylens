@@ -369,7 +369,7 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 
 ## 3.7 — Event, tick, render и switching integration
 
-Статус пакета: `completed`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 
@@ -399,8 +399,9 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 
 ### Exit gate
 
-Mixed runtime работает в full firmware host harness; current physical behavior
-не требует проверки до первой migrated app.
+Mixed runtime исполняется через production `hk_main.c` и
+`app_runtime_integration.c` в host harness; full firmware profiles собираются,
+а current physical behavior не требует проверки до первой migrated app.
 
 Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 

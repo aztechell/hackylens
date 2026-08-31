@@ -349,6 +349,7 @@ static hk_result_t render_abort(void *user)
 hk_result_t app_runtime_integration_initialize(void)
 {
     static const hk_app_switch_ops_t switch_ops = {
+        .user = &s_integration,
         .legacy_open = legacy_open,
         .legacy_close = legacy_close,
         .now_us = now_us,

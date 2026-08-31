@@ -93,6 +93,10 @@ platform operation. Retaining a surface pointer after callback return is an SDK
 contract violation and every use outside that borrow returns a stale-handle
 error when observable by the runtime.
 
+An invalidation requested from inside `render` applies to a later render pass;
+it is not consumed by the pass already in progress. Runtime schedules that
+pending pass immediately rather than waiting for the next manifest tick.
+
 Tick and render intervals/budgets come only from the immutable generated
 descriptor. Apps cannot refresh them or create a catch-up loop. Timer events
 and `tick(ctx, monotonic_now)` run synchronously on the existing firmware loop;

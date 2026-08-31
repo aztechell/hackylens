@@ -108,6 +108,13 @@ retained but cannot cancel or skip teardown. Start failure has not reached the
 running event surface and therefore proceeds directly through the documented
 failure unwind.
 
+A terminal `event`, `tick`, or `render` callback failure uses that same running
+instance termination path. Runtime first retains the original callback error,
+then delivers exactly one Runtime Close event with
+`HK_APP_STOP_CALLBACK_FAILED`, and only then enters teardown. Failure of this
+Runtime Close callback cannot replace the original callback diagnostic and
+cannot skip stop, app cleanup, or owner-wide cleanup.
+
 The wakeup payload contains only a fixed-size token with runtime slot, context
 generation, instance epoch, and app-private value. The runtime validates all
 three authority fields before dispatch. A stale completion is rejected before
@@ -143,6 +150,11 @@ Time provider. A callback, provider, present, or budget failure aborts the
 batch where possible and enters the common unwind. If an optional Display grant
 is absent, the invalidation is deterministically consumed without opening a
 hardware path; a required absent Display has already failed preflight.
+
+If `render` requests another invalidation after runtime has consumed the
+current pending set, that invalidation remains pending for a new render pass.
+The foreground switch MUST schedule the next poll immediately and MUST NOT
+delay that pass until the next manifest tick interval.
 
 ## Foreground switching
 

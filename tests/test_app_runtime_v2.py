@@ -33,6 +33,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     f"-I{ROOT / 'sdk' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'src'}",
+                    f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                     str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
                     *(str(ROOT / source) for source in extra_sources),
@@ -78,6 +79,18 @@ class AppRuntimeV2Tests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_MIXED_OK\n")
 
+    def test_full_firmware_production_integration_harness(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_production_harness.c",
+            (
+                "firmware/src/app_runtime/surface.c",
+                "firmware/src/app_runtime/switch.c",
+                "firmware/src/runtime/app_runtime_integration.c",
+                "firmware/src/runtime/hk_main.c",
+            ),
+        )
+        self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
+
     def test_engine_stays_private_behind_one_production_switch_boundary(self) -> None:
         main = (ROOT / "firmware/src/runtime/hk_main.c").read_text(encoding="utf-8")
         startup = (ROOT / "firmware/src/runtime/firmware_startup.c").read_text(
@@ -91,6 +104,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
         self.assertIn("consumed && !app_runtime_integration_active()", main)
         self.assertIn("app_runtime_integration_open(app, input)", startup)
         self.assertIn("hk_app_switch_open", integration)
+        self.assertIn(".user = &s_integration", integration)
         self.assertNotIn("screen_t", integration)
         self.assertNotIn("hal_", integration)
 

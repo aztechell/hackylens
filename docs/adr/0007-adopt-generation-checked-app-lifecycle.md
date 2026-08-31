@@ -89,6 +89,12 @@ same close/open algorithm. Legacy enter/exit remains behavior-compatible behind
 that boundary and uses the same capability-owner cleanup. The runtime consumes
 events from the existing Input and SD paths; it adds no sampler or queue.
 
+A running callback failure retains its original diagnostic, delivers one
+Runtime Close event with the callback-failed reason, and then follows the same
+stop/app-cleanup/owner-cleanup path. A Runtime Close callback failure cannot
+replace that original cause. An invalidation requested during `render` remains
+pending and forces an immediate next poll instead of waiting for a later tick.
+
 The public event ABI is one bounded ordered union for Input, SD/media, Timer,
 Runtime Close, and generation-checked Wakeup. BACK is consumed as navigation.
 Ticks use manifest interval/budget and the composed monotonic Time provider,

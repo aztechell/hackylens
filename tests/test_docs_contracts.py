@@ -606,6 +606,18 @@ class DocumentationContractsTest(unittest.TestCase):
                 "one switch algorithm",
             ),
             (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "then delivers exactly one Runtime Close event",
+                "then skips the Runtime Close event",
+                "deliver one close event",
+            ),
+            (
+                Path("docs/spec/APP_RUNTIME.md"),
+                "schedule the next poll immediately",
+                "wait for the next tick before polling",
+                "immediate later pass",
+            ),
+            (
                 Path("docs/spec/APP_SDK.md"),
                 "`hk_app_surface_t` is opaque and borrowed",
                 "`hk_app_surface_t` exposes LCD ownership and is borrowed",
