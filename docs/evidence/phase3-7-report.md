@@ -1,10 +1,8 @@
-# Phase 3.7 correction report
+# Phase 3.7 completion report
 
 Пакет: `3.7 — Event, tick, render и switching integration`
 
-Статус: `in_progress` — corrective implementation проверена локально; пакет
-будет повторно закрыт только после green normal-push CI точного implementation
-commit.
+Статус: `completed`
 
 Ветка: `phase-3-work`
 
@@ -103,8 +101,8 @@ Representative local host p99 для package-owned runtime paths:
 | stop | `64 ns` | `100 us` |
 | legacy dispatch | `3 ns` | `100 us` |
 
-Это host measurements, а не hardware latency qualification. CI повторно
-проверит bounded thresholds для corrective implementation commit.
+Это host measurements, а не hardware latency qualification. Corrective CI
+повторно подтвердил bounded thresholds и весь resource gate.
 
 ## Hardware impact
 
@@ -130,6 +128,14 @@ UART/I2C/Lights/Files/MicroPython и иных сценариев не имел i
   [run 33332339004](https://github.com/aztechell/hackylens/actions/runs/33332339004),
   `success`.
 
-Все восемь scope items остаются реализованными, но пакет 3.7 находится в
-`in_progress` до green exact-commit normal-push CI текущей коррекции. Пакет 3.8
-в рамках этой работы не начат.
+## Corrective implementation evidence
+
+- Corrective implementation commit:
+  `0924e6ad86621d0ab9f9c3d24966dd1b812e88ea`.
+- Normal-push Release firmware CI для exact corrective commit:
+  [run 33360359691](https://github.com/aztechell/hackylens/actions/runs/33360359691),
+  `success`; полный host suite `272/272`, required firmware profiles и Phase 3
+  resource gate прошли.
+
+Все восемь scope items пакета 3.7 закрыты повторно после corrective exact-commit
+CI. Пакет 3.8 в рамках этой работы не начат.
