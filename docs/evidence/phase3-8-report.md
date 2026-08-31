@@ -2,8 +2,7 @@
 
 Пакет: `3.8 — Feature App SDK core и host fake`
 
-Статус: `in_progress` до зелёного normal-push Release firmware CI для exact
-implementation commit.
+Статус: `completed`.
 
 Ветка: `phase-3-work`
 
@@ -85,6 +84,12 @@ impact-based основания.
 
 ## CI evidence
 
-Implementation commit и normal-push Release firmware CI будут зафиксированы
-после push. Пакет остаётся `in_progress`, а scope items masterplan —
-неотмеченными до зелёного exact-commit CI.
+- Implementation commit:
+  `218ebd48fc74e3ee9c3cafbab7f7739740b7fefd`.
+- Normal-push Release firmware CI для exact implementation commit:
+  [run 33383313479](https://github.com/aztechell/hackylens/actions/runs/33383313479),
+  `success`.
+
+Все восемь scope items пакета отмечены выполненными только после зелёного
+exact-commit CI. Closure commit и его normal-push CI фиксируются отдельным
+документальным завершением без изменения production runtime behavior.

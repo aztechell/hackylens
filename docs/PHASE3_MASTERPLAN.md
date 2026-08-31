@@ -409,7 +409,7 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 
 ## 3.8 — Feature App SDK core и host fake
 
-Статус пакета: `in_progress`.
+Статус пакета: `completed`.
 
 ### Depends on
 
@@ -422,19 +422,19 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 
 ### Scope
 
-- [ ] Создать `sdk/include` как public entry surface Feature App SDK.
-- [ ] SDK headers могут включать/re-export только public Phase 2 Capability API
+- [x] Создать `sdk/include` как public entry surface Feature App SDK.
+- [x] SDK headers могут включать/re-export только public Phase 2 Capability API
   types из `firmware/include/hackylens/capability/`; не создавать redundant
   app-specific wrappers для Time/Display/Input без доказанной ABI-причины.
-- [ ] Экспортировать app definition/context, lifecycle ops, events, result/error,
+- [x] Экспортировать app definition/context, lifecycle ops, events, result/error,
   deadline/cancel и declared capability handles/types.
-- [ ] Не реэкспортировать board, HAL, SDK, drivers, private capability providers,
+- [x] Не реэкспортировать board, HAL, SDK, drivers, private capability providers,
   raw SD или framebuffer ownership internals.
-- [ ] Добавить CMake/make integration для standalone app compile.
-- [ ] Добавить deterministic host fake platform: time, input, display, grants,
+- [x] Добавить CMake/make integration для standalone app compile.
+- [x] Добавить deterministic host fake platform: time, input, display, grants,
   lifecycle driver и failure injection.
-- [ ] Добавить compatibility metadata и compile tests для C/C++ consumers.
-- [ ] Architecture guard запрещает SDK→platform/app-private и app→anything кроме
+- [x] Добавить compatibility metadata и compile tests для C/C++ consumers.
+- [x] Architecture guard запрещает SDK→platform/app-private и app→anything кроме
   SDK plus own private headers; разрешено только SDK public header→public
   Capability API header, но не implementation/provider/private headers.
 
@@ -442,6 +442,8 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 
 Минимальный fixture app компилируется и тестируется только через SDK/fakes; SDK
 header closure не содержит repository-private dependencies.
+
+Completion evidence: [Phase 3.8 completion report](evidence/phase3-8-report.md).
 
 ---
 
