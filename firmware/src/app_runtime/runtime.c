@@ -3,6 +3,10 @@
 #include <limits.h>
 #include <string.h>
 
+_Static_assert(
+    HK_APP_DESCRIPTOR_STATE_ALIGNMENT == HK_APP_STATE_ALIGNMENT,
+    "generated descriptor alignment must match the public App SDK ABI");
+
 static hk_app_runtime_t *s_live_runtime;
 static hk_app_runtime_t *s_callback_runtime;
 

@@ -279,6 +279,46 @@ APP_RUNTIME_INTEGRATION_REQUIREMENTS = {
     ),
 }
 
+APP_SDK_CORE_REQUIREMENTS = {
+    Path("docs/spec/APP_SDK.md"): (
+        (
+            r"canonical\s+umbrella\s+is\s+`sdk/include/hackylens/app\.h`"
+            r"[\s\S]*SDK\s+`0\.1\.0`[\s\S]*\[0\.1\.0,\s*0\.2\.0\)"
+            r"[\s\S]*schema\s+major\s+`1`",
+            "Feature App SDK must publish compile-time compatibility metadata",
+        ),
+        (
+            r"app/runtime\.h`\s+owns\s+the\s+public[\s\S]*lifecycle\s+callback"
+            r"[\s\S]*`hk_app_v2_entry_t`[\s\S]*MUST\s+NOT\s+maintain\s+a\s+"
+            r"private\s+parallel\s+lifecycle\s+ABI",
+            "Feature App SDK must own the lifecycle entry ABI",
+        ),
+        (
+            r"host_fake\.h`[\s\S]*allocation-free[\s\S]*caller-owned\s+fixed"
+            r"[\s\S]*Time,\s+Input,\s+Display[\s\S]*grant[\s\S]*lifecycle"
+            r"[\s\S]*failure-injection",
+            "Feature App SDK must define the deterministic fixed host fake",
+        ),
+        (
+            r"add_subdirectory[\s\S]*HackyLens::AppSDK[\s\S]*"
+            r"HackyLens::AppHostFake[\s\S]*hackylens-app-sdk\.mk",
+            "Feature App SDK must define CMake and Make standalone integration",
+        ),
+        (
+            r"recursively\s+checks\s+public\s+header\s+closure[\s\S]*C11"
+            r"[\s\S]*C\+\+17[\s\S]*both\s+CMake\s+and\s+Make",
+            "Feature App SDK must require standalone closure and language tests",
+        ),
+        (
+            r"architecture\s+guard\s+rejects[\s\S]*repository-private\s+layers"
+            r"[\s\S]*rejects\s+a\s+lifecycle-v2\s+production\s+app\s+"
+            r"dependency\s+outside\s+the\s+App\s+SDK[\s\S]*app's\s+own\s+"
+            r"private\s+headers",
+            "Feature App SDK must preserve the SDK-only app dependency rule",
+        ),
+    ),
+}
+
 APP_CONTEXT_GRANT_REQUIREMENTS = {
     Path("docs/spec/APP_RUNTIME.md"): (
         (
@@ -1160,6 +1200,22 @@ def check_phase3_app_runtime_integration(root: Path) -> list[Issue]:
     return issues
 
 
+def check_phase3_app_sdk_core(root: Path) -> list[Issue]:
+    """Keep the standalone SDK, host fake, and dependency closure normative."""
+
+    issues: list[Issue] = []
+    for relative, requirements in APP_SDK_CORE_REQUIREMENTS.items():
+        path = root / relative
+        if not path.is_file():
+            issues.append(issue(root, path, 1, "Feature App SDK document is missing"))
+            continue
+        text = read_text(path)
+        for pattern, message in requirements:
+            if re.search(pattern, text, flags=re.IGNORECASE) is None:
+                issues.append(issue(root, path, 1, message))
+    return issues
+
+
 def check_app_manifest_schema(root: Path) -> list[Issue]:
     """Keep the schema-1 build-time grammar and safety rules normative."""
 
@@ -1327,6 +1383,7 @@ def check_repository(root: Path = ROOT) -> list[Issue]:
     issues.extend(check_phase3_teardown_deadline(root))
     issues.extend(check_phase3_app_context_grants(root))
     issues.extend(check_phase3_app_runtime_integration(root))
+    issues.extend(check_phase3_app_sdk_core(root))
     issues.extend(check_phase2_status_consistency(root))
     issues.extend(check_adrs(root))
     return sorted(issues, key=lambda item: (str(item.path), item.line, item.message))

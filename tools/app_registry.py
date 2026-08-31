@@ -172,7 +172,7 @@ def generated_source(
             f"        {int(limits['static_ram_bytes'])}U,",
             f"        {int(limits['stack_bytes'])}U,",
             f"        {int(limits['state_bytes'])}U,",
-            "        HK_APP_STATE_ALIGNMENT,",
+            "        HK_APP_DESCRIPTOR_STATE_ALIGNMENT,",
             f"        {int(limits['tick_interval_us'])}U,",
             f"        {int(limits['tick_budget_us'])}U,",
             f"        {int(limits['render_budget_us'])}U,",

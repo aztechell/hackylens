@@ -43,41 +43,10 @@ typedef enum
     HK_APP_STAGE_INVALIDATING,
 } hk_app_runtime_stage_t;
 
-typedef hk_result_t (*hk_app_probe_fn)(const hk_app_context_t *ctx);
-typedef hk_result_t (*hk_app_prepare_fn)(const hk_app_context_t *ctx);
-typedef hk_result_t (*hk_app_start_fn)(const hk_app_context_t *ctx);
-typedef hk_result_t (*hk_app_event_fn)(
-    const hk_app_context_t *ctx,
-    const hk_app_event_t *event);
-typedef hk_result_t (*hk_app_tick_fn)(
-    const hk_app_context_t *ctx,
-    uint64_t now_us);
-typedef hk_result_t (*hk_app_render_fn)(
-    const hk_app_context_t *ctx,
-    hk_app_surface_t *surface);
-typedef hk_result_t (*hk_app_stop_fn)(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason);
-typedef hk_result_t (*hk_app_cleanup_fn)(const hk_app_context_t *ctx);
-
 /* Private compatibility names retained for focused lifecycle harnesses. */
 typedef hk_app_event_t hk_app_runtime_event_t;
 typedef hk_app_surface_t hk_app_runtime_surface_t;
 typedef hk_app_wakeup_token_t hk_app_runtime_token_t;
-
-struct hk_app_v2_entry
-{
-    void *state_storage;
-    uint32_t state_capacity_bytes;
-    hk_app_probe_fn probe;
-    hk_app_prepare_fn prepare;
-    hk_app_start_fn start;
-    hk_app_event_fn event;
-    hk_app_tick_fn tick;
-    hk_app_render_fn render;
-    hk_app_stop_fn stop;
-    hk_app_cleanup_fn cleanup;
-};
 
 typedef hk_result_t (*hk_app_runtime_resolve_capability_fn)(
     void *user,

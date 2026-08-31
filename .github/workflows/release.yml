@@ -78,6 +78,7 @@ jobs:
           Invoke-NativeChecked python tools/check_docs.py
           Invoke-NativeChecked python tools/check_app_manifests.py --scan-root tests/fixtures/app_manifests/valid --output build/app-manifests.json
           Invoke-NativeChecked python tools/check_app_manifests.py --scan-root firmware/src/apps --output build/firmware-app-manifests.json
+          Invoke-NativeChecked python tools/check_app_sdk.py
           Invoke-NativeChecked python tools/gen_app_composition.py --check
           Invoke-NativeChecked python tools/check_app_composition.py
           Invoke-NativeChecked python tools/check_phase2_evidence.py

@@ -31,6 +31,14 @@ Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
 language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 
+The canonical umbrella is `sdk/include/hackylens/app.h`. It publishes the
+Feature App SDK `0.1.0` version, the accepted App Runtime and Capability API
+range `[0.1.0, 0.2.0)`, and Native App Manifest schema major `1` as numeric
+compile-time metadata. `sdk/include/hackylens/app/runtime.h` owns the public
+lifecycle callback typedefs and immutable `hk_app_v2_entry_t` definition; the
+firmware runtime consumes that definition and MUST NOT maintain a private
+parallel lifecycle ABI.
+
 ## App-facing contracts
 
 SDK `0.1.x` defines or re-exports only:
@@ -157,6 +165,31 @@ The SDK contract is platform-independent. Its deterministic host fake executes
 the same public lifecycle, context, event, capability, service, cleanup, stale
 generation, and limit cases without hardware. A fake may record operations but
 MUST preserve owner, deadline, cancellation, buffer, and teardown semantics.
+
+The core fake entry is `sdk/include/hackylens/app/host_fake.h` with its
+allocation-free implementation under `sdk/host`. It uses caller-owned fixed
+storage and provides deterministic Time, Input, Display, manifest-style grant,
+lifecycle-driver, render-surface, owner-cleanup, and failure-injection behavior.
+Failure points cover grant injection and every lifecycle/unwind stage; a
+failure never skips the later stop/app-cleanup/owner-cleanup stages required by
+the lifecycle depth already reached. The fake is test infrastructure, not a
+production capability provider, runtime registry, second hardware path, or
+permission to construct runtime grants on-device.
+
+Standalone CMake consumers use `add_subdirectory(<hackylens>/sdk)` and link
+`HackyLens::AppSDK`; host tests additionally link
+`HackyLens::AppHostFake`. Make consumers include
+`sdk/hackylens-app-sdk.mk` and use its public include flags and host-fake source
+list. Both paths compile the app from SDK headers plus its own private headers;
+neither path adds firmware runtime, generated registry, board, platform, HAL,
+driver, provider, or other app include roots.
+
+The SDK conformance gate recursively checks public header closure, compiles C11
+and C++17 consumers, and builds/runs one minimal lifecycle-v2 app through both
+CMake and Make using only the SDK and host fake. The architecture guard rejects
+SDK or fake dependencies on repository-private layers and rejects a
+lifecycle-v2 production app dependency outside the App SDK, standard language
+headers, and that app's own private headers.
 
 A native app is portable only when it builds against this entry surface and its
 declared public capabilities. Successful compilation against SEN0305 private

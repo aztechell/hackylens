@@ -644,6 +644,49 @@ class DocumentationContractsTest(unittest.TestCase):
                     issues = CHECK_DOCS.check_phase3_app_runtime_integration(root)
                 self.assertTrue(any(expected in found.message for found in issues))
 
+    def test_phase3_standalone_app_sdk_contract_is_required(self) -> None:
+        relative = Path("docs/spec/APP_SDK.md")
+        original = (ROOT / relative).read_text(encoding="utf-8")
+        mutations = (
+            (
+                "The canonical umbrella is `sdk/include/hackylens/app.h`.",
+                "The canonical umbrella is a private runtime header.",
+                "compile-time compatibility metadata",
+            ),
+            (
+                "MUST NOT maintain a private\nparallel lifecycle ABI",
+                "may maintain a private\nparallel lifecycle ABI",
+                "own the lifecycle entry ABI",
+            ),
+            (
+                "caller-owned fixed\nstorage",
+                "heap-allocated\nstorage",
+                "deterministic fixed host fake",
+            ),
+            (
+                "through both\nCMake and Make",
+                "through a firmware-only build",
+                "standalone closure and language tests",
+            ),
+            (
+                "rejects a\nlifecycle-v2 production app dependency outside the App SDK",
+                "allows a\nlifecycle-v2 production app dependency outside the App SDK",
+                "SDK-only app dependency rule",
+            ),
+        )
+        for old, new, expected in mutations:
+            with self.subTest(expected=expected):
+                with tempfile.TemporaryDirectory(
+                    prefix="hackylens-phase3-sdk-"
+                ) as temp:
+                    root = Path(temp)
+                    write(root / relative, original.replace(old, new, 1))
+                    self.assertNotEqual(
+                        (root / relative).read_text(encoding="utf-8"), original
+                    )
+                    issues = CHECK_DOCS.check_phase3_app_sdk_core(root)
+                self.assertTrue(any(expected in found.message for found in issues))
+
     def test_native_app_manifest_schema_safety_rules_are_normative(self) -> None:
         relative = Path("docs/spec/APP_MANIFEST.md")
         original = (ROOT / relative).read_text(encoding="utf-8")

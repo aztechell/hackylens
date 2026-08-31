@@ -409,7 +409,7 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 
 ## 3.8 — Feature App SDK core и host fake
 
-Статус пакета: `not_started`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 

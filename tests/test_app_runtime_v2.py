@@ -130,15 +130,19 @@ class AppRuntimeV2Tests(unittest.TestCase):
         private_header = (
             ROOT / "firmware/src/app_runtime/runtime_private.h"
         ).read_text(encoding="utf-8")
+        public_runtime = (
+            ROOT / "sdk/include/hackylens/app/runtime.h"
+        ).read_text(encoding="utf-8")
         runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
             encoding="utf-8"
         )
 
         self.assertRegex(
-            private_header,
+            public_runtime,
             r"typedef hk_result_t \(\*hk_app_cleanup_fn\)\("
             r"const hk_app_context_t \*ctx\);",
         )
+        self.assertNotIn("typedef hk_result_t (*hk_app_cleanup_fn)", private_header)
         self.assertIn("hk_owner_t owner;", private_header)
         self.assertIn(
             "uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];",
@@ -158,7 +162,15 @@ class AppRuntimeV2Tests(unittest.TestCase):
         )
         app_count = generated.count(".struct_version = HK_APP_DESCRIPTOR_VERSION")
         self.assertGreater(app_count, 0)
-        self.assertEqual(generated.count("HK_APP_STATE_ALIGNMENT,"), app_count)
+        self.assertEqual(
+            generated.count("HK_APP_DESCRIPTOR_STATE_ALIGNMENT,"), app_count
+        )
+        self.assertIn(
+            "HK_APP_DESCRIPTOR_STATE_ALIGNMENT == HK_APP_STATE_ALIGNMENT",
+            (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
+                encoding="utf-8"
+            ),
+        )
         self.assertIn("uint32_t state_alignment;", (
             ROOT / "firmware/src/core/hk_app.h"
         ).read_text(encoding="utf-8"))

@@ -97,8 +97,8 @@ typedef struct
     uint32_t render_budget_us;
 } hk_app_limits_t;
 
-/* Schema 1 keeps alignment as a runtime ABI policy, not a manifest knob. */
-#define HK_APP_STATE_ALIGNMENT 16U
+/* Private descriptor encoding; runtime asserts equality with the public SDK ABI. */
+#define HK_APP_DESCRIPTOR_STATE_ALIGNMENT 16U
 
 #define HK_APP_DESCRIPTOR_VERSION 1U
 

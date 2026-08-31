@@ -17,6 +17,7 @@ import tomllib
 from pathlib import Path
 
 import check_capabilities
+import check_app_sdk
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -347,6 +348,7 @@ def resolve_repository_include(
         path.parent / normalized,
         repository_root / normalized,
         source_root / normalized,
+        repository_root / "sdk" / "include" / normalized,
         repository_root / "firmware" / "include" / normalized,
     )
     root = repository_root.resolve()
@@ -1263,6 +1265,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     failures = layout_failures()
     failures.extend(check_capabilities.validate())
+    failures.extend(check_app_sdk.source_boundary_failures())
     failures.extend(phase2_source_failures())
     for path in source_files():
         path_rel = relative(path)
