@@ -402,6 +402,8 @@ stale-handle tests зелёные; Phase 2 providers не меняют semantics
 Mixed runtime работает в full firmware host harness; current physical behavior
 не требует проверки до первой migrated app.
 
+Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
+
 ---
 
 ## 3.8 — Feature App SDK core и host fake
