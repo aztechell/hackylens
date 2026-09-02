@@ -179,13 +179,7 @@ class AppCompositionTests(unittest.TestCase):
             self.assertNotIn(hidden.as_posix(), include_block)
             self.assertIn(hidden.as_posix(), project)
 
-    def test_release_ci_enforces_manifest_composition(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("check_app_manifests.py --scan-root firmware/src/apps", workflow)
-        self.assertIn("gen_app_composition.py --check", workflow)
-        self.assertGreaterEqual(workflow.count("check_app_composition.py"), 4)
+    def test_generated_composition_artifacts_keep_lf(self) -> None:
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
         self.assertIn("firmware/generated/app_composition/*.json text eol=lf", attributes)
         self.assertIn("firmware/config/app_config_defaults.h text eol=lf", attributes)

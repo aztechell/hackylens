@@ -442,16 +442,7 @@ class AppManifestSchemaTests(unittest.TestCase):
                 ):
                     MANIFEST.validate_tree(root)
 
-    def test_release_ci_runs_the_build_time_validator(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("check_app_manifests.py --scan-root", workflow)
-        self.assertIn("tests/fixtures/app_manifests/valid", workflow)
-        self.assertLess(
-            workflow.index("check_app_manifests.py --scan-root"),
-            workflow.index("build_firmware.py"),
-        )
+    def test_firmware_does_not_parse_manifests_at_runtime(self) -> None:
         firmware_text = "\n".join(
             path.read_text(encoding="utf-8", errors="replace")
             for path in (ROOT / "firmware").rglob("*")

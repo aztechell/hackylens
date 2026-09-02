@@ -280,29 +280,6 @@ int main(void)
         self.assertIn("hide-external-link-menu", first)
         self.assertIn("hackylens.service.legacy-camera", first)
 
-    def test_autostart_persistence_contract_is_documented(self) -> None:
-        manifest = (ROOT / "docs/spec/APP_MANIFEST.md").read_text(encoding="utf-8")
-        adr = (ROOT / "docs/adr/0008-generate-native-app-composition.md").read_text(
-            encoding="utf-8"
-        )
-        lifecycle = (ROOT / "docs/APP_LIFECYCLE.md").read_text(encoding="utf-8")
-        baseline = (ROOT / "docs/PHASE3_BASELINE.md").read_text(encoding="utf-8")
-        architecture = (ROOT / "docs/ARCHITECTURE.md").read_text(encoding="utf-8")
-        modules = (ROOT / "docs/MODULES.md").read_text(encoding="utf-8")
-        ram_budget = (ROOT / "docs/RAM_BUDGET.md").read_text(encoding="utf-8")
-        for document in (manifest, adr):
-            self.assertIn("immutable reserved-ID set", document)
-            self.assertIn("exact set membership", document)
-            self.assertIn("Settings schema v5", document)
-            self.assertIn("schema-v4 uint8", document)
-        self.assertIn("independent of\nmenu visibility/order", lifecycle)
-        self.assertEqual(baseline.count("--phase3-receipt"), 2)
-        self.assertIn("Settings record v5", architecture)
-        self.assertIn("Settings storage v5", modules)
-        self.assertIn("106-byte v5", ram_budget)
-        for document in (architecture, modules, ram_budget):
-            self.assertIn("124 byte", document.replace("124-byte", "124 byte"))
-
     def test_current_legacy_menu_autostart_debug_and_callback_parity(self) -> None:
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",

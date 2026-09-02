@@ -85,12 +85,9 @@ class FeatureAppSdkTests(unittest.TestCase):
             )
         self.assertTrue(any("escapes its private headers" in item for item in failures))
 
-    def test_sdk_build_metadata_and_ci_gate_are_committed(self) -> None:
+    def test_sdk_build_metadata_is_committed(self) -> None:
         cmake = (ROOT / "sdk/CMakeLists.txt").read_text(encoding="utf-8")
         make = (ROOT / "sdk/hackylens-app-sdk.mk").read_text(encoding="utf-8")
-        workflow = (ROOT / ".github/workflows/release.yml").read_text(
-            encoding="utf-8"
-        )
         public = (ROOT / "sdk/include/hackylens/app.h").read_text(
             encoding="utf-8"
         )
@@ -100,7 +97,6 @@ class FeatureAppSdkTests(unittest.TestCase):
         self.assertIn("HackyLens::AppSDK", cmake)
         self.assertIn("HackyLens::AppHostFake", cmake)
         self.assertIn("HACKYLENS_APP_HOST_FAKE_SOURCES", make)
-        self.assertIn("python tools/check_app_sdk.py", workflow)
         self.assertIn("HK_APP_SDK_VERSION_MINOR 1U", public)
         self.assertIn("HK_APP_SDK_MANIFEST_SCHEMA_MAJOR 1U", public)
         self.assertIn("typedef struct hk_app_v2_entry", runtime)

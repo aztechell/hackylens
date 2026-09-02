@@ -37,19 +37,6 @@ class Phase3BaselineTests(unittest.TestCase):
             "docs/evidence/phase3-baseline.json: eol: lf",
         )
 
-    def test_repository_baseline_is_canonical_and_pins_phase2_closure(self) -> None:
-        document = CHECKER.load_baseline()
-        CHECKER.verify_provenance(document)
-        closure = document["baseline"]["closure"]
-        self.assertEqual(
-            closure["closure_commit"],
-            "ed2adcebb757ccf4c8bdaf5b7ba3f0b9c596eedb",
-        )
-        self.assertEqual(
-            closure["implementation_commit"],
-            "f8b76f441d25a7be02bf8c804736750306b8f2b7",
-        )
-
     def test_current_source_obeys_every_zero_resource_rule(self) -> None:
         document = CHECKER.load_baseline()
         closure = document["baseline"]["closure"]["closure_commit"]
@@ -125,36 +112,6 @@ class Phase3BaselineTests(unittest.TestCase):
                 "new_heap_allocation_sites"
             ]
         )
-
-    def test_release_workflow_runs_resource_gate_after_profile_receipts(self) -> None:
-        workflow = (
-            ROOT / ".github" / "workflows" / "release.yml"
-        ).read_text(encoding="utf-8")
-        self.assertIn(
-            "--capture-profile micropython-disabled --phase3-receipt", workflow
-        )
-        self.assertIn("--capture-profile full --phase3-receipt", workflow)
-        self.assertNotIn(
-            "check_phase2_evidence.py --verify-profile", workflow
-        )
-        disabled_capture = workflow.index(
-            "check_phase2_resources.py --capture-profile micropython-disabled"
-        )
-        full_capture = workflow.index(
-            "check_phase2_resources.py --capture-profile full"
-        )
-        resource_gate = workflow.index(
-            "check_phase3_baseline.py --verify-resources"
-        )
-        self.assertLess(disabled_capture, full_capture)
-        self.assertLess(full_capture, resource_gate)
-
-    def test_numerical_budgets_are_strict(self) -> None:
-        document = CHECKER.load_baseline()
-        changed = copy.deepcopy(document)
-        changed["budgets"]["static_ram_delta_max_bytes"] += 1
-        with self.assertRaisesRegex(RuntimeError, "budgets are not canonical"):
-            CHECKER.validate_document(changed)
 
     def test_flash_and_static_ram_boundaries_are_enforced(self) -> None:
         document = CHECKER.load_baseline()

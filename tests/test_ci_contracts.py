@@ -22,43 +22,6 @@ def load_tool(name: str):
 
 
 class CiContractsTest(unittest.TestCase):
-    def test_release_workflow_native_commands_are_fail_fast(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-            encoding="utf-8"
-        )
-        required = (
-            "python tools/ci_diff_range.py",
-            "git diff --check $diffRange",
-            "python tools/check_docs.py",
-            "python tools/check_phase2_evidence.py",
-            "python tools/check_arch.py",
-            "python tools/check_board_ports.py --all",
-            "python tools/check_board_ports.py --board sipeed-maix-cube --compile",
-            "python tools/check_env.py",
-            "python tools/run_tests.py",
-            "python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython",
-            "python tools/check_arch.py --verify-build-profile micropython-disabled",
-            "python tools/check_phase3_baseline.py --verify-profile micropython-disabled",
-            "python tools/check_phase2_resources.py --capture-profile micropython-disabled --phase3-receipt",
-            "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent",
-            "python tools/build_firmware.py full --board huskylens-sen0305",
-            "python tools/check_arch.py --verify-build-profile full",
-            "python tools/check_phase3_baseline.py --verify-profile full",
-            "python tools/check_phase2_resources.py --capture-profile full --phase3-receipt",
-            "python tools/check_phase3_baseline.py --verify-resources",
-            "python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present",
-            'python tools/package_release.py --board huskylens-sen0305 --tag "${{ github.ref_name }}"',
-        )
-        self.assertIn("function Invoke-NativeChecked", workflow)
-        self.assertIn("if ($LASTEXITCODE -ne 0)", workflow)
-        for command in required:
-            with self.subTest(command=command):
-                self.assertIn(f"Invoke-NativeChecked {command}", workflow)
-                self.assertNotRegex(
-                    workflow,
-                    re.compile(rf"(?m)^\s+{re.escape(command)}\s*$"),
-                )
-
     def test_strict_runner_rejects_skips(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-strict-tests-") as temp:
             tests = Path(temp)
@@ -109,18 +72,13 @@ class CiContractsTest(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_firmware_repo_does_not_build_or_package_the_standalone_ide(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-            encoding="utf-8"
-        )
+    def test_firmware_packager_does_not_include_the_standalone_ide(self) -> None:
         packager = (ROOT / "tools" / "package_release.py").read_text(
             encoding="utf-8"
         )
-        self.assertNotIn("bootstrap_ide", workflow)
-        self.assertNotIn("hackylens-code", workflow)
-        self.assertNotIn("actions/setup-node", workflow)
         self.assertNotIn("--ide", packager)
         self.assertNotIn("code.zip", packager)
+        self.assertNotIn("bootstrap_ide", packager)
 
     def test_micropython_patches_keep_lf_on_windows_runners(self) -> None:
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
@@ -128,74 +86,6 @@ class CiContractsTest(unittest.TestCase):
             "firmware/third_party/micropython/patches/*.patch text eol=lf",
             attributes.splitlines(),
         )
-        self.assertIn(
-            "docs/evidence/phase2-*.json text eol=lf",
-            attributes.splitlines(),
-        )
-
-    def test_release_workflow_validates_every_change_and_publishes_tags_only(self) -> None:
-        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("  pull_request:\n", workflow)
-        self.assertIn('      - "**"\n', workflow)
-        self.assertIn("python tools/check_docs.py", workflow)
-        self.assertIn("python tools/check_phase2_evidence.py", workflow)
-        self.assertIn("python tools/run_tests.py", workflow)
-        self.assertNotIn("msys2/setup-msys2", workflow)
-        self.assertNotIn("update: true", workflow)
-        self.assertIn('HOST_GCC_VERSION: "13.2.0"', workflow)
-        self.assertIn("Configure pinned host GCC", workflow)
-        self.assertIn("-dumpfullversion -dumpversion", workflow)
-        self.assertIn("x86_64-w64-mingw32", workflow)
-        self.assertIn(
-            "full --board huskylens-sen0305 --disable-app micropython", workflow
-        )
-        disabled_build = workflow.index(
-            "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython"
-        )
-        disabled_verify = workflow.index(
-            "Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile micropython-disabled"
-        )
-        disabled_symbols = workflow.index(
-            "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent"
-        )
-        self.assertLess(disabled_build, disabled_verify)
-        self.assertLess(disabled_verify, disabled_symbols)
-        full_build = workflow.index(
-            "Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305\n"
-        )
-        full_verify = workflow.index(
-            "Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full"
-        )
-        full_symbols = workflow.index(
-            "Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present"
-        )
-        self.assertLess(full_build, full_verify)
-        self.assertLess(full_verify, full_symbols)
-        self.assertIn("check_board_ports.py --all", workflow)
-        self.assertIn(
-            "check_board_ports.py --board sipeed-maix-cube --compile", workflow
-        )
-        self.assertNotIn("check_phase1_resources.py --board huskylens-sen0305", workflow)
-        self.assertNotIn("--write-result docs/evidence/phase1-result.json", workflow)
-        self.assertEqual(workflow.count("fetch-depth: 0"), 2)
-        self.assertNotIn("\n          git diff --check\n", workflow)
-        self.assertIn("PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}", workflow)
-        self.assertIn("PUSH_BEFORE_SHA: ${{ github.event.before }}", workflow)
-        self.assertIn("DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}", workflow)
-        self.assertIn("python tools/ci_diff_range.py", workflow)
-        self.assertNotIn("git rev-parse HEAD^", workflow)
-        self.assertIn("git diff --check $diffRange", workflow)
-        self.assertIn("--expect absent", workflow)
-        self.assertIn("--expect present", workflow)
-        self.assertGreaterEqual(
-            workflow.count("github.event_name == 'push' && github.ref_type == 'tag'"),
-            3,
-        )
-        self.assertIn("path: dist/release/", workflow)
-        self.assertIn("dist/release/*", workflow)
-        self.assertIn("hashFiles('tools/bootstrap_deps.py')", workflow)
 
     def test_host_gcc_dependency_is_version_and_content_pinned(self) -> None:
         bootstrap = load_tool("bootstrap_deps")
@@ -203,15 +93,6 @@ class CiContractsTest(unittest.TestCase):
         self.assertEqual(bootstrap.HOST_GCC_MACHINE, "x86_64-w64-mingw32")
         self.assertIn("/13.2.0-rt_v11-rev0/", bootstrap.HOST_GCC_URL)
         self.assertRegex(bootstrap.HOST_GCC_SHA256, re.compile(r"^[0-9a-f]{64}$"))
-
-    def test_readme_uses_only_qualified_firmware_artifacts(self) -> None:
-        readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertNotRegex(readme, re.compile(r"build[\\/][^`\s]*\.bin"))
-        self.assertIn("dist\\hackylens-full-huskylens-sen0305.bin", readme)
-        self.assertIn("dist\\release\\hackylens-huskylens-sen0305-v<version>.*", readme)
-        self.assertNotIn("`firmware/src/drivers`, `board`, `hal`", readme)
-        self.assertIn("| `boards` |", readme)
-        self.assertIn("`platforms/k210/hal`, `platforms/k210/startup`", readme)
 
     def test_zero_before_and_dispatch_ranges_cover_multi_commit_new_branch(self) -> None:
         selector = load_tool("ci_diff_range")

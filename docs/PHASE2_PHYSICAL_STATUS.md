@@ -48,7 +48,6 @@ Sleep и HMPY перенесены после impact review: provider/HAL/routin
   candidate build, flash и boot sanity устройства.
 - Физическая квалификация второй K210-платы не заявляется.
 
-Machine-readable owner acceptance находится в
-`docs/evidence/phase2-hardware-smoke.json`; immutable automated result и closure
-chain — в `docs/evidence/phase2-candidate-result.json` и
-`docs/evidence/phase2-closure-result.json`.
+Этот документ — текущий SEN0305 hardware acceptance summary. Historical
+JSON receipts remain in Git history and in `docs/evidence/phase2-candidate-result.json`
+plus `docs/evidence/phase2-closure-result.json` for resource-baseline provenance.

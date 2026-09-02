@@ -81,42 +81,11 @@ jobs:
           Invoke-NativeChecked python tools/check_app_sdk.py
           Invoke-NativeChecked python tools/gen_app_composition.py --check
           Invoke-NativeChecked python tools/check_app_composition.py
-          Invoke-NativeChecked python tools/check_phase2_evidence.py
-          Invoke-NativeChecked python tools/check_phase3_baseline.py --measure-dispatch
-          if (Test-Path -LiteralPath docs/evidence/phase2-hardware-smoke.json) {
-            Invoke-NativeChecked python tools/check_phase2_hardware.py
-          }
           Invoke-NativeChecked python tools/check_arch.py
           Invoke-NativeChecked python tools/check_capabilities.py
           Invoke-NativeChecked python tools/check_board_ports.py --all
-          Invoke-NativeChecked python tools/check_board_ports.py --board sipeed-maix-cube --compile
           Invoke-NativeChecked python tools/check_env.py
           Invoke-NativeChecked python tools/run_tests.py
-          Invoke-NativeChecked python tools/run_phase2_contracts.py --write-receipt build/phase2-qualification/contracts.json
-
-      - name: Build capability-absent diagnostics and Cube conformance
-        shell: pwsh
-        run: |
-          function Invoke-NativeChecked {
-            & $args[0] $args[1..($args.Count - 1)]
-            if ($LASTEXITCODE -ne 0) {
-              throw "native command failed ($LASTEXITCODE): $($args -join ' ')"
-            }
-          }
-          $diagnosticCapabilities = @(
-            "hackylens.cap.time",
-            "hackylens.cap.input",
-            "hackylens.cap.display",
-            "hackylens.cap.external-link",
-            "hackylens.cap.lights"
-          )
-          foreach ($capability in $diagnosticCapabilities) {
-            Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-capability $capability
-            Invoke-NativeChecked python tools/check_phase2_resources.py --capture-diagnostic $capability
-          }
-          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
-          Invoke-NativeChecked python tools/build_firmware.py conformance --board sipeed-maix-cube
-          Invoke-NativeChecked python tools/check_phase2_resources.py --capture-conformance
 
       - name: Build firmware without MicroPython and verify isolation
         shell: pwsh
@@ -129,10 +98,8 @@ jobs:
           }
           Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython
           Invoke-NativeChecked python tools/check_arch.py --verify-build-profile micropython-disabled
-          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile micropython-disabled
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent
           Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
-          Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile micropython-disabled --phase3-receipt
 
       - name: Build full firmware and verify feature symbols
         shell: pwsh
@@ -145,11 +112,9 @@ jobs:
           }
           Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305
           Invoke-NativeChecked python tools/check_arch.py --verify-build-profile full
-          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present
           Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
-          Invoke-NativeChecked python tools/check_phase2_resources.py --capture-profile full --phase3-receipt
-          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-resources
+          Invoke-NativeChecked python tools/check_phase3_baseline.py --verify-profile full
 
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'

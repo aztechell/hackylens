@@ -403,7 +403,7 @@ Mixed runtime исполняется через production `hk_main.c` и
 `app_runtime_integration.c` в host harness; full firmware profiles собираются,
 а current physical behavior не требует проверки до первой migrated app.
 
-Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
+Completion evidence is retained in Git history of the Phase 3.7 closure.
 
 ---
 
@@ -443,7 +443,7 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 Минимальный fixture app компилируется и тестируется только через SDK/fakes; SDK
 header closure не содержит repository-private dependencies.
 
-Completion evidence: [Phase 3.8 completion report](evidence/phase3-8-report.md).
+Completion evidence is retained in Git history of the Phase 3.8 closure.
 
 ---
 

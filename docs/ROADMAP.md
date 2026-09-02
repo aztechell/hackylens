@@ -159,8 +159,8 @@ Capability/App SDK.
 
 - normative index, glossary и versioning policy находятся в `docs/spec/`;
 - ADR process, template и accepted ADR-0001 находятся в `docs/adr/`;
-- `tools/check_docs.py` проверяет metadata, локальные links/anchors, canonical
-  version sources, ADR structure, entry markers и точные forbidden claims;
+- `tools/check_docs.py` проверяет локальные links/anchors, публичные version
+  constants и небольшой набор product claims;
 - `tests/test_docs_contracts.py` содержит positive repository gate и negative
   fixtures, а GitHub Actions запускает documentation guard для каждого change;
 - `.github/pull_request_template.md` требует architecture, contract,
@@ -296,10 +296,8 @@ constant.
 exit gates зафиксированы в [PHASE2_MASTERPLAN.md](PHASE2_MASTERPLAN.md).
 
 Статус: **DONE**. Пять начальных capabilities реализованы и квалифицированы на
-SEN0305; automated result, owner hardware acceptance и closure chain находятся
-в `docs/evidence/phase2-candidate-result.json`,
-`docs/evidence/phase2-hardware-smoke.json` и
-`docs/evidence/phase2-closure-result.json`. Maix Cube остаётся
+SEN0305; текущий hardware acceptance summary — в
+[PHASE2_PHYSICAL_STATUS.md](PHASE2_PHYSICAL_STATUS.md). Maix Cube остаётся
 compile-conformance-only; общая hardware portability не заявляется.
 
 ### Цель

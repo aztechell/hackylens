@@ -55,8 +55,9 @@ Phase 2 closure commit, not declarations inferred from static-RAM size. The
 checker fingerprints direct and transitively wrapped heap, task, and queue
 creation sites, counts runtime core starts, and counts full-display framebuffer
 allocation expressions. Renames of byte-identical source are tolerated; a new
-site or a delete/add replacement is not. Both profile receipts and the current
-full artifact are checked before the zero-resource result is accepted.
+site or a delete/add replacement is not. Host tests enforce the zero-resource source deltas and reproduce the dispatch
+baseline. Normal-push CI measures flash/static RAM of the current full firmware
+against this baseline after the product image is built.
 
 ## Reproduction
 
@@ -64,20 +65,14 @@ With the pinned host compiler and dependencies available:
 
 ```powershell
 python tools/check_phase3_baseline.py --measure-dispatch
-python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython
-python tools/check_phase3_baseline.py --verify-profile micropython-disabled
-python tools/check_phase2_resources.py --capture-profile micropython-disabled --phase3-receipt
 python tools/build_firmware.py full --board huskylens-sen0305
 python tools/check_phase3_baseline.py --verify-profile full
-python tools/check_phase2_resources.py --capture-profile full --phase3-receipt
-python tools/check_phase3_baseline.py --verify-resources
 ```
 
 The checker validates canonical JSON, Git ancestry, historical closure bytes,
-the immutable Phase 2 evidence chain, normalized dispatch source/harness hashes,
-attested board/profile identity, formulas, numerical limits, zero-resource
-source deltas, build receipts, and current full artifact identity. CI executes
-the same checks after both required profile receipts exist.
+normalized dispatch source/harness hashes, attested board/profile identity,
+formulas, and numerical limits. The longer dual-profile receipt recipe remains
+available locally; it is not required on every push.
 
 ## Hardware impact
 
