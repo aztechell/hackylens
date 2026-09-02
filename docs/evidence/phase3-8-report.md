@@ -2,7 +2,8 @@
 
 Пакет: `3.8 — Feature App SDK core и host fake`
 
-Статус: `completed`.
+Статус: `in_progress` на время corrective work по эквивалентности host fake
+production Runtime и Phase 2 Capability contracts.
 
 Ветка: `phase-3-work`
 
@@ -19,6 +20,14 @@
 - Добавлен allocation-free deterministic host fake с caller-owned fixed
   storage для Time, Input, Display, manifest-style grants, lifecycle, render,
   owner cleanup и failure injection.
+- Corrective pass выровнял host fake с production Runtime и Phase 2 contracts:
+  initial render создаётся runtime после успешного `start`, render request во
+  время `STARTING` запрещён, `HK_PENDING` callback нормализуется как в Runtime,
+  state и callback budgets берутся из immutable manifest-equivalent limits.
+- Input использует независимый cursor каждого lease с overflow/resync; Time и
+  release соблюдают maximum/overflow/deadline rules; Display сохраняет
+  transactional batch/surface state, zero-area no-op, full clip и failed
+  validation semantics. Release/reacquire увеличивает lease generation.
 - Минимальный lifecycle-v2 app собирается и исполняется только с App SDK,
   собственным private header и host fake через CMake и Make.
 - C11/C++17 header consumers и recursive public-header closure проверяются
@@ -48,9 +57,14 @@ firmware и не создаёт второй runtime, provider или hardware p
 
 ## Проверки и сборки
 
-- Полный host suite: `279/279` tests passed.
+- Полный host suite: `280/280` tests passed на финальном corrective diff.
 - Standalone SDK conformance: CMake/Ninja build+run, Make build+run, C11 and
   C++17 consumers passed.
+- Negative regressions прошли для render request из `start`, callback
+  `HK_PENDING`, early tick, tick/render budget overrun, independent Input
+  overflow/resync, stale reacquire generation, Time/release limits и Display
+  transaction validation. Нормальные `<array>`/`<cstdint>` проходят app
+  boundary, undeclared third-party C++ header отклоняется.
 - Documentation, architecture, manifest composition, capability inventory and
   Board Port Contract guards passed.
 - Sipeed Maix Cube compile conformance passed; это не runtime qualification

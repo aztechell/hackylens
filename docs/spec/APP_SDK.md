@@ -176,6 +176,27 @@ the lifecycle depth already reached. The fake is test infrastructure, not a
 production capability provider, runtime registry, second hardware path, or
 permission to construct runtime grants on-device.
 
+The host-fake configuration carries immutable manifest-equivalent
+`state_bytes`, tick interval/budget, and render budget values separately from
+the entry's storage capacity. `hk_app_context_state` exposes exactly
+`state_bytes`, and only that declared range is cleared. A successful `start`
+creates the same automatic initial full invalidation as production Runtime;
+`hk_app_context_request_render` remains legal only in `RUNNING`, never while
+`start` is executing. Lifecycle `HK_PENDING` is normalized to
+`HK_ERR_INVALID_STATE`, exactly as production Runtime does.
+
+The fake's public Capability operations preserve Phase 2 semantics rather than
+defining a reduced parallel contract. In particular, every Input lease has an
+independent sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
+stable state and exact dropped count before resynchronizing without replay.
+Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
+`HK_ERR_LIMIT`. Every release rejects `UINT64_MAX` as an invalid absolute
+deadline before changing lease state. Display treats zero-area rectangles as
+successful no-ops, accepts `set_clip(NULL)` as the full display, requires the
+normative batch/surface state for commands, present, and abort, and preserves
+staged state after validation failure. A borrowed Display surface is advertised
+only when the test supplies explicit caller-owned backing storage.
+
 Standalone CMake consumers use `add_subdirectory(<hackylens>/sdk)` and link
 `HackyLens::AppSDK`; host tests additionally link
 `HackyLens::AppHostFake`. Make consumers include
@@ -190,6 +211,10 @@ CMake and Make using only the SDK and host fake. The architecture guard rejects
 SDK or fake dependencies on repository-private layers and rejects a
 lifecycle-v2 production app dependency outside the App SDK, standard language
 headers, and that app's own private headers.
+The C++ policy recognizes a bounded allocation-free C++17 standard-header
+allowlist (including `<array>` and `<cstdint>`) while continuing to reject
+undeclared third-party headers; accepting C++ syntax does not waive the Phase 3
+heap, task, queue, core, or framebuffer rules.
 
 A native app is portable only when it builds against this entry surface and its
 declared public capabilities. Successful compilation against SEN0305 private

@@ -26,6 +26,10 @@ INCLUDE_RE = re.compile(
 SYSTEM_HEADERS = {
     "assert.h", "stdbool.h", "stddef.h", "stdint.h", "stdio.h", "stdlib.h",
     "string.h", "limits.h", "inttypes.h", "float.h", "math.h", "time.h",
+    "algorithm", "array", "bitset", "cassert", "cctype", "cerrno", "cfloat",
+    "cinttypes", "climits", "cmath", "cstddef", "cstdint", "cstdio",
+    "cstdlib", "cstring", "ctime", "initializer_list", "limits", "optional",
+    "ratio", "string_view", "tuple", "type_traits", "utility", "variant",
 }
 FORBIDDEN_TOKENS = (
     "firmware/src/", "platforms/", "boards/", "runtime_private.h",

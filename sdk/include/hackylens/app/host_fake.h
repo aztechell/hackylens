@@ -66,10 +66,15 @@ typedef struct
     const hk_app_host_fake_service_t *services;
     uint16_t service_count;
     uint16_t reserved;
+    uint32_t state_bytes;
+    uint32_t tick_interval_us;
+    uint32_t tick_budget_us;
+    uint32_t render_budget_us;
     uint64_t initial_time_us;
     uint64_t teardown_budget_us;
     uint32_t display_width;
     uint32_t display_height;
+    hk_buffer_view_t display_surface;
 } hk_app_host_fake_config_t;
 
 typedef struct

@@ -409,7 +409,7 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 
 ## 3.8 — Feature App SDK core и host fake
 
-Статус пакета: `completed`.
+Статус пакета: `in_progress`.
 
 ### Depends on
 
@@ -431,10 +431,10 @@ Completion evidence: [Phase 3.7 completion report](evidence/phase3-7-report.md).
 - [x] Не реэкспортировать board, HAL, SDK, drivers, private capability providers,
   raw SD или framebuffer ownership internals.
 - [x] Добавить CMake/make integration для standalone app compile.
-- [x] Добавить deterministic host fake platform: time, input, display, grants,
+- [ ] Добавить deterministic host fake platform: time, input, display, grants,
   lifecycle driver и failure injection.
-- [x] Добавить compatibility metadata и compile tests для C/C++ consumers.
-- [x] Architecture guard запрещает SDK→platform/app-private и app→anything кроме
+- [ ] Добавить compatibility metadata и compile tests для C/C++ consumers.
+- [ ] Architecture guard запрещает SDK→platform/app-private и app→anything кроме
   SDK plus own private headers; разрешено только SDK public header→public
   Capability API header, но не implementation/provider/private headers.
 

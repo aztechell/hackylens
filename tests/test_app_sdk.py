@@ -60,6 +60,31 @@ class FeatureAppSdkTests(unittest.TestCase):
         self.assertTrue(any("must include the App SDK" in item for item in failures))
         self.assertTrue(any("escapes its private headers" in item for item in failures))
 
+    def test_v2_cpp_app_accepts_bounded_standard_headers_only(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-cpp-boundary-") as temp:
+            app = Path(temp) / "sample"
+            app.mkdir(parents=True)
+            source = app / "sample.cpp"
+            source.write_text(
+                "#include <hackylens/app.h>\n"
+                "#include <array>\n"
+                "#include <cstdint>\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                check_app_sdk.app_source_boundary_failures(app, [source], [app]),
+                [],
+            )
+            source.write_text(
+                "#include <hackylens/app.h>\n"
+                "#include <boost/asio.hpp>\n",
+                encoding="utf-8",
+            )
+            failures = check_app_sdk.app_source_boundary_failures(
+                app, [source], [app]
+            )
+        self.assertTrue(any("escapes its private headers" in item for item in failures))
+
     def test_sdk_build_metadata_and_ci_gate_are_committed(self) -> None:
         cmake = (ROOT / "sdk/CMakeLists.txt").read_text(encoding="utf-8")
         make = (ROOT / "sdk/hackylens-app-sdk.mk").read_text(encoding="utf-8")

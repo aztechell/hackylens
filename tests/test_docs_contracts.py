@@ -664,6 +664,16 @@ class DocumentationContractsTest(unittest.TestCase):
                 "deterministic fixed host fake",
             ),
             (
+                "every Input lease has an\nindependent sequence cursor",
+                "all Input leases share one\nglobal destructive cursor",
+                "preserve Phase 2 Capability semantics",
+            ),
+            (
+                "legal only in `RUNNING`, never while\n`start` is executing",
+                "legal in `RUNNING` and while\n`start` is executing",
+                "match Runtime state and limit semantics",
+            ),
+            (
                 "through both\nCMake and Make",
                 "through a firmware-only build",
                 "standalone closure and language tests",
@@ -672,6 +682,11 @@ class DocumentationContractsTest(unittest.TestCase):
                 "rejects a\nlifecycle-v2 production app dependency outside the App SDK",
                 "allows a\nlifecycle-v2 production app dependency outside the App SDK",
                 "SDK-only app dependency rule",
+            ),
+            (
+                "bounded allocation-free C++17 standard-header\nallowlist",
+                "unbounded third-party C++ header\nallowlist",
+                "bounded C++ standard-header policy",
             ),
         )
         for old, new, expected in mutations:

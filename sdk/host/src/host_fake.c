@@ -4,6 +4,31 @@
 #include <string.h>
 
 #define HK_APP_HOST_FAKE_MAGIC UINT32_C(0x484B464B)
+#define HK_APP_HOST_FAKE_LEASE_CAPACITY 24U
+#define HK_APP_HOST_FAKE_DISPLAY_MAX_COMMANDS 32U
+#define HK_APP_HOST_FAKE_DISPLAY_MAX_TEXT_BYTES 128U
+#define HK_APP_HOST_FAKE_DISPLAY_MAX_DIRTY_RECTS HK_APP_MAX_INVALIDATIONS
+#define HK_APP_HOST_FAKE_DISPLAY_MAX_PRESENT_US UINT32_C(100000)
+
+typedef enum
+{
+    HK_APP_HOST_FAKE_DISPLAY_IDLE = 0,
+    HK_APP_HOST_FAKE_DISPLAY_BATCH,
+    HK_APP_HOST_FAKE_DISPLAY_SURFACE,
+} hk_app_host_fake_display_state_t;
+
+typedef struct
+{
+    hk_lease_t lease;
+    uint64_t input_next_sequence;
+    hk_display_rect_t display_clip;
+    uint32_t display_plane;
+    uint16_t display_commands;
+    uint16_t display_text_bytes;
+    uint16_t display_dirty_rects;
+    uint8_t active;
+    uint8_t display_state;
+} hk_app_host_fake_lease_t;
 
 typedef struct hk_app_host_fake_impl hk_app_host_fake_impl_t;
 
@@ -23,12 +48,14 @@ struct hk_app_host_fake_impl
     hk_app_context_t context;
     hk_app_surface_t surface;
     hk_input_event_t input_events[HK_APP_HOST_FAKE_INPUT_CAPACITY];
+    hk_app_host_fake_lease_t leases[HK_APP_HOST_FAKE_LEASE_CAPACITY];
     hk_app_host_fake_state_t state;
     hk_result_t first_error;
     hk_app_host_fake_failure_point_t failure_point;
     hk_result_t failure_result;
     hk_deadline_t teardown_deadline;
     uint64_t now_us;
+    uint64_t next_tick_us;
     uint64_t event_sequence;
     uint64_t input_sequence;
     uint32_t context_generation;
@@ -44,16 +71,11 @@ struct hk_app_host_fake_impl
     uint32_t owner_cleanup_calls;
     uint32_t display_operations;
     uint32_t display_present_calls;
-    uint16_t input_head;
-    uint16_t input_count;
-    uint32_t input_dropped;
-    uint8_t capability_active[HK_APP_CONTEXT_MAX_CAPABILITIES];
     uint8_t callback_active;
     uint8_t prepare_entered;
     uint8_t start_entered;
     uint8_t teardown_deadline_valid;
     uint8_t render_pending;
-    uint8_t display_batch_active;
 };
 
 _Static_assert(
@@ -91,11 +113,17 @@ static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
 
 static uint8_t result_is_failure(hk_result_t result)
 {
-    return (uint8_t)(result < HK_OK);
+    return (uint8_t)(result != HK_OK);
+}
+
+static hk_result_t callback_result(hk_result_t result)
+{
+    return result == HK_PENDING ? HK_ERR_INVALID_STATE : result;
 }
 
 static void retain_error(hk_app_host_fake_impl_t *fake, hk_result_t result)
 {
+    result = callback_result(result);
     if(result_is_failure(result) && fake->first_error == HK_OK)
         fake->first_error = result;
 }
@@ -133,9 +161,7 @@ static hk_result_t finish_callback(
     fake->callback_active = 0U;
     if(s_callback_fake == fake)
         s_callback_fake = NULL;
-    if(result == HK_PENDING || result > HK_PENDING)
-        return HK_ERR_INTERNAL;
-    return result;
+    return callback_result(result);
 }
 
 static hk_result_t validate_callback_context(const hk_app_context_t *ctx)
@@ -167,6 +193,128 @@ static uint8_t supported_grant(hk_capability_id_t id)
                      id == HK_CAPABILITY_ID_DISPLAY);
 }
 
+static uint64_t capability_features(
+    const hk_app_host_fake_impl_t *fake,
+    hk_capability_id_t id)
+{
+    if(id == HK_CAPABILITY_ID_TIME)
+        return HK_TIME_FEATURES_0_1;
+    if(id == HK_CAPABILITY_ID_INPUT)
+        return HK_INPUT_FEATURES_0_1;
+    if(id == HK_CAPABILITY_ID_DISPLAY)
+    {
+        uint64_t features =
+            HK_DISPLAY_FEATURE_BASE_PLANE | HK_DISPLAY_FEATURE_BATCH |
+            HK_DISPLAY_FEATURE_DIRTY_REGIONS | HK_DISPLAY_FEATURE_RGB565 |
+            HK_DISPLAY_FEATURE_TEXT;
+
+        if(fake->config.display_surface.data)
+            features |= HK_DISPLAY_FEATURE_BORROWED_SURFACE;
+        return features;
+    }
+    return 0U;
+}
+
+static int version_compare(hk_version_t left, hk_version_t right)
+{
+    if(left.major != right.major)
+        return left.major < right.major ? -1 : 1;
+    if(left.minor != right.minor)
+        return left.minor < right.minor ? -1 : 1;
+    if(left.patch != right.patch)
+        return left.patch < right.patch ? -1 : 1;
+    return 0;
+}
+
+static hk_result_t validate_capability_request(
+    const hk_app_host_fake_impl_t *fake,
+    const hk_capability_request_t *request,
+    hk_capability_id_t id)
+{
+    const hk_version_t provider_version = {0U, 1U, 0U, 0U};
+
+    if(!request || request->struct_size < sizeof(*request))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(request->struct_version != HK_CAPABILITY_REQUEST_VERSION)
+        return HK_ERR_VERSION_INCOMPATIBLE;
+    if(request->id != id || request->reserved != 0U ||
+       request->minimum.reserved != 0U ||
+       request->maximum_exclusive.reserved != 0U)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(version_compare(request->minimum, request->maximum_exclusive) >= 0)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(version_compare(request->minimum, provider_version) > 0 ||
+       version_compare(provider_version, request->maximum_exclusive) >= 0)
+        return HK_ERR_VERSION_INCOMPATIBLE;
+    if((request->required_features & capability_features(fake, id)) !=
+       request->required_features)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    return HK_OK;
+}
+
+static hk_app_host_fake_lease_t *lease_record(
+    hk_app_host_fake_impl_t *fake,
+    const hk_lease_t *lease)
+{
+    hk_app_host_fake_lease_t *record;
+
+    if(!fake || !lease || lease->slot == 0U ||
+       lease->slot > HK_APP_HOST_FAKE_LEASE_CAPACITY)
+        return NULL;
+    record = &fake->leases[lease->slot - 1U];
+    if(!record->active || record->lease.generation != lease->generation ||
+       record->lease.capability_id != lease->capability_id ||
+       !owner_equal(record->lease.owner, lease->owner))
+        return NULL;
+    return record;
+}
+
+static hk_result_t allocate_lease(
+    hk_app_host_fake_impl_t *fake,
+    hk_capability_id_t id,
+    uint32_t display_plane,
+    hk_lease_t *lease)
+{
+    uint32_t index;
+
+    if(!fake || !lease)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(id == HK_CAPABILITY_ID_DISPLAY)
+    {
+        for(index = 0U; index < HK_APP_HOST_FAKE_LEASE_CAPACITY; index++)
+        {
+            if(fake->leases[index].active &&
+               fake->leases[index].lease.capability_id == id &&
+               fake->leases[index].display_plane == display_plane)
+                return HK_ERR_BUSY;
+        }
+    }
+    for(index = 0U; index < HK_APP_HOST_FAKE_LEASE_CAPACITY; index++)
+    {
+        hk_app_host_fake_lease_t *record = &fake->leases[index];
+        uint32_t generation = record->lease.generation;
+
+        if(record->active || generation == UINT32_MAX)
+            continue;
+        memset(record, 0, sizeof(*record));
+        record->lease = (hk_lease_t){
+            index + 1U,
+            generation + 1U,
+            fake->context.owner,
+            id,
+        };
+        record->input_next_sequence = fake->input_sequence + 1U;
+        record->display_plane = display_plane;
+        record->display_clip = (hk_display_rect_t){
+            0, 0, fake->config.display_width, fake->config.display_height,
+        };
+        record->active = 1U;
+        *lease = record->lease;
+        return HK_OK;
+    }
+    return HK_ERR_LIMIT;
+}
+
 static void rebuild_context(hk_app_host_fake_impl_t *fake)
 {
     uint16_t index;
@@ -193,26 +341,24 @@ static void rebuild_context(hk_app_host_fake_impl_t *fake)
         fake->context.services[index].namespace_name =
             fake->services[index].namespace_name;
     }
-    memset(fake->capability_active, 0, sizeof(fake->capability_active));
 }
 
 static void retire_instance(hk_app_host_fake_impl_t *fake)
 {
     if(fake->config.entry->state_storage &&
-       fake->config.entry->state_capacity_bytes > 0U)
+       fake->config.state_bytes > 0U)
     {
         memset(
             fake->config.entry->state_storage,
             0,
-            fake->config.entry->state_capacity_bytes);
+            fake->config.state_bytes);
     }
     fake->context.owner = HK_OWNER_NONE;
     memset(fake->context.capabilities, 0, sizeof(fake->context.capabilities));
     memset(fake->context.services, 0, sizeof(fake->context.services));
-    memset(fake->capability_active, 0, sizeof(fake->capability_active));
+    memset(fake->leases, 0, sizeof(fake->leases));
     fake->surface.valid = 0U;
     fake->render_pending = 0U;
-    fake->display_batch_active = 0U;
     fake->teardown_deadline_valid = 0U;
     fake->prepare_entered = 0U;
     fake->start_entered = 0U;
@@ -228,7 +374,7 @@ static hk_result_t owner_cleanup(hk_app_host_fake_impl_t *fake)
     fake->owner_cleanup_calls++;
     result = injected_result(fake, HK_APP_HOST_FAKE_FAIL_OWNER_CLEANUP);
     retain_error(fake, result);
-    memset(fake->capability_active, 0, sizeof(fake->capability_active));
+    memset(fake->leases, 0, sizeof(fake->leases));
     return result;
 }
 
@@ -353,59 +499,29 @@ static hk_result_t dispatch_event_value(
     return result;
 }
 
-static hk_result_t capability_lease(
-    hk_app_host_fake_impl_t *fake,
-    hk_capability_id_t id,
-    uint16_t instance,
-    hk_lease_t *lease,
-    uint16_t *grant_index)
-{
-    uint16_t index;
-
-    if(!fake || !lease)
-        return HK_ERR_INVALID_ARGUMENT;
-    *lease = HK_LEASE_NONE;
-    for(index = 0U; index < fake->config.grant_count; index++)
-    {
-        const hk_app_capability_grant_t *grant = &fake->context.capabilities[index];
-        if(grant->id != id || grant->instance != instance)
-            continue;
-        if(!grant->available)
-            return HK_ERR_CAPABILITY_ABSENT;
-        if(!fake->capability_active[index])
-            return HK_ERR_STALE_HANDLE;
-        *lease = grant->lease;
-        if(grant_index)
-            *grant_index = index;
-        return HK_OK;
-    }
-    return HK_ERR_NOT_DECLARED;
-}
-
 static hk_result_t validate_handle(
     hk_owner_t owner,
     const hk_lease_t *lease,
     hk_capability_id_t id,
     uint16_t *grant_index)
 {
-    hk_lease_t expected;
-    uint16_t index;
-    hk_result_t result;
+    hk_app_host_fake_lease_t *record;
 
     if(!s_active_fake || !lease)
         return HK_ERR_INVALID_ARGUMENT;
-    if(hk_owner_is_zero(owner) || !owner_equal(owner, s_active_fake->context.owner))
+    if(hk_owner_is_zero(owner))
         return HK_ERR_WRONG_OWNER;
-    result = capability_lease(s_active_fake, id, 0U, &expected, &index);
-    if(result != HK_OK)
-        return result;
+    if(hk_owner_is_zero(s_active_fake->context.owner))
+        return HK_ERR_STALE_HANDLE;
+    if(!owner_equal(owner, s_active_fake->context.owner))
+        return HK_ERR_WRONG_OWNER;
     if(lease->capability_id != id)
         return HK_ERR_INVALID_ARGUMENT;
-    if(lease->slot != expected.slot || lease->generation != expected.generation ||
-       !owner_equal(lease->owner, expected.owner))
+    record = lease_record(s_active_fake, lease);
+    if(!record)
         return HK_ERR_STALE_HANDLE;
     if(grant_index)
-        *grant_index = index;
+        *grant_index = (uint16_t)(record - s_active_fake->leases);
     return HK_OK;
 }
 
@@ -429,9 +545,36 @@ hk_result_t hk_app_host_fake_initialize(
        (config->grant_count > 0U && !config->grants) ||
        config->service_count > HK_APP_CONTEXT_MAX_SERVICES ||
        (config->service_count > 0U && !config->services) ||
-       config->teardown_budget_us == 0U || config->display_width == 0U ||
-       config->display_height == 0U)
+       config->reserved != 0U || config->state_bytes == 0U ||
+       config->state_bytes > config->entry->state_capacity_bytes ||
+       config->tick_interval_us == 0U || config->tick_budget_us == 0U ||
+       config->tick_budget_us > config->tick_interval_us ||
+       config->render_budget_us == 0U || config->teardown_budget_us == 0U ||
+       config->display_width == 0U || config->display_height == 0U ||
+       ((uintptr_t)config->entry->state_storage % HK_APP_STATE_ALIGNMENT) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
+    if(config->display_surface.data)
+    {
+        uint64_t minimum_stride = (uint64_t)config->display_width * 2U;
+        uint64_t minimum_size =
+            (uint64_t)config->display_surface.stride_bytes *
+            config->display_height;
+
+        if(minimum_stride > UINT32_MAX ||
+           config->display_surface.stride_bytes < minimum_stride ||
+           minimum_size > config->display_surface.size_bytes ||
+           (((uintptr_t)config->display_surface.data) & 1U) != 0U ||
+           (config->display_surface.flags &
+            (HK_BUFFER_ACCESS_READABLE | HK_BUFFER_ACCESS_WRITABLE)) !=
+               (HK_BUFFER_ACCESS_READABLE | HK_BUFFER_ACCESS_WRITABLE))
+            return HK_ERR_INVALID_ARGUMENT;
+    }
+    else if(config->display_surface.size_bytes != 0U ||
+            config->display_surface.stride_bytes != 0U ||
+            config->display_surface.flags != 0U)
+    {
+        return HK_ERR_INVALID_ARGUMENT;
+    }
     for(left = 0U; left < config->grant_count; left++)
     {
         const hk_app_host_fake_grant_t *grant = &config->grants[left];
@@ -484,7 +627,7 @@ hk_result_t hk_app_host_fake_initialize(
     memset(
         impl->config.entry->state_storage,
         0,
-        impl->config.entry->state_capacity_bytes);
+        impl->config.state_bytes);
     s_active_fake = impl;
     return HK_OK;
 }
@@ -497,7 +640,7 @@ hk_result_t hk_app_host_fake_set_failure(
     hk_app_host_fake_impl_t *impl = fake_impl(fake);
 
     if(!impl || point <= HK_APP_HOST_FAKE_FAIL_NONE ||
-       point > HK_APP_HOST_FAKE_FAIL_OWNER_CLEANUP || !result_is_failure(result))
+       point > HK_APP_HOST_FAKE_FAIL_OWNER_CLEANUP || result >= HK_OK)
         return HK_ERR_INVALID_ARGUMENT;
     impl->failure_point = point;
     impl->failure_result = result;
@@ -532,10 +675,10 @@ hk_result_t hk_app_host_fake_launch(hk_app_host_fake_t *fake)
     impl->first_error = HK_OK;
     impl->event_sequence = 0U;
     impl->input_sequence = 0U;
-    impl->input_head = 0U;
-    impl->input_count = 0U;
-    impl->input_dropped = 0U;
     impl->input_state = 0U;
+    impl->next_tick_us = 0U;
+    memset(impl->input_events, 0, sizeof(impl->input_events));
+    memset(impl->leases, 0, sizeof(impl->leases));
     rebuild_context(impl);
     for(index = 0U; index < impl->config.grant_count; index++)
     {
@@ -578,13 +721,17 @@ hk_result_t hk_app_host_fake_launch(hk_app_host_fake_t *fake)
             (void)teardown(impl, HK_APP_STOP_START_FAILED);
             return result;
         }
-        grant->lease = (hk_lease_t){
-            (uint32_t)index + 1U,
-            impl->context_generation,
-            impl->context.owner,
-            grant->id,
-        };
-        impl->capability_active[index] = 1U;
+        result = allocate_lease(
+            impl, grant->id,
+            grant->id == HK_CAPABILITY_ID_DISPLAY ?
+                HK_DISPLAY_PLANE_BASE : 0U,
+            &grant->lease);
+        if(result != HK_OK)
+        {
+            retain_error(impl, result);
+            (void)teardown(impl, HK_APP_STOP_START_FAILED);
+            return result;
+        }
     }
     result = injected_result(impl, HK_APP_HOST_FAKE_FAIL_GRANT_SERVICE);
     if(result != HK_OK)
@@ -639,6 +786,12 @@ hk_result_t hk_app_host_fake_launch(hk_app_host_fake_t *fake)
     }
     impl->state = HK_APP_HOST_FAKE_RUNNING;
     impl->render_pending = 1U;
+    if(impl->now_us > UINT64_MAX - impl->config.tick_interval_us)
+    {
+        retain_error(impl, HK_ERR_LIMIT);
+        return terminate_running(impl, HK_APP_STOP_DEADLINE);
+    }
+    impl->next_tick_us = impl->now_us + impl->config.tick_interval_us;
     return HK_OK;
 }
 
@@ -650,13 +803,16 @@ hk_result_t hk_app_host_fake_input(
     hk_input_event_t input;
     hk_app_event_t event = {0};
     uint32_t changed;
-    uint16_t tail;
 
     if(!impl || (state & ~HK_INPUT_BUTTON_ALL) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
     if(impl->state != HK_APP_HOST_FAKE_RUNNING)
         return HK_ERR_INVALID_STATE;
     changed = impl->input_state ^ state;
+    if(changed == 0U)
+        return HK_OK;
+    if(impl->input_sequence == UINT64_MAX)
+        return HK_ERR_LIMIT;
     input = (hk_input_event_t){
         ++impl->input_sequence,
         impl->now_us,
@@ -664,21 +820,11 @@ hk_result_t hk_app_host_fake_input(
         changed,
         changed & state,
         changed & ~state,
-        impl->input_dropped,
+        0U,
     };
     impl->input_state = state;
-    if(impl->input_count == HK_APP_HOST_FAKE_INPUT_CAPACITY)
-    {
-        impl->input_head = (uint16_t)(
-            (impl->input_head + 1U) % HK_APP_HOST_FAKE_INPUT_CAPACITY);
-        impl->input_count--;
-        impl->input_dropped++;
-        input.dropped = impl->input_dropped;
-    }
-    tail = (uint16_t)((impl->input_head + impl->input_count) %
-                      HK_APP_HOST_FAKE_INPUT_CAPACITY);
-    impl->input_events[tail] = input;
-    impl->input_count++;
+    impl->input_events[
+        (impl->input_sequence - 1U) % HK_APP_HOST_FAKE_INPUT_CAPACITY] = input;
     event.kind = HK_APP_EVENT_INPUT;
     event.data.input = input;
     return dispatch_event_value(impl, event);
@@ -719,11 +865,17 @@ hk_result_t hk_app_host_fake_tick(hk_app_host_fake_t *fake)
     hk_app_host_fake_impl_t *impl = fake_impl(fake);
     hk_app_event_t event = {0};
     hk_result_t result;
+    uint64_t started_us;
 
     if(!impl)
         return HK_ERR_INVALID_ARGUMENT;
+    if(impl->state != HK_APP_HOST_FAKE_RUNNING)
+        return HK_ERR_INVALID_STATE;
+    if(impl->now_us < impl->next_tick_us)
+        return HK_PENDING;
+    started_us = impl->now_us;
     event.kind = HK_APP_EVENT_TIMER;
-    event.data.timer.scheduled_us = impl->now_us;
+    event.data.timer.scheduled_us = impl->next_tick_us;
     event.data.timer.now_us = impl->now_us;
     result = dispatch_event_value(impl, event);
     if(result != HK_OK || impl->state != HK_APP_HOST_FAKE_RUNNING)
@@ -743,14 +895,29 @@ hk_result_t hk_app_host_fake_tick(hk_app_host_fake_t *fake)
     {
         retain_error(impl, result);
         (void)terminate_running(impl, HK_APP_STOP_CALLBACK_FAILED);
+        return result;
     }
-    return result;
+    if(impl->now_us - started_us > impl->config.tick_budget_us)
+    {
+        retain_error(impl, HK_ERR_DEADLINE_EXCEEDED);
+        (void)terminate_running(impl, HK_APP_STOP_DEADLINE);
+        return HK_ERR_DEADLINE_EXCEEDED;
+    }
+    if(impl->now_us > UINT64_MAX - impl->config.tick_interval_us)
+    {
+        retain_error(impl, HK_ERR_LIMIT);
+        (void)terminate_running(impl, HK_APP_STOP_DEADLINE);
+        return HK_ERR_LIMIT;
+    }
+    impl->next_tick_us = impl->now_us + impl->config.tick_interval_us;
+    return HK_OK;
 }
 
 hk_result_t hk_app_host_fake_render(hk_app_host_fake_t *fake)
 {
     hk_app_host_fake_impl_t *impl = fake_impl(fake);
     hk_result_t result;
+    uint64_t started_us;
 
     if(!impl)
         return HK_ERR_INVALID_ARGUMENT;
@@ -759,6 +926,7 @@ hk_result_t hk_app_host_fake_render(hk_app_host_fake_t *fake)
     if(!impl->render_pending)
         return HK_PENDING;
     impl->render_pending = 0U;
+    started_us = impl->now_us;
     impl->surface.fake = impl;
     impl->surface.context_generation = impl->context_generation;
     impl->surface.valid = 1U;
@@ -780,6 +948,12 @@ hk_result_t hk_app_host_fake_render(hk_app_host_fake_t *fake)
         retain_error(impl, result);
         (void)terminate_running(impl, HK_APP_STOP_CALLBACK_FAILED);
         return result;
+    }
+    if(impl->now_us - started_us > impl->config.render_budget_us)
+    {
+        retain_error(impl, HK_ERR_DEADLINE_EXCEEDED);
+        (void)terminate_running(impl, HK_APP_STOP_DEADLINE);
+        return HK_ERR_DEADLINE_EXCEEDED;
     }
     impl->display_present_calls++;
     return HK_OK;
@@ -892,7 +1066,8 @@ static hk_result_t context_capability(
             continue;
         if(!grant->available)
             return HK_ERR_CAPABILITY_ABSENT;
-        if(hk_owner_is_zero(ctx->owner) || !s_active_fake->capability_active[index])
+        if(hk_owner_is_zero(ctx->owner) ||
+           !lease_record(s_active_fake, &grant->lease))
             return HK_ERR_INVALID_STATE;
         *lease = grant->lease;
         return HK_OK;
@@ -963,7 +1138,7 @@ hk_result_t hk_app_context_state(
     if(result != HK_OK)
         return result;
     *state = s_callback_fake->config.entry->state_storage;
-    *size_bytes = s_callback_fake->config.entry->state_capacity_bytes;
+    *size_bytes = s_callback_fake->config.state_bytes;
     return HK_OK;
 }
 
@@ -994,8 +1169,7 @@ hk_result_t hk_app_context_request_render(
 
     if(result != HK_OK)
         return result;
-    if(s_callback_fake->state != HK_APP_HOST_FAKE_RUNNING &&
-       s_callback_fake->state != HK_APP_HOST_FAKE_STARTING)
+    if(s_callback_fake->state != HK_APP_HOST_FAKE_RUNNING)
         return HK_ERR_INVALID_STATE;
     if(region && (region->width == 0U || region->height == 0U))
         return HK_ERR_INVALID_ARGUMENT;
@@ -1137,15 +1311,36 @@ static hk_result_t acquire_capability(
     hk_owner_t owner,
     const hk_capability_request_t *request,
     hk_capability_id_t id,
+    uint32_t display_plane,
     hk_lease_t *lease)
 {
-    if(!request || request->struct_size < sizeof(*request) ||
-       request->struct_version != HK_CAPABILITY_REQUEST_VERSION ||
-       request->id != id || !lease)
+    hk_result_t result;
+    uint16_t index;
+
+    if(!lease)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!s_active_fake || !owner_equal(owner, s_active_fake->context.owner))
+    *lease = HK_LEASE_NONE;
+    if(!s_active_fake)
+        return HK_ERR_INVALID_STATE;
+    result = validate_capability_request(s_active_fake, request, id);
+    if(result != HK_OK)
+        return result;
+    if(hk_owner_is_zero(s_active_fake->context.owner))
+        return HK_ERR_STALE_HANDLE;
+    if(!owner_equal(owner, s_active_fake->context.owner))
         return HK_ERR_WRONG_OWNER;
-    return capability_lease(s_active_fake, id, request->instance, lease, NULL);
+    for(index = 0U; index < s_active_fake->config.grant_count; index++)
+    {
+        const hk_app_capability_grant_t *grant =
+            &s_active_fake->context.capabilities[index];
+
+        if(grant->id != id || grant->instance != request->instance)
+            continue;
+        if(!grant->available)
+            return HK_ERR_CAPABILITY_ABSENT;
+        return allocate_lease(s_active_fake, id, display_plane, lease);
+    }
+    return HK_ERR_NOT_DECLARED;
 }
 
 static hk_result_t release_capability(
@@ -1154,18 +1349,27 @@ static hk_result_t release_capability(
     hk_capability_id_t id,
     hk_lease_t *lease)
 {
-    uint16_t index;
+    hk_app_host_fake_lease_t *record;
     hk_result_t result;
 
-    (void)deadline;
     if(!lease)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
     if(hk_lease_is_zero(lease))
         return HK_OK;
-    result = validate_handle(owner, lease, id, &index);
+    result = validate_handle(owner, lease, id, NULL);
     if(result != HK_OK)
         return result;
-    s_active_fake->capability_active[index] = 0U;
+    record = lease_record(s_active_fake, lease);
+    if(!record)
+        return HK_ERR_STALE_HANDLE;
+    {
+        uint32_t generation = record->lease.generation;
+
+        memset(record, 0, sizeof(*record));
+        record->lease.generation = generation;
+    }
     *lease = HK_LEASE_NONE;
     return HK_OK;
 }
@@ -1178,7 +1382,7 @@ hk_result_t hk_time_acquire(
     if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
     return acquire_capability(
-        owner, request, HK_CAPABILITY_ID_TIME, &handle->lease);
+        owner, request, HK_CAPABILITY_ID_TIME, 0U, &handle->lease);
 }
 
 hk_result_t hk_time_release(
@@ -1215,16 +1419,18 @@ hk_result_t hk_time_deadline_after_us(
 {
     hk_result_t result;
 
-    if(!deadline || duration_us == 0U)
+    if(!deadline)
         return HK_ERR_INVALID_ARGUMENT;
+    deadline->at_us = 0U;
     result = handle
                  ? validate_handle(
                        owner, &handle->lease, HK_CAPABILITY_ID_TIME, NULL)
                  : HK_ERR_INVALID_ARGUMENT;
     if(result != HK_OK)
         return result;
-    if(s_active_fake->now_us > UINT64_MAX - duration_us)
-        return HK_ERR_OVERFLOW;
+    if(duration_us > HK_TIME_MAX_SLEEP_US ||
+       duration_us >= UINT64_MAX - s_active_fake->now_us)
+        return HK_ERR_LIMIT;
     deadline->at_us = s_active_fake->now_us + duration_us;
     return HK_OK;
 }
@@ -1237,22 +1443,46 @@ hk_result_t hk_time_sleep_until(
     const hk_cancel_t *cancel)
 {
     hk_result_t result;
+    uint64_t now;
 
+    if(wake_target.at_us == UINT64_MAX ||
+       operation_deadline.at_us == UINT64_MAX)
+        return HK_ERR_INVALID_ARGUMENT;
     result = handle
                  ? validate_handle(
                        owner, &handle->lease, HK_CAPABILITY_ID_TIME, NULL)
                  : HK_ERR_INVALID_ARGUMENT;
     if(result != HK_OK)
         return result;
+    now = s_active_fake->now_us;
+    if(now >= wake_target.at_us)
+        return HK_OK;
     if(cancel && cancel->probe && cancel->probe(cancel->context))
         return HK_ERR_CANCELLED;
-    if(operation_deadline.at_us == UINT64_MAX ||
-       wake_target.at_us > operation_deadline.at_us ||
-       operation_deadline.at_us <= s_active_fake->now_us)
+    if(operation_deadline.at_us == 0U || now >= operation_deadline.at_us)
         return HK_ERR_DEADLINE_EXCEEDED;
-    if(wake_target.at_us > s_active_fake->now_us)
-        s_active_fake->now_us = wake_target.at_us;
-    return HK_OK;
+    if(wake_target.at_us - now > HK_TIME_MAX_SLEEP_US ||
+       operation_deadline.at_us - now > HK_TIME_MAX_SLEEP_US)
+        return HK_ERR_LIMIT;
+    while(1)
+    {
+        uint64_t stop_at = wake_target.at_us < operation_deadline.at_us ?
+            wake_target.at_us : operation_deadline.at_us;
+        uint64_t slice_us = stop_at - now;
+
+        if(slice_us > HK_TIME_CANCEL_PROBE_MAX_US)
+            slice_us = HK_TIME_CANCEL_PROBE_MAX_US;
+        if(slice_us == 0U)
+            return HK_ERR_INTERNAL;
+        now += slice_us;
+        s_active_fake->now_us = now;
+        if(now >= wake_target.at_us)
+            return HK_OK;
+        if(cancel && cancel->probe && cancel->probe(cancel->context))
+            return HK_ERR_CANCELLED;
+        if(now >= operation_deadline.at_us)
+            return HK_ERR_DEADLINE_EXCEEDED;
+    }
 }
 
 hk_result_t hk_input_acquire(
@@ -1263,7 +1493,7 @@ hk_result_t hk_input_acquire(
     if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
     return acquire_capability(
-        owner, request, HK_CAPABILITY_ID_INPUT, &handle->lease);
+        owner, request, HK_CAPABILITY_ID_INPUT, 0U, &handle->lease);
 }
 
 hk_result_t hk_input_release(
@@ -1319,6 +1549,8 @@ hk_result_t hk_input_next_event(
     const hk_input_t *handle,
     hk_input_event_t *event)
 {
+    hk_app_host_fake_lease_t *record;
+    uint64_t oldest;
     hk_result_t result;
 
     if(!handle || !event)
@@ -1326,12 +1558,33 @@ hk_result_t hk_input_next_event(
     result = validate_handle(owner, &handle->lease, HK_CAPABILITY_ID_INPUT, NULL);
     if(result != HK_OK)
         return result;
-    if(s_active_fake->input_count == 0U)
+    memset(event, 0, sizeof(*event));
+    record = lease_record(s_active_fake, &handle->lease);
+    if(!record)
+        return HK_ERR_STALE_HANDLE;
+    if(record->input_next_sequence > s_active_fake->input_sequence)
         return HK_PENDING;
-    *event = s_active_fake->input_events[s_active_fake->input_head];
-    s_active_fake->input_head = (uint16_t)(
-        (s_active_fake->input_head + 1U) % HK_APP_HOST_FAKE_INPUT_CAPACITY);
-    s_active_fake->input_count--;
+    oldest = s_active_fake->input_sequence >= HK_APP_HOST_FAKE_INPUT_CAPACITY ?
+        s_active_fake->input_sequence - HK_APP_HOST_FAKE_INPUT_CAPACITY + 1U :
+        1U;
+    if(record->input_next_sequence < oldest)
+    {
+        uint64_t dropped =
+            s_active_fake->input_sequence - record->input_next_sequence + 1U;
+
+        event->sequence = s_active_fake->input_sequence;
+        event->timestamp_us = s_active_fake->input_events[
+            (s_active_fake->input_sequence - 1U) %
+            HK_APP_HOST_FAKE_INPUT_CAPACITY].timestamp_us;
+        event->state = s_active_fake->input_state;
+        event->dropped = dropped > UINT32_MAX ? UINT32_MAX : (uint32_t)dropped;
+        record->input_next_sequence = s_active_fake->input_sequence + 1U;
+        return HK_ERR_OVERFLOW;
+    }
+    *event = s_active_fake->input_events[
+        (record->input_next_sequence - 1U) %
+        HK_APP_HOST_FAKE_INPUT_CAPACITY];
+    record->input_next_sequence++;
     return HK_OK;
 }
 
@@ -1341,10 +1594,14 @@ hk_result_t hk_display_acquire(
     uint32_t plane,
     hk_display_t *handle)
 {
-    if(!handle || plane != HK_DISPLAY_PLANE_BASE)
+    if(!handle ||
+       (plane != HK_DISPLAY_PLANE_BASE && plane != HK_DISPLAY_PLANE_OVERLAY))
         return HK_ERR_INVALID_ARGUMENT;
+    handle->lease = HK_LEASE_NONE;
+    if(plane == HK_DISPLAY_PLANE_OVERLAY)
+        return HK_ERR_FEATURE_UNAVAILABLE;
     return acquire_capability(
-        owner, request, HK_CAPABILITY_ID_DISPLAY, &handle->lease);
+        owner, request, HK_CAPABILITY_ID_DISPLAY, plane, &handle->lease);
 }
 
 hk_result_t hk_display_release(
@@ -1375,37 +1632,135 @@ hk_result_t hk_display_get_info(
         s_active_fake->config.display_width,
         s_active_fake->config.display_height,
         HK_DISPLAY_FORMAT_RGB565_BE, HK_DISPLAY_PLANE_BASE,
-        2U, 2U, 32U, 128U, HK_APP_MAX_INVALIDATIONS, 1U,
-        1024U, 100000U, 0U,
+        2U, 2U, HK_APP_HOST_FAKE_DISPLAY_MAX_COMMANDS,
+        HK_APP_HOST_FAKE_DISPLAY_MAX_TEXT_BYTES,
+        HK_APP_HOST_FAKE_DISPLAY_MAX_DIRTY_RECTS,
+        s_active_fake->config.display_surface.data ? 1U : 0U,
+        1024U, HK_APP_HOST_FAKE_DISPLAY_MAX_PRESENT_US, 0U,
     };
     return HK_OK;
 }
 
-static hk_result_t display_operation(
+static hk_result_t display_record(
     hk_owner_t owner,
-    const hk_display_t *handle)
+    const hk_display_t *handle,
+    hk_app_host_fake_lease_t **record)
 {
     hk_result_t result;
 
-    if(!handle)
+    if(!handle || !record)
         return HK_ERR_INVALID_ARGUMENT;
-    result = validate_handle(owner, &handle->lease, HK_CAPABILITY_ID_DISPLAY, NULL);
-    if(result == HK_OK)
-        s_active_fake->display_operations++;
-    return result;
+    result = validate_handle(
+        owner, &handle->lease, HK_CAPABILITY_ID_DISPLAY, NULL);
+    if(result != HK_OK)
+        return result;
+    *record = lease_record(s_active_fake, &handle->lease);
+    return *record ? HK_OK : HK_ERR_STALE_HANDLE;
+}
+
+static hk_result_t clip_rect(
+    const hk_app_host_fake_lease_t *record,
+    const hk_display_rect_t *rect,
+    hk_display_rect_t *clipped,
+    uint8_t *visible)
+{
+    int64_t left;
+    int64_t top;
+    int64_t right;
+    int64_t bottom;
+    int64_t clip_right;
+    int64_t clip_bottom;
+
+    if(!record || !rect || !clipped || !visible)
+        return HK_ERR_INVALID_ARGUMENT;
+    *visible = 0U;
+    memset(clipped, 0, sizeof(*clipped));
+    if(rect->width == 0U || rect->height == 0U)
+        return HK_OK;
+    right = (int64_t)rect->x + rect->width;
+    bottom = (int64_t)rect->y + rect->height;
+    if(right > INT32_MAX || bottom > INT32_MAX ||
+       right < INT32_MIN || bottom < INT32_MIN)
+        return HK_ERR_INVALID_ARGUMENT;
+    clip_right = (int64_t)record->display_clip.x +
+        record->display_clip.width;
+    clip_bottom = (int64_t)record->display_clip.y +
+        record->display_clip.height;
+    left = rect->x > record->display_clip.x ?
+        rect->x : record->display_clip.x;
+    top = rect->y > record->display_clip.y ?
+        rect->y : record->display_clip.y;
+    if(right > clip_right)
+        right = clip_right;
+    if(bottom > clip_bottom)
+        bottom = clip_bottom;
+    if(right <= left || bottom <= top)
+        return HK_OK;
+    *clipped = (hk_display_rect_t){
+        (int32_t)left, (int32_t)top,
+        (uint32_t)(right - left), (uint32_t)(bottom - top),
+    };
+    *visible = 1U;
+    return HK_OK;
+}
+
+static void reset_display_stage(hk_app_host_fake_lease_t *record)
+{
+    record->display_state = HK_APP_HOST_FAKE_DISPLAY_IDLE;
+    record->display_commands = 0U;
+    record->display_text_bytes = 0U;
+    record->display_dirty_rects = 0U;
+    record->display_clip = (hk_display_rect_t){
+        0, 0, s_active_fake->config.display_width,
+        s_active_fake->config.display_height,
+    };
+}
+
+static hk_result_t stage_rect_command(
+    hk_owner_t owner,
+    const hk_display_t *handle,
+    const hk_display_rect_t *rect,
+    uint16_t text_bytes)
+{
+    hk_app_host_fake_lease_t *record;
+    hk_display_rect_t clipped;
+    hk_result_t result = display_record(owner, handle, &record);
+    uint8_t visible;
+
+    if(result != HK_OK)
+        return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_BATCH)
+        return HK_ERR_INVALID_STATE;
+    result = clip_rect(record, rect, &clipped, &visible);
+    if(result != HK_OK || !visible)
+        return result;
+    if(record->display_commands >= HK_APP_HOST_FAKE_DISPLAY_MAX_COMMANDS ||
+       record->display_dirty_rects >=
+           HK_APP_HOST_FAKE_DISPLAY_MAX_DIRTY_RECTS ||
+       text_bytes > HK_APP_HOST_FAKE_DISPLAY_MAX_TEXT_BYTES -
+           record->display_text_bytes)
+        return HK_ERR_LIMIT;
+    record->display_commands++;
+    record->display_dirty_rects++;
+    record->display_text_bytes =
+        (uint16_t)(record->display_text_bytes + text_bytes);
+    s_active_fake->display_operations++;
+    return HK_OK;
 }
 
 hk_result_t hk_display_begin_batch(
     hk_owner_t owner,
     const hk_display_t *handle)
 {
-    hk_result_t result = display_operation(owner, handle);
+    hk_app_host_fake_lease_t *record;
+    hk_result_t result = display_record(owner, handle, &record);
 
     if(result != HK_OK)
         return result;
-    if(s_active_fake->display_batch_active)
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_IDLE)
         return HK_ERR_INVALID_STATE;
-    s_active_fake->display_batch_active = 1U;
+    reset_display_stage(record);
+    record->display_state = HK_APP_HOST_FAKE_DISPLAY_BATCH;
     return HK_OK;
 }
 
@@ -1414,9 +1769,34 @@ hk_result_t hk_display_set_clip(
     const hk_display_t *handle,
     const hk_display_rect_t *clip)
 {
-    return clip && clip->width > 0U && clip->height > 0U
-               ? display_operation(owner, handle)
-               : HK_ERR_INVALID_ARGUMENT;
+    hk_app_host_fake_lease_t *record;
+    hk_app_host_fake_lease_t validation;
+    hk_display_rect_t full;
+    hk_display_rect_t clipped;
+    hk_result_t result = display_record(owner, handle, &record);
+    uint8_t visible;
+
+    if(result != HK_OK)
+        return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_BATCH)
+        return HK_ERR_INVALID_STATE;
+    full = (hk_display_rect_t){
+        0, 0, s_active_fake->config.display_width,
+        s_active_fake->config.display_height,
+    };
+    if(!clip)
+    {
+        record->display_clip = full;
+        return HK_OK;
+    }
+    validation = *record;
+    validation.display_clip = full;
+    result = clip_rect(&validation, clip, &clipped, &visible);
+    if(result != HK_OK)
+        return result;
+    record->display_clip = visible ? clipped :
+        (hk_display_rect_t){0, 0, 0U, 0U};
+    return HK_OK;
 }
 
 hk_result_t hk_display_clear(
@@ -1424,8 +1804,22 @@ hk_result_t hk_display_clear(
     const hk_display_t *handle,
     uint16_t rgb565)
 {
+    hk_app_host_fake_lease_t *record;
+    hk_result_t result = display_record(owner, handle, &record);
+
     (void)rgb565;
-    return display_operation(owner, handle);
+    if(result != HK_OK)
+        return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_BATCH)
+        return HK_ERR_INVALID_STATE;
+    if(record->display_commands >= HK_APP_HOST_FAKE_DISPLAY_MAX_COMMANDS ||
+       record->display_dirty_rects >=
+           HK_APP_HOST_FAKE_DISPLAY_MAX_DIRTY_RECTS)
+        return HK_ERR_LIMIT;
+    record->display_commands++;
+    record->display_dirty_rects++;
+    s_active_fake->display_operations++;
+    return HK_OK;
 }
 
 hk_result_t hk_display_fill_rect(
@@ -1435,9 +1829,8 @@ hk_result_t hk_display_fill_rect(
     uint16_t rgb565)
 {
     (void)rgb565;
-    return rect && rect->width > 0U && rect->height > 0U
-               ? display_operation(owner, handle)
-               : HK_ERR_INVALID_ARGUMENT;
+    return rect ? stage_rect_command(owner, handle, rect, 0U) :
+        HK_ERR_INVALID_ARGUMENT;
 }
 
 hk_result_t hk_display_stroke_rect(
@@ -1458,9 +1851,9 @@ hk_result_t hk_display_text(
     uint16_t rgb565)
 {
     (void)rgb565;
-    return bounds && utf8 && size_bytes > 0U
-               ? display_operation(owner, handle)
-               : HK_ERR_INVALID_ARGUMENT;
+    if(!bounds || !utf8 || size_bytes == 0U || size_bytes > UINT16_MAX)
+        return HK_ERR_INVALID_ARGUMENT;
+    return stage_rect_command(owner, handle, bounds, (uint16_t)size_bytes);
 }
 
 hk_result_t hk_display_blit(
@@ -1470,10 +1863,32 @@ hk_result_t hk_display_blit(
     const hk_buffer_view_t *pixels,
     uint32_t pixel_format)
 {
-    (void)pixel_format;
-    return destination && pixels && pixels->data && pixels->size_bytes > 0U
-               ? display_operation(owner, handle)
-               : HK_ERR_INVALID_ARGUMENT;
+    hk_app_host_fake_lease_t *record;
+    hk_display_rect_t clipped;
+    hk_result_t result;
+    uint8_t visible;
+    uint64_t required;
+
+    if(!destination)
+        return HK_ERR_INVALID_ARGUMENT;
+    result = display_record(owner, handle, &record);
+    if(result != HK_OK)
+        return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_BATCH)
+        return HK_ERR_INVALID_STATE;
+    result = clip_rect(record, destination, &clipped, &visible);
+    if(result != HK_OK || !visible)
+        return result;
+    if(!pixels || !pixels->data ||
+       pixel_format != HK_DISPLAY_FORMAT_RGB565_BE ||
+       (pixels->flags & HK_BUFFER_ACCESS_READABLE) == 0U ||
+       (((uintptr_t)pixels->data) & 1U) != 0U ||
+       pixels->stride_bytes < (uint64_t)destination->width * 2U)
+        return HK_ERR_INVALID_ARGUMENT;
+    required = (uint64_t)pixels->stride_bytes * destination->height;
+    if(required > pixels->size_bytes)
+        return HK_ERR_INVALID_ARGUMENT;
+    return stage_rect_command(owner, handle, destination, 0U);
 }
 
 hk_result_t hk_display_mark_dirty(
@@ -1481,9 +1896,28 @@ hk_result_t hk_display_mark_dirty(
     const hk_display_t *handle,
     const hk_display_rect_t *rect)
 {
-    return rect && rect->width > 0U && rect->height > 0U
-               ? display_operation(owner, handle)
-               : HK_ERR_INVALID_ARGUMENT;
+    hk_app_host_fake_lease_t *record;
+    hk_display_rect_t clipped;
+    hk_result_t result;
+    uint8_t visible;
+
+    if(!rect)
+        return HK_ERR_INVALID_ARGUMENT;
+    result = display_record(owner, handle, &record);
+    if(result != HK_OK)
+        return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_BATCH &&
+       record->display_state != HK_APP_HOST_FAKE_DISPLAY_SURFACE)
+        return HK_ERR_INVALID_STATE;
+    result = clip_rect(record, rect, &clipped, &visible);
+    if(result != HK_OK || !visible)
+        return result;
+    if(record->display_dirty_rects >=
+       HK_APP_HOST_FAKE_DISPLAY_MAX_DIRTY_RECTS)
+        return HK_ERR_LIMIT;
+    record->display_dirty_rects++;
+    s_active_fake->display_operations++;
+    return HK_OK;
 }
 
 hk_result_t hk_display_surface_acquire(
@@ -1491,19 +1925,27 @@ hk_result_t hk_display_surface_acquire(
     const hk_display_t *handle,
     hk_display_surface_t *surface)
 {
+    hk_app_host_fake_lease_t *record;
     hk_result_t result;
 
     if(!surface)
         return HK_ERR_INVALID_ARGUMENT;
-    result = display_operation(owner, handle);
+    result = display_record(owner, handle, &record);
     if(result != HK_OK)
         return result;
+    if(record->display_state != HK_APP_HOST_FAKE_DISPLAY_IDLE)
+        return HK_ERR_INVALID_STATE;
+    if(!s_active_fake->config.display_surface.data)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    reset_display_stage(record);
+    record->display_state = HK_APP_HOST_FAKE_DISPLAY_SURFACE;
     memset(surface, 0, sizeof(*surface));
     surface->struct_size = sizeof(*surface);
     surface->struct_version = HK_DISPLAY_SURFACE_VERSION;
     surface->width = s_active_fake->config.display_width;
     surface->height = s_active_fake->config.display_height;
     surface->pixel_format = HK_DISPLAY_FORMAT_RGB565_BE;
+    surface->pixels = s_active_fake->config.display_surface;
     return HK_OK;
 }
 
@@ -1513,17 +1955,21 @@ hk_result_t hk_display_present(
     hk_deadline_t deadline,
     const hk_cancel_t *cancel)
 {
-    hk_result_t result = display_operation(owner, handle);
+    hk_app_host_fake_lease_t *record;
+    hk_result_t result;
 
+    if(deadline.at_us == UINT64_MAX)
+        return HK_ERR_INVALID_ARGUMENT;
+    result = display_record(owner, handle, &record);
     if(result != HK_OK)
         return result;
+    if(record->display_state == HK_APP_HOST_FAKE_DISPLAY_IDLE)
+        return HK_ERR_INVALID_STATE;
     if(cancel && cancel->probe && cancel->probe(cancel->context))
         return HK_ERR_CANCELLED;
-    if(deadline.at_us == UINT64_MAX || deadline.at_us <= s_active_fake->now_us)
+    if(deadline.at_us == 0U || deadline.at_us <= s_active_fake->now_us)
         return HK_ERR_DEADLINE_EXCEEDED;
-    if(!s_active_fake->display_batch_active)
-        return HK_ERR_INVALID_STATE;
-    s_active_fake->display_batch_active = 0U;
+    reset_display_stage(record);
     s_active_fake->display_present_calls++;
     return HK_OK;
 }
@@ -1532,9 +1978,13 @@ hk_result_t hk_display_abort(
     hk_owner_t owner,
     const hk_display_t *handle)
 {
-    hk_result_t result = display_operation(owner, handle);
+    hk_app_host_fake_lease_t *record;
+    hk_result_t result = display_record(owner, handle, &record);
 
-    if(result == HK_OK)
-        s_active_fake->display_batch_active = 0U;
-    return result;
+    if(result != HK_OK)
+        return result;
+    if(record->display_state == HK_APP_HOST_FAKE_DISPLAY_IDLE)
+        return HK_ERR_INVALID_STATE;
+    reset_display_stage(record);
+    return HK_OK;
 }

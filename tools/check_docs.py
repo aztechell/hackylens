@@ -300,6 +300,19 @@ APP_SDK_CORE_REQUIREMENTS = {
             "Feature App SDK must define the deterministic fixed host fake",
         ),
         (
+            r"manifest-equivalent[\s\S]*`state_bytes`[\s\S]*automatic\s+"
+            r"initial\s+full\s+invalidation[\s\S]*only\s+in\s+`RUNNING`"
+            r"[\s\S]*`HK_ERR_INVALID_STATE`",
+            "Feature App SDK host fake must match Runtime state and limit semantics",
+        ),
+        (
+            r"every\s+Input\s+lease[\s\S]*independent\s+sequence\s+cursor"
+            r"[\s\S]*`HK_ERR_OVERFLOW`[\s\S]*`HK_TIME_MAX_SLEEP_US`"
+            r"[\s\S]*`UINT64_MAX`[\s\S]*zero-area\s+rectangles"
+            r"[\s\S]*`set_clip\(NULL\)`[\s\S]*validation\s+failure",
+            "Feature App SDK host fake must preserve Phase 2 Capability semantics",
+        ),
+        (
             r"add_subdirectory[\s\S]*HackyLens::AppSDK[\s\S]*"
             r"HackyLens::AppHostFake[\s\S]*hackylens-app-sdk\.mk",
             "Feature App SDK must define CMake and Make standalone integration",
@@ -315,6 +328,11 @@ APP_SDK_CORE_REQUIREMENTS = {
             r"dependency\s+outside\s+the\s+App\s+SDK[\s\S]*app's\s+own\s+"
             r"private\s+headers",
             "Feature App SDK must preserve the SDK-only app dependency rule",
+        ),
+        (
+            r"bounded\s+allocation-free\s+C\+\+17\s+standard-header"
+            r"[\s\S]*`<array>`[\s\S]*`<cstdint>`[\s\S]*third-party\s+headers",
+            "Feature App SDK must define the bounded C++ standard-header policy",
         ),
     ),
 }
