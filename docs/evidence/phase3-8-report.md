@@ -2,8 +2,8 @@
 
 Пакет: `3.8 — Feature App SDK core и host fake`
 
-Статус: `in_progress` на время corrective work по эквивалентности host fake
-production Runtime и Phase 2 Capability contracts.
+Статус: `completed` после corrective work по эквивалентности host fake
+production Runtime и Phase 2 Capability contracts и зелёного exact-commit CI.
 
 Ветка: `phase-3-work`
 
@@ -102,6 +102,11 @@ impact-based основания.
   `218ebd48fc74e3ee9c3cafbab7f7739740b7fefd`.
 - Normal-push Release firmware CI для exact implementation commit:
   [run 33383313479](https://github.com/aztechell/hackylens/actions/runs/33383313479),
+  `success`.
+- Corrective implementation commit:
+  `3695faa24a581aa0797a20174e76ef7d05722a25`.
+- Normal-push Release firmware CI для exact corrective commit:
+  [run 33655299914](https://github.com/aztechell/hackylens/actions/runs/33655299914),
   `success`.
 
 Все восемь scope items пакета отмечены выполненными только после зелёного
