@@ -313,7 +313,7 @@ storage format не меняется.
 Риск: **средний–высокий**. Цель — убрать duplicate host state machine без
 изменения public lifecycle.
 
-Статус: `[~]`.
+Статус: `[x]`.
 
 ### Цель
 
