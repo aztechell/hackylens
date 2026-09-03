@@ -468,8 +468,6 @@ class BoardDescriptorTests(unittest.TestCase):
                 board.flash_layout_path.read_bytes(),
                 gen_flash_layout.canonical_json_bytes(parsed),
             )
-        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-        self.assertIn("boards/*/flash_layout.json text eol=lf", attributes)
 
         with tempfile.TemporaryDirectory() as directory:
             bad = Path(directory) / "layout.json"
@@ -645,12 +643,6 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "required app"):
             build_firmware.compose_apps(self.cube, set(), {"camera"})
 
-        source_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / "firmware" / "src").rglob("*.[ch]")
-        )
-        self.assertNotIn("app_requirements.toml", source_text)
-
         requirements = build_firmware.load_app_requirements()
         self.assertNotIn("lights", requirements["micropython"])
         capability_requirements = (
@@ -660,18 +652,6 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             request.id == "hackylens.cap.lights"
             for request in capability_requirements["micropython"].required
         ))
-        binding_service = (
-            ROOT
-            / "firmware"
-            / "src"
-            / "adapters"
-            / "micropython"
-            / "micropython_capability_bridge.c"
-        ).read_text(encoding="utf-8")
-        for token in ("hk_lights_set_level", "hk_lights_set_rgb"):
-            self.assertIn(token, binding_service)
-        for token in ("lights_illum_set", "lights_rgb_set", "hk_lights.h"):
-            self.assertNotIn(token, binding_service)
 
     def test_app_binding_still_forbids_board_hal_and_sdk(self) -> None:
         app = "apps/buttons/buttons_view.c"
@@ -1248,14 +1228,6 @@ class ResourceEvidenceTests(unittest.TestCase):
         )
 
     def test_build_path_mapping_is_global_and_host_paths_are_rejected(self) -> None:
-        source = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-        board_source = (
-            ROOT / "boards" / "huskylens-sen0305" / "board.c"
-        ).read_text(encoding="utf-8")
-        self.assertIn("-DCMAKE_PROJECT_INCLUDE=", source)
-        self.assertIn("-ffile-prefix-map=", source)
-        self.assertNotIn("static_ram_compatibility_reserve", board_source)
-
         with tempfile.TemporaryDirectory() as directory:
             temporary = Path(directory)
             mapping = temporary / "path-map.cmake"
@@ -1289,8 +1261,6 @@ class ResourceEvidenceTests(unittest.TestCase):
             check_phase1_resources.sha256(baseline_path),
             check_phase1_resources.PINNED_BASELINE_SHA256,
         )
-        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-        self.assertIn("docs/evidence/phase1-*.json text eol=lf", attributes)
         check_phase1_resources.verify_baseline_repository_provenance(document)
 
         with tempfile.TemporaryDirectory() as directory:

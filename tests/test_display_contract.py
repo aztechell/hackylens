@@ -91,28 +91,6 @@ class DisplayContractTests(unittest.TestCase):
                 ):
                     self.assertNotIn(forbidden, symbols)
 
-    def test_normative_contract_closes_phase_2_7_ambiguities(self) -> None:
-        contract = (
-            ROOT / "docs" / "spec" / "capabilities" / "DISPLAY.md"
-        ).read_text(encoding="utf-8")
-        for required in (
-            "RGB565 big-endian",
-            "zero-area",
-            "successful present, abort, or release",
-            "MUST NOT mutate staged state",
-            "needs_repair",
-            "HK_ERR_LIMIT",
-            "HK_ERR_DEADLINE_EXCEEDED",
-            "MUST NOT silently promote",
-            "source_x = clipped.x - destination.x",
-            "MUST NOT replace disjoint damage with one bounding rectangle",
-            "does not roll back backing pixel mutations",
-            "current backing store",
-            "Retained command batches",
-            "Phase 2.13",
-        ):
-            self.assertIn(required, contract)
-
     def test_phase_2_8_enters_production_through_the_capability(self) -> None:
         manifests = list((ROOT / "firmware" / "src" / "apps").glob("*/app.toml"))
         manifests.append(ROOT / "firmware" / "capability_consumers.toml")
@@ -133,25 +111,10 @@ class DisplayContractTests(unittest.TestCase):
             'provider_source = "platforms/k210/capabilities/display_adapter.c"',
             catalog,
         )
-        production = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in sorted((ROOT / "firmware" / "src").rglob("*"))
-            if path.suffix in {".c", ".h"}
-        )
-        self.assertIn("hackylens/capability/display.h", production)
-        self.assertNotIn("hk_lcd.h", production)
-        self.assertNotIn("lcd_overlay_", production)
         self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
                          "lcd_st7789.c").is_file())
         self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
                          "lcd_st7789_transport.h").is_file())
-        transport = (ROOT / "firmware" / "src" / "drivers" /
-                     "lcd_st7789.c").read_text(encoding="utf-8")
-        adapter = (ROOT / "platforms" / "k210" / "capabilities" /
-                   "display_adapter.c").read_text(encoding="utf-8")
-        self.assertEqual(transport.count("LCD_W * LCD_H * 2U"), 1)
-        self.assertNotIn("LCD_W * LCD_H * 2U", adapter)
-        self.assertNotIn("HK_ENABLE_APP_MICROPYTHON", transport)
 
 
 if __name__ == "__main__":

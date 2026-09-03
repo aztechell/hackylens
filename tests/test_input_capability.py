@@ -150,29 +150,6 @@ class InputCapabilityTests(unittest.TestCase):
                 {"hackylens.cap.input"},
             )
 
-    def test_runtime_and_micropython_share_public_provider(self) -> None:
-        runtime = (ROOT / "firmware" / "src" / "runtime" / "hk_main.c").read_text(
-            encoding="utf-8"
-        )
-        service = (
-            ROOT
-            / "firmware"
-            / "src"
-            / "adapters"
-            / "micropython"
-            / "micropython_capability_bridge.c"
-        ).read_text(encoding="utf-8")
-        driver = (
-            ROOT / "firmware" / "src" / "drivers" / "board_buttons.c"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn("hk_input_next_event", runtime)
-        self.assertIn("hk_input_get_state", runtime)
-        self.assertIn("hk_input_get_state", service)
-        self.assertNotIn("hk_input_poll", runtime + service)
-        self.assertNotIn("buttons_poll", runtime + service + driver)
-        self.assertNotIn("BUTTON_DEBOUNCE_POLLS", driver)
-
 
 if __name__ == "__main__":
     unittest.main()

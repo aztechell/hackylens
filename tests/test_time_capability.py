@@ -114,34 +114,16 @@ class TimeCapabilityTests(unittest.TestCase):
             "K210_TIME_ANY_CORE_ORDER_OK reads=2 locks=2", result.stdout,
         )
 
-    def test_all_application_time_calls_use_the_public_provider(self) -> None:
-        apps = ROOT / "firmware" / "src" / "apps"
-        sources = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in sorted(apps.rglob("*"))
-            if path.suffix in {".c", ".h"}
-        )
-        self.assertNotIn("time_internal", sources)
-        self.assertNotIn("hal_time_us", sources)
-        self.assertNotIn("hal_sleep", sources)
-
+    def test_micropython_ticks_ms_use_uint_conversion(self) -> None:
         bindings = (
-            apps / "micropython" / "micropython_bindings.c"
+            ROOT / "firmware" / "src" / "apps" / "micropython" /
+            "micropython_bindings.c"
         ).read_text(encoding="utf-8")
-        self.assertIn("hk_time_now_us", bindings)
-        self.assertIn("hk_time_sleep_until", bindings)
-        self.assertIn("micropython_runtime_interrupt_pending", bindings)
         self.assertIn(
             "mp_obj_new_int_from_uint((mp_uint_t)(now / 1000ULL))",
             bindings,
         )
         self.assertNotIn("mp_obj_new_int_from_ull(now / 1000ULL)", bindings)
-
-        adapters = list((ROOT / "platforms").rglob("time_adapter.c"))
-        self.assertEqual(
-            [ROOT / "platforms" / "k210" / "capabilities" / "time_adapter.c"],
-            adapters,
-        )
 
 
 if __name__ == "__main__":

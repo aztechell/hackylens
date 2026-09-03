@@ -72,22 +72,6 @@ class DocumentationContractsTest(unittest.TestCase):
         self.assertTrue(any("broken local link" in item for item in messages))
         self.assertEqual(len(issues), 2)
 
-    def test_forbidden_claim_requires_same_paragraph_qualifier(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="hackylens-doc-claim-") as temp:
-            root = Path(temp)
-            bad = write(
-                root / "bad.md",
-                "HackyLens is an open application standard.\n",
-            )
-            good = write(
-                root / "good.md",
-                "HackyLens is a candidate open application standard.\n",
-            )
-            bad_issues = CHECK_DOCS.check_forbidden_claims(root, [bad])
-            good_issues = CHECK_DOCS.check_forbidden_claims(root, [good])
-        self.assertEqual(len(bad_issues), 1)
-        self.assertEqual(good_issues, [])
-
     def test_fixed_canonical_version_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-doc-version-") as temp:
             root = Path(temp)

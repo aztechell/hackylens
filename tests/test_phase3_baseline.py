@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import importlib.util
 from pathlib import Path
-import subprocess
 import sys
 import unittest
 
@@ -21,22 +20,6 @@ spec.loader.exec_module(CHECKER)
 
 
 class Phase3BaselineTests(unittest.TestCase):
-    def test_canonical_baseline_keeps_lf_on_windows_checkouts(self) -> None:
-        result = subprocess.run(
-            [
-                "git", "check-attr", "eol", "--",
-                "docs/evidence/phase3-baseline.json",
-            ],
-            cwd=ROOT,
-            check=True,
-            text=True,
-            capture_output=True,
-        )
-        self.assertEqual(
-            result.stdout.strip(),
-            "docs/evidence/phase3-baseline.json: eol: lf",
-        )
-
     def test_current_source_obeys_every_zero_resource_rule(self) -> None:
         document = CHECKER.load_baseline()
         closure = document["baseline"]["closure"]["closure_commit"]

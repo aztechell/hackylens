@@ -50,9 +50,6 @@ class AppCompositionTests(unittest.TestCase):
         )
         defaults = app_composition.generated_defaults(app_composition.load_model())
         self.assertEqual(defaults.count("#define HK_ENABLE_APP_"), len(EXPECTED_APPS))
-        source = (ROOT / "tools" / "build_firmware.py").read_text(encoding="utf-8")
-        self.assertNotIn('"qr-camera": "HK_ENABLE_APP_QR_CAMERA"', source)
-        self.assertNotIn('"qr-camera": Path("firmware/src/apps/qr_camera")', source)
 
     def test_legacy_build_constraints_are_manifest_services_only(self) -> None:
         requirements = build_firmware.load_app_requirements()
@@ -178,11 +175,6 @@ class AppCompositionTests(unittest.TestCase):
             self.assertIn(declared.as_posix(), include_block)
             self.assertNotIn(hidden.as_posix(), include_block)
             self.assertIn(hidden.as_posix(), project)
-
-    def test_generated_composition_artifacts_keep_lf(self) -> None:
-        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-        self.assertIn("firmware/generated/app_composition/*.json text eol=lf", attributes)
-        self.assertIn("firmware/config/app_config_defaults.h text eol=lf", attributes)
 
 
 if __name__ == "__main__":

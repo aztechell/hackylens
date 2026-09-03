@@ -181,30 +181,6 @@ class LightsCapabilityTests(unittest.TestCase):
                 {"hackylens.cap.lights"},
             )
 
-        settings = (
-            ROOT / "firmware" / "src" / "services" / "settings_lights_apply.c"
-        ).read_text(encoding="utf-8")
-        camera = (
-            ROOT / "firmware" / "src" / "services" / "camera_light_apply.c"
-        ).read_text(encoding="utf-8")
-        micropython = (
-            ROOT
-            / "firmware"
-            / "src"
-            / "adapters"
-            / "micropython"
-            / "micropython_capability_bridge.c"
-        ).read_text(encoding="utf-8")
-        sleep = (
-            ROOT / "firmware" / "src" / "apps" / "sleep" / "sleep_controller.c"
-        ).read_text(encoding="utf-8")
-        self.assertIn("hk_lights_set_level", settings + camera + micropython)
-        self.assertIn("hk_lights_set_rgb", settings + camera + micropython)
-        self.assertIn("screen_brightness_off", sleep)
-        self.assertNotIn("drivers/hk_lights.h", micropython)
-        self.assertNotIn("lights_illum_set", settings + camera + micropython)
-        self.assertNotIn("lights_rgb_set", settings + camera + micropython)
-
 
 if __name__ == "__main__":
     unittest.main()

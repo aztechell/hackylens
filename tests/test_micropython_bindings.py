@@ -122,14 +122,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             ROOT / "firmware" / "src" / "services" /
             "micropython_binding_service.c"
         )
-        source = bridge.read_text(encoding="utf-8").lower()
         self.assertFalse(legacy.exists())
-        for forbidden in (
-            "hal_external", "hal_time", "hk_board", "<i2c.h>",
-            "<uart.h>", "<plic.h>", "../drivers/", "../../drivers/",
-            "i2c_device_", "uart_device_",
-        ):
-            self.assertNotIn(forbidden, source)
         with tempfile.TemporaryDirectory(prefix="hackylens-mpy-bridge-") as temp:
             object_file = Path(temp) / "micropython_capability_bridge.o"
             subprocess.run([

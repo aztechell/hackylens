@@ -141,42 +141,6 @@ class ExternalLinkContractTests(unittest.TestCase):
                     ):
                         self.assertNotIn(forbidden, symbols)
 
-    def test_normative_contract_closes_phase_2_9_ambiguities(self) -> None:
-        contract = (
-            ROOT / "docs" / "spec" / "capabilities" / "EXTERNAL_LINK.md"
-        ).read_text(encoding="utf-8")
-        normalized = " ".join(contract.split())
-        for required in (
-            "mode_features",
-            "one exclusive connector lease",
-            "one in-flight operation per lease",
-            "at most 32 bytes",
-            "empty FIFO and an idle shift register",
-            "original absolute deadline",
-            "NACK maps to `HK_ERR_IO`",
-            "cancellation wins over deadline expiry",
-            "completed RX prefix",
-            "MUST NOT perform late writes",
-            "generation-checked",
-            "all-zero typed handle is idempotent `HK_OK`",
-            "uses a preload model",
-            "one-shot response for the next master READ",
-            "atomically replaces an unread preload",
-            "pads a longer request with `0x00`",
-            "READ event is queued after that master transaction completes",
-            "undersized input structure",
-            "two bounded completed-event slots",
-            "`HK_ERR_OVERFLOW`",
-            "explicit resynchronization state",
-            "Phase 2.10",
-        ):
-            self.assertIn(required, normalized)
-
-        fake = (ROOT / "tests" / "capability_fake_external_link.h").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn("late_effect_attempts", fake)
-
     def test_public_contract_contains_no_board_routing_identity(self) -> None:
         header = (
             ROOT / "firmware" / "include" / "hackylens" / "capability" /

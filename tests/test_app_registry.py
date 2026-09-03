@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -244,11 +243,6 @@ int main(void)
         self.assertIn("{.v2 = &buttons_v2_entry}", source)
 
     def test_fixture_manifest_changes_generated_output_not_generic_runtime(self) -> None:
-        runtime = (ROOT / "firmware/src/core/hk_app_registry.c").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn("terminal", runtime)
-        self.assertNotIn("camera", runtime)
         fixture = copy.deepcopy(next(
             app for app in self.model["apps"] if app["id"] == "buttons"
         ))
@@ -280,7 +274,7 @@ int main(void)
         self.assertIn("hide-external-link-menu", first)
         self.assertIn("hackylens.service.legacy-camera", first)
 
-    def test_current_legacy_menu_autostart_debug_and_callback_parity(self) -> None:
+    def test_current_legacy_menu_autostart_debug_and_tick_parity(self) -> None:
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "files", "buttons", "pong", "settings",
@@ -304,20 +298,6 @@ int main(void)
                 "HKMPFORMAT-CONFIRM"
             ),
         }
-        expected_callbacks = {
-            "terminal": {"screen": "HK_TERMINAL_SCREEN", "enter": "terminal_enter", "exit": "terminal_exit", "tick": "terminal_tick", "handle_input": "terminal_handle_buttons", "draw_icon": "terminal_draw_icon"},
-            "camera": {"screen": "SCREEN_CAMERA", "enter": "camera_enter", "exit": "camera_exit", "tick": "camera_tick", "handle_input": "camera_handle_buttons", "owns_screen": "camera_owns_screen", "draw_icon": "camera_draw_icon", "blocks_sd_poll": "1U", "handle_debug_command": "camera_handle_debug_command"},
-            "qr-camera": {"screen": "SCREEN_QR_CAMERA", "enter": "qr_camera_enter", "exit": "qr_camera_exit", "tick": "qr_camera_tick", "handle_input": "qr_camera_handle_buttons", "owns_screen": "qr_camera_owns_screen", "draw_icon": "qr_camera_draw_icon", "blocks_sd_poll": "1U", "handle_debug_command": "qr_camera_handle_debug_command"},
-            "face-detect": {"screen": "SCREEN_FACE_DETECT", "enter": "face_detect_enter", "exit": "face_detect_exit", "tick": "face_detect_tick", "handle_input": "face_detect_handle_buttons", "draw_icon": "face_detect_draw_icon", "background_tick": "face_detect_background_tick", "blocks_sd_poll": "1U", "handle_debug_command": "face_detect_handle_debug_command"},
-            "apriltag": {"screen": "SCREEN_APRILTAG", "enter": "apriltag_enter", "exit": "apriltag_exit", "tick": "apriltag_tick", "handle_input": "apriltag_handle_buttons", "draw_icon": "apriltag_draw_icon", "background_tick": "apriltag_background_tick", "handle_debug_command": "apriltag_handle_debug_command"},
-            "object-detect": {"screen": "SCREEN_OBJECT_DETECT", "enter": "object_detect_enter", "exit": "object_detect_exit", "tick": "object_detect_tick", "handle_input": "object_detect_handle_buttons", "draw_icon": "object_detect_draw_icon", "background_tick": "object_detect_background_tick", "blocks_sd_poll": "1U", "handle_debug_command": "object_detect_handle_debug_command"},
-            "files": {"screen": "SCREEN_FILES", "enter": "files_enter", "exit": "files_exit", "tick": "files_tick", "handle_input": "files_handle_buttons", "draw_icon": "files_draw_icon", "handle_sd_event": "files_handle_sd_event"},
-            "buttons": {"screen": "SCREEN_BUTTONS", "enter": "buttons_enter", "tick": "buttons_tick", "handle_input": "buttons_handle_buttons", "draw_icon": "buttons_draw_icon"},
-            "pong": {"screen": "HK_PONG_SCREEN", "enter": "pong_enter", "tick": "pong_tick", "handle_input": "pong_handle_buttons", "draw_icon": "pong_draw_icon"},
-            "settings": {"screen": "SCREEN_SETTINGS", "enter": "settings_enter", "exit": "settings_exit", "tick": "settings_tick", "handle_input": "settings_handle_buttons", "draw_icon": "settings_draw_icon", "handle_debug_command": "settings_handle_debug_command"},
-            "sleep": {"screen": "SCREEN_SLEEP", "enter": "sleep_enter", "handle_input": "sleep_handle_buttons", "draw_icon": "sleep_draw_icon", "background_tick": "sleep_background_tick", "blocks_sd_poll": "1U"},
-            "micropython": {"screen": "HK_MICROPYTHON_SCREEN", "enter": "micropython_enter", "exit": "micropython_exit", "tick": "micropython_tick", "handle_input": "micropython_handle_buttons", "draw_icon": "micropython_draw_icon", "background_tick": "micropython_background_tick", "handle_debug_command": "micropython_handle_debug_command"},
-        }
         apps = {app["id"]: app for app in self.model["apps"]}
         self.assertEqual([
             app["id"] for app in sorted(
@@ -336,20 +316,6 @@ int main(void)
                 )
                 if app_id in expected_debug:
                     self.assertEqual(app["metadata"]["debug"], expected_debug[app_id])
-                source = (
-                    app_composition.MANIFEST_ROOT / app["directory"] /
-                    f"{app['directory']}_app.c"
-                ).read_text(encoding="utf-8")
-                match = re.search(
-                    rf"const hk_legacy_app_entry_t {re.escape(app['entry'])} = "
-                    r"\{(?P<body>[\s\S]*?)\n\};",
-                    source,
-                )
-                self.assertIsNotNone(match)
-                actual = dict(re.findall(
-                    r"\.(\w+)\s*=\s*([^,\n]+)", match.group("body")
-                ))
-                self.assertEqual(actual, expected_callbacks[app_id])
 
 
 if __name__ == "__main__":

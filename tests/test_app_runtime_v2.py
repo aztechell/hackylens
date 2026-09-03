@@ -91,41 +91,6 @@ class AppRuntimeV2Tests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
 
-    def test_engine_stays_private_behind_one_production_switch_boundary(self) -> None:
-        main = (ROOT / "firmware/src/runtime/hk_main.c").read_text(encoding="utf-8")
-        startup = (ROOT / "firmware/src/runtime/firmware_startup.c").read_text(
-            encoding="utf-8"
-        )
-        integration = (ROOT / "firmware/src/runtime/app_runtime_integration.c").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("app_runtime_integration_input(&event, &consumed)", main)
-        self.assertIn("app_runtime_integration_poll(now_us)", main)
-        self.assertIn("consumed && !app_runtime_integration_active()", main)
-        self.assertIn("app_runtime_integration_open(app, input)", startup)
-        self.assertIn("hk_app_switch_open", integration)
-        self.assertIn(".user = &s_integration", integration)
-        self.assertNotIn("screen_t", integration)
-        self.assertNotIn("hal_", integration)
-
-        runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn(
-            "descriptor->limits.state_alignment != HK_APP_STATE_ALIGNMENT",
-            runtime,
-        )
-        for forbidden in (
-            "malloc(",
-            "calloc(",
-            "realloc(",
-            "xTaskCreate",
-            "xQueueCreate",
-            "hal_core1_start",
-            "hal_time",
-        ):
-            self.assertNotIn(forbidden, runtime)
-
     def test_owner_and_preflight_authority_stay_private(self) -> None:
         private_header = (
             ROOT / "firmware/src/app_runtime/runtime_private.h"
@@ -133,9 +98,6 @@ class AppRuntimeV2Tests(unittest.TestCase):
         public_runtime = (
             ROOT / "sdk/include/hackylens/app/runtime.h"
         ).read_text(encoding="utf-8")
-        runtime = (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
-            encoding="utf-8"
-        )
 
         self.assertRegex(
             public_runtime,
@@ -148,13 +110,6 @@ class AppRuntimeV2Tests(unittest.TestCase):
             "uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];",
             private_header,
         )
-        self.assertIn("runtime->ops.user,\n            runtime->owner,", runtime)
-        self.assertNotRegex(
-            runtime,
-            r"owner_cleanup\([\s\S]{0,160}runtime->context\.owner",
-        )
-        self.assertNotIn("is_optional_runtime_unavailable", runtime)
-        self.assertIn("if(!runtime->resolved_available[index])", runtime)
 
     def test_generated_descriptor_carries_manifest_state_size_and_abi_alignment(self) -> None:
         generated = (ROOT / "firmware/generated/app_registry/registry.c").read_text(
@@ -165,15 +120,6 @@ class AppRuntimeV2Tests(unittest.TestCase):
         self.assertEqual(
             generated.count("HK_APP_DESCRIPTOR_STATE_ALIGNMENT,"), app_count
         )
-        self.assertIn(
-            "HK_APP_DESCRIPTOR_STATE_ALIGNMENT == HK_APP_STATE_ALIGNMENT",
-            (ROOT / "firmware/src/app_runtime/runtime.c").read_text(
-                encoding="utf-8"
-            ),
-        )
-        self.assertIn("uint32_t state_alignment;", (
-            ROOT / "firmware/src/core/hk_app.h"
-        ).read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

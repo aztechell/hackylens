@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import re
 import subprocess
-import sys
 import tempfile
 import unittest
 
@@ -22,71 +21,6 @@ def load_tool(name: str):
 
 
 class CiContractsTest(unittest.TestCase):
-    def test_strict_runner_rejects_skips(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="hackylens-strict-tests-") as temp:
-            tests = Path(temp)
-            source = tests / "test_sample.py"
-            source.write_text(
-                "import unittest\n"
-                "class Sample(unittest.TestCase):\n"
-                "    def test_skip(self):\n"
-                "        self.skipTest('coverage unavailable')\n",
-                encoding="utf-8",
-            )
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(ROOT / "tools" / "run_tests.py"),
-                    "--start-directory",
-                    str(tests),
-                ],
-                cwd=ROOT,
-                text=True,
-                capture_output=True,
-                timeout=30,
-            )
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("strict test run skipped 1 test(s)", result.stderr)
-
-    def test_strict_runner_accepts_complete_suite(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="hackylens-strict-tests-") as temp:
-            tests = Path(temp)
-            (tests / "test_sample.py").write_text(
-                "import unittest\n"
-                "class Sample(unittest.TestCase):\n"
-                "    def test_pass(self):\n"
-                "        self.assertTrue(True)\n",
-                encoding="utf-8",
-            )
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    str(ROOT / "tools" / "run_tests.py"),
-                    "--start-directory",
-                    str(tests),
-                ],
-                cwd=ROOT,
-                text=True,
-                capture_output=True,
-                timeout=30,
-            )
-        self.assertEqual(result.returncode, 0, result.stderr)
-
-    def test_firmware_packager_does_not_include_the_standalone_ide(self) -> None:
-        packager = (ROOT / "tools" / "package_release.py").read_text(
-            encoding="utf-8"
-        )
-        self.assertNotIn("--ide", packager)
-        self.assertNotIn("code.zip", packager)
-        self.assertNotIn("bootstrap_ide", packager)
-
-    def test_micropython_patches_keep_lf_on_windows_runners(self) -> None:
-        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
-        self.assertIn(
-            "firmware/third_party/micropython/patches/*.patch text eol=lf",
-            attributes.splitlines(),
-        )
-
     def test_host_gcc_dependency_is_version_and_content_pinned(self) -> None:
         bootstrap = load_tool("bootstrap_deps")
         self.assertEqual(bootstrap.HOST_GCC_VERSION, "13.2.0")

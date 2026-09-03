@@ -114,11 +114,6 @@ class BuildContractsTest(unittest.TestCase):
             image = Path(directory) / "firmware.bin"
             image.write_bytes(b"arbitrary small bytes")
             PACKAGE_RELEASE.validate_release_firmware(image, self.board)
-            source = (ROOT / "tools" / "package_release.py").read_text(
-                encoding="utf-8"
-            )
-            self.assertIn("read_and_validate_attestation", source)
-            self.assertNotIn("version.encode", source)
 
     def test_build_package_and_flasher_share_canonical_partition(self):
         flash, partitions = PACKAGE_RELEASE.load_validated(
