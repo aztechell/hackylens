@@ -4,6 +4,7 @@ project(hackylens_app_sdk_fixture LANGUAGES C)
 if(NOT DEFINED HACKYLENS_SOURCE_DIR)
     message(FATAL_ERROR "HACKYLENS_SOURCE_DIR is required")
 endif()
+file(TO_CMAKE_PATH "${HACKYLENS_SOURCE_DIR}" HACKYLENS_SOURCE_DIR)
 
 include("${HACKYLENS_SOURCE_DIR}/tests/app_runtime_host.cmake")
 add_subdirectory("${HACKYLENS_SOURCE_DIR}/sdk" hackylens-sdk)

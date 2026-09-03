@@ -219,7 +219,9 @@ def build_standalone_fixture() -> None:
         cmake_build = temp / "cmake-build"
         subprocess.run([
             cmake, "-S", str(source), "-B", str(cmake_build), "-G", "Ninja",
-            f"-DHACKYLENS_SOURCE_DIR={ROOT}",
+            # Native separators are intentional: CMake must accept Windows paths
+            # such as D:\a\... without treating \a as an escape.
+            f"-DHACKYLENS_SOURCE_DIR={os.fspath(ROOT)}",
             f"-DCMAKE_C_COMPILER={compiler('c')}",
         ], cwd=ROOT, check=True)
         subprocess.run([cmake, "--build", str(cmake_build)], cwd=ROOT, check=True)

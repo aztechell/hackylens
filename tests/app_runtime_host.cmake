@@ -1,6 +1,8 @@
 # Private host-compilation sources for production app runtime tests.
 # This is not a public SDK target or host runtime framework.
 
+file(TO_CMAKE_PATH "${HACKYLENS_SOURCE_DIR}" HACKYLENS_SOURCE_DIR)
+
 set(HK_APP_RUNTIME_HOST_SOURCES
     "${HACKYLENS_SOURCE_DIR}/firmware/src/app_runtime/runtime.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/app_runtime/surface.c"
