@@ -1,6 +1,6 @@
 #include "sd_spi.h"
 
-#include "defaults.h"
+#include "board_config.h"
 
 #include "../internal/hk_board_port.h"
 #include "hal_gpio.h"

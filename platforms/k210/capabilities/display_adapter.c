@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "defaults.h"
+#include "board_config.h"
 #include "hackylens_font_1bpp.h"
 #include "hal_time.h"
 

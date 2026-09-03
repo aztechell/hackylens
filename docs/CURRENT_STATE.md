@@ -26,22 +26,17 @@ Two descriptors are tracked:
   runtime-qualified or releaseable, and its full build, package, release, and
   flash operations fail before performing work.
 
-The Cube port proves that a second descriptor, generated-header set, and
-minimal BSP satisfy the conformance compile/link harness. It does not prove
-that common runtime firmware is composed for Cube, nor is it evidence of Cube
-runtime behavior or general hardware independence. Its Grove connector records
-only the source-verified physical pins 24 and 25; it deliberately claims no
-UART/I2C protocol or routed-peripheral semantics.
+The Cube port proves that a second descriptor and minimal BSP satisfy the
+conformance compile/link harness. It does not prove that common runtime
+firmware is composed for Cube, nor is it evidence of Cube runtime behavior or
+general hardware independence.
 
 ## Implemented boundaries
 
-- Board descriptors own identity, inventory, routes, defaults, flash layout,
-  and programming metadata.
-- `platforms/k210/devices.toml` privately registers recognized hardware,
-  drivers, exact route roles, the one legacy runtime-mux exception, base
-  runtime devices, programming values, and runtime profiles.
-- Generated `pins.h`, `defaults.h`, `inventory.h`, and `flash_layout.h` are
-  checked for staleness.
+- Board descriptors own identity, available services, routes, defaults, flash
+  layout, and programming metadata.
+- One private `build/generated/board_config.h` is generated at firmware build
+  time from the selected `board.toml`.
 - Applications do not include K210 SDK headers. BSP/HAL code and explicitly
   platform-bound internals may include them; startup lives in
   `platforms/k210/startup`.
@@ -125,9 +120,8 @@ qualification.
 ## Verification and evidence
 
 Host checks cover descriptor/profile/programming validation, route selection
-and collisions, generated-file freshness, canonical flash-layout bytes,
-architecture boundaries, board-aware composition, sidecar safety, and CLI
-rejection paths. CI compile-checks the Cube BSP and builds SEN0305 full and
+and collisions, flash overlap/overflow, architecture boundaries, board-aware
+composition, sidecar safety, and CLI rejection paths. CI compile-checks the Cube BSP and builds SEN0305 full and
 feature-disabled configurations.
 
 Phase 3.1 adds contract/version/scope negatives, generic SDK/runtime/manifest/

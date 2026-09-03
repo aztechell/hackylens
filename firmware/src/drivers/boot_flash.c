@@ -3,8 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "defaults.h"
-#include "flash_layout.h"
+#include "board_config.h"
 #include "../internal/hk_board_port.h"
 #include "hal_spi.h"
 #include "hal_time.h"

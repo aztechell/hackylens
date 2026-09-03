@@ -17,7 +17,6 @@ from typing import Any
 import build_firmware
 import check_phase1_resources
 from board_contract import load_board
-from gen_flash_layout import load_validated
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -291,7 +290,7 @@ def verify_provenance(document: dict[str, Any], *, root: Path = ROOT) -> None:
         raise RuntimeError("timing baseline does not match pinned source")
 
     board = load_board(baseline["board"], root=root)
-    flash, _ = load_validated(board.flash_layout_path)
+    flash = board.flash
     for name, profile in baseline["profiles"].items():
         image = profile["image"]
         occupied = math.ceil(
@@ -416,7 +415,7 @@ def verify_profile_artifacts(
         raise RuntimeError(f"{profile_name} attestation capability hash mismatch")
 
     board = load_board(document["baseline"]["board"], root=root)
-    flash, _ = load_validated(board.flash_layout_path)
+    flash = board.flash
     measure = verify_profile_budget if enforce_phase2_budget else profile_deltas
     return measure(
         document,

@@ -1,6 +1,6 @@
 #include "hk_input.h"
 
-#include "defaults.h"
+#include "board_config.h"
 #include <hackylens/capability/input.h>
 
 #include "hal_gpio.h"

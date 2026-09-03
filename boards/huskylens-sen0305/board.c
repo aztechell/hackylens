@@ -2,8 +2,7 @@
 
 #include <fpioa.h>
 
-#include "defaults.h"
-#include "pins.h"
+#include "board_config.h"
 #include "hal_gpio.h"
 #include "hal_spi.h"
 

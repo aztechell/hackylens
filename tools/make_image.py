@@ -15,13 +15,12 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from board_contract import ContractError, load_board
+from board_contract import ContractError, load_board, partition_by_name
 from firmware_attestation import (
     AttestationError,
     read_and_validate as read_and_validate_attestation,
 )
 from firmware_sidecar import SidecarError, write as write_sidecar
-from gen_flash_layout import load_validated, partition_by_name
 
 K210_IMAGE_OVERHEAD = 37
 SAFE_IMAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.bin$")
@@ -111,8 +110,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"build attestation validation failed: {exc}", file=sys.stderr)
         return 2
 
-    flash, partitions = load_validated(board.flash_layout_path)
-    firmware = partition_by_name(partitions, "firmware")
+    flash = board.flash
+    firmware = partition_by_name(board.partitions, "firmware")
     wrapped = args.input.stat().st_size + K210_IMAGE_OVERHEAD
     occupied = ((wrapped + flash["erase_size"] - 1) // flash["erase_size"]
                 * flash["erase_size"])

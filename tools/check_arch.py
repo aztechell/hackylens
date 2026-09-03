@@ -40,7 +40,7 @@ SDK_HEADER_FALLBACK = {
     "syslog.h",
 }
 PRIVATE_BOARD_HEADERS = {
-    "pins.h", "defaults.h", "inventory.h", "flash_layout.h",
+    "board_config.h", "pins.h", "defaults.h", "inventory.h", "flash_layout.h",
     "hk_board_port.h",
 }
 

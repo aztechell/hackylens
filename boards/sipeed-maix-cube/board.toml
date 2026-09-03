@@ -3,96 +3,42 @@ id = "sipeed-maix-cube"
 platform = "kendryte-k210"
 support = "conformance"
 releaseable = false
-
-# Physical pin names are sourced from Sipeed MaixPy-v1 cube.config.json at
-# d8901fd2272f000226f1c1037c1eb7c412b88e66. Connector pins do not imply a
-# routed UART/I2C peripheral or runtime support.
-
-[[devices]]
-id = "k210"
-kind = "processor"
-driver = "k210-core"
-support = "driver"
-
-[[devices]]
-id = "gd25lq128"
-kind = "internal-flash"
-support = "known-unsupported"
-
-[[devices]]
-id = "st7789v"
-kind = "display"
-support = "known-unsupported"
-
-[[devices]]
-id = "ov7740"
-kind = "camera"
-support = "known-unsupported"
-
-[[devices]]
-id = "top-3way"
-kind = "buttons"
-support = "known-unsupported"
-
-[[devices]]
-id = "cube-lights"
-kind = "lights"
-support = "known-unsupported"
-
-[[devices]]
-id = "sd-spi"
-kind = "sd-card"
-support = "known-unsupported"
-
-[[devices]]
-id = "axp173"
-kind = "power-management"
-support = "known-unsupported"
-
-[[devices]]
-id = "es8374"
-kind = "audio-codec"
-support = "known-unsupported"
-
-[[devices]]
-id = "msa301"
-kind = "accelerometer"
-support = "known-unsupported"
-
-[[routes]]
-id = "top-3way-key1"
-macro = "IO_TOP_3WAY_KEY1"
-pin = 10
-function = "gpiohs2"
-peripheral = "gpiohs"
-compile = false
-
-[[routes]]
-id = "top-3way-key2"
-macro = "IO_TOP_3WAY_KEY2"
-pin = 11
-function = "gpiohs3"
-peripheral = "gpiohs"
-compile = false
-
-[[routes]]
-id = "top-3way-boot-key"
-macro = "IO_TOP_3WAY_BOOT_KEY"
-pin = 16
-function = "gpiohs4"
-peripheral = "gpiohs"
-compile = false
+# Compile-conformance only. Present hardware is not driver-supported.
+available = ["processor"]
+present = [
+  "processor",
+  "internal-flash",
+  "display",
+  "camera",
+  "buttons",
+  "lights",
+  "sd-card",
+]
 
 [defaults]
 lcd_width = 240
 lcd_height = 240
 
-[[connectors]]
-id = "grove"
-kind = "grove"
-pins = [24, 25]
-protocols = []
-routes = []
+[flash]
+address_bytes = 3
+minimum_capacity = 0x01000000
+maximum_capacity = 0x01000000
+erase_size = 0x00001000
+program_size = 0x00000100
+
+[[partitions]]
+name = "firmware"
+offset = 0x00000000
+size = 0x00800000
+required_capacity = 0x01000000
+runtime_writable = false
+
+[[partitions]]
+name = "reserved"
+offset = 0x00800000
+size = 0x00800000
+required_capacity = 0x01000000
+runtime_writable = false
 
 [programming]
 supported = false

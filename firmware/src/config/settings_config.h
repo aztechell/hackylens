@@ -1,7 +1,7 @@
 #ifndef HK_SETTINGS_CONFIG_H
 #define HK_SETTINGS_CONFIG_H
 
-#include "flash_layout.h"
+#include "board_config.h"
 
 #define SETTINGS_SAVE_DELAY_TICKS 25
 #define SETTINGS_FLASH_SLOT0 HK_FLASH_PARTITION_SETTINGS_0_OFFSET

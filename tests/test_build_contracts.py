@@ -116,9 +116,8 @@ class BuildContractsTest(unittest.TestCase):
             PACKAGE_RELEASE.validate_release_firmware(image, self.board)
 
     def test_build_package_and_flasher_share_canonical_partition(self):
-        flash, partitions = PACKAGE_RELEASE.load_validated(
-            self.board.flash_layout_path
-        )
+        flash = self.board.flash
+        partitions = self.board.partitions
         firmware = PACKAGE_RELEASE.partition_by_name(partitions, "firmware")
         expected_limit = firmware["offset"] + firmware["size"]
         self.assertEqual(
@@ -132,9 +131,8 @@ class BuildContractsTest(unittest.TestCase):
         )
 
     def test_flasher_rejects_payload_past_firmware_partition(self):
-        flash, partitions = PACKAGE_RELEASE.load_validated(
-            self.board.flash_layout_path
-        )
+        flash = self.board.flash
+        partitions = self.board.partitions
         firmware = PACKAGE_RELEASE.partition_by_name(partitions, "firmware")
         address = firmware["offset"]
         limit = address + firmware["size"]

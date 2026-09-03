@@ -23,7 +23,6 @@ import build_firmware
 import check_phase1_resources
 import check_phase2_evidence
 from board_contract import load_board
-from gen_flash_layout import load_validated
 
 
 BOARD_ID = "huskylens-sen0305"
@@ -175,7 +174,7 @@ def artifact_measurement(paths: dict[str, Path]) -> dict[str, Any]:
         paths["elf"]
     )
     board = load_board(BOARD_ID)
-    flash, _ = load_validated(board.flash_layout_path)
+    flash = board.flash
     raw_bytes = paths["image"].stat().st_size
     rounded = math.ceil(
         (raw_bytes + build_firmware.K210_IMAGE_OVERHEAD) / flash["erase_size"]

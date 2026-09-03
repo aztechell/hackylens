@@ -26,7 +26,6 @@ if str(TOOLS_DIR) not in sys.path:
 
 import build_firmware
 from board_contract import ContractError, load_board
-from gen_flash_layout import load_validated
 
 
 DEFAULT_BASELINE = ROOT / "docs" / "evidence" / "phase1-baseline.json"
@@ -990,7 +989,7 @@ def measure(board_id: str, baseline_path: Path, image: Path,
         raise RuntimeError("full firmware image and ELF must exist before resource check")
 
     board = load_board(board_id)
-    flash, _partitions = load_validated(board.flash_layout_path)
+    flash = board.flash
     baseline_flash_occupied = math.ceil(
         (int(baseline["raw_image_bytes"]) + build_firmware.K210_IMAGE_OVERHEAD)
         / flash["erase_size"]

@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "defaults.h"
+#include "board_config.h"
 #include "hal_gpio.h"
 #include "hal_pwm.h"
 #include "hal_spi.h"

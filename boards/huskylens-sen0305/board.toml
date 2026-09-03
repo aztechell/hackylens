@@ -4,60 +4,17 @@ platform = "kendryte-k210"
 support = "runtime"
 releaseable = true
 runtime_profile = "hackylens-full"
-
-[[devices]]
-id = "k210"
-kind = "processor"
-driver = "k210-core"
-support = "driver"
-
-[[devices]]
-id = "board-internal-flash"
-kind = "internal-flash"
-driver = "boot-flash"
-support = "driver"
-
-[[devices]]
-id = "st7789v"
-kind = "display"
-driver = "lcd-st7789"
-support = "driver"
-
-[[devices]]
-id = "ov2640"
-kind = "camera"
-driver = "camera-ov2640"
-support = "driver"
-
-[[devices]]
-id = "huskylens-buttons"
-kind = "buttons"
-driver = "huskylens-buttons"
-support = "driver"
-
-[[devices]]
-id = "huskylens-lights"
-kind = "lights"
-driver = "huskylens-lights"
-support = "driver"
-
-[[devices]]
-id = "sd-spi"
-kind = "sd-card"
-driver = "sd-spi"
-support = "driver"
-
-[[devices]]
-id = "grove-uart"
-kind = "external-uart"
-driver = "external-uart"
-support = "driver"
-
-[[devices]]
-id = "grove-i2c"
-kind = "external-i2c"
-driver = "external-i2c"
-support = "driver"
+available = [
+  "processor",
+  "internal-flash",
+  "display",
+  "camera",
+  "buttons",
+  "lights",
+  "sd-card",
+  "external-uart",
+  "external-i2c",
+]
 
 [[routes]]
 id = "lcd-backlight"
@@ -241,38 +198,6 @@ pin = 29
 function = "gpiohs6"
 peripheral = "gpiohs"
 
-[defaults]
-lcd_width = 320
-lcd_height = 240
-lcd_spi = 0
-lcd_chip_select = 3
-lcd_spi_hz = 40000000
-gpiohs_lcd_reset = 14
-gpiohs_lcd_dc = 15
-gpiohs_button_left = 2
-gpiohs_button_ok = 3
-gpiohs_button_right = 4
-gpiohs_button_back = 5
-gpiohs_sd_chip_select = 6
-sd_spi = 1
-sd_chip_select = 3
-flash_spi = 3
-flash_chip_select = 0
-led_pwm_device = 2
-led_pwm_channel = 3
-rgb_pwm_device = 2
-rgb_pwm_channel0 = 0
-rgb_pwm_channel1 = 1
-rgb_pwm_channel2 = 2
-screen_pwm_device = 0
-screen_pwm_channel = 0
-pwm_frequency_hz = 20000
-camera_sccb_address = 96
-camera_xclk_hz = 40000000
-camera_sccb_hz = 100000
-camera_max_width = 640
-camera_max_height = 480
-
 [[routes]]
 id = "external-uart-rx"
 macro = "IO_EXTERNAL_UART_R"
@@ -305,17 +230,79 @@ function = "i2c0-sda"
 peripheral = "i2c0"
 runtime_mux_group = "external-four-pin-mode"
 
-[[connectors]]
-id = "external-four-pin"
-kind = "grove"
-pins = [34, 35]
-protocols = ["uart1", "i2c0"]
-routes = [
-  "external-uart-rx",
-  "external-uart-tx",
-  "external-i2c-clock",
-  "external-i2c-data",
-]
+[defaults]
+lcd_width = 320
+lcd_height = 240
+lcd_spi = 0
+lcd_chip_select = 3
+lcd_spi_hz = 40000000
+gpiohs_lcd_reset = 14
+gpiohs_lcd_dc = 15
+gpiohs_button_left = 2
+gpiohs_button_ok = 3
+gpiohs_button_right = 4
+gpiohs_button_back = 5
+gpiohs_sd_chip_select = 6
+sd_spi = 1
+sd_chip_select = 3
+flash_spi = 3
+flash_chip_select = 0
+led_pwm_device = 2
+led_pwm_channel = 3
+rgb_pwm_device = 2
+rgb_pwm_channel0 = 0
+rgb_pwm_channel1 = 1
+rgb_pwm_channel2 = 2
+screen_pwm_device = 0
+screen_pwm_channel = 0
+pwm_frequency_hz = 20000
+camera_sccb_address = 96
+camera_xclk_hz = 40000000
+camera_sccb_hz = 100000
+camera_max_width = 640
+camera_max_height = 480
+
+[flash]
+address_bytes = 3
+minimum_capacity = 0x00800000
+maximum_capacity = 0x01000000
+erase_size = 0x00001000
+program_size = 0x00000100
+
+[[partitions]]
+name = "firmware"
+offset = 0x00000000
+size = 0x007FE000
+required_capacity = 0x00800000
+runtime_writable = false
+
+[[partitions]]
+name = "settings_0"
+offset = 0x007FE000
+size = 0x00001000
+required_capacity = 0x00800000
+runtime_writable = true
+
+[[partitions]]
+name = "settings_1"
+offset = 0x007FF000
+size = 0x00001000
+required_capacity = 0x00800000
+runtime_writable = true
+
+[[partitions]]
+name = "legacy_reserved"
+offset = 0x00800000
+size = 0x00470000
+required_capacity = 0x01000000
+runtime_writable = false
+
+[[partitions]]
+name = "userfs"
+offset = 0x00C70000
+size = 0x00390000
+required_capacity = 0x01000000
+runtime_writable = true
 
 [programming]
 supported = true

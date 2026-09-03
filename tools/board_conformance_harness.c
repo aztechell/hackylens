@@ -1,9 +1,6 @@
 #include "hk_board_port.h"
 
-#include "defaults.h"
-#include "flash_layout.h"
-#include "inventory.h"
-#include "pins.h"
+#include "board_config.h"
 
 int main(void)
 {

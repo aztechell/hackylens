@@ -15,6 +15,7 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 import check_arch
+import gen_board
 
 
 class Phase2ArchitectureGuardTests(unittest.TestCase):
@@ -311,7 +312,7 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
                     "-DHK_FRAME_POOL_TESTING",
                     f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                     f"-I{ROOT / 'firmware' / 'src' / 'config'}",
-                    f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
+                    f"-I{gen_board.board_config_include_dir()}",
                     str(ROOT / "tests" / "frame_pool_harness.c"),
                     str(ROOT / "firmware" / "src" / "services" / "frame_pool.c"),
                     "-o", str(executable),

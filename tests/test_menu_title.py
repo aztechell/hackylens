@@ -2,11 +2,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import gen_board
 
 
 class MenuTitleHostTests(unittest.TestCase):
@@ -33,7 +39,7 @@ class MenuTitleHostTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
-                f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
+                f"-I{gen_board.board_config_include_dir()}",
                 str(ROOT / "tests" / "menu_title_harness.c"),
                 str(ROOT / "firmware" / "src" / "ui" / "ui_menu.c"),
                 "-o",

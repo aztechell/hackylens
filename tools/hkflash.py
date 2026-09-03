@@ -17,9 +17,8 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from board_contract import Board, ContractError, load_board
+from board_contract import Board, ContractError, load_board, partition_by_name
 from firmware_sidecar import SidecarError, read_and_validate as read_and_validate_sidecar
-from gen_flash_layout import load_validated, partition_by_name
 
 FLASH_CHUNK = 4096
 SRAM_CHUNK = 1024
@@ -867,8 +866,8 @@ def apply_board_configuration(args: argparse.Namespace) -> None:
         )
 
     if hardware_affecting:
-        flash, partitions = load_validated(board.flash_layout_path)
-        firmware = partition_by_name(partitions, "firmware")
+        flash = board.flash
+        firmware = partition_by_name(board.partitions, "firmware")
         args.flash_address = firmware["offset"]
         args.firmware_flash_limit = firmware["offset"] + firmware["size"]
         args.flash_erase_size = flash["erase_size"]

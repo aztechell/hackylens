@@ -9,8 +9,7 @@ from pathlib import Path
 import re
 from typing import Any
 
-from board_contract import Board
-from gen_flash_layout import load_validated, partition_by_name
+from board_contract import Board, flash_layout_sha256, partition_by_name
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,12 +57,9 @@ def current_firmware_version(root: Path = ROOT) -> str:
 
 
 def layout_identity(board: Board) -> tuple[str, str]:
-    # Validation happens before hashing so non-canonical layout bytes can never
-    # acquire a trusted identity.
-    _, partitions = load_validated(board.flash_layout_path)
-    firmware = partition_by_name(partitions, "firmware")
+    firmware = partition_by_name(board.partitions, "firmware")
     address = f"0x{firmware['offset']:08X}"
-    return address, sha256_file(board.flash_layout_path)
+    return address, flash_layout_sha256(board)
 
 
 def build_document(image: Path, board: Board) -> dict[str, object]:
@@ -74,7 +70,7 @@ def build_document(image: Path, board: Board) -> dict[str, object]:
         "schema": SCHEMA_VERSION,
         "firmware_version": current_firmware_version(),
         "board_id": board.id,
-        "platform_id": board.registry.platform,
+        "platform_id": board.platform,
         "board_contract_version": BOARD_CONTRACT_VERSION,
         "build_profile": BUILD_PROFILE,
         "image": image.name,

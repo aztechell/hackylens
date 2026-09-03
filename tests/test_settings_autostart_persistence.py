@@ -4,11 +4,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import gen_board
 
 
 class SettingsAutostartPersistenceTests(unittest.TestCase):
@@ -34,7 +40,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware/src/services'}",
                 f"-I{ROOT / 'firmware/src/storage'}",
                 f"-I{ROOT / 'firmware/src/config'}",
-                f"-I{ROOT / 'boards/huskylens-sen0305/generated'}",
+                f"-I{gen_board.board_config_include_dir()}",
                 str(ROOT / "tests/settings_autostart_persistence_harness.c"),
                 str(ROOT / "firmware/src/storage/settings_store.c"),
                 str(ROOT / "firmware/src/services/settings_payload_codec.c"),

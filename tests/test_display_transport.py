@@ -2,11 +2,18 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import board_contract
+import gen_board
 
 
 class DisplayTransportTests(unittest.TestCase):
@@ -19,6 +26,10 @@ class DisplayTransportTests(unittest.TestCase):
             executable = Path(temp) / (
                 "lcd_stream_test.exe" if os.name == "nt" else "lcd_stream_test"
             )
+            generated = Path(temp) / "board_config.h"
+            gen_board.write_board_config(
+                board_contract.load_board("huskylens-sen0305"), generated
+            )
             command = [
                 compiler,
                 "-std=c11",
@@ -29,7 +40,7 @@ class DisplayTransportTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
-                f"-I{ROOT / 'boards' / 'huskylens-sen0305' / 'generated'}",
+                f"-I{generated.parent}",
                 str(ROOT / "tests" / "lcd_st7789_stream_harness.c"),
                 str(ROOT / "firmware" / "src" / "drivers" / "lcd_st7789.c"),
                 "-o",

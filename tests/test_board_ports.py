@@ -29,8 +29,6 @@ import check_arch
 import check_phase1_resources
 import firmware_attestation
 import firmware_sidecar
-import gen_board
-import gen_flash_layout
 import hkflash
 import make_image
 import package_release
@@ -39,12 +37,11 @@ import package_release
 class BoardDescriptorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.registry = board_contract.load_registry()
         cls.runtime = board_contract.load_board("huskylens-sen0305")
         cls.cube = board_contract.load_board("sipeed-maix-cube")
 
     def validate(self, data: dict) -> None:
-        board_contract.validate_board_data(data, self.registry)
+        board_contract.validate_board_data(data)
 
     def test_runtime_and_conformance_invariants(self) -> None:
         self.assertEqual(self.runtime.runtime_profile, "hackylens-full")
@@ -52,11 +49,8 @@ class BoardDescriptorTests(unittest.TestCase):
         self.assertIsNone(self.cube.runtime_profile)
         self.assertFalse(self.cube.releaseable)
         self.assertEqual(
-            set(self.registry.data["runtime_base_devices"]),
-            {
-                "processor", "internal-flash", "display", "buttons", "lights",
-                "sd-card", "external-uart", "external-i2c",
-            },
+            self.runtime.driver_supported_kinds(),
+            set(board_contract.RUNTIME_REQUIRED_SERVICES),
         )
 
         missing = copy.deepcopy(self.runtime.data)
@@ -74,47 +68,27 @@ class BoardDescriptorTests(unittest.TestCase):
         with self.assertRaisesRegex(board_contract.ContractError, "support=runtime"):
             self.validate(releaseable)
 
-    def test_profile_requires_present_driver_binding(self) -> None:
+    def test_profile_requires_available_services(self) -> None:
         data = copy.deepcopy(self.runtime.data)
-        camera = next(item for item in data["devices"] if item["kind"] == "camera")
-        camera["support"] = "known-unsupported"
-        del camera["driver"]
-        with self.assertRaisesRegex(board_contract.ContractError, "missing driver-supported"):
+        data["available"] = [kind for kind in data["available"] if kind != "camera"]
+        with self.assertRaisesRegex(board_contract.ContractError, "missing available"):
             self.validate(data)
 
-    def test_unknown_schema_fields_and_ids_are_rejected(self) -> None:
+    def test_unknown_schema_fields_and_services_are_rejected(self) -> None:
         unknown_field = copy.deepcopy(self.runtime.data)
         unknown_field["capabilities"] = []
         with self.assertRaisesRegex(board_contract.ContractError, "unknown field"):
             self.validate(unknown_field)
 
-        unknown_device = copy.deepcopy(self.runtime.data)
-        unknown_device["devices"][0]["id"] = "invented-k210"
-        with self.assertRaisesRegex(board_contract.ContractError, "unknown device ID"):
-            self.validate(unknown_device)
+        unknown_service = copy.deepcopy(self.runtime.data)
+        unknown_service["available"] = list(unknown_service["available"]) + ["invented-device"]
+        with self.assertRaisesRegex(board_contract.ContractError, "unknown service"):
+            self.validate(unknown_service)
 
-        wrong_kind = copy.deepcopy(self.runtime.data)
-        wrong_kind["devices"][0]["kind"] = "display"
-        with self.assertRaisesRegex(board_contract.ContractError, "requires 'processor'"):
-            self.validate(wrong_kind)
-
-        wrong_driver = copy.deepcopy(self.runtime.data)
-        wrong_driver["devices"][0]["driver"] = "lcd-st7789"
-        with self.assertRaisesRegex(board_contract.ContractError, "not allowed"):
-            self.validate(wrong_driver)
-
-    def test_registry_function_mapping_and_defaults_are_cross_checked(self) -> None:
+    def test_route_functions_and_defaults_are_cross_checked(self) -> None:
         self.assertEqual(set(board_contract.DEFAULT_RANGES), board_contract.DEFAULT_FIELDS)
-        runtime_flash = next(
-            device for device in self.runtime.data["devices"]
-            if device["kind"] == "internal-flash"
-        )
-        cube_flash = next(
-            device for device in self.cube.data["devices"]
-            if device["kind"] == "internal-flash"
-        )
-        self.assertEqual(runtime_flash["id"], "board-internal-flash")
-        self.assertEqual(cube_flash["id"], "gd25lq128")
+        self.assertIn("internal-flash", self.runtime.present_kinds())
+        self.assertIn("internal-flash", self.cube.present_kinds())
 
         wrong_peripheral = copy.deepcopy(self.runtime.data)
         wrong_peripheral["routes"][0]["peripheral"] = "timer2"
@@ -160,14 +134,7 @@ class BoardDescriptorTests(unittest.TestCase):
         with self.assertRaisesRegex(board_contract.ContractError, "must match"):
             self.validate(pwm_relation)
 
-    def test_registry_route_roles_prevent_logical_signal_swaps(self) -> None:
-        all_route_macros = {
-            route["macro"]
-            for board in (self.runtime, self.cube)
-            for route in board.data["routes"]
-        }
-        self.assertTrue(all_route_macros.issubset(self.registry.data["route_roles"]))
-
+    def test_route_roles_prevent_logical_signal_swaps(self) -> None:
         spi_swap = copy.deepcopy(self.runtime.data)
         lcd_mosi = next(
             route for route in spi_swap["routes"] if route["macro"] == "IO_LCD_MOSI"
@@ -198,56 +165,6 @@ class BoardDescriptorTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(board_contract.ContractError, "route role"):
             self.validate(camera_swap)
-
-    def test_registry_tables_reject_unknown_peripherals_and_duplicate_macros(self) -> None:
-        registry_text = board_contract.REGISTRY_PATH.read_text(encoding="utf-8")
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "devices.toml"
-            path.write_text(
-                registry_text.replace(
-                    'peripheral = "uart1"\nmacro = "FUNC_UART1_RX"',
-                    'peripheral = "invented-uart"\nmacro = "FUNC_UART1_RX"',
-                    1,
-                ),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(board_contract.ContractError, "unknown instance"):
-                board_contract.load_registry(path)
-
-            path.write_text(
-                registry_text.replace("FUNC_UART1_RX", "FUNC_UART1_TX", 1),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(board_contract.ContractError, "duplicate"):
-                board_contract.load_registry(path)
-
-            path.write_text(
-                registry_text
-                + "\n[runtime_profiles.incomplete-future]\n"
-                + 'required_devices = ["processor"]\n',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(board_contract.ContractError, "runtime base"):
-                board_contract.load_registry(path)
-
-            mux_route = (
-                '  { macro = "IO_EXTERNAL_I2C_T", function = "i2c0-sda", '
-                'pin = 35, peripheral = "i2c0" },\n'
-            )
-            path.write_text(registry_text.replace(mux_route, "", 1), encoding="utf-8")
-            with self.assertRaisesRegex(board_contract.ContractError, "exactly four"):
-                board_contract.load_registry(path)
-
-            path.write_text(
-                registry_text.replace(
-                    'macro = "IO_EXTERNAL_UART_T", function = "uart1-tx", pin = 35',
-                    'macro = "IO_EXTERNAL_UART_T", function = "uart1-tx", pin = 36',
-                    1,
-                ),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(board_contract.ContractError, "two symmetric modes"):
-                board_contract.load_registry(path)
 
     def test_programming_metadata_is_strict(self) -> None:
         reset = copy.deepcopy(self.runtime.data)
@@ -308,6 +225,7 @@ class BoardDescriptorTests(unittest.TestCase):
         conformance = copy.deepcopy(self.runtime.data)
         conformance["support"] = "conformance"
         conformance["releaseable"] = False
+        conformance["present"] = list(conformance["available"])
         del conformance["runtime_profile"]
         with self.assertRaisesRegex(board_contract.ContractError, "only runtime ports"):
             self.validate(conformance)
@@ -316,7 +234,7 @@ class BoardDescriptorTests(unittest.TestCase):
         for route in renamed["routes"]:
             if route.get("runtime_mux_group") == "external-four-pin-mode":
                 route["runtime_mux_group"] = "invented-runtime-mux"
-        with self.assertRaisesRegex(board_contract.ContractError, "registry-defined"):
+        with self.assertRaisesRegex(board_contract.ContractError, "legacy exception"):
             self.validate(renamed)
 
         shortened = copy.deepcopy(self.runtime.data)
@@ -324,7 +242,6 @@ class BoardDescriptorTests(unittest.TestCase):
             route for route in shortened["routes"]
             if route["macro"] != "IO_EXTERNAL_I2C_T"
         ]
-        shortened["connectors"][0]["routes"].remove("external-i2c-data")
         with self.assertRaisesRegex(board_contract.ContractError, "exactly match"):
             self.validate(shortened)
 
@@ -333,97 +250,21 @@ class BoardDescriptorTests(unittest.TestCase):
             route for route in moved["routes"]
             if route["macro"] == "IO_EXTERNAL_UART_R"
         )["pin"] = 33
-        moved["connectors"][0]["pins"] = [33, 34, 35]
         with self.assertRaisesRegex(board_contract.ContractError, "exactly match"):
             self.validate(moved)
 
-    def test_connector_pins_protocols_and_routes_are_cross_checked(self) -> None:
-        wrong_pin = copy.deepcopy(self.runtime.data)
-        wrong_pin["connectors"][0]["pins"] = [33, 35]
-        with self.assertRaisesRegex(board_contract.ContractError, "exactly match"):
-            self.validate(wrong_pin)
-
-        wrong_protocol = copy.deepcopy(self.runtime.data)
-        wrong_protocol["connectors"][0]["protocols"] = ["uart1"]
-        with self.assertRaisesRegex(board_contract.ContractError, "route peripherals"):
-            self.validate(wrong_protocol)
-
-        unknown_route = copy.deepcopy(self.runtime.data)
-        unknown_route["connectors"][0]["routes"][0] = "imaginary-route"
-        with self.assertRaisesRegex(board_contract.ContractError, "unknown route"):
-            self.validate(unknown_route)
-
-    def test_cube_grove_records_only_source_verified_physical_pins(self) -> None:
-        connector = next(
-            item for item in self.cube.data["connectors"] if item["id"] == "grove"
-        )
-        self.assertEqual(connector["pins"], [24, 25])
-        self.assertEqual(connector["protocols"], [])
-        self.assertEqual(connector["routes"], [])
-        kinds = {device["kind"] for device in self.cube.data["devices"]}
-        self.assertNotIn("external-uart", kinds)
-        self.assertNotIn("external-i2c", kinds)
-
-        invented_protocol = copy.deepcopy(self.cube.data)
-        invented_protocol["connectors"][0]["protocols"] = ["uart1"]
-        with self.assertRaisesRegex(
-            board_contract.ContractError, "protocol semantics require explicit routes"
-        ):
-            self.validate(invented_protocol)
-
-        runtime_physical_only = copy.deepcopy(self.runtime.data)
-        runtime_physical_only["connectors"][0] = {
-            "id": "physical-only",
-            "kind": "grove",
-            "pins": [24, 25],
-            "protocols": [],
-            "routes": [],
-        }
-        with self.assertRaisesRegex(
-            board_contract.ContractError, "physical-only connector inventory"
-        ):
-            self.validate(runtime_physical_only)
-
-    def test_compile_time_exclusive_route_selection(self) -> None:
-        data = copy.deepcopy(self.runtime.data)
-        first = data["routes"][0]
-        first["exclusive_group"] = "display-backlight-mux"
-        alternate = copy.deepcopy(first)
-        alternate["id"] = "lcd-backlight-alternate"
-        data["routes"].append(alternate)
-        data["route_selections"] = {
-            "display-backlight-mux": first["id"],
-        }
-        self.validate(data)
-        board = board_contract.Board(
-            path=Path("board.toml"), data=data, registry=self.registry
-        )
-        selected_ids = {route["id"] for route in board.selected_routes()}
-        self.assertIn(first["id"], selected_ids)
-        self.assertNotIn(alternate["id"], selected_ids)
-
-        del data["route_selections"]
-        with self.assertRaisesRegex(board_contract.ContractError, "must select exactly one"):
-            self.validate(data)
-
-    def test_conformance_may_omit_only_noncompiled_route_group(self) -> None:
-        self.validate(copy.deepcopy(self.cube.data))
-        data = copy.deepcopy(self.cube.data)
-        data["routes"][0]["exclusive_group"] = "unqualified-alternatives"
-        data["routes"][1]["exclusive_group"] = "unqualified-alternatives"
-        data["routes"][0]["compile"] = True
-        with self.assertRaisesRegex(board_contract.ContractError, "every route compile=false"):
-            self.validate(data)
-
-    def test_known_unsupported_inventory_is_not_driver_supported(self) -> None:
-        inventory = gen_board.render_inventory(self.cube)
-        self.assertIn("#define HK_BOARD_HAS_DISPLAY 1U", inventory)
-        self.assertIn("#define HK_BOARD_DRIVER_DISPLAY 0U", inventory)
+    def test_cube_has_no_external_link_services(self) -> None:
+        self.assertNotIn("external-uart", self.cube.present_kinds())
+        self.assertNotIn("external-i2c", self.cube.present_kinds())
         self.assertEqual(self.cube.driver_supported_kinds(), {"processor"})
 
-    def test_every_board_has_current_generated_files_and_mandatory_early_init(self) -> None:
+    def test_known_unsupported_services_are_not_driver_supported(self) -> None:
+        self.assertIn("display", self.cube.present_kinds())
+        self.assertNotIn("display", self.cube.driver_supported_kinds())
+        self.assertEqual(self.cube.driver_supported_kinds(), {"processor"})
+
+    def test_board_ops_require_mandatory_early_init(self) -> None:
         for board in (self.runtime, self.cube):
-            self.assertEqual(gen_board.generate(board, check=True), [])
             board_contract.validate_board_source(board)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -436,11 +277,7 @@ class BoardDescriptorTests(unittest.TestCase):
             )
             board = board_contract.Board(
                 path=board_dir / "board.toml",
-                data={
-                    "id": "missing-early",
-                    "devices": [],
-                },
-                registry=self.registry,
+                data={"id": "missing-early", "available": []},
             )
             with self.assertRaisesRegex(board_contract.ContractError, "early_init"):
                 board_contract.validate_board_source(board)
@@ -455,38 +292,31 @@ class BoardDescriptorTests(unittest.TestCase):
             )
             board = board_contract.Board(
                 path=board_dir / "board.toml",
-                data={"id": "comment-test", "devices": []},
-                registry=self.registry,
+                data={"id": "comment-test", "available": []},
             )
             with self.assertRaisesRegex(board_contract.ContractError, "early_init"):
                 board_contract.validate_board_source(board)
 
-    def test_flash_layout_bytes_are_exactly_canonical(self) -> None:
-        for board in (self.runtime, self.cube):
-            parsed = gen_flash_layout.load_layout(board.flash_layout_path)
-            self.assertEqual(
-                board.flash_layout_path.read_bytes(),
-                gen_flash_layout.canonical_json_bytes(parsed),
-            )
+    def test_flash_partitions_reject_overlap_and_overflow(self) -> None:
+        overlap = copy.deepcopy(self.runtime.data)
+        overlap["partitions"][1]["offset"] = overlap["partitions"][0]["offset"]
+        with self.assertRaisesRegex(board_contract.ContractError, "overlaps"):
+            self.validate(overlap)
 
-        with tempfile.TemporaryDirectory() as directory:
-            bad = Path(directory) / "layout.json"
-            parsed = gen_flash_layout.load_layout(self.cube.flash_layout_path)
-            bad.write_text(json.dumps(parsed), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "not canonical"):
-                gen_flash_layout.load_layout(bad)
-            parsed["invented_contract_field"] = True
-            bad.write_bytes(gen_flash_layout.canonical_json_bytes(parsed))
-            with self.assertRaisesRegex(ValueError, "unknown field"):
-                gen_flash_layout.load_layout(bad)
+        overflow = copy.deepcopy(self.runtime.data)
+        overflow["partitions"][-1]["size"] = overflow["flash"]["maximum_capacity"]
+        with self.assertRaisesRegex(board_contract.ContractError, "exceeds"):
+            self.validate(overflow)
+
+        unknown = copy.deepcopy(self.runtime.data)
+        unknown["flash"]["invented"] = 1
+        with self.assertRaisesRegex(board_contract.ContractError, "unknown field"):
+            self.validate(unknown)
 
     def test_cube_layout_is_conservative_and_not_runtime_storage(self) -> None:
-        _flash, partitions = gen_flash_layout.load_validated(
-            self.cube.flash_layout_path
-        )
         self.assertEqual(
             [(p["name"], p["offset"], p["size"], p["runtime_writable"])
-             for p in partitions],
+             for p in self.cube.partitions],
             [
                 ("firmware", 0, 0x00800000, False),
                 ("reserved", 0x00800000, 0x00800000, False),
@@ -530,8 +360,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("passed for 1 board", result.stdout)
         harness = (TOOLS / "board_conformance_harness.c").read_text(encoding="utf-8")
-        for header in ("pins.h", "defaults.h", "inventory.h", "flash_layout.h"):
-            self.assertIn(f'#include "{header}"', harness)
+        self.assertIn('#include "board_config.h"', harness)
         self.assertIn("&hk_board_ops", harness)
 
     def test_cube_full_package_image_and_flash_fail_early(self) -> None:
@@ -590,11 +419,11 @@ class BoardCompositionAndCliTests(unittest.TestCase):
     def test_named_programming_profiles_dispatch_without_board_id_behavior(self) -> None:
         self.assertEqual(
             set(hkflash.RESET_PROFILE_CONNECTORS),
-            set(self.runtime.registry.data["reset_profiles"]) - {"manual"},
+            board_contract.RESET_PROFILES - {"manual"},
         )
         self.assertEqual(
             set(hkflash.REBOOT_PROFILE_HANDLERS),
-            set(self.runtime.registry.data["reboot_profiles"]),
+            board_contract.REBOOT_PROFILES,
         )
         calls: list[object] = []
         args = SimpleNamespace(
@@ -695,8 +524,8 @@ class BoardCompositionAndCliTests(unittest.TestCase):
                     check_arch.layer_violation(app, sdk_header, None)
                 )
         for private_header in (
-            "pins.h", "defaults.h", "inventory.h", "flash_layout.h",
-            "hk_board_port.h",
+            "board_config.h", "pins.h", "defaults.h", "inventory.h",
+            "flash_layout.h", "hk_board_port.h",
         ):
             with self.subTest(private_header=private_header):
                 self.assertIsNotNone(
@@ -850,10 +679,9 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.board = board_contract.load_board("huskylens-sen0305")
-        cls.flash, cls.partitions = gen_flash_layout.load_validated(
-            cls.board.flash_layout_path
-        )
-        cls.firmware = gen_flash_layout.partition_by_name(
+        cls.flash = cls.board.flash
+        cls.partitions = cls.board.partitions
+        cls.firmware = board_contract.partition_by_name(
             cls.partitions, "firmware"
         )
 
@@ -1030,7 +858,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             self.assertEqual(metadata["schema"], 1)
             self.assertEqual(metadata["firmware_version"], "0.4.0")
             self.assertEqual(metadata["board_id"], self.board.id)
-            self.assertEqual(metadata["platform_id"], self.board.registry.platform)
+            self.assertEqual(metadata["platform_id"], self.board.platform)
             self.assertEqual(metadata["board_contract_version"], "0.1.0")
             self.assertEqual(metadata["build_profile"], "hackylens-full")
             self.assertEqual(metadata["image"], output.name)

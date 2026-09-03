@@ -1,7 +1,7 @@
 #include "camera_frame.h"
 
 #include <stdio.h>
-#include "pins.h"
+#include "board_config.h"
 #include "camera_light.h"
 #include "camera_persist_settings.h"
 #include "camera_status.h"

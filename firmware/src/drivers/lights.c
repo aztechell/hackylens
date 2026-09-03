@@ -1,6 +1,6 @@
 #include "hk_lights.h"
 
-#include "defaults.h"
+#include "board_config.h"
 
 #include "../core/hk_binary.h"
 #include "hal_pwm.h"

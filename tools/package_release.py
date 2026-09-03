@@ -17,7 +17,14 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from board_contract import Board, ContractError, load_board
+from board_contract import (
+    Board,
+    ContractError,
+    flash_layout_document,
+    flash_layout_sha256,
+    load_board,
+    partition_by_name,
+)
 from firmware_attestation import (
     AttestationError,
     read_and_validate as read_and_validate_attestation,
@@ -27,7 +34,6 @@ from firmware_sidecar import (
     read_and_validate as read_and_validate_sidecar,
     write as write_sidecar,
 )
-from gen_flash_layout import load_layout, load_validated, partition_by_name
 from bootstrap_deps import LITTLEFS_REVISION, MICROPYTHON_REVISION
 
 K210_IMAGE_OVERHEAD = 37
@@ -45,8 +51,8 @@ def validate_release_firmware(path: Path, board: Board) -> None:
     """Validate partition safety; build identity comes only from attestation."""
 
     wrapped_size = path.stat().st_size + K210_IMAGE_OVERHEAD
-    flash, partitions = load_validated(board.flash_layout_path)
-    firmware_partition = partition_by_name(partitions, "firmware")
+    flash = board.flash
+    firmware_partition = partition_by_name(board.partitions, "firmware")
     erased_size = (
         (wrapped_size + flash["erase_size"] - 1) // flash["erase_size"]
         * flash["erase_size"]
@@ -235,8 +241,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"build attestation validation failed: {exc}") from exc
     if not args.sdcard.is_dir():
         raise SystemExit(f"SD-card tree not found: {args.sdcard}")
-    flash_layout = load_layout(board.flash_layout_path)
-    flash, partitions = load_validated(board.flash_layout_path)
+    flash_layout = flash_layout_document(board)
+    flash = board.flash
+    partitions = board.partitions
     firmware_partition = partition_by_name(partitions, "firmware")
 
     artifact_stem = f"hackylens-{board.id}-v{version}"
@@ -297,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         "schema": 1,
         "version": version,
         "board_id": board.id,
-        "platform_id": board.registry.platform,
+        "platform_id": board.platform,
         "firmware": firmware_out.name,
         "firmware_bytes": firmware_out.stat().st_size,
         "firmware_sha256": sha256(firmware_out),
@@ -308,9 +315,7 @@ def main(argv: list[str] | None = None) -> int:
         "sdcard": sdcard_out.name,
         "sdcard_sha256": sha256(sdcard_out),
         "flash_address": f"0x{firmware_partition['offset']:08X}",
-        "flash_layout_sha256": hashlib.sha256(
-            board.flash_layout_path.read_bytes()
-        ).hexdigest(),
+        "flash_layout_sha256": flash_layout_sha256(board),
         "flash_layout": flash_layout,
         "firmware_dependencies": dependencies_out.name,
         "firmware_dependencies_sha256": sha256(dependencies_out),

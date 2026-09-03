@@ -19,14 +19,13 @@ TOOLS_DIR = Path(__file__).resolve().parent
 if str(TOOLS_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_DIR))
 
-from board_contract import Board, ContractError, load_board
+from board_contract import Board, ContractError, load_board, partition_by_name
 from check_board_ports import compile_conformance_board
 from firmware_attestation import (
     FULL_APP_IDS as ATTESTED_FULL_APP_IDS,
     write as write_build_attestation,
 )
-from gen_board import generate as generate_board
-from gen_flash_layout import load_validated, partition_by_name
+from gen_board import write_board_config
 import app_composition
 import gen_capability_inventory as capability_inventory
 
@@ -568,7 +567,7 @@ def stage_platform_sources(
     }
     platform = ROOT / "platforms" / "k210"
     for path in platform.rglob("*"):
-        if not path.is_file() or path.name in {"devices.toml", "capabilities.toml"}:
+        if not path.is_file() or path.name == "capabilities.toml":
             continue
         rel = path.relative_to(ROOT)
         if rel in provider_sources and rel not in selected_provider_sources:
@@ -589,9 +588,8 @@ def stage_board_port(stage: Path, board: Board) -> None:
     destination = stage / "boards" / board.id
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copy2(board.directory / "board.c", destination / "board.c")
-    for name in ("pins.h", "defaults.h", "inventory.h", "flash_layout.h"):
-        source = board.generated_dir / name
-        shutil.copy2(source, stage / name)
+    generated = write_board_config(board)
+    shutil.copy2(generated, stage / "board_config.h")
     shutil.copy2(
         ROOT / "firmware" / "src" / "internal" / "hk_board_port.h",
         stage / "hk_board_port.h",
@@ -744,8 +742,8 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
         raise RuntimeError(f"build did not produce a non-empty ELF: {built_elf}")
     reject_embedded_host_paths(built, [ROOT, sdk])
     reject_embedded_host_paths(built_elf, [ROOT, sdk])
-    flash, partitions = load_validated(board.flash_layout_path)
-    firmware_partition = partition_by_name(partitions, "firmware")
+    flash = board.flash
+    firmware_partition = partition_by_name(board.partitions, "firmware")
     flash_limit = firmware_partition["offset"] + firmware_partition["size"]
     flashed_size = ((built.stat().st_size + K210_IMAGE_OVERHEAD + flash["erase_size"] - 1)
                     // flash["erase_size"] * flash["erase_size"])
@@ -791,9 +789,6 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
 def conformance_check(board: Board) -> None:
     if board.support != "conformance":
         raise RuntimeError("conformance target requires support=conformance")
-    failures = generate_board(board, check=True)
-    if failures:
-        raise RuntimeError("; ".join(failures))
     compile_conformance_board(board)
     print(f"[OK] {board.id}: conformance descriptor/BSP compile-check passed")
 
@@ -843,11 +838,6 @@ def main(argv: list[str] | None = None) -> int:
         board = load_board(args.board)
     except ContractError as exc:
         print(f"[ERR] {exc}", file=sys.stderr)
-        return 2
-    failures = generate_board(board, check=True)
-    if failures:
-        for failure in failures:
-            print(f"[ERR] {failure}", file=sys.stderr)
         return 2
     composition = compose_capabilities(
         board,

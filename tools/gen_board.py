@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Generate and stale-check private headers for one selected board port."""
+"""Generate one private board_config.h from board.toml."""
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import re
 import sys
 
-from board_contract import Board, ContractError, load_board, validate_board_source
-from gen_flash_layout import load_validated, render as render_flash_layout
+from board_contract import (
+    Board,
+    ContractError,
+    ROOT,
+    function_macro,
+    load_board,
+    validate_board_source,
+)
 
 
-ROOT = Path(__file__).resolve().parents[1]
+BUILD_BOARD_CONFIG = ROOT / "build" / "generated" / "board_config.h"
 
 DEFAULT_MACROS = {
     "lcd_width": "LCD_W",
@@ -48,45 +53,34 @@ DEFAULT_MACROS = {
 }
 
 
-def _guard(name: str) -> str:
-    return "HK_GENERATED_" + re.sub(r"[^A-Z0-9]", "_", name.upper())
-
-
-def _macro(name: str) -> str:
-    return re.sub(r"[^A-Z0-9]", "_", name.upper())
-
-
-def render_pins(board: Board) -> str:
-    guard = _guard("pins_h")
+def render_board_config(board: Board) -> str:
+    profile = board.runtime_profile or ""
     lines = [
-        f"#ifndef {guard}",
-        f"#define {guard}",
+        "#ifndef HK_BOARD_CONFIG_H",
+        "#define HK_BOARD_CONFIG_H",
         "",
         f"/* Generated from boards/{board.id}/board.toml. Do not edit. */",
+        "",
+        f'#define HK_BOARD_ID "{board.id}"',
+        f'#define HK_BOARD_PLATFORM "{board.platform}"',
+        f'#define HK_BOARD_SUPPORT "{board.support}"',
+        f"#define HK_BOARD_RELEASEABLE {1 if board.releaseable else 0}U",
+        f'#define HK_BOARD_RUNTIME_PROFILE "{profile}"',
         "",
     ]
     for route in board.selected_routes():
         lines.append(f"#define {route['macro']} {route['pin']}")
         lines.append(f'#define {route["macro"]}_LABEL "IO{route["pin"]}"')
-        function_macro = board.registry.function_macro(route["function"])
-        lines.append(f"#define {route['macro']}_FUNCTION {function_macro}")
-    lines.extend(["", "#endif", ""])
-    return "\n".join(lines)
-
-
-def render_defaults(board: Board) -> str:
-    guard = _guard("defaults_h")
-    lines = [
-        f"#ifndef {guard}",
-        f"#define {guard}",
-        "",
-        f"/* Generated from boards/{board.id}/board.toml. Do not edit. */",
-        "",
-    ]
+        lines.append(
+            f"#define {route['macro']}_FUNCTION {function_macro(route['function'])}"
+        )
+    if board.selected_routes():
+        lines.append("")
+    defaults = board.data.get("defaults", {})
     for field, macro in DEFAULT_MACROS.items():
-        if field not in board.data["defaults"]:
+        if field not in defaults:
             continue
-        value = board.data["defaults"][field]
+        value = defaults[field]
         suffix = (
             ".0" if field == "pwm_frequency_hz"
             else "" if field in {"lcd_width", "lcd_height"}
@@ -94,91 +88,75 @@ def render_defaults(board: Board) -> str:
         )
         lines.append(f"#define {macro} {value}{suffix}")
         lines.append(f'#define {macro}_LABEL "{value}"')
-    defaults = board.data["defaults"]
     if "gpiohs_lcd_dc" in defaults:
         lines.append("#define GPIOHS_LCD_DC_BIT (1U << GPIOHS_LCD_DC_OR_AUX)")
     if "camera_max_width" in defaults and "camera_max_height" in defaults:
         lines.append("#define CAMERA_MAX_FRAME_PIXELS (CAMERA_MAX_W * CAMERA_MAX_H)")
-    lines.extend(["", "#endif", ""])
+    if defaults:
+        lines.append("")
+    flash = board.flash
+    lines.extend([
+        f"#define HK_FLASH_ADDRESS_BYTES {flash['address_bytes']}U",
+        f"#define HK_FLASH_MIN_CAPACITY 0x{flash['minimum_capacity']:08X}UL",
+        f"#define HK_FLASH_MAX_CAPACITY 0x{flash['maximum_capacity']:08X}UL",
+        f"#define HK_FLASH_ERASE_SIZE 0x{flash['erase_size']:08X}UL",
+        f"#define HK_FLASH_PROGRAM_SIZE 0x{flash['program_size']:08X}UL",
+        "",
+        "typedef enum",
+        "{",
+    ])
+    for index, part in enumerate(board.partitions):
+        lines.append(f"    HK_FLASH_PARTITION_{part['name'].upper()} = {index},")
+    lines.extend([
+        f"    HK_FLASH_PARTITION_COUNT = {len(board.partitions)}",
+        "} hk_flash_partition_id_t;",
+        "",
+    ])
+    for part in board.partitions:
+        name = part["name"].upper()
+        lines.extend([
+            f"#define HK_FLASH_PARTITION_{name}_OFFSET 0x{part['offset']:08X}UL",
+            f"#define HK_FLASH_PARTITION_{name}_SIZE 0x{part['size']:08X}UL",
+            f"#define HK_FLASH_PARTITION_{name}_REQUIRED_CAPACITY "
+            f"0x{part['required_capacity']:08X}UL",
+            f"#define HK_FLASH_PARTITION_{name}_RUNTIME_WRITABLE "
+            f"{1 if part['runtime_writable'] else 0}U",
+            "",
+        ])
+    lines.extend(["#endif", ""])
     return "\n".join(lines)
 
 
-def render_inventory(board: Board) -> str:
-    guard = _guard("inventory_h")
-    profile = board.runtime_profile or ""
-    lines = [
-        f"#ifndef {guard}",
-        f"#define {guard}",
-        "",
-        f"/* Generated from boards/{board.id}/board.toml. Private build metadata. */",
-        f'#define HK_BOARD_ID "{board.id}"',
-        f'#define HK_BOARD_PLATFORM "{board.registry.platform}"',
-        f'#define HK_BOARD_SUPPORT "{board.support}"',
-        f"#define HK_BOARD_RELEASEABLE {1 if board.releaseable else 0}U",
-        f'#define HK_BOARD_RUNTIME_PROFILE "{profile}"',
-        f"#define HK_BOARD_SELECTED_ROUTE_COUNT {len(board.selected_routes())}U",
-        "",
-    ]
-    supported = board.driver_supported_kinds()
-    for kind in board.registry.device_kinds():
-        present = any(device["kind"] == kind for device in board.data["devices"])
-        token = _macro(kind)
-        lines.append(f"#define HK_BOARD_HAS_{token} {1 if present else 0}U")
-        lines.append(f"#define HK_BOARD_DRIVER_{token} {1 if kind in supported else 0}U")
-    lines.extend(["", "#endif", ""])
-    return "\n".join(lines)
-
-
-def generated_files(board: Board) -> dict[str, str]:
-    flash, partitions = load_validated(board.flash_layout_path)
-    return {
-        "pins.h": render_pins(board),
-        "defaults.h": render_defaults(board),
-        "inventory.h": render_inventory(board),
-        "flash_layout.h": render_flash_layout(
-            board.flash_layout_path.relative_to(ROOT), flash, partitions
-        ),
-    }
-
-
-def generate(board: Board, *, check: bool) -> list[str]:
+def write_board_config(board: Board, path: Path | None = None) -> Path:
     validate_board_source(board)
-    expected = generated_files(board)
-    failures: list[str] = []
-    for name, content in expected.items():
-        path = board.generated_dir / name
-        if check:
-            try:
-                current = path.read_text(encoding="utf-8")
-            except OSError:
-                failures.append(f"missing generated file: {path}")
-                continue
-            if current != content:
-                failures.append(f"stale generated file: {path}")
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8", newline="\n")
-        print(f"generated {path}")
-    return failures
+    destination = path or BUILD_BOARD_CONFIG
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(render_board_config(board), encoding="utf-8", newline="\n")
+    return destination
+
+
+def board_config_include_dir(board_id: str = "huskylens-sen0305") -> Path:
+    """Write board_config.h and return its include directory."""
+    return write_board_config(load_board(board_id)).parent
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--board", required=True, help="Canonical board.toml ID")
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=BUILD_BOARD_CONFIG,
+        help="Output path for board_config.h",
+    )
     args = parser.parse_args(argv)
     try:
         board = load_board(args.board)
-        failures = generate(board, check=args.check)
+        path = write_board_config(board, args.out)
     except (ContractError, ValueError) as exc:
         print(f"board contract error: {exc}", file=sys.stderr)
         return 2
-    if failures:
-        for failure in failures:
-            print(failure, file=sys.stderr)
-        return 1
-    if args.check:
-        print(f"[OK] {board.id}: descriptor, BSP and generated headers are current")
+    print(f"generated {path}")
     return 0
 
 

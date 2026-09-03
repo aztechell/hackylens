@@ -435,7 +435,7 @@ def capability_availability(
     unknown = sorted(disabled_capabilities - known)
     if unknown:
         raise CapabilityError("unknown disabled capability: " + ", ".join(unknown))
-    board_kinds = {item["kind"] for item in board.data["devices"]}
+    board_kinds = board.present_kinds()
     driver_kinds = board.driver_supported_kinds()
     selected_routes = {item["id"] for item in board.selected_routes()}
     available: list[Capability] = []
@@ -554,9 +554,9 @@ def compose(
                 f"{owner}: enabled_by_app names unknown app "
                 f"{requirements.enabled_by_app!r}"
             )
-    if board.registry.platform != _load_toml(catalog_path)["platform"]:
+    if board.platform != _load_toml(catalog_path)["platform"]:
         raise CapabilityError(
-            f"capability catalog platform does not match board {board.registry.platform!r}"
+            f"capability catalog platform does not match board {board.platform!r}"
         )
     available, absences = capability_availability(
         board, catalog, disabled_capabilities, root=root
@@ -693,7 +693,7 @@ def capabilities_document(composition: Composition) -> dict[str, object]:
     return {
         "schema": 1,
         "board": composition.board.id,
-        "platform": composition.board.registry.platform,
+        "platform": composition.board.platform,
         "support": composition.board.support,
         "runtime_supported": composition.board.support == "runtime",
         "entries": entries,
@@ -705,7 +705,7 @@ def composition_document(composition: Composition, capabilities_sha256: str) -> 
     return {
         "schema": 2,
         "board": composition.board.id,
-        "platform": composition.board.registry.platform,
+        "platform": composition.board.platform,
         "support": composition.board.support,
         "runtime_supported": composition.board.support == "runtime",
         "disabled_apps": sorted(composition.disabled_apps),

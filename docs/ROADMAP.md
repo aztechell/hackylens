@@ -194,9 +194,8 @@ releaseable = true
 runtime_profile = "hackylens-full"
 ```
 
-Descriptor описывает hardware inventory, routes, defaults и programming
-metadata, а не app policy. Private platform registry фиксирует допустимые device
-kinds, drivers, FPIOA functions, peripherals и runtime profiles.
+Descriptor описывает available services, routes, defaults, flash layout и
+programming metadata, а не app policy.
 
 ### 1.2 Source layout
 
@@ -206,16 +205,9 @@ kinds, drivers, FPIOA functions, peripherals и runtime profiles.
 platforms/k210/
   hal/
   startup/
-  devices.toml
 boards/huskylens-sen0305/
   board.toml
   board.c
-  flash_layout.json
-  generated/
-    pins.h
-    defaults.h
-    inventory.h
-    flash_layout.h
 boards/sipeed-maix-cube/
   ...
 firmware/src/internal/

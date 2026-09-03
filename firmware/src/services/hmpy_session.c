@@ -11,7 +11,7 @@
 #include "micropython_runtime.h"
 #include "hal_time.h"
 #include "hal_watchdog.h"
-#include "inventory.h"
+#include "board_config.h"
 #include "../storage/userfs.h"
 
 #define HMPY_SESSION_LEASE_US 10000000ULL

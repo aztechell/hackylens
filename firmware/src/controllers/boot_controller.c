@@ -2,9 +2,8 @@
 
 #include <stdio.h>
 
-#include "defaults.h"
+#include "board_config.h"
 #include "hk_config.h"
-#include "pins.h"
 #include "../config/settings_config.h"
 
 #include "../core/hk_app_registry.h"
