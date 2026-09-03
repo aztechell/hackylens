@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 import shutil
 import sys
@@ -24,19 +23,21 @@ EXPECTED_APPS = {
 
 
 class AppCompositionTests(unittest.TestCase):
-    def test_repository_manifests_are_complete_deterministic_and_fresh(self) -> None:
+    def test_repository_manifests_are_complete_and_deterministic(self) -> None:
         first = app_composition.load_model()
         second = app_composition.load_model()
         self.assertEqual(first, second)
         self.assertEqual({app["id"] for app in first["apps"]}, EXPECTED_APPS)
-        self.assertEqual(app_composition.freshness_failures(), [])
-        generated = json.loads(
-            app_composition.GENERATED_JSON.read_text(encoding="utf-8")
-        )
+        document = app_composition.generated_document(first)
         self.assertEqual(
-            [app["id"] for app in generated["apps"]],
+            [app["id"] for app in document["apps"]],
             sorted(EXPECTED_APPS),
         )
+        first_registry = app_composition.generated_registry_files(first)
+        self.assertEqual(
+            first_registry, app_composition.generated_registry_files(second)
+        )
+        self.assertEqual(set(first_registry), {"registry.h", "registry.c"})
 
     def test_enable_definitions_and_source_sets_are_manifest_derived(self) -> None:
         document = app_composition.generated_document(
@@ -48,8 +49,10 @@ class AppCompositionTests(unittest.TestCase):
             "firmware/src/apps/qr_camera/qr_decoder_engine.c",
             by_id["qr-camera"]["sources"],
         )
-        defaults = app_composition.generated_defaults(app_composition.load_model())
-        self.assertEqual(defaults.count("#define HK_ENABLE_APP_"), len(EXPECTED_APPS))
+        self.assertEqual(
+            {app["enable_definition"] for app in document["apps"]},
+            {app_composition.enable_definition(app_id) for app_id in EXPECTED_APPS},
+        )
 
     def test_legacy_build_constraints_are_manifest_services_only(self) -> None:
         requirements = build_firmware.load_app_requirements()
@@ -60,6 +63,10 @@ class AppCompositionTests(unittest.TestCase):
             for service in app["services"]:
                 if service["id"].startswith(app_composition.LEGACY_SERVICE_PREFIX):
                     self.assertEqual(app["lifecycle"], "legacy")
+
+    def test_committed_generated_copies_are_removed(self) -> None:
+        for path in app_composition.committed_generated_copies():
+            self.assertFalse(path.exists(), path)
 
     def test_undeclared_translation_unit_is_rejected_before_build(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -127,19 +134,14 @@ class AppCompositionTests(unittest.TestCase):
                 (stage / "firmware" / "src" / "apps" / "camera" / "camera_app.c").is_file()
             )
 
-    def test_generated_composition_freshness_rejects_stale_output(self) -> None:
+    def test_registry_generation_is_path_independent(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
-            generated_json = Path(directory) / "composition.json"
-            generated_defaults = Path(directory) / "app_config_defaults.h"
-            with mock.patch.object(app_composition, "GENERATED_JSON", generated_json), \
-                    mock.patch.object(app_composition, "GENERATED_DEFAULTS", generated_defaults):
-                app_composition.write_generated()
-                self.assertEqual(app_composition.freshness_failures(), [])
-                generated_json.write_text("{}\n", encoding="utf-8")
-                self.assertRegex(
-                    "\n".join(app_composition.freshness_failures()),
-                    r"composition\.json: generated file is stale",
-                )
+            destination = Path(directory) / "app_registry"
+            model = app_composition.load_model()
+            app_composition.write_registry(destination, model)
+            expected = app_composition.generated_registry_files(model)
+            for name, content in expected.items():
+                self.assertEqual((destination / name).read_bytes(), content)
 
     def test_private_includes_control_real_cmake_include_roots(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

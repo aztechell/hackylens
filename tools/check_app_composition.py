@@ -27,20 +27,40 @@ def _tool(toolchain: Path, name: str) -> Path:
 
 
 def validate_source() -> list[str]:
-    failures = app_composition.freshness_failures()
+    failures: list[str] = []
+    try:
+        app_composition.load_model()
+    except app_composition.CompositionError as exc:
+        failures.append(str(exc))
     if (ROOT / "firmware" / "app_requirements.toml").exists():
         failures.append("firmware/app_requirements.toml remains a composition source")
+    for path in app_composition.committed_generated_copies():
+        if path.exists():
+            failures.append(
+                f"{path.relative_to(ROOT).as_posix()}: committed generated copy must not exist"
+            )
     return failures
 
 
 def validate_build(board_id: str) -> list[str]:
     failures = validate_source()
+    try:
+        model = app_composition.load_model()
+        expected = app_composition.generated_registry_files(model)
+    except app_composition.CompositionError as exc:
+        return failures + [str(exc)]
+    generated_root = app_composition.BUILD_REGISTRY_ROOT
+    for name, content in expected.items():
+        path = generated_root / name
+        if not path.is_file():
+            failures.append(f"missing generated app registry: {path}")
+        elif path.read_bytes() != content:
+            failures.append(f"{path}: generated app registry does not match manifests")
     composition_path = ROOT / "build" / board_id / "composition.json"
     if not composition_path.is_file():
         return failures + [f"missing build composition: {composition_path}"]
     composition = json.loads(composition_path.read_text(encoding="utf-8"))
     disabled = set(composition["disabled_apps"])
-    model = app_composition.load_model()
     apps = app_composition.app_map(model)
     unknown = disabled - set(apps)
     if unknown:
@@ -52,6 +72,13 @@ def validate_build(board_id: str) -> list[str]:
     stage = sdk / "src" / str(build_firmware.TARGETS["full"]["project"])
     if not stage.is_dir():
         return failures + [f"firmware stage is unavailable: {stage}"]
+    staged_registry = stage / "firmware" / "generated" / "app_registry"
+    for name, content in expected.items():
+        path = staged_registry / name
+        if not path.is_file():
+            failures.append(f"staged app registry is missing: {path}")
+        elif path.read_bytes() != content:
+            failures.append(f"{path}: staged app registry does not match manifests")
     config_path = stage / "hk_config.h"
     config = config_path.read_text(encoding="utf-8") if config_path.is_file() else ""
     project_path = stage / "project.cmake"

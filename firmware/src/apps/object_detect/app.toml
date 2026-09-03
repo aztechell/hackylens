@@ -1,46 +1,10 @@
-schema = 1
 id = "object-detect"
 name = "OBJECT DETECT"
-version = "0.1.0"
-entry = "object_detect_legacy_entry"
-generated_symbol = "hk_generated_app_object_detect"
 lifecycle = "legacy"
+entry = "object_detect_legacy_entry"
 sources = ["object_detect_app.c", "object_detect_controller.c", "object_detect_detector.c", "object_detect_labels.c", "object_detect_postprocess.c", "object_detect_settings.c", "object_detect_settings_menu.c", "object_detect_view.c"]
-private_includes = []
-services = [
-  { id = "hackylens.service.legacy-camera", namespace = "object-detect.legacy-camera" },
-  { id = "hackylens.service.legacy-sd-card", namespace = "object-detect.legacy-sd-card" },
-]
-
-[menu]
-visible = true
-order = 6
-
-[autostart]
-eligible = true
-id = 9
-
-[capabilities]
-required = [
-  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
-  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
-  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
-  { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
-]
-optional = []
-
-[limits]
-static_ram_bytes = 1048576
-stack_bytes = 16384
-state_bytes = 262144
-tick_interval_us = 1000
-tick_budget_us = 1000
-render_budget_us = 10000
-
-[metadata]
-help = "OBJECT DETECT legacy feature app."
+requires = ["display", "time", "input", "lights", "camera", "sd-card"]
+menu_order = 6
+autostart_id = 9
+tick_ms = 1
 debug = "HKOBJECT/HKOBJECTINFO"
-
-[tests]
-host_sources = ["object_detect_app.c"]
-build_profiles = ["full", "disabled"]

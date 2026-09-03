@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Native App Manifest schema 1 and emit its canonical model."""
+"""Validate Native App Manifests and emit the canonical build model."""
 
 from __future__ import annotations
 

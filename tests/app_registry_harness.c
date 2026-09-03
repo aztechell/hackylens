@@ -3,8 +3,8 @@
 #include <string.h>
 
 #include "hk_config.h"
-#include "../firmware/generated/app_registry/registry.h"
-#include "../firmware/src/core/hk_app_registry.h"
+#include "firmware/generated/app_registry/registry.h"
+#include "firmware/src/core/hk_app_registry.h"
 
 #define CHECK(expression)                                                     \
     do                                                                        \

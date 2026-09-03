@@ -12,8 +12,8 @@ version is historical and does not permanently couple firmware releases to the
 future App SDK or runtime contract.
 
 Apps are described by immutable generated `hk_app_t` descriptors. Identity,
-title, menu order, stable autostart ID, help/debug text, tick policy, limits,
-and capability/service requests come from canonical `app.toml`. A legacy
+title, menu order, stable autostart ID, debug text, tick policy, and
+capability/service requests come from canonical `app.toml`. A legacy
 descriptor points to one app-owned const `hk_legacy_app_entry_t` binding with
 its screen, `enter`, optional `exit`, optional `tick`, optional `handle_input`,
 optional `owns_screen`, optional `draw_icon`, optional
@@ -54,8 +54,9 @@ Reusable settings menus are neutral child sessions rather than screens or applic
 CAMERA and QR each own a settings child session and descriptor table. `owns_screen` maps their shared `SCREEN_CAMERA_SETTINGS` secondary screen back to the correct active app. BACK closes the child session and preserves the existing camera resume, QR resume, or size-reinitialization path. System SETTINGS uses edit-on-OK rows; BACK first commits and leaves edit mode, while a second BACK exits. Its app `exit` callback closes the session so `HKMENU` also commits an active edit.
 
 Every app lives in a self-contained `apps/<feature>/` directory and owns its
-legacy binding object. `firmware/generated/app_registry/registry.c` is the only
-production descriptor table; `core/hk_app_registry.c` contains no concrete app
+legacy binding object. `build/generated/app_registry/registry.c` is the
+build-time descriptor table copied into the firmware stage;
+`core/hk_app_registry.c` contains no concrete app
 names and iterates it to dispatch secondary screens, background ticks with the
 current input snapshot, SD events, debug commands, and `HKHELP` tokens
 generically. FILES closes preview/GIF state through `exit` and owns SD

@@ -111,7 +111,7 @@ link, AI, and MicroPython behavior remains part of the SEN0305 runtime profile.
 | SEN0305 runtime port | Supported and releaseable |
 | Cube port | Compile conformance only |
 | Capability build composition | Phase 2 qualified on SEN0305; Time + Input + Display + External Link + Lights runtime providers |
-| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; schema-1 manifests drive production sources and immutable descriptors; the fixed-capacity lifecycle-v2 engine is integrated into the production firmware loop through one legacy/v2 foreground switch with ordered events, bounded tick/render, exact owner-scoped grants, and generation-checked wakeups; no current app is migrated to v2 yet |
+| App Runtime / Native App Manifest / Feature App SDK | 0.1.0 experimental contracts; minimal build-time `app.toml` manifests drive production sources and one immutable build-directory registry; the fixed-capacity lifecycle-v2 engine is integrated into the production firmware loop through one legacy/v2 foreground switch with ordered events, bounded tick/render, exact owner-scoped grants, and generation-checked wakeups; no current app is migrated to v2 yet |
 | General hardware portability | Not claimed |
 
 `HELLO.board` is the canonical `board.toml.id`; clients must not infer

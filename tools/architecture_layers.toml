@@ -62,7 +62,10 @@ paths = ["firmware/src/app_runtime/**"]
 
 [[layers]]
 name = "generated-app-registry"
-paths = ["firmware/generated/app_registry/**"]
+paths = [
+  "firmware/generated/app_registry/**",
+  "build/generated/app_registry/**",
+]
 
 [[layers]]
 name = "generated-app-composition"

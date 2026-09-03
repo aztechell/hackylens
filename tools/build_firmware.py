@@ -72,13 +72,19 @@ if set(APP_MODULES) != ATTESTED_FULL_APP_IDS:
         "build app registry does not match firmware-attestation full composition"
     )
 
+def _app_capability_requirements() -> dict[str, capability_inventory.Requirements]:
+    return capability_inventory.requirements_from_manifest_model(
+        APP_MANIFEST_MODEL, set(APP_MODULES)
+    )
+
+
 def load_app_requirements() -> dict[str, set[str]]:
     """Compatibility view of manifest-declared legacy build requirements."""
 
-    requirements = capability_inventory.load_app_requirements(
-        app_composition.MANIFEST_ROOT, set(APP_MODULES)
-    )
-    return {app: set(value.legacy) for app, value in requirements.items()}
+    return {
+        app: set(value.legacy)
+        for app, value in _app_capability_requirements().items()
+    }
 
 
 def apps_requiring_legacy(requirement: str) -> frozenset[str]:
@@ -107,6 +113,7 @@ def compose_capabilities(
             required_apps,
             disabled_capabilities,
             allow_required_consumer_exclusion=allow_required_consumer_exclusion,
+            app_requirements=_app_capability_requirements(),
         )
     except capability_inventory.CapabilityError as exc:
         raise RuntimeError(str(exc)) from exc
@@ -635,8 +642,11 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     stage_firmware_sources(stage, disabled_apps)
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
     copy_tree_files(ROOT / "sdk" / "include", stage / "sdk" / "include")
+    app_composition.write_registry(
+        app_composition.BUILD_REGISTRY_ROOT, APP_MANIFEST_MODEL
+    )
     copy_tree_files(
-        app_composition.GENERATED_REGISTRY_ROOT,
+        app_composition.BUILD_REGISTRY_ROOT,
         stage / "firmware" / "generated" / "app_registry",
     )
     stage_platform_sources(stage, disabled_apps, capability_composition)
@@ -645,10 +655,6 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
         shutil.copy2(header, stage / header.name)
     shutil.copy2(ROOT / "firmware" / "config" / "hk_config_default.h", stage / "hk_config_default.h")
-    shutil.copy2(
-        app_composition.GENERATED_DEFAULTS,
-        stage / "app_config_defaults.h",
-    )
 
     if "qr-camera" not in disabled_apps:
         quirc = ROOT / "firmware" / "third_party" / "quirc"

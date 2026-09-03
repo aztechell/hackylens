@@ -739,8 +739,6 @@ def layout_failures() -> list[str]:
         ROOT / "tests" / "capability_fake_display.c",
         ROOT / "tests" / "display_contract_harness.c",
         ROOT / "tests" / "test_display_contract.py",
-        ROOT / "firmware" / "generated" / "app_composition" / "composition.json",
-        ROOT / "firmware" / "config" / "app_config_defaults.h",
         ROOT / "firmware" / "capability_consumers.toml",
         ROOT / "platforms" / "k210" / "capabilities.toml",
         ROOT / "tools" / "gen_capability_inventory.py",
@@ -810,8 +808,14 @@ def layout_failures() -> list[str]:
             failures.append(f"apps/{directory}/app.toml: manifest composition is missing")
     for path in (SRC / "apps").glob("*.[ch]"):
         failures.append(f"apps/{path.name}: flat app source is forbidden")
-    if not (ROOT / "firmware" / "generated" / "app_registry" / "registry.c").is_file():
-        failures.append("generated app registry source is missing")
+    for relative in (
+        "firmware/generated/app_registry/registry.c",
+        "firmware/generated/app_registry/registry.h",
+        "firmware/generated/app_composition/composition.json",
+        "firmware/config/app_config_defaults.h",
+    ):
+        if (ROOT / relative).exists():
+            failures.append(f"{relative}: committed generated copy must not exist")
     if not (SRC / "core" / "hk_app_registry.c").is_file():
         failures.append("generic app registry runtime is missing")
     if 'if "qr-camera" not in disabled_apps:' not in manifest:

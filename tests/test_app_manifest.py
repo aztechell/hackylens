@@ -49,27 +49,16 @@ class AppManifestSchemaTests(unittest.TestCase):
         source = path.read_text(encoding="utf-8")
         source = source.replace("alpha-tool", "beta-tool")
         source = source.replace("alpha_tool_app", "beta_tool_app")
-        source = source.replace(
-            "hk_generated_app_alpha_tool", "hk_generated_app_beta_tool"
-        )
-        source = source.replace("order = 10", "order = 11")
-        source = source.replace("id = 42", "id = 43")
+        source = source.replace("menu_order = 10", "menu_order = 11")
+        source = source.replace("autostart_id = 42", "autostart_id = 43")
         if field == "id":
             source = source.replace('id = "beta-tool"', 'id = "alpha-tool"', 1)
-            source = source.replace(
-                'namespace = "beta-tool.settings"',
-                'namespace = "alpha-tool.settings"',
-            )
         elif field == "entry":
             source = source.replace("beta_tool_app", "alpha_tool_app", 1)
-        elif field == "generated_symbol":
-            source = source.replace(
-                "hk_generated_app_beta_tool", "hk_generated_app_alpha_tool", 1
-            )
         elif field == "menu.order":
-            source = source.replace("order = 11", "order = 10", 1)
+            source = source.replace("menu_order = 11", "menu_order = 10", 1)
         elif field == "autostart.id":
-            source = source.replace("id = 43", "id = 42", 1)
+            source = source.replace("autostart_id = 43", "autostart_id = 42", 1)
         else:
             self.fail(f"unknown collision field {field}")
         path.write_text(source, encoding="utf-8")
@@ -81,14 +70,24 @@ class AppManifestSchemaTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in first["apps"]], [
             "alpha-tool", "zeta-legacy",
         ])
+        alpha = first["apps"][0]
+        self.assertEqual(alpha["generated_symbol"], "hk_generated_app_alpha_tool")
+        self.assertEqual(alpha["menu"]["order"], 10)
+        self.assertTrue(alpha["menu"]["visible"])
+        self.assertEqual(alpha["autostart"]["id"], 42)
         self.assertEqual(
-            first["apps"][0]["capabilities"]["optional"][0]["features"],
-            ["base-plane", "rgb565"],
+            alpha["capabilities"]["optional"][0]["id"],
+            "hackylens.cap.display",
+        )
+        self.assertEqual(
+            alpha["capabilities"]["optional"][0]["fallback"],
+            "headless",
         )
         self.assertEqual(
             first["apps"][1]["sources"],
             ["src/zeta_legacy.c", "src/zeta_view.c"],
         )
+        self.assertFalse(first["apps"][1]["autostart"]["eligible"])
         with tempfile.TemporaryDirectory(prefix="hackylens-app-manifest-copy-") as temp:
             copied = self.copy_fixtures(Path(temp))
             second_bytes = MANIFEST.canonical_json_bytes(
@@ -126,7 +125,7 @@ class AppManifestSchemaTests(unittest.TestCase):
             empty.mkdir()
             malformed = temporary / "malformed" / "app"
             malformed.mkdir(parents=True)
-            (malformed / "app.toml").write_text("schema = [\n", encoding="utf-8")
+            (malformed / "app.toml").write_text("id = [\n", encoding="utf-8")
             for scan_root in (empty, malformed.parent):
                 with self.subTest(scan_root=scan_root):
                     output = temporary / f"{scan_root.name}.json"
@@ -143,22 +142,13 @@ class AppManifestSchemaTests(unittest.TestCase):
                     self.assertIn("[FAIL] Native App Manifest", result.stderr)
                     self.assertFalse(output.exists())
 
-    def test_unknown_and_missing_schema_fields_are_rejected_without_defaults(self) -> None:
+    def test_unknown_and_missing_fields_are_rejected(self) -> None:
         mutations = (
-            ("schema = 1", "schema = 2", "schema must be integer 1"),
-            ("schema = 1", 'schema = "1"', "schema must be integer 1"),
-            ("schema = 1", "schema = true", "schema must be integer 1"),
-            ("schema = 1", "schema = 1\nunknown = 7", "unknown=unknown"),
+            ("id = \"alpha-tool\"\n", 'id = "alpha-tool"\nunknown = 7\n', "unknown=unknown"),
             ('id = "alpha-tool"\n', "", "missing=id"),
             ('entry = "alpha_tool_app"\n', "", "missing=entry"),
-            ('generated_symbol = "hk_generated_app_alpha_tool"\n', "", "missing=generated_symbol"),
-            ("[menu]", "[menu]\nunknown = true", "menu: unknown=unknown"),
-            ("visible = true\n", "", "menu: missing=visible"),
-            ("[autostart]", "[autostart]\nunknown = true", "autostart: unknown=unknown"),
-            ("[limits]", "[limits]\nunknown = 1", "limits: unknown=unknown"),
-            ("state_bytes = 256\n", "", "limits: missing=state_bytes"),
-            ("[metadata]", "[metadata]\nunknown = 1", "metadata: unknown=unknown"),
-            ("[tests]", "[tests]\nunknown = 1", "tests: unknown=unknown"),
+            ("tick_ms = 10\n", "", "missing=tick_ms"),
+            ('requires = ["input", "settings"]\n', "", "missing=requires"),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
@@ -171,204 +161,115 @@ class AppManifestSchemaTests(unittest.TestCase):
             ('id = "alpha-tool"', f'id = "a{"a" * 63}"', "exceeds 63"),
             ('name = "Alpha Tool"', 'name = " Alpha Tool"', "trimmed string"),
             ('entry = "alpha_tool_app"', 'entry = "alpha-tool-app"', "invalid value"),
-            (
-                'generated_symbol = "hk_generated_app_alpha_tool"',
-                'generated_symbol = "hk-generated-alpha"',
-                "invalid value",
-            ),
             ('lifecycle = "v2"', 'lifecycle = "dynamic"', "lifecycle must be one of"),
-            ("visible = true", "visible = 1", "menu.visible: expected boolean"),
-            ("order = 10", "order = 0", "menu.order: outside"),
-            ("eligible = true", "eligible = false", "must be non-zero exactly"),
-            ("id = 42", "id = 0", "must be non-zero exactly"),
+            ("menu_order = 10", "menu_order = 0", "menu_order: outside"),
+            ("autostart_id = 42", "autostart_id = 65536", "autostart_id: outside"),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
                 self.reject_alpha(old, new, expected)
 
-    def test_app_version_accepts_semver_components_above_uint16(self) -> None:
-        with tempfile.TemporaryDirectory(
-            prefix="hackylens-app-manifest-version-"
-        ) as temp:
+    def test_omitted_menu_order_hides_the_app(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-app-manifest-hidden-") as temp:
             root = self.copy_fixtures(Path(temp))
             path = root / ALPHA
-            source = path.read_text(encoding="utf-8")
             path.write_text(
-                source.replace(
-                    'version = "0.1.0"', 'version = "65536.0.0"', 1
+                path.read_text(encoding="utf-8").replace("menu_order = 10\n", ""),
+                encoding="utf-8",
+            )
+            model = MANIFEST.validate_tree(root)
+        alpha = next(app for app in model["apps"] if app["id"] == "alpha-tool")
+        self.assertFalse(alpha["menu"]["visible"])
+        self.assertEqual(alpha["menu"]["order"], 0)
+
+    def test_omitted_autostart_id_is_ineligible(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-app-manifest-off-") as temp:
+            root = self.copy_fixtures(Path(temp))
+            path = root / ALPHA
+            path.write_text(
+                path.read_text(encoding="utf-8").replace("autostart_id = 42\n", ""),
+                encoding="utf-8",
+            )
+            model = MANIFEST.validate_tree(root)
+        alpha = next(app for app in model["apps"] if app["id"] == "alpha-tool")
+        self.assertFalse(alpha["autostart"]["eligible"])
+        self.assertEqual(alpha["autostart"]["id"], 0)
+
+    def test_explicit_zero_autostart_id_is_ineligible(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="hackylens-app-manifest-zero-") as temp:
+            root = self.copy_fixtures(Path(temp))
+            path = root / ALPHA
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "autostart_id = 42", "autostart_id = 0"
                 ),
                 encoding="utf-8",
             )
             model = MANIFEST.validate_tree(root)
         alpha = next(app for app in model["apps"] if app["id"] == "alpha-tool")
-        self.assertEqual(alpha["version"], "65536.0.0")
+        self.assertFalse(alpha["autostart"]["eligible"])
+        self.assertEqual(alpha["autostart"]["id"], 0)
 
-    def test_versions_are_canonical_and_capability_versions_are_bounded(self) -> None:
-        mutations = (
-            ('version = "0.1.0"', 'version = "01.1.0"', "canonical SemVer"),
-            ('version = "0.1.0"', 'version = "0.1"', "canonical SemVer"),
-            ('version = "0.1.0"', 'version = "0.1.0-01"', "leading zeroes"),
-            (
-                'minimum = "0.1.0"', 'minimum = "0.2.0"',
-                "minimum must precede maximum_exclusive",
-            ),
-            (
-                'minimum = "0.1.0"', 'minimum = "0.1.0-beta"',
-                "canonical MAJOR.MINOR.PATCH",
-            ),
-            (
-                'maximum_exclusive = "0.2.0"',
-                'maximum_exclusive = "65536.0.0"',
-                "component exceeds uint16",
-            ),
-        )
-        for old, new, expected in mutations:
-            with self.subTest(old=old, new=new):
-                self.reject_alpha(old, new, expected)
-
-    def test_capability_and_optional_fallback_contract_is_strict(self) -> None:
+    def test_required_services_and_optional_fallbacks_are_strict(self) -> None:
         mutations = (
             (
-                'id = "hackylens.cap.input"', 'id = "input"',
-                "capabilities.required.*invalid value",
-            ),
-            ("instance = 0", "instance = 65536", "instance: outside"),
-            (
-                'features = ["state", "events"]',
-                'features = ["state", "state"]',
-                "features: duplicate value",
+                'requires = ["input", "settings"]',
+                'requires = ["input", "not-a-service"]',
+                "unknown required service",
             ),
             (
-                'features = ["state", "events"]',
-                'features = ["state", "Bad Feature"]',
-                "features.*invalid value",
+                'requires = ["input", "settings"]',
+                'requires = ["hackylens.cap.input"]',
+                "invalid value",
             ),
             (
-                ', fallback = "headless"', "",
-                "capabilities.optional.*missing=fallback",
-            ),
-            (
-                'fallback = "headless"', 'fallback = ""',
-                "expected non-empty trimmed string",
-            ),
-            (
-                'id = "hackylens.cap.display"', 'id = "hackylens.cap.input"',
-                "cannot be both required and optional",
-            ),
-            (
-                'features = ["state", "events"] }',
-                'features = ["state", "events"], extra = 1 }',
-                "unknown=extra",
-            ),
-            (
-                'instance = 0, minimum = "0.1.0"',
-                'minimum = "0.1.0"',
-                "missing=instance",
-            ),
-            (
-                '  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events"] },',
-                '  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events"] },\n'
-                '  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = [] },',
-                "duplicate capability request",
-            ),
-        )
-        for old, new, expected in mutations:
-            with self.subTest(old=old, new=new):
-                self.reject_alpha(old, new, expected)
-
-    def test_runtime_grant_tables_have_fixed_capacity(self) -> None:
-        capability_rows = ",\n".join(
-            "  { id = \"hackylens.cap.input\", instance = "
-            f"{index}, minimum = \"0.1.0\", maximum_exclusive = \"0.2.0\", "
-            "features = [\"state\"] }"
-            for index in range(MANIFEST.MAX_CAPABILITY_REQUESTS + 1)
-        )
-        self.reject_alpha(
-            'required = [\n  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events"] },\n]',
-            f"required = [\n{capability_rows}\n]",
-            "capabilities exceed fixed runtime capacity 16",
-        )
-
-        service_rows = ",\n".join(
-            "  { id = \"hackylens.service.service-"
-            f"{index}\", namespace = \"alpha-tool.service-{index}\" }}"
-            for index in range(MANIFEST.MAX_SERVICES + 1)
-        )
-        self.reject_alpha(
-            'services = [\n  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },\n]',
-            f"services = [\n{service_rows}\n]",
-            "services exceed fixed runtime capacity 16",
-        )
-
-    def test_app_scoped_services_and_test_metadata_are_strict(self) -> None:
-        mutations = (
-            (
-                'id = "hackylens.service.settings"', 'id = "settings"',
-                "services.*invalid value",
-            ),
-            (
-                'id = "hackylens.service.settings"',
-                'id = "hackylens.service.legacy-camera"',
-                "transitional legacy services require lifecycle=legacy",
-            ),
-            (
-                'namespace = "alpha-tool.settings"',
-                'namespace = "other-app.settings"',
-                "must be scoped below",
-            ),
-            (
-                'namespace = "alpha-tool.settings"',
-                'namespace = "alpha-tool.Bad"',
-                "invalid scoped namespace",
-            ),
-            (
-                '  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },',
-                '  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },\n'
-                '  { id = "hackylens.service.settings", namespace = "alpha-tool.settings" },',
-                "duplicate service or namespace",
-            ),
-            (
-                'host_sources = ["tests/alpha_tool_test.c"]',
-                "host_sources = []",
-                "host_sources: must not be empty",
-            ),
-            (
-                'build_profiles = ["standalone", "full", "disabled"]',
-                'build_profiles = ["full", "full"]',
+                'requires = ["input", "settings"]',
+                'requires = ["input", "input"]',
                 "duplicate value",
             ),
             (
-                'build_profiles = ["standalone", "full", "disabled"]',
-                'build_profiles = ["runtime-install"]',
-                "unknown=runtime-install",
-            ),
-            ('help = "Exercises the schema-1 lifecycle-v2 surface."', 'help = ""', "trimmed string"),
-            (
-                'help = "Exercises the schema-1 lifecycle-v2 surface."',
-                'help = "' + ("h" * 1025) + '"',
-                "metadata.help: exceeds 1024 UTF-8 bytes",
+                'optional = ["display"]',
+                'optional = ["display", "display"]',
+                "duplicate value",
             ),
             (
-                'debug = "alpha-status"',
-                'debug = "' + ("d" * 1025) + '"',
-                "metadata.debug: exceeds 1024 UTF-8 bytes",
+                'optional = ["display"]',
+                'optional = ["input"]',
+                "cannot be both required and optional",
+            ),
+            (
+                'optional = ["display"]',
+                'optional = ["sd-card"]',
+                "services cannot be optional",
+            ),
+            (
+                'optional = ["display"]',
+                "optional = []",
+                "must not be empty",
+            ),
+            (
+                'requires = ["input", "settings"]',
+                'requires = ["input", "camera"]',
+                "transitional legacy services require lifecycle=legacy",
             ),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
                 self.reject_alpha(old, new, expected)
 
-    def test_resource_limits_reject_zero_negative_unbounded_and_over_limit_values(self) -> None:
+    def test_debug_text_is_bounded_when_present(self) -> None:
+        self.reject_alpha(
+            'debug = "alpha-status"',
+            'debug = "' + ("d" * 1025) + '"',
+            "debug: exceeds 1024 UTF-8 bytes",
+        )
+
+    def test_tick_period_rejects_zero_and_over_limit_values(self) -> None:
         mutations = (
-            ("static_ram_bytes = 4096", "static_ram_bytes = 0", "static_ram_bytes: outside"),
-            ("stack_bytes = 2048", "stack_bytes = -1", "stack_bytes: outside"),
-            ("state_bytes = 256", 'state_bytes = "unbounded"', "state_bytes: expected integer"),
-            ("stack_bytes = 2048", "stack_bytes = 32769", "stack_bytes: outside"),
-            ("state_bytes = 256", "state_bytes = 5000", "state_bytes exceeds"),
-            ("tick_interval_us = 10000", "tick_interval_us = 0", "tick_interval_us: outside"),
-            ("tick_interval_us = 10000", "tick_interval_us = 4294967295", "tick_interval_us: outside"),
-            ("tick_budget_us = 1000", "tick_budget_us = 11000", "tick_budget_us exceeds"),
-            ("render_budget_us = 2000", "render_budget_us = 1000001", "render_budget_us: outside"),
+            ("tick_ms = 10", "tick_ms = 0", "tick_ms: outside"),
+            ("tick_ms = 10", "tick_ms = -1", "tick_ms: outside"),
+            ("tick_ms = 10", 'tick_ms = "20"', "tick_ms: expected integer"),
+            ("tick_ms = 10", "tick_ms = 60001", "tick_ms: outside"),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
@@ -387,7 +288,7 @@ class AppManifestSchemaTests(unittest.TestCase):
             ('"src/alpha_tool.c"', '"include/alpha_tool.h"', "expected one of"),
             ('sources = ["src/alpha_tool.c"]', "sources = []", "sources: must not be empty"),
             ('private_includes = ["include"]', 'private_includes = ["src/alpha_tool.c"]', "expected directory"),
-            ('"tests/alpha_tool_test.c"', '"include/alpha_tool.h"', "expected one of"),
+            ('private_includes = ["include"]', "private_includes = []", "omit empty arrays"),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):
@@ -430,9 +331,7 @@ class AppManifestSchemaTests(unittest.TestCase):
                 MANIFEST.validate_tree(root)
 
     def test_collection_rejects_every_identity_and_order_collision(self) -> None:
-        for field in (
-            "id", "entry", "generated_symbol", "menu.order", "autostart.id",
-        ):
+        for field in ("id", "entry", "menu.order", "autostart.id"):
             with self.subTest(field=field), tempfile.TemporaryDirectory(
                 prefix="hackylens-app-manifest-collision-"
             ) as temp:
@@ -450,6 +349,7 @@ class AppManifestSchemaTests(unittest.TestCase):
         )
         self.assertNotIn("app.toml", firmware_text)
         self.assertNotIn("toml_parse", firmware_text.casefold())
+        self.assertNotIn("tomllib", firmware_text.casefold())
 
 
 if __name__ == "__main__":

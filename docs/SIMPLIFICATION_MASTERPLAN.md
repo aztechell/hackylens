@@ -208,7 +208,7 @@ Revert test-only commits; production source не затронут.
 
 Риск: **средний**. Меняется build composition, но не app/runtime behavior.
 
-Статус: `[ ]`.
+Статус: `[~]`.
 
 ### Цель
 

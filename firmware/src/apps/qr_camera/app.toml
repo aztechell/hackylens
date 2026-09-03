@@ -1,46 +1,10 @@
-schema = 1
 id = "qr-camera"
 name = "QR-CAMERA"
-version = "0.1.0"
-entry = "qr_camera_legacy_entry"
-generated_symbol = "hk_generated_app_qr_camera"
 lifecycle = "legacy"
+entry = "qr_camera_legacy_entry"
 sources = ["qr_camera_app.c", "qr_camera_controller.c", "qr_camera_frame_adapter.c", "qr_camera_view.c", "qr_decoder_engine.c", "qr_luma.c", "qr_result_controller.c", "qr_result_state.c", "qr_result_view.c", "qr_service.c", "qr_settings.c", "qr_settings_menu.c", "qr_text_path.c", "qr_text_writer.c"]
-private_includes = []
-services = [
-  { id = "hackylens.service.legacy-camera", namespace = "qr-camera.legacy-camera" },
-  { id = "hackylens.service.legacy-sd-card", namespace = "qr-camera.legacy-sd-card" },
-]
-
-[menu]
-visible = true
-order = 3
-
-[autostart]
-eligible = true
-id = 3
-
-[capabilities]
-required = [
-  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
-  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us"] },
-  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
-  { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
-]
-optional = []
-
-[limits]
-static_ram_bytes = 1048576
-stack_bytes = 16384
-state_bytes = 262144
-tick_interval_us = 1000
-tick_budget_us = 1000
-render_budget_us = 10000
-
-[metadata]
-help = "QR-CAMERA legacy feature app."
+requires = ["display", "time", "input", "lights", "camera", "sd-card"]
+menu_order = 3
+autostart_id = 3
+tick_ms = 1
 debug = "HKQRINFO HKQR/HKQRCAM HKQRDECODE"
-
-[tests]
-host_sources = ["qr_camera_app.c"]
-build_profiles = ["full", "disabled"]

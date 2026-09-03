@@ -35,9 +35,9 @@ Runtime, Native App Manifest, and Feature App SDK contracts without yet changing
 firmware behavior.
 
 Compile-time app flags are generated into `hk_config.h` by
-`tools/build_firmware.py`. Canonical manifests generate immutable descriptors
-and menu views in `firmware/generated/app_registry/registry.*`; the app-neutral
-lookup and dispatch implementation lives in `core/hk_app_registry.c`.
+`tools/build_firmware.py`. Canonical manifests generate one immutable registry
+in `build/generated/app_registry/registry.*` during the firmware build; the
+app-neutral lookup and dispatch implementation lives in `core/hk_app_registry.c`.
 Every `--disable-app <name>` omits the corresponding complete
 `apps/<feature>/` directory. Disabling QR-CAMERA also omits `quirc`; disabling
 APRILTAG omits its vendored detector core and TAG36H11 table. The shared core-1

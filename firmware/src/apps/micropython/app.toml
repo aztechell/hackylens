@@ -1,46 +1,10 @@
-schema = 1
 id = "micropython"
 name = "MICRO-PYTHON"
-version = "0.1.0"
-entry = "micropython_legacy_entry"
-generated_symbol = "hk_generated_app_micropython"
 lifecycle = "legacy"
+entry = "micropython_legacy_entry"
 sources = ["micropython_app.c", "micropython_bindings.c", "micropython_view.c"]
-private_includes = []
-services = [
-  { id = "hackylens.service.legacy-internal-flash", namespace = "micropython.legacy-internal-flash" },
-]
-
-[menu]
-visible = true
-order = 12
-
-[autostart]
-eligible = true
-id = 10
-
-[capabilities]
-required = [
-  { id = "hackylens.cap.display", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["base-plane", "dirty-regions", "rgb565", "borrowed-surface"] },
-  { id = "hackylens.cap.time", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["monotonic-us", "sleep-until"] },
-  { id = "hackylens.cap.input", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["state", "events", "debounced-buttons"] },
-  { id = "hackylens.cap.lights", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["illumination", "rgb"] },
-  { id = "hackylens.cap.external-link", instance = 0, minimum = "0.1.0", maximum_exclusive = "0.2.0", features = ["uart", "i2c-controller"] },
-]
-optional = []
-
-[limits]
-static_ram_bytes = 1048576
-stack_bytes = 16384
-state_bytes = 262144
-tick_interval_us = 5000
-tick_budget_us = 1000
-render_budget_us = 10000
-
-[metadata]
-help = "MICRO-PYTHON legacy feature app."
+requires = ["display", "time", "input", "lights", "external-link", "internal-flash"]
+menu_order = 12
+autostart_id = 10
+tick_ms = 5
 debug = "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST HKMPFORMAT-CONFIRM"
-
-[tests]
-host_sources = ["micropython_app.c"]
-build_profiles = ["full", "disabled"]

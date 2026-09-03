@@ -2,11 +2,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import app_composition
 
 
 class DisplayContractTests(unittest.TestCase):
@@ -92,13 +98,20 @@ class DisplayContractTests(unittest.TestCase):
                     self.assertNotIn(forbidden, symbols)
 
     def test_phase_2_8_enters_production_through_the_capability(self) -> None:
-        manifests = list((ROOT / "firmware" / "src" / "apps").glob("*/app.toml"))
-        manifests.append(ROOT / "firmware" / "capability_consumers.toml")
-        for manifest in manifests:
+        model = app_composition.load_model()
+        for app in model["apps"]:
+            required_ids = [item["id"] for item in app["capabilities"]["required"]]
             self.assertIn(
                 "hackylens.cap.display",
-                manifest.read_text(encoding="utf-8"),
+                required_ids,
+                app["id"],
             )
+        self.assertIn(
+            "hackylens.cap.display",
+            (ROOT / "firmware" / "capability_consumers.toml").read_text(
+                encoding="utf-8"
+            ),
+        )
         self.assertTrue(
             (ROOT / "platforms" / "k210" / "capabilities" /
              "display_adapter.c").exists()

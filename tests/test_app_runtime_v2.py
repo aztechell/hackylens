@@ -5,11 +5,15 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
 
 
 class AppRuntimeV2Tests(unittest.TestCase):
@@ -112,8 +116,12 @@ class AppRuntimeV2Tests(unittest.TestCase):
         )
 
     def test_generated_descriptor_carries_manifest_state_size_and_abi_alignment(self) -> None:
-        generated = (ROOT / "firmware/generated/app_registry/registry.c").read_text(
-            encoding="utf-8"
+        import app_composition
+        import app_registry
+
+        generated = app_registry.generated_source(
+            app_composition.load_model(),
+            app_composition.enable_definition,
         )
         app_count = generated.count(".struct_version = HK_APP_DESCRIPTOR_VERSION")
         self.assertGreater(app_count, 0)

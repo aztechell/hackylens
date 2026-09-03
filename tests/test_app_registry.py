@@ -36,6 +36,21 @@ class AppRegistryTests(unittest.TestCase):
     def compile_profile(self, *, micropython: bool) -> str:
         with tempfile.TemporaryDirectory(prefix="hackylens-app-registry-") as directory:
             temporary = Path(directory)
+            core = temporary / "firmware/src/core"
+            generated = temporary / "firmware/generated/app_registry"
+            core.mkdir(parents=True)
+            generated.mkdir(parents=True)
+            for name in ("hk_app_registry.c", "hk_app_registry.h", "hk_app.h", "hk_events.h"):
+                shutil.copy2(ROOT / "firmware/src/core" / name, core / name)
+            (generated / "registry.h").write_text(
+                app_registry.generated_header(self.model), encoding="utf-8"
+            )
+            (generated / "registry.c").write_text(
+                app_registry.generated_source(
+                    self.model, app_composition.enable_definition
+                ),
+                encoding="utf-8",
+            )
             definitions = []
             for app in self.model["apps"]:
                 enabled = micropython or app["id"] != "micropython"
@@ -53,8 +68,8 @@ class AppRegistryTests(unittest.TestCase):
                 self.compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                 f"-I{temporary}",
                 f"-I{ROOT / 'firmware' / 'src'}",
-                str(ROOT / "firmware/generated/app_registry/registry.c"),
-                str(ROOT / "firmware/src/core/hk_app_registry.c"),
+                str(generated / "registry.c"),
+                str(core / "hk_app_registry.c"),
                 str(ROOT / "tests/app_registry_harness.c"),
                 "-o", str(executable),
             ], cwd=ROOT, check=True)

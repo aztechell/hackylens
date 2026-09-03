@@ -19,12 +19,7 @@ from app_manifest import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
-GENERATED_ROOT = ROOT / "firmware" / "generated" / "app_composition"
-GENERATED_JSON = GENERATED_ROOT / "composition.json"
-GENERATED_DEFAULTS = ROOT / "firmware" / "config" / "app_config_defaults.h"
-GENERATED_REGISTRY_ROOT = ROOT / "firmware" / "generated" / "app_registry"
-GENERATED_REGISTRY_HEADER = GENERATED_REGISTRY_ROOT / "registry.h"
-GENERATED_REGISTRY_SOURCE = GENERATED_REGISTRY_ROOT / "registry.c"
+BUILD_REGISTRY_ROOT = ROOT / "build" / "generated" / "app_registry"
 TRANSLATION_UNIT_SUFFIXES = frozenset({".c", ".cc", ".cpp", ".cxx"})
 
 
@@ -132,53 +127,37 @@ def generated_document(
     }
 
 
-def generated_defaults(model: Mapping[str, Any]) -> str:
-    lines = [
-        "#ifndef HK_GENERATED_APP_CONFIG_DEFAULTS_H",
-        "#define HK_GENERATED_APP_CONFIG_DEFAULTS_H",
-    ]
-    for app in model["apps"]:
-        definition = enable_definition(app["id"])
-        lines.extend([
-            f"#ifndef {definition}",
-            f"#define {definition} 1",
-            "#endif",
-        ])
-    lines.extend(["#endif", ""])
-    return "\n".join(lines)
-
-
-def generated_files(
-    manifest_root: Path = MANIFEST_ROOT,
-) -> dict[Path, bytes]:
-    model = load_model(manifest_root)
+def generated_registry_files(model: Mapping[str, Any]) -> dict[str, bytes]:
     try:
-        registry_header = app_registry.generated_header(model)
-        registry_source = app_registry.generated_source(model, enable_definition)
+        return {
+            "registry.h": app_registry.generated_header(model).encode("utf-8"),
+            "registry.c": app_registry.generated_source(
+                model, enable_definition
+            ).encode("utf-8"),
+        }
     except app_registry.RegistryGenerationError as exc:
         raise CompositionError(str(exc)) from exc
-    return {
-        GENERATED_JSON: canonical_json_bytes(generated_document(model)),
-        GENERATED_DEFAULTS: generated_defaults(model).encode("utf-8"),
-        GENERATED_REGISTRY_HEADER: registry_header.encode("utf-8"),
-        GENERATED_REGISTRY_SOURCE: registry_source.encode("utf-8"),
-    }
 
 
-def write_generated(manifest_root: Path = MANIFEST_ROOT) -> None:
-    for path, content in generated_files(manifest_root).items():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content)
+def write_registry(
+    destination: Path,
+    model: Mapping[str, Any] | None = None,
+    manifest_root: Path = MANIFEST_ROOT,
+) -> None:
+    if model is None:
+        model = load_model(manifest_root)
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, content in generated_registry_files(model).items():
+        (destination / name).write_bytes(content)
 
 
-def freshness_failures(manifest_root: Path = MANIFEST_ROOT) -> list[str]:
-    failures: list[str] = []
-    for path, expected in generated_files(manifest_root).items():
-        if not path.is_file():
-            failures.append(f"{path.relative_to(ROOT).as_posix()}: generated file is missing")
-        elif path.read_bytes() != expected:
-            failures.append(f"{path.relative_to(ROOT).as_posix()}: generated file is stale")
-    return failures
+def committed_generated_copies() -> list[Path]:
+    return [
+        ROOT / "firmware" / "generated" / "app_registry" / "registry.c",
+        ROOT / "firmware" / "generated" / "app_registry" / "registry.h",
+        ROOT / "firmware" / "generated" / "app_composition" / "composition.json",
+        ROOT / "firmware" / "config" / "app_config_defaults.h",
+    ]
 
 
 def app_map(model: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
