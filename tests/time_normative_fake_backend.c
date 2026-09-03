@@ -80,6 +80,11 @@ uint64_t time_normative_backend_reset(void)
     return base;
 }
 
+uint64_t time_normative_backend_now_us(void)
+{
+    return s_fake.now_us;
+}
+
 void time_normative_backend_set_now(uint64_t now_us)
 {
     s_fake.now_us = now_us;

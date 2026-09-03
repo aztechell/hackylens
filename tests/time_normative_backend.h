@@ -8,6 +8,7 @@
 const hk_capability_provider_t *time_normative_backend_provider(void);
 const char *time_normative_backend_name(void);
 uint64_t time_normative_backend_reset(void);
+uint64_t time_normative_backend_now_us(void);
 void time_normative_backend_set_now(uint64_t now_us);
 void time_normative_backend_set_freeze(uint8_t freeze);
 uint32_t time_normative_backend_sleep_calls(void);

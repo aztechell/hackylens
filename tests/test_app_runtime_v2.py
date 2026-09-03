@@ -16,9 +16,33 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 
+HOST_RUNTIME_SOURCES = (
+    "firmware/src/app_runtime/surface.c",
+    "firmware/src/app_runtime/switch.c",
+    "firmware/src/capabilities/capability_core.c",
+    "firmware/src/capabilities/time.c",
+    "firmware/src/capabilities/input.c",
+    "firmware/src/capabilities/input_state.c",
+    "tests/time_normative_fake_backend.c",
+    "tests/input_normative_fake_backend.c",
+    "tests/capability_fake_display.c",
+    "tests/app_runtime_host_support.c",
+    "tests/fixtures/app_sdk/minimal_app.c",
+)
+
+HOST_RUNTIME_INCLUDES = (
+    ROOT / "firmware" / "src" / "capabilities",
+    ROOT / "tests",
+    ROOT / "tests" / "fixtures" / "app_sdk",
+)
+
+
 class AppRuntimeV2Tests(unittest.TestCase):
     def compile_and_run_harness(
-        self, source_name: str, extra_sources: tuple[str, ...] = ()
+        self,
+        source_name: str,
+        extra_sources: tuple[str, ...] = (),
+        extra_includes: tuple[Path, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
@@ -38,6 +62,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     f"-I{ROOT / 'firmware' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'src'}",
                     f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
+                    *(f"-I{path}" for path in extra_includes),
                     str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
                     *(str(ROOT / source) for source in extra_sources),
@@ -82,6 +107,14 @@ class AppRuntimeV2Tests(unittest.TestCase):
             ),
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_MIXED_OK\n")
+
+    def test_host_support_executes_production_runtime(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_host_cases.c",
+            HOST_RUNTIME_SOURCES,
+            HOST_RUNTIME_INCLUDES,
+        )
+        self.assertEqual(result.stdout, "APP_RUNTIME_HOST_OK\n")
 
     def test_full_firmware_production_integration_harness(self) -> None:
         result = self.compile_and_run_harness(
