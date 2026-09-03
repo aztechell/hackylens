@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and build the standalone Feature App SDK and host fake."""
+"""Validate and build the standalone Feature App SDK."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 SDK_INCLUDE = ROOT / "sdk" / "include"
 CAPABILITY_INCLUDE = ROOT / "firmware" / "include" / "hackylens" / "capability"
-SDK_HOST = ROOT / "sdk" / "host"
 FIXTURE = ROOT / "tests" / "fixtures" / "app_sdk"
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx"}
 INCLUDE_RE = re.compile(
@@ -95,24 +94,6 @@ def public_header_closure_failures(
     return sorted(set(failures))
 
 
-def host_fake_source_failures(host_root: Path = SDK_HOST) -> list[str]:
-    failures: list[str] = []
-    for path in sorted(host_root.rglob("*")):
-        if not path.is_file() or path.suffix.casefold() not in SOURCE_SUFFIXES:
-            continue
-        relative = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else path.name
-        text = path.read_text(encoding="utf-8")
-        for token in FORBIDDEN_TOKENS:
-            if token.casefold() in text.casefold():
-                failures.append(f"{relative}: host fake uses private token {token!r}")
-        for include in include_names(path):
-            normalized = include.replace("\\", "/")
-            if normalized in SYSTEM_HEADERS or normalized.startswith("hackylens/app"):
-                continue
-            failures.append(f"{relative}: host fake include is outside SDK: {include!r}")
-    return sorted(set(failures))
-
-
 def app_source_boundary_failures(
     app_root: Path,
     production_sources: list[Path],
@@ -174,7 +155,6 @@ def production_v2_app_failures(
 
 def source_boundary_failures() -> list[str]:
     failures = public_header_closure_failures()
-    failures.extend(host_fake_source_failures())
     failures.extend(production_v2_app_failures())
     fixture_sources = [FIXTURE / "minimal_app.c", FIXTURE / "minimal_private.h"]
     failures.extend(app_source_boundary_failures(FIXTURE, fixture_sources, [FIXTURE]))
@@ -205,7 +185,6 @@ def run_executable(path: Path) -> None:
 
 def compile_header_consumers(temp: Path) -> None:
     source = """#include <hackylens/app.h>
-#include <hackylens/app/host_fake.h>
 #ifdef __cplusplus
 static_assert(HK_APP_SDK_VERSION_MINOR == 1U);
 static_assert(HK_APP_STATE_ALIGNMENT == 16U);
@@ -272,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not args.source_only:
         build_standalone_fixture()
-    print("[OK] Feature App SDK closure and standalone host fake passed")
+    print("[OK] Feature App SDK closure and standalone runtime fixture passed")
     return 0
 
 

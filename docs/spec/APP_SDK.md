@@ -159,34 +159,23 @@ The build-generated descriptor supplies manifest `state_bytes` and the fixed
 `HK_APP_STATE_ALIGNMENT` ABI policy; alignment is not a runtime request or an
 app-manifest tuning field.
 
-## Host fake and portability
+## Host tests and portability
 
-The SDK contract is platform-independent. Its deterministic host fake executes
-the same public lifecycle, context, event, capability, service, cleanup, stale
-generation, and limit cases without hardware. A fake may record operations but
-MUST preserve owner, deadline, cancellation, buffer, and teardown semantics.
+The SDK contract is platform-independent. Host tests compile the production app
+runtime core with typed Time, Input, and Display doubles rather than a second
+lifecycle engine. Test support may create descriptors, provide clock and
+capability/service operations, call the production runtime API, and record
+traces or inject faults at those seams. It MUST NOT implement its own
+lifecycle states, transitions, unwind, teardown ordering, or generation model.
 
-The core fake entry is `sdk/include/hackylens/app/host_fake.h` with its
-allocation-free implementation under `sdk/host`. It uses caller-owned fixed
-storage and provides deterministic Time, Input, Display, manifest-style grant,
-lifecycle-driver, render-surface, owner-cleanup, and failure-injection behavior.
-Failure points cover grant injection and every lifecycle/unwind stage; a
-failure never skips the later stop/app-cleanup/owner-cleanup stages required by
-the lifecycle depth already reached. The fake is test infrastructure, not a
-production capability provider, runtime registry, second hardware path, or
-permission to construct runtime grants on-device.
+Public lifecycle callbacks remain `probe`, `prepare`, `start`, `event`, `tick`,
+`render`, `stop`, and `cleanup`. `hk_app_context_request_render` remains legal
+only in `RUNNING`, never while `start` is executing. Lifecycle `HK_PENDING` is
+normalized to `HK_ERR_INVALID_STATE` by production Runtime. Teardown creates
+one finite absolute monotonic deadline at teardown start and uses that same
+deadline for stop, app cleanup, and owner-wide provider cleanup.
 
-The host-fake configuration carries immutable manifest-equivalent
-`state_bytes`, tick interval/budget, and render budget values separately from
-the entry's storage capacity. `hk_app_context_state` exposes exactly
-`state_bytes`, and only that declared range is cleared. A successful `start`
-creates the same automatic initial full invalidation as production Runtime;
-`hk_app_context_request_render` remains legal only in `RUNNING`, never while
-`start` is executing. Lifecycle `HK_PENDING` is normalized to
-`HK_ERR_INVALID_STATE`, exactly as production Runtime does.
-
-The fake's public Capability operations preserve Phase 2 semantics rather than
-defining a reduced parallel contract. In particular, every Input lease has an
+Capability operations keep Phase 2 semantics. Every Input lease has an
 independent sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
 stable state and exact dropped count before resynchronizing without replay.
 Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
@@ -194,21 +183,20 @@ Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
 deadline before changing lease state. Display treats zero-area rectangles as
 successful no-ops, accepts `set_clip(NULL)` as the full display, requires the
 normative batch/surface state for commands, present, and abort, and preserves
-staged state after validation failure. A borrowed Display surface is advertised
-only when the test supplies explicit caller-owned backing storage.
+staged state after validation failure.
 
 Standalone CMake consumers use `add_subdirectory(<hackylens>/sdk)` and link
-`HackyLens::AppSDK`; host tests additionally link
-`HackyLens::AppHostFake`. Make consumers include
-`sdk/hackylens-app-sdk.mk` and use its public include flags and host-fake source
-list. Both paths compile the app from SDK headers plus its own private headers;
-neither path adds firmware runtime, generated registry, board, platform, HAL,
-driver, provider, or other app include roots.
+`HackyLens::AppSDK`. Make consumers include `sdk/hackylens-app-sdk.mk` and use
+its public include flags. App sources compile from SDK headers plus their own
+private headers; they do not include firmware runtime, generated registry,
+board, platform, HAL, driver, or provider headers. Host tests may compile
+production runtime sources privately as test support. That is not a public host
+runtime framework and MUST NOT be installed or exported as an SDK target.
 
 The SDK conformance gate recursively checks public header closure, compiles C11
 and C++17 consumers, and builds/runs one minimal lifecycle-v2 app through both
-CMake and Make using only the SDK and host fake. The architecture guard rejects
-SDK or fake dependencies on repository-private layers and rejects a
+CMake and Make against the production runtime test support. The architecture
+guard rejects SDK dependencies on repository-private layers and rejects a
 lifecycle-v2 production app dependency outside the App SDK, standard language
 headers, and that app's own private headers.
 The C++ policy recognizes a bounded allocation-free C++17 standard-header

@@ -5,13 +5,18 @@ if(NOT DEFINED HACKYLENS_SOURCE_DIR)
     message(FATAL_ERROR "HACKYLENS_SOURCE_DIR is required")
 endif()
 
+include("${HACKYLENS_SOURCE_DIR}/tests/app_runtime_host.cmake")
 add_subdirectory("${HACKYLENS_SOURCE_DIR}/sdk" hackylens-sdk)
 add_executable(app_sdk_fixture
     minimal_app.c
     minimal_app_test.c
+    ${HK_APP_RUNTIME_HOST_SOURCES}
 )
-target_include_directories(app_sdk_fixture PRIVATE "${CMAKE_CURRENT_LIST_DIR}")
-target_link_libraries(app_sdk_fixture PRIVATE HackyLens::AppHostFake)
+target_include_directories(app_sdk_fixture PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}"
+    ${HK_APP_RUNTIME_HOST_INCLUDE_DIRS}
+)
+target_link_libraries(app_sdk_fixture PRIVATE HackyLens::AppSDK)
 set_target_properties(app_sdk_fixture PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED YES

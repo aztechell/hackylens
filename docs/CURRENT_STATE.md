@@ -194,12 +194,12 @@ need to be repeated before the first migration.
 Phase 3.8 publishes the complete Feature App SDK core through the canonical
 `hackylens/app.h` umbrella. Lifecycle callbacks and `hk_app_v2_entry_t` now live
 in the public SDK rather than a private runtime header; existing Capability API
-handles are reused directly. CMake and Make standalone integration build the
-same minimal lifecycle-v2 fixture against a fixed-storage deterministic host
-fake for Time, Input, Display, grants, lifecycle/unwind, rendering, and failure
-injection. The SDK closure guard rejects private/platform/provider headers and
-enforces SDK-only repository dependencies for lifecycle-v2 app sources. This
-package does not migrate a production app or add a second hardware path.
+handles are reused directly. Host tests compile that production runtime with
+typed Time, Input, and Display doubles; there is no public AppHostFake or second
+lifecycle engine. The SDK closure guard rejects private/platform/provider
+headers and enforces SDK-only repository dependencies for lifecycle-v2 app
+sources. This package does not migrate a production app or add a second hardware
+path.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-

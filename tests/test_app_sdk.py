@@ -31,15 +31,11 @@ class FeatureAppSdkTests(unittest.TestCase):
             failures = check_app_sdk.public_header_closure_failures(include)
         self.assertTrue(any("forbidden private token" in item for item in failures))
 
-    def test_host_fake_private_provider_dependency_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="hackylens-fake-negative-") as temp:
-            host = Path(temp) / "host"
-            host.mkdir()
-            (host / "fake.c").write_text(
-                '#include "capability_provider.h"\n', encoding="utf-8"
-            )
-            failures = check_app_sdk.host_fake_source_failures(host)
-        self.assertTrue(any("private token" in item for item in failures))
+    def test_removed_host_fake_is_not_part_of_the_public_sdk(self) -> None:
+        self.assertFalse(
+            (ROOT / "sdk/include/hackylens/app/host_fake.h").exists()
+        )
+        self.assertFalse((ROOT / "sdk/host").exists())
 
     def test_v2_app_direct_capability_and_foreign_private_include_are_rejected(
         self,
@@ -95,8 +91,9 @@ class FeatureAppSdkTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("HackyLens::AppSDK", cmake)
-        self.assertIn("HackyLens::AppHostFake", cmake)
-        self.assertIn("HACKYLENS_APP_HOST_FAKE_SOURCES", make)
+        self.assertNotIn("HackyLens::AppHostFake", cmake)
+        self.assertNotIn("HACKYLENS_APP_HOST_FAKE_SOURCES", make)
+        self.assertNotIn("host_fake", cmake)
         self.assertIn("HK_APP_SDK_VERSION_MINOR 1U", public)
         self.assertIn("HK_APP_SDK_MANIFEST_SCHEMA_MAJOR 1U", public)
         self.assertIn("typedef struct hk_app_v2_entry", runtime)

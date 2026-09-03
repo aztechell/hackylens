@@ -24,7 +24,6 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
             "sdk/include/hackylens/app.h": "sdk",
             "sdk/include/hackylens/app/context.h": "sdk",
             "sdk/include/hackylens/app/runtime.h": "sdk",
-            "sdk/host/src/host_fake.c": "sdk-host",
             "firmware/src/app_runtime/runtime.c": "app-runtime",
             "firmware/src/apps/example/app.toml": "manifest",
             "firmware/generated/app_registry/registry.c":
@@ -54,9 +53,6 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
         sdk = "sdk/include/hackylens/app/context.h"
         self.assertIsNone(check_arch.layer_edge_violation(
             sdk, "firmware/include/hackylens/capability/display.h"
-        ))
-        self.assertIsNone(check_arch.layer_edge_violation(
-            "sdk/host/src/host_fake.c", "sdk/include/hackylens/app.h"
         ))
         forbidden = (
             "firmware/src/capabilities/capability_provider.h",

@@ -1,7 +1,6 @@
 schema = 1
 source_roots = [
   "sdk/include",
-  "sdk/host",
   "firmware/include",
   "firmware/src",
   "firmware/generated",
@@ -15,10 +14,6 @@ source_roots = [
 [[layers]]
 name = "sdk"
 paths = ["sdk/include/**"]
-
-[[layers]]
-name = "sdk-host"
-paths = ["sdk/host/**"]
 
 [[layers]]
 name = "public-capability"
@@ -177,32 +172,6 @@ to = [
   "third-party",
 ]
 reason = "the public SDK may depend only on public capability contracts"
-
-[[forbidden_edges]]
-from = ["sdk-host"]
-to = [
-  "app",
-  "adapter",
-  "manifest",
-  "app-runtime",
-  "generated-app-registry",
-  "generated-app-composition",
-  "capability-implementation",
-  "service",
-  "storage",
-  "driver",
-  "board",
-  "platform-hal",
-  "platform-startup",
-  "runtime",
-  "controller",
-  "ui",
-  "core",
-  "config",
-  "asset",
-  "third-party",
-]
-reason = "the host fake may depend only on the public SDK and capabilities"
 
 [[forbidden_edges]]
 from = ["app-runtime"]
