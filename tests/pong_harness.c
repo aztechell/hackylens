@@ -1,20 +1,18 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
-#include <hackylens/capability/time.h>
-
-#include "display_binding.h"
-#include "input_config.h"
-#include "pong_controller.h"
-#include "pong_view.h"
+#include "../firmware/src/app_runtime/surface_private.h"
+#include "../firmware/src/apps/pong/pong_controller.h"
+#include "../firmware/src/apps/pong/pong_view.h"
 
 typedef struct
 {
-    uint16_t x;
-    uint16_t y;
-    uint16_t w;
-    uint16_t h;
+    int32_t x;
+    int32_t y;
+    uint32_t w;
+    uint32_t h;
     uint16_t color;
 } fill_call_t;
 
@@ -23,174 +21,115 @@ typedef struct
 static uint64_t g_now_us;
 static fill_call_t g_fill_calls[FILL_CALL_MAX];
 static uint16_t g_fill_call_count;
-static uint16_t g_draw_rect_count;
+static uint16_t g_clear_count;
 static uint16_t g_text_count;
 static uint8_t g_record_lcd;
-static uint8_t g_frame_active;
-static uint16_t g_frame_acquire_count;
-static uint16_t g_frame_present_count;
-static uint16_t g_frame_full_present_count;
-static uint16_t g_present_region_count;
-static uint32_t g_next_lease_id;
+static hk_app_surface_t g_surface;
 
-hk_owner_t capability_client_current_owner(void)
+static hk_result_t stub_invalidate(void *user, const hk_display_rect_t *region)
 {
-    return (hk_owner_t){1U, 1U};
-}
-
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    (void)consumer_id;
-    return HK_OWNER_NONE;
-}
-
-hk_result_t hk_time_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    hk_time_t *handle)
-{
-    assert(request != NULL);
-    assert(request->required_features == HK_TIME_FEATURE_MONOTONIC_US);
-    handle->lease = (hk_lease_t){1U, 1U, owner, HK_CAPABILITY_ID_TIME};
+    (void)user;
+    (void)region;
     return HK_OK;
 }
 
-hk_result_t hk_time_now_us(
-    hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
+static hk_result_t record_clear(void *user, uint16_t rgb565)
 {
-    (void)owner;
-    (void)handle;
-    *value = g_now_us;
-    return HK_OK;
-}
-
-void hk_screen_set(screen_t screen)
-{
-    assert(screen == HK_PONG_SCREEN);
-}
-
-void hk_back_exit_set_armed(uint8_t armed)
-{
-    assert(armed == 0U);
-}
-
-void shell_show_menu(void)
-{
-}
-
-void hk_ui_display_fill_rect(uint16_t x, uint16_t y,
-                             uint16_t w, uint16_t h, uint16_t color)
-{
-    if(!g_record_lcd)
-        return;
-    assert(g_fill_call_count < FILL_CALL_MAX);
-    g_fill_calls[g_fill_call_count++] = (fill_call_t){x, y, w, h, color};
-}
-
-void hk_ui_display_draw_rect(uint16_t x, uint16_t y,
-                             uint16_t w, uint16_t h,
-                             uint16_t thickness, uint16_t color)
-{
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    (void)thickness;
-    (void)color;
+    (void)user;
+    (void)rgb565;
     if(g_record_lcd)
-        g_draw_rect_count++;
+        g_clear_count++;
+    return HK_OK;
 }
 
-void hk_ui_display_draw_text_centered(uint16_t y, const char *text,
-                                      uint16_t fg, uint16_t bg)
+static hk_result_t record_fill(
+    void *user, const hk_display_rect_t *rect, uint16_t rgb565)
 {
-    (void)y;
-    (void)text;
-    (void)fg;
-    (void)bg;
+    (void)user;
+    if(!g_record_lcd)
+        return HK_OK;
+    assert(rect != NULL);
+    assert(g_fill_call_count < FILL_CALL_MAX);
+    g_fill_calls[g_fill_call_count++] = (fill_call_t){
+        rect->x, rect->y, rect->width, rect->height, rgb565,
+    };
+    return HK_OK;
+}
+
+static hk_result_t record_text(
+    void *user,
+    const hk_display_rect_t *bounds,
+    const char *utf8,
+    uint32_t size_bytes,
+    uint16_t rgb565)
+{
+    (void)user;
+    (void)bounds;
+    (void)utf8;
+    (void)size_bytes;
+    (void)rgb565;
     if(g_record_lcd)
         g_text_count++;
+    return HK_OK;
 }
 
-uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
+static hk_result_t stub_blit(
+    void *user,
+    const hk_display_rect_t *destination,
+    const hk_buffer_view_t *pixels,
+    uint32_t pixel_format)
 {
-    assert(surface != NULL);
-    assert(!g_frame_active);
-    g_frame_active = 1U;
-    surface->rgb565_be = NULL;
-    surface->width = HK_DISPLAY_REQUIRED_WIDTH;
-    surface->height = HK_DISPLAY_REQUIRED_HEIGHT;
-    surface->stride_bytes = HK_DISPLAY_REQUIRED_WIDTH * 2U;
-    surface->lease_id = ++g_next_lease_id;
-    if(g_record_lcd)
-        g_frame_acquire_count++;
-    return 1U;
+    (void)user;
+    (void)destination;
+    (void)pixels;
+    (void)pixel_format;
+    return HK_OK;
 }
 
-uint8_t hk_ui_display_frame_present(uint32_t lease_id)
+static void init_surface(void)
 {
-    assert(g_frame_active);
-    assert(lease_id == g_next_lease_id);
-    g_frame_active = 0U;
-    if(g_record_lcd)
-    {
-        g_frame_present_count++;
-        g_frame_full_present_count++;
-    }
-    return 1U;
-}
+    static const hk_display_info_t info = {
+        sizeof(hk_display_info_t), HK_DISPLAY_INFO_VERSION,
+        PONG_DISPLAY_WIDTH, PONG_DISPLAY_HEIGHT,
+        HK_DISPLAY_FORMAT_RGB565_BE, HK_DISPLAY_PLANE_BASE,
+        2U, 2U, 64U, 128U, HK_APP_MAX_INVALIDATIONS, 1U, 64U, 500000U, 0U,
+    };
+    const hk_app_surface_ops_t ops = {
+        .user = NULL,
+        .invalidate = stub_invalidate,
+        .clear = record_clear,
+        .fill_rect = record_fill,
+        .stroke_rect = record_fill,
+        .text = record_text,
+        .blit = stub_blit,
+    };
 
-uint8_t hk_ui_display_frame_present_regions(
-    uint32_t lease_id, const hk_ui_display_rect_t *regions,
-    uint16_t region_count)
-{
-    assert(g_frame_active);
-    assert(lease_id == g_next_lease_id);
-    assert(regions != NULL);
-    assert(region_count > 0U && region_count <= 8U);
-    g_frame_active = 0U;
-    if(g_record_lcd)
-    {
-        g_frame_present_count++;
-        g_present_region_count = region_count;
-    }
-    return 1U;
-}
-
-void hk_ui_display_frame_cancel(uint32_t lease_id)
-{
-    assert(g_frame_active);
-    assert(lease_id == g_next_lease_id);
-    g_frame_active = 0U;
+    assert(hk_app_surface_private_init(&g_surface, 1U, &info, &ops) == HK_OK);
 }
 
 static void reset_lcd_log(void)
 {
     g_fill_call_count = 0U;
-    g_draw_rect_count = 0U;
+    g_clear_count = 0U;
     g_text_count = 0U;
-    g_frame_acquire_count = 0U;
-    g_frame_present_count = 0U;
-    g_frame_full_present_count = 0U;
-    g_present_region_count = 0U;
 }
 
-static void advance_and_tick(uint32_t elapsed_us,
-                             const hk_input_snapshot_t *input)
+static void advance_and_tick(pong_state_t *state, uint32_t elapsed_us, uint32_t buttons)
 {
     g_now_us += elapsed_us;
-    pong_controller_tick(input);
+    pong_controller_tick(state, buttons, g_now_us);
 }
 
 static pong_view_state_t run_regular_schedule(void)
 {
-    const hk_input_snapshot_t input = {BUTTON_RIGHT, 0U, 0U};
+    pong_state_t state;
 
-    g_record_lcd = 0U;
+    memset(&state, 0, sizeof(state));
     g_now_us = 1000000ULL;
-    pong_controller_enter(&input);
-    for(uint8_t i = 0; i < 20U; i++)
-        advance_and_tick(20000U, &input);
-    return pong_controller_test_state();
+    pong_controller_reset(&state, g_now_us);
+    for(uint8_t i = 0U; i < 20U; i++)
+        advance_and_tick(&state, 20000U, HK_INPUT_BUTTON_RIGHT);
+    return pong_controller_view_state(&state);
 }
 
 static pong_view_state_t run_irregular_schedule(void)
@@ -198,13 +137,13 @@ static pong_view_state_t run_irregular_schedule(void)
     static const uint32_t pattern[] = {
         7000U, 29000U, 11000U, 53000U, 17000U, 31000U, 19000U, 33000U,
     };
-    const hk_input_snapshot_t input = {BUTTON_RIGHT, 0U, 0U};
+    pong_state_t state;
     uint32_t remaining_us = 400000U;
     uint8_t index = 0U;
 
-    g_record_lcd = 0U;
+    memset(&state, 0, sizeof(state));
     g_now_us = 9000000ULL;
-    pong_controller_enter(&input);
+    pong_controller_reset(&state, g_now_us);
     while(remaining_us > 0U)
     {
         uint32_t elapsed_us = pattern[index %
@@ -212,16 +151,17 @@ static pong_view_state_t run_irregular_schedule(void)
 
         if(elapsed_us > remaining_us)
             elapsed_us = remaining_us;
-        advance_and_tick(elapsed_us, &input);
+        advance_and_tick(&state, elapsed_us, HK_INPUT_BUTTON_RIGHT);
         remaining_us -= elapsed_us;
         index++;
     }
-    return pong_controller_test_state();
+    return pong_controller_view_state(&state);
 }
 
-static void assert_state_equal(pong_view_state_t first,
-                               pong_view_state_t second)
+static void assert_state_equal(pong_view_state_t first, pong_view_state_t second)
 {
+    uint8_t index;
+
     assert(first.player_x == second.player_x);
     assert(first.ai_x == second.ai_x);
     assert(first.ball_x == second.ball_x);
@@ -232,10 +172,10 @@ static void assert_state_equal(pong_view_state_t first,
     assert(first.ai_score == second.ai_score);
     assert(first.trail_count == second.trail_count);
     assert(first.flash_ticks == second.flash_ticks);
-    for(uint8_t i = 0; i < PONG_TRAIL_LENGTH; i++)
+    for(index = 0U; index < PONG_TRAIL_LENGTH; index++)
     {
-        assert(first.trail_x[i] == second.trail_x[i]);
-        assert(first.trail_y[i] == second.trail_y[i]);
+        assert(first.trail_x[index] == second.trail_x[index]);
+        assert(first.trail_y[index] == second.trail_y[index]);
     }
 }
 
@@ -248,7 +188,7 @@ static void test_frame_rate_independence(void)
 
     assert_state_equal(regular, irregular);
     assert(regular.player_x >
-           (HK_DISPLAY_REQUIRED_WIDTH - PONG_PADDLE_W) / 2);
+           (PONG_DISPLAY_WIDTH - PONG_PADDLE_W) / 2);
     assert(regular.ball_x != serve_x);
 }
 
@@ -264,35 +204,38 @@ static void test_dirty_rendering(void)
     uint16_t black_calls = 0U;
     uint16_t green_calls = 0U;
     uint16_t white_calls = 0U;
-    const uint16_t dirty_x = (uint16_t)previous.ball_x;
-    const uint16_t dirty_y = (uint16_t)previous.ball_y;
-    const uint16_t dirty_w = PONG_BALL_SIZE + 3U;
-    const uint16_t dirty_h = PONG_BALL_SIZE;
+    const int32_t dirty_x = previous.ball_x;
+    const int32_t dirty_y = previous.ball_y;
+    const uint32_t dirty_w = (uint32_t)PONG_BALL_SIZE + 3U;
+    const uint32_t dirty_h = (uint32_t)PONG_BALL_SIZE;
+    uint8_t full = 0U;
+    hk_display_rect_t regions[HK_APP_MAX_INVALIDATIONS];
+    uint8_t count;
 
     current.ball_x += 3;
     g_record_lcd = 1U;
     reset_lcd_log();
-    pong_view_render_frame(previous, current);
+    assert(pong_view_render_frame(&g_surface, previous, current) == HK_OK);
 
-    assert(g_draw_rect_count == 0U);
+    count = pong_view_collect_invalidations(
+        previous, current, 0U, regions, HK_APP_MAX_INVALIDATIONS, &full);
+    assert(full == 0U);
+    assert(count > 0U && count <= HK_APP_MAX_INVALIDATIONS);
+    assert(g_clear_count == 0U);
     assert(g_text_count == 0U);
-    assert(g_frame_acquire_count == 1U);
-    assert(g_frame_present_count == 1U);
-    assert(g_frame_full_present_count == 0U);
-    assert(g_present_region_count > 0U && g_present_region_count <= 8U);
     assert(g_fill_call_count >= 3U);
-    for(uint16_t i = 0; i < g_fill_call_count; i++)
+    for(uint16_t i = 0U; i < g_fill_call_count; i++)
     {
         const fill_call_t *call = &g_fill_calls[i];
 
         assert(call->x >= dirty_x);
         assert(call->y >= dirty_y);
-        assert(call->x + call->w <= dirty_x + dirty_w);
-        assert(call->y + call->h <= dirty_y + dirty_h);
-        assert(call->w < PONG_FIELD_W);
-        assert(call->h < PONG_FIELD_H);
-        black_calls += call->color == COLOR_BLACK;
-        green_calls += call->color == COLOR_TERM_GREEN;
+        assert(call->x + (int32_t)call->w <= dirty_x + (int32_t)dirty_w);
+        assert(call->y + (int32_t)call->h <= dirty_y + (int32_t)dirty_h);
+        assert(call->w < (uint32_t)PONG_FIELD_W);
+        assert(call->h < (uint32_t)PONG_FIELD_H);
+        black_calls += call->color == PONG_COLOR_BLACK;
+        green_calls += call->color == PONG_COLOR_GREEN;
         white_calls += call->color == PONG_BALL_COLOR;
     }
     assert(black_calls > 0U);
@@ -300,12 +243,10 @@ static void test_dirty_rendering(void)
     assert(white_calls > 0U);
 
     reset_lcd_log();
-    pong_view_render_frame(current, current);
+    assert(pong_view_render_frame(&g_surface, current, current) == HK_OK);
     assert(g_fill_call_count == 0U);
-    assert(g_draw_rect_count == 0U);
+    assert(g_clear_count == 0U);
     assert(g_text_count == 0U);
-    assert(g_frame_acquire_count == 0U);
-    assert(g_frame_present_count == 0U);
 }
 
 static void test_single_present_for_full_and_maximal_frames(void)
@@ -334,31 +275,35 @@ static void test_single_present_for_full_and_maximal_frames(void)
         .trail_count = PONG_TRAIL_LENGTH,
         .flash_ticks = 1U,
     };
+    uint8_t full = 0U;
+    hk_display_rect_t regions[HK_APP_MAX_INVALIDATIONS];
+    uint8_t count;
 
     g_record_lcd = 1U;
     reset_lcd_log();
-    pong_view_render_initial(current);
-    assert(g_frame_acquire_count == 1U);
-    assert(g_frame_present_count == 1U);
-    assert(g_frame_full_present_count == 1U);
+    assert(pong_view_render_initial(&g_surface, current) == HK_OK);
+    assert(g_clear_count == 1U);
+    assert(g_text_count == 1U);
 
     reset_lcd_log();
-    pong_view_render_score(current);
-    assert(g_frame_acquire_count == 1U);
-    assert(g_frame_present_count == 1U);
-    assert(g_frame_full_present_count == 0U);
-    assert(g_present_region_count == 1U);
+    assert(pong_view_render_score(&g_surface, current) == HK_OK);
+    assert(g_clear_count == 0U);
+    assert(g_text_count == 1U);
+    assert(g_fill_call_count >= 1U);
+    assert(g_fill_calls[0].h < (uint32_t)PONG_FIELD_H);
 
     reset_lcd_log();
-    pong_view_render_frame(previous, current);
-    assert(g_frame_acquire_count == 1U);
-    assert(g_frame_present_count == 1U);
-    assert(g_frame_full_present_count == 0U);
-    assert(g_present_region_count > 0U && g_present_region_count <= 8U);
+    assert(pong_view_render_frame(&g_surface, previous, current) == HK_OK);
+    count = pong_view_collect_invalidations(
+        previous, current, 0U, regions, HK_APP_MAX_INVALIDATIONS, &full);
+    assert(g_clear_count == 0U);
+    assert(full == 0U);
+    assert(count > 0U && count <= HK_APP_MAX_INVALIDATIONS);
 }
 
 int main(void)
 {
+    init_surface();
     test_frame_rate_independence();
     test_dirty_rendering();
     test_single_present_for_full_and_maximal_frames();

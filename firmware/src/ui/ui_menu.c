@@ -84,3 +84,13 @@ void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_draw_rect(x + 13, y + 34, 14, 14, 2, color);
     hk_ui_display_draw_rect(x + 33, y + 34, 14, 14, 2, color);
 }
+
+void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_fill_rect(x + 8, y + 10, 4, 40, color);
+    hk_ui_display_fill_rect(x + 48, y + 10, 4, 40, color);
+    hk_ui_display_fill_rect(x + 27, y + 27, 6, 6, color);
+    hk_ui_display_fill_rect(x + 18, y + 16, 2, 2, color);
+    hk_ui_display_fill_rect(x + 40, y + 42, 2, 2, color);
+}

@@ -1,7 +1,7 @@
 id = "pong"
 name = "PONG"
-lifecycle = "legacy"
-entry = "pong_legacy_entry"
+lifecycle = "v2"
+entry = "pong_v2_entry"
 sources = ["pong_app.c", "pong_controller.c", "pong_view.c"]
 requires = ["display", "input", "time"]
 menu_order = 9

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <hackylens/app.h>
+
 #include "pong_config.h"
 
 typedef struct
@@ -21,9 +23,20 @@ typedef struct
     uint8_t flash_ticks;
 } pong_view_state_t;
 
-void pong_view_render_initial(pong_view_state_t state);
-void pong_view_render_score(pong_view_state_t state);
-void pong_view_render_frame(pong_view_state_t previous, pong_view_state_t current);
-void pong_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+hk_result_t pong_view_render_initial(
+    hk_app_surface_t *surface, pong_view_state_t state);
+hk_result_t pong_view_render_score(
+    hk_app_surface_t *surface, pong_view_state_t state);
+hk_result_t pong_view_render_frame(
+    hk_app_surface_t *surface,
+    pong_view_state_t previous,
+    pong_view_state_t current);
+uint8_t pong_view_collect_invalidations(
+    pong_view_state_t previous,
+    pong_view_state_t current,
+    uint8_t score_changed,
+    hk_display_rect_t *regions,
+    uint8_t max_regions,
+    uint8_t *full);
 
 #endif
