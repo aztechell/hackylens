@@ -100,6 +100,19 @@ class BuildContractsTest(unittest.TestCase):
         )
         self.assertIn("hk_generated_capability_grants_for(app->id", runtime)
 
+    def test_v2_enter_releases_ui_display_before_runtime_open(self):
+        startup = (
+            ROOT / "firmware" / "src" / "runtime" / "firmware_startup.c"
+        ).read_text(encoding="utf-8")
+        enter = startup.index("firmware_app_enter")
+        exit_fn = startup.index("firmware_app_exit")
+        self.assertIn("hk_ui_display_release();", startup[enter:exit_fn])
+        self.assertLess(
+            startup[enter:exit_fn].index("hk_ui_display_release();"),
+            startup[enter:exit_fn].index("app_runtime_integration_open("),
+        )
+        self.assertIn("hk_ui_display_prepare()", startup[exit_fn:])
+
     def test_firmware_runtime_time_acquire_matches_granted_features(self):
         integration = (
             ROOT / "firmware" / "src" / "runtime" /

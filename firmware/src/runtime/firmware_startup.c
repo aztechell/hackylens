@@ -35,7 +35,28 @@ static uint8_t firmware_app_enter(
     const hk_app_t *app,
     const hk_input_snapshot_t *input)
 {
-    return (uint8_t)(app_runtime_integration_open(app, input) == HK_OK);
+    hk_result_t result;
+
+    /* Display BASE is exclusive. Menu UI holds it; v2 apps must take it. */
+    if(app && app->lifecycle == HK_APP_LIFECYCLE_V2)
+    {
+        result = hk_ui_display_release();
+        if(result != HK_OK)
+        {
+            printf("[DISPLAY] release failed result=%d\r\n", (int)result);
+            return 0U;
+        }
+    }
+    result = app_runtime_integration_open(app, input);
+    if(result != HK_OK)
+    {
+        printf("[APP] open %s failed result=%d\r\n",
+               app && app->title ? app->title : "?", (int)result);
+        if(app && app->lifecycle == HK_APP_LIFECYCLE_V2)
+            (void)hk_ui_display_prepare();
+        return 0U;
+    }
+    return 1U;
 }
 
 static void firmware_app_exit(
@@ -44,6 +65,8 @@ static void firmware_app_exit(
 {
     (void)app;
     (void)app_runtime_integration_close(reason);
+    if(hk_ui_display_prepare() != HK_OK)
+        printf("[DISPLAY] restore failed\r\n");
 }
 
 static uint8_t firmware_app_media_event(hk_sd_event_t event)

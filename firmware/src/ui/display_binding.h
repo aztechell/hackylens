@@ -31,6 +31,7 @@ typedef struct
 } hk_ui_display_rect_t;
 
 hk_result_t hk_ui_display_prepare(void);
+hk_result_t hk_ui_display_release(void);
 void hk_ui_display_draw_boot_logo(void);
 void hk_ui_display_fill_rect(
     uint16_t x, uint16_t y, uint16_t width, uint16_t height,

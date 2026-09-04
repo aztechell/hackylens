@@ -67,6 +67,22 @@ hk_result_t hk_ui_display_prepare(void)
     return HK_OK;
 }
 
+hk_result_t hk_ui_display_release(void)
+{
+    hk_result_t result;
+
+    if(s_frame_active)
+        hk_ui_display_frame_cancel(s_frame_lease_id);
+    if(!s_ready)
+        return HK_OK;
+    result = hk_display_release(s_owner, HK_DEADLINE_IMMEDIATE, &s_display);
+    if(result != HK_OK)
+        return result;
+    s_display = (hk_display_t){0};
+    s_ready = 0U;
+    return HK_OK;
+}
+
 static hk_result_t surface_acquire(hk_display_surface_t *surface)
 {
     hk_result_t result;
