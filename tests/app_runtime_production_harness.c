@@ -541,6 +541,11 @@ const hk_app_t *hk_app_for_screen(screen_t screen)
     return screen == SCREEN_APP_SLOT_0 ? &s_v2_app : NULL;
 }
 
+uint64_t hal_time_us(void)
+{
+    return s_fixture.now_us;
+}
+
 void hal_sleep_ms(uint32_t milliseconds)
 {
     s_fixture.sleep_count++;

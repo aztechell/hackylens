@@ -359,8 +359,7 @@ hk_result_t app_runtime_integration_initialize(void)
     };
     hk_app_runtime_ops_t runtime_ops;
     hk_result_t result;
-    static const hk_capability_request_t time_request =
-        HK_TIME_REQUEST_0_1_INIT;
+    hk_capability_request_t time_request = HK_TIME_REQUEST_0_1_INIT;
 
     if(s_integration.initialized)
         return HK_OK;
@@ -372,6 +371,8 @@ hk_result_t app_runtime_integration_initialize(void)
         "consumer:firmware-runtime");
     if(hk_owner_is_zero(s_integration.runtime_owner))
         return HK_ERR_STALE_HANDLE;
+    /* firmware-runtime is granted monotonic-us only, not sleep-until. */
+    time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
     result = hk_time_acquire(
         s_integration.runtime_owner, &time_request, &s_integration.time);
     if(result != HK_OK)

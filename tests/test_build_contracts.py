@@ -100,6 +100,16 @@ class BuildContractsTest(unittest.TestCase):
         )
         self.assertIn("hk_generated_capability_grants_for(app->id", runtime)
 
+    def test_firmware_runtime_time_acquire_matches_granted_features(self):
+        integration = (
+            ROOT / "firmware" / "src" / "runtime" /
+            "app_runtime_integration.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US",
+            integration,
+        )
+
     def test_wdt_fault_injection_is_explicit_and_test_build_only(self):
         expected = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
         with tempfile.TemporaryDirectory() as directory:

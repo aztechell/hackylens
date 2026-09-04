@@ -123,8 +123,13 @@ int hk_main(void)
         }
         if(app_runtime_integration_now_us(&now_us) != HK_OK)
         {
-            printf("[TIME] capability failure\r\n");
-            return -1;
+            static uint8_t s_time_fallback;
+            if(!s_time_fallback)
+            {
+                printf("[TIME] capability failure; using HAL clock\r\n");
+                s_time_fallback = 1U;
+            }
+            now_us = hal_time_us();
         }
         if(next_dispatch_us != 0U && now_us < next_dispatch_us)
         {

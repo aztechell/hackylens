@@ -78,8 +78,12 @@ void firmware_startup(void)
     platform_bootstrap_init_clocks();
     if(capability_owner_runtime_initialize() != HK_OK)
         printf("[CAPABILITY] owner initialization failed\r\n");
-    if(app_runtime_integration_initialize() != HK_OK)
-        printf("[APP] runtime initialization failed\r\n");
+    {
+        hk_result_t result = app_runtime_integration_initialize();
+        if(result != HK_OK)
+            printf("[APP] runtime initialization failed result=%d\r\n",
+                   (int)result);
+    }
     settings_storage_init();
     platform_bootstrap_init_hardware();
     if(hk_ui_display_prepare() != HK_OK)
