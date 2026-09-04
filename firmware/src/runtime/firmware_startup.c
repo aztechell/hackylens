@@ -8,6 +8,7 @@
 #include "../controllers/boot_controller.h"
 #include "../controllers/autostart_controller.h"
 #include "../controllers/sd_event_controller.h"
+#include "../controllers/auto_sleep_controller.h"
 #include "app_runtime_integration.h"
 #include "../core/hk_menu_runtime.h"
 #include "../core/hk_screen.h"
@@ -22,7 +23,7 @@
 
 static void firmware_wake_from_sleep(void)
 {
-    if(hk_screen_get() != SCREEN_SLEEP)
+    if(hk_screen_get() != SCREEN_SLEEP && !sleep_session_active())
         return;
     screen_brightness_apply();
     illum_led_apply();

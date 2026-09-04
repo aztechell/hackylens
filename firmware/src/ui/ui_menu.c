@@ -124,3 +124,12 @@ void settings_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_draw_rect(x + 24, y + 24, 12, 12, 2, color);
     hk_ui_display_fill_rect(x + 28, y + 28, 4, 4, color);
 }
+
+void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_draw_rect(x + 20, y + 10, 20, 30, 2, color);
+    hk_ui_display_fill_rect(x + 28, y + 6, 4, 14, color);
+    hk_ui_display_fill_rect(x + 22, y + 44, 16, 2, color);
+    hk_ui_display_fill_rect(x + 18, y + 49, 24, 2, color);
+}

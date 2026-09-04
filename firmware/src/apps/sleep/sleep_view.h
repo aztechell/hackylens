@@ -1,9 +1,8 @@
-#ifndef SLEEP_VIEW_H
-#define SLEEP_VIEW_H
+#ifndef HK_SLEEP_VIEW_H
+#define HK_SLEEP_VIEW_H
 
-#include <stdint.h>
+#include <hackylens/app.h>
 
-void sleep_view_enter(void);
-void sleep_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+hk_result_t sleep_view_render(hk_app_surface_t *surface);
 
 #endif

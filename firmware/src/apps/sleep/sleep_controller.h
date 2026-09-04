@@ -1,10 +1,19 @@
 #ifndef SLEEP_CONTROLLER_H
 #define SLEEP_CONTROLLER_H
 
-#include "../../core/hk_app.h"
+#include <hackylens/app.h>
 
-void sleep_controller_enter(const hk_input_snapshot_t *input);
-void sleep_controller_handle_buttons(const hk_input_snapshot_t *input);
-void auto_sleep_controller_tick(const hk_input_snapshot_t *input);
+typedef struct
+{
+    hk_owner_t owner;
+    hk_input_t input;
+    uint8_t close_requested;
+    uint8_t dirty;
+} sleep_state_t;
+
+void sleep_controller_reset(sleep_state_t *state);
+void sleep_controller_exit(sleep_state_t *state);
+void sleep_controller_handle_input(
+    sleep_state_t *state, const hk_input_event_t *event);
 
 #endif

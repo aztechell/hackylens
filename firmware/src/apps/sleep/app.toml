@@ -1,7 +1,7 @@
 id = "sleep"
 name = "SLEEP"
-lifecycle = "legacy"
-entry = "sleep_legacy_entry"
+lifecycle = "v2"
+entry = "sleep_v2_entry"
 sources = ["sleep_app.c", "sleep_controller.c", "sleep_view.c"]
 requires = ["display", "time", "input", "lights"]
 menu_order = 11

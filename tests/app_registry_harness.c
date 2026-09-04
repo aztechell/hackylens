@@ -233,9 +233,38 @@ const hk_app_v2_entry_t settings_v2_entry = {
     .render = dummy_settings_render,
     .stop = dummy_settings_stop,
 };
-const hk_legacy_app_entry_t sleep_legacy_entry = {
-    .screen = SCREEN_SLEEP,
-    .enter = noop_enter,
+static uint8_t s_sleep_v2_storage[16];
+static hk_result_t dummy_sleep_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_sleep_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_sleep_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+static hk_result_t dummy_sleep_stop(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+const hk_app_v2_entry_t sleep_v2_entry = {
+    .state_storage = s_sleep_v2_storage,
+    .state_capacity_bytes = sizeof(s_sleep_v2_storage),
+    .start = dummy_sleep_start,
+    .event = dummy_sleep_event,
+    .render = dummy_sleep_render,
+    .stop = dummy_sleep_stop,
 };
 static uint8_t s_terminal_v2_storage[16];
 static hk_result_t dummy_terminal_start(const hk_app_context_t *ctx)
