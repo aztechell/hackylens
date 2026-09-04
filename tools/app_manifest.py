@@ -34,8 +34,9 @@ PLACEHOLDER_STATIC_RAM_BYTES = 1_048_576
 PLACEHOLDER_STACK_BYTES = 16_384
 PLACEHOLDER_STATE_BYTES = 262_144
 V2_STATE_BYTES = 1_024
-PLACEHOLDER_TICK_BUDGET_US = 1_000
-PLACEHOLDER_RENDER_BUDGET_US = 10_000
+# Runtime presents with this deadline. 10 ms cannot finish a K210 320x240 SPI
+# transfer; the display adapter and UI already use 500 ms.
+PLACEHOLDER_RENDER_BUDGET_US = 500_000
 DEFAULT_DEBUG = "No app-specific debug commands."
 
 MAX_APP_ID_BYTES = 63
@@ -381,7 +382,9 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
 
     tick_ms = _integer(table["tick_ms"], f"{path}: tick_ms", 1, MAX_TICK_MS)
     tick_interval_us = tick_ms * 1000
-    tick_budget_us = min(PLACEHOLDER_TICK_BUDGET_US, tick_interval_us)
+    # TIMER callbacks are measured against tick_budget_us. The legal maximum is
+    # the tick interval; a 1 ms placeholder cannot host K210 TIMER + input.
+    tick_budget_us = tick_interval_us
 
     required_names = _name_array(
         table["requires"], f"{path}: requires", allow_empty=True

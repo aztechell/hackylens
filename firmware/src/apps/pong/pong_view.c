@@ -237,23 +237,16 @@ static hk_result_t pong_view_draw_border(
 static hk_result_t pong_view_draw_midline(
     hk_app_surface_t *surface, const pong_rect_t *clip)
 {
-    const uint16_t y = PONG_FIELD_Y + PONG_FIELD_H / 2;
-    const uint16_t left = PONG_FIELD_X + PONG_MENU_LINE;
-    const uint16_t right = PONG_FIELD_X + PONG_FIELD_W - PONG_MENU_LINE;
-    const uint16_t dash = 8U;
-    const uint16_t step = 16U;
-    const uint16_t count = (right - left) / step;
-    const uint16_t pattern_width = (count - 1U) * step + dash;
-    const uint16_t start = left + (right - left - pattern_width) / 2U;
-    hk_result_t result = HK_OK;
+    const pong_rect_t line = {
+        (int16_t)(PONG_FIELD_X + PONG_MENU_LINE),
+        (int16_t)(PONG_FIELD_Y + PONG_FIELD_H / 2 - 1),
+        (int16_t)(PONG_FIELD_W - PONG_MENU_LINE * 2),
+        2,
+    };
 
-    for(uint16_t x = start; result == HK_OK && x + dash <= right; x += step)
-    {
-        const pong_rect_t segment = {(int16_t)x, (int16_t)(y - 1), dash, 2};
-
-        result = pong_fill_shape(surface, segment, clip, PONG_COLOR_GREEN);
-    }
-    return result;
+    /* One fill keeps the first frame inside the K210 32-command BASE batch.
+     * A dashed line used 19 segments and overflowed on launch. */
+    return pong_fill_shape(surface, line, clip, PONG_COLOR_GREEN);
 }
 
 static pong_rect_t pong_view_trail_rect(pong_view_state_t state, uint8_t index)

@@ -113,6 +113,25 @@ class BuildContractsTest(unittest.TestCase):
         )
         self.assertIn("hk_ui_display_prepare()", startup[exit_fn:])
 
+    def test_v2_render_budget_covers_k210_full_frame_present(self):
+        manifest = (ROOT / "tools" / "app_manifest.py").read_text(
+            encoding="utf-8"
+        )
+        adapter = (
+            ROOT / "platforms" / "k210" / "capabilities" / "display_adapter.c"
+        ).read_text(encoding="utf-8")
+        ui = (ROOT / "firmware" / "src" / "ui" / "display_binding.c").read_text(
+            encoding="utf-8"
+        )
+        main = (ROOT / "firmware" / "src" / "runtime" / "hk_main.c").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("PLACEHOLDER_RENDER_BUDGET_US = 500_000", manifest)
+        self.assertIn("tick_budget_us = tick_interval_us", manifest)
+        self.assertIn("#define K210_DISPLAY_MAX_PRESENT_US 500000U", adapter)
+        self.assertIn("#define UI_DISPLAY_PRESENT_TIMEOUT_US 500000ULL", ui)
+        self.assertIn("[APP] poll failed result=%d", main)
+
     def test_firmware_runtime_time_acquire_matches_granted_features(self):
         integration = (
             ROOT / "firmware" / "src" / "runtime" /

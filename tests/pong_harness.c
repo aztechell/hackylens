@@ -17,6 +17,7 @@ typedef struct
 } fill_call_t;
 
 #define FILL_CALL_MAX 64U
+#define K210_BASE_BATCH_COMMANDS 32U
 
 static uint64_t g_now_us;
 static fill_call_t g_fill_calls[FILL_CALL_MAX];
@@ -112,6 +113,11 @@ static void reset_lcd_log(void)
     g_fill_call_count = 0U;
     g_clear_count = 0U;
     g_text_count = 0U;
+}
+
+static uint16_t recorded_commands(void)
+{
+    return (uint16_t)(g_clear_count + g_fill_call_count + g_text_count);
 }
 
 static void advance_and_tick(pong_state_t *state, uint32_t elapsed_us, uint32_t buttons)
@@ -284,6 +290,7 @@ static void test_single_present_for_full_and_maximal_frames(void)
     assert(pong_view_render_initial(&g_surface, current) == HK_OK);
     assert(g_clear_count == 1U);
     assert(g_text_count == 1U);
+    assert(recorded_commands() <= K210_BASE_BATCH_COMMANDS);
 
     reset_lcd_log();
     assert(pong_view_render_score(&g_surface, current) == HK_OK);
@@ -299,6 +306,7 @@ static void test_single_present_for_full_and_maximal_frames(void)
     assert(g_clear_count == 0U);
     assert(full == 0U);
     assert(count > 0U && count <= HK_APP_MAX_INVALIDATIONS);
+    assert(recorded_commands() <= K210_BASE_BATCH_COMMANDS);
 }
 
 int main(void)

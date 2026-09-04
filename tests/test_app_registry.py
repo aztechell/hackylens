@@ -371,6 +371,11 @@ int main(void)
                         "object-detect",
                     } else 5000 if app_id == "micropython" else 20000,
                 )
+                self.assertEqual(
+                    app["limits"]["tick_budget_us"],
+                    app["limits"]["tick_interval_us"],
+                )
+                self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:
                     self.assertEqual(app["metadata"]["debug"], expected_debug[app_id])
 

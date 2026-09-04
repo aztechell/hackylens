@@ -96,6 +96,19 @@ class AppManifestSchemaTests(unittest.TestCase):
         self.assertEqual(first_bytes, second_bytes)
         self.assertEqual(first, json.loads(first_bytes.decode("utf-8")))
 
+    def test_generated_budgets_cover_tick_interval_and_k210_present(self) -> None:
+        model = MANIFEST.validate_tree(VALID_FIXTURES)
+        self.assertEqual(MANIFEST.PLACEHOLDER_RENDER_BUDGET_US, 500_000)
+        for app in model["apps"]:
+            self.assertEqual(
+                app["limits"]["tick_budget_us"],
+                app["limits"]["tick_interval_us"],
+            )
+            self.assertEqual(
+                app["limits"]["render_budget_us"],
+                MANIFEST.PLACEHOLDER_RENDER_BUDGET_US,
+            )
+
     def test_cli_validates_all_manifests_and_emits_identical_canonical_bytes(self) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-app-manifest-cli-") as temp:
             first = Path(temp) / "first.json"

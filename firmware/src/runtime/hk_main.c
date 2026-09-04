@@ -114,6 +114,7 @@ int hk_main(void)
         uint64_t now_us;
         uint64_t sleep_us;
         uint32_t tick_interval_us;
+        hk_result_t poll_result;
 
         input = (hk_input_snapshot_t){0U, 0U, 0U};
         if(runtime_input_sample(&input.state) != HK_OK)
@@ -154,9 +155,13 @@ int hk_main(void)
             entry->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
-        if(app_runtime_integration_poll(now_us) != HK_OK &&
+        poll_result = app_runtime_integration_poll(now_us);
+        if(poll_result != HK_OK &&
            hk_screen_get() == SCREEN_APP_SLOT_0)
+        {
+            printf("[APP] poll failed result=%d\r\n", (int)poll_result);
             shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
+        }
         else if(hk_screen_get() == SCREEN_APP_SLOT_0 &&
                 !app_runtime_integration_active())
             shell_show_menu_reason(HK_APP_STOP_COMPLETED);
