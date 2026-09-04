@@ -33,7 +33,9 @@ ordinary Input event; portable v2 code requests close through
 adapter cannot skip owner-wide capability cleanup. A lifecycle-v2 app uses
 private `SCREEN_APP_SLOT_0` only as a shell compatibility marker; `screen_t` is
 not part of the public Feature App SDK. Menu icons remain descriptor/menu
-hooks (`draw_icon`) and are not v2 lifecycle callbacks.
+hooks (`draw_icon`) and are not v2 lifecycle callbacks. BUTTONS and PONG are the
+production apps on that v2 path; the remaining apps still use the one legacy
+adapter.
 
 Autostart identity is a stable uint16 manifest value. Settings schema v5 stores
 it without narrowing and migrates schema-v4 uint8 values by zero extension.

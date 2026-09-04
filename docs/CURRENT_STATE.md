@@ -188,8 +188,7 @@ common teardown. Render-time invalidation schedules an immediate later pass.
 An executable host harness runs the production `hk_main.c` and
 `app_runtime_integration.c` boundary with deterministic provider fakes,
 including v2 open/input/media/wakeup/tick/render/close and legacy open/close.
-No existing app uses the v2 branch yet, so targeted physical behavior does not
-need to be repeated before the first migration.
+At the time of that wiring, no production app used the v2 branch yet.
 
 Phase 3.8 publishes the complete Feature App SDK core through the canonical
 `hackylens/app.h` umbrella. Lifecycle callbacks and `hk_app_v2_entry_t` now live
@@ -198,8 +197,14 @@ handles are reused directly. Host tests compile that production runtime with
 typed Time, Input, and Display doubles; there is no public AppHostFake or second
 lifecycle engine. The SDK closure guard rejects private/platform/provider
 headers and enforces SDK-only repository dependencies for lifecycle-v2 app
-sources. This package does not migrate a production app or add a second hardware
+sources. That package did not migrate a production app or add a second hardware
 path.
+
+Simplification package S6 keeps that production runtime in place and shrinks the
+public v2 lifecycle to `start`/`event`/`render`/`stop`. BUTTONS and PONG now use
+that API with fixed-capacity app state, input/timer events, and runtime-owned
+Display transactions. The other ten production apps remain on one temporary
+legacy adapter.
 
 The pinned pre-change resource baseline is recorded in
 `docs/evidence/phase1-baseline.json`. Its exact canonical bytes are digest-
@@ -257,8 +262,9 @@ at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
 schema validation, production manifests, generated build composition, the
 generated registry/legacy adapter, the private lifecycle-v2 state machine, its
 public context/capability injection, and the production foreground switching,
-event, tick, and render integration are implemented. App generator and app
-migrations remain later Phase 3 work.
+event, tick, and render integration are implemented. BUTTONS and PONG already
+use the minimal v2 lifecycle; remaining production-app migrations and legacy
+adapter removal remain later Phase 3 work.
 Public storage, camera, vision, and AI capabilities also remain Phase 3+.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

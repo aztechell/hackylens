@@ -96,6 +96,11 @@ SDK_TOKEN_RE = re.compile(
     r"sysctl_get_time_us|DVP_|FUNC_CMOS|FUNC_SCCB|FUNC_SPI|FPIOA_|"
     r"SPI_DEVICE|SPI_CHIP|SPI_WORK)"
 )
+SDK_ABI_SYMBOL_RE = re.compile(
+    r"^\s*hk_result_t\s+(hk_app_[A-Za-z0-9_]+)\s*\(",
+    re.MULTILINE,
+)
+_SDK_ABI_SYMBOLS: frozenset[str] | None = None
 TRIGRAPHS = {
     "??=": "#",
     "??/": "\\",
@@ -315,6 +320,21 @@ def repository_layer_violation(
         if source_layer in edge["from"] and target_layer in edge["to"]:
             return f"{edge['reason']} ({source_layer} -> {target_layer})"
     return None
+
+
+def public_sdk_abi_symbols() -> frozenset[str]:
+    """Public Feature App SDK function names implemented by app-runtime."""
+
+    global _SDK_ABI_SYMBOLS
+    if _SDK_ABI_SYMBOLS is None:
+        symbols: set[str] = set()
+        include = ROOT / "sdk" / "include"
+        for path in include.rglob("*.h"):
+            symbols.update(SDK_ABI_SYMBOL_RE.findall(
+                path.read_text(encoding="utf-8")
+            ))
+        _SDK_ABI_SYMBOLS = frozenset(symbols)
+    return _SDK_ABI_SYMBOLS
 
 
 def repository_source_files(
@@ -1114,6 +1134,7 @@ def repository_object_symbol_edge_failures(
     """
 
     policy = policy or load_layer_policy()
+    sdk_abi = public_sdk_abi_symbols()
     ordered = sorted(
         objects, key=lambda item: (item.source, item.object_path, item.layer)
     )
@@ -1128,6 +1149,10 @@ def repository_object_symbol_edge_failures(
             targets = definitions.get(symbol, ())
             for target in targets:
                 if target.object_path == origin.object_path:
+                    continue
+                if (origin.layer == "app" and
+                    target.layer == "app-runtime" and
+                    symbol in sdk_abi):
                     continue
                 violation = repository_layer_violation(
                     origin.layer, target.layer, policy

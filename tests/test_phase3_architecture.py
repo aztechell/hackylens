@@ -141,6 +141,42 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
             runtime, "firmware/generated/app_registry/registry.h"
         ))
 
+    def test_v2_apps_link_public_sdk_symbols_but_not_runtime_privates(self) -> None:
+        self.assertIn("hk_app_context_state", check_arch.public_sdk_abi_symbols())
+        self.assertNotIn("hk_app_runtime_launch", check_arch.public_sdk_abi_symbols())
+        self.assertIsNotNone(check_arch.layer_edge_violation(
+            "firmware/src/apps/buttons/buttons_app.c",
+            "firmware/src/app_runtime/runtime_private.h",
+        ))
+
+        def record(
+            source: str, *, defined: tuple[str, ...] = (),
+            undefined: tuple[str, ...] = (),
+        ) -> check_arch.RepositoryObjectSymbols:
+            return check_arch.RepositoryObjectSymbols(
+                f"{source}.obj",
+                source,
+                check_arch.classify_repository_path(source),
+                frozenset(defined),
+                frozenset(undefined),
+            )
+
+        failures = check_arch.repository_object_symbol_edge_failures([
+            record(
+                "firmware/src/apps/buttons/buttons_app.c",
+                undefined=("hk_app_context_state", "hk_app_runtime_launch"),
+            ),
+            record(
+                "firmware/src/app_runtime/runtime.c",
+                defined=("hk_app_context_state", "hk_app_runtime_launch"),
+            ),
+        ])
+        self.assertFalse(any("hk_app_context_state" in item for item in failures))
+        self.assertTrue(any(
+            "hk_app_runtime_launch" in item and "app -> app-runtime" in item
+            for item in failures
+        ))
+
 
 if __name__ == "__main__":
     unittest.main()
