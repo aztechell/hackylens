@@ -31,16 +31,20 @@ static hk_result_t state_from(
     return HK_OK;
 }
 
-static hk_result_t minimal_probe(const hk_app_context_t *ctx)
+static hk_result_t minimal_start(const hk_app_context_t *ctx)
 {
     const char *app_id = NULL;
     const char *fallback = NULL;
-    hk_owner_t owner = HK_OWNER_NONE;
+    hk_owner_t identity_owner = HK_OWNER_NONE;
     uint32_t generation = 0U;
     uint8_t available = 0U;
+    minimal_state_t *state = NULL;
+    hk_capability_request_t input_request = HK_INPUT_REQUEST_0_1_INIT;
+    hk_result_t result;
 
-    if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
-       !app_id || generation == 0U || !hk_owner_is_zero(owner))
+    if(hk_app_context_identity(
+           ctx, &app_id, &generation, &identity_owner) != HK_OK ||
+       !app_id || generation == 0U || hk_owner_is_zero(identity_owner))
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(
            ctx, HK_CAPABILITY_ID_TIME, 0U, &available, &fallback) != HK_OK ||
@@ -54,17 +58,8 @@ static hk_result_t minimal_probe(const hk_app_context_t *ctx)
            ctx, HK_CAPABILITY_ID_DISPLAY, 0U, &available, &fallback) != HK_OK ||
        !available || fallback)
         return HK_ERR_INTERNAL;
-    return HK_OK;
-}
 
-static hk_result_t minimal_prepare(const hk_app_context_t *ctx)
-{
-    minimal_state_t *state = NULL;
-    const char *app_id = NULL;
-    uint32_t generation = 0U;
-    hk_result_t result = state_from(ctx, &state);
-    hk_capability_request_t input_request = HK_INPUT_REQUEST_0_1_INIT;
-
+    result = state_from(ctx, &state);
     if(result != HK_OK)
         return result;
     if(hk_app_context_identity(
@@ -83,12 +78,6 @@ static hk_result_t minimal_prepare(const hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t minimal_start(const hk_app_context_t *ctx)
-{
-    (void)ctx;
-    return HK_OK;
-}
-
 static hk_result_t minimal_event(
     const hk_app_context_t *ctx,
     const hk_app_event_t *event)
@@ -102,7 +91,6 @@ static hk_result_t minimal_event(
     {
         hk_input_event_t queued;
         uint32_t input_state = 0U;
-
         hk_input_event_t queued_second;
 
         if(state->consume_input &&
@@ -122,27 +110,19 @@ static hk_result_t minimal_event(
     {
         state->media_events++;
     }
+    else if(event->kind == HK_APP_EVENT_TIMER)
+    {
+        uint64_t observed_us = 0U;
+
+        if(hk_time_now_us(state->owner, &state->time, &observed_us) != HK_OK ||
+           observed_us != event->data.timer.now_us)
+            return HK_ERR_INTERNAL;
+        state->ticks++;
+    }
     else if(event->kind == HK_APP_EVENT_RUNTIME_CLOSE)
     {
         state->close_events++;
     }
-    return HK_OK;
-}
-
-static hk_result_t minimal_tick(
-    const hk_app_context_t *ctx,
-    uint64_t now_us)
-{
-    minimal_state_t *state = NULL;
-    uint64_t observed_us = 0U;
-    hk_result_t result = state_from(ctx, &state);
-
-    if(result != HK_OK)
-        return result;
-    if(hk_time_now_us(state->owner, &state->time, &observed_us) != HK_OK ||
-       observed_us != now_us)
-        return HK_ERR_INTERNAL;
-    state->ticks++;
     return HK_OK;
 }
 
@@ -168,19 +148,7 @@ static hk_result_t minimal_render(
     return HK_OK;
 }
 
-static hk_result_t minimal_stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
-{
-    minimal_state_t *state = NULL;
-    hk_result_t result = state_from(ctx, &state);
-
-    if(result != HK_OK || reason > HK_APP_STOP_SHUTDOWN)
-        return result != HK_OK ? result : HK_ERR_INVALID_ARGUMENT;
-    return hk_app_context_teardown_deadline(ctx, &state->stop_deadline);
-}
-
-static hk_result_t minimal_cleanup(const hk_app_context_t *ctx)
+static hk_result_t minimal_stop(const hk_app_context_t *ctx)
 {
     minimal_state_t *state = NULL;
     hk_deadline_t deadline;
@@ -188,9 +156,9 @@ static hk_result_t minimal_cleanup(const hk_app_context_t *ctx)
 
     if(result != HK_OK)
         return result;
-    if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK ||
-       deadline.at_us != state->stop_deadline.at_us)
+    if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK)
         return HK_ERR_INTERNAL;
+    state->stop_deadline = deadline;
     if(hk_display_release(state->owner, deadline, &state->display) != HK_OK ||
        hk_input_release(
            state->owner, deadline, &state->input_second) != HK_OK ||
@@ -203,14 +171,10 @@ static hk_result_t minimal_cleanup(const hk_app_context_t *ctx)
 const hk_app_v2_entry_t minimal_app_entry = {
     .state_storage = s_state_storage,
     .state_capacity_bytes = sizeof(s_state_storage),
-    .probe = minimal_probe,
-    .prepare = minimal_prepare,
     .start = minimal_start,
     .event = minimal_event,
-    .tick = minimal_tick,
     .render = minimal_render,
     .stop = minimal_stop,
-    .cleanup = minimal_cleanup,
 };
 
 void minimal_app_set_consume_input(uint8_t consume)

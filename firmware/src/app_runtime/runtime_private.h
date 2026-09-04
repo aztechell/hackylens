@@ -20,25 +20,18 @@ extern "C" {
 typedef enum
 {
     HK_APP_RUNTIME_INACTIVE = 0,
-    HK_APP_RUNTIME_INJECTING,
-    HK_APP_RUNTIME_PROBED,
-    HK_APP_RUNTIME_PREPARED,
+    HK_APP_RUNTIME_STARTING,
     HK_APP_RUNTIME_RUNNING,
     HK_APP_RUNTIME_STOPPING,
-    HK_APP_RUNTIME_CLEANING,
     HK_APP_RUNTIME_FAULTED,
 } hk_app_runtime_state_t;
 
 typedef enum
 {
     HK_APP_STAGE_REUSABLE = 0,
-    HK_APP_STAGE_PROBING,
-    HK_APP_STAGE_INJECTING,
-    HK_APP_STAGE_PREPARING,
     HK_APP_STAGE_STARTING,
     HK_APP_STAGE_RUNNING,
     HK_APP_STAGE_STOPPING,
-    HK_APP_STAGE_APP_CLEANUP,
     HK_APP_STAGE_OWNER_CLEANUP,
     HK_APP_STAGE_INVALIDATING,
 } hk_app_runtime_stage_t;
@@ -113,10 +106,9 @@ typedef struct hk_app_runtime
     uint8_t context_valid;
     uint8_t teardown_deadline_valid;
     uint8_t callback_active;
-    uint8_t prepare_entered;
     uint8_t start_entered;
     uint8_t stop_called;
-    uint8_t cleanup_called;
+    uint8_t close_requested;
     uint8_t teardown_started;
     uint8_t invalidation_count;
     uint8_t full_invalidation;
@@ -136,7 +128,6 @@ hk_result_t hk_app_runtime_stop(
 hk_result_t hk_app_runtime_event(
     hk_app_runtime_t *runtime,
     const hk_app_event_t *event);
-hk_result_t hk_app_runtime_tick(hk_app_runtime_t *runtime, uint64_t now_us);
 hk_result_t hk_app_runtime_render(
     hk_app_runtime_t *runtime,
     hk_app_surface_t *surface);

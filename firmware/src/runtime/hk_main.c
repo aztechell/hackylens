@@ -65,7 +65,7 @@ static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
         }
         if(consumed && !app_runtime_integration_active() &&
            hk_screen_get() == SCREEN_APP_SLOT_0)
-            shell_show_menu_reason(HK_APP_STOP_BACK);
+            shell_show_menu_reason(HK_APP_STOP_COMPLETED);
         if(!consumed)
             shell_handle_buttons(snapshot);
     }
@@ -152,6 +152,9 @@ int hk_main(void)
         if(app_runtime_integration_poll(now_us) != HK_OK &&
            hk_screen_get() == SCREEN_APP_SLOT_0)
             shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
+        else if(hk_screen_get() == SCREEN_APP_SLOT_0 &&
+                !app_runtime_integration_active())
+            shell_show_menu_reason(HK_APP_STOP_COMPLETED);
         app = hk_app_for_screen(hk_screen_get());
         entry = hk_app_legacy_entry(app);
         if(hk_screen_get() == SCREEN_APP_SLOT_0 &&

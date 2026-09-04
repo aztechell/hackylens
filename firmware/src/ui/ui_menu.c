@@ -56,6 +56,9 @@ void menu_draw_title(const char *title)
 void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
 {
     const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
+    void (*draw_icon)(uint16_t, uint16_t, uint16_t, uint16_t) =
+        app && app->draw_icon ? app->draw_icon :
+        (entry ? entry->draw_icon : NULL);
     uint8_t col = (uint8_t)(index % MENU_GRID_COLS);
     uint8_t row = (uint8_t)(index / MENU_GRID_COLS);
     uint16_t x = MENU_ICON_X0 + col * (MENU_ICON + MENU_ICON_GAP_X);
@@ -69,6 +72,6 @@ void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
     else
         hk_ui_display_draw_rect(x, y, MENU_ICON, MENU_ICON, MENU_LINE, COLOR_TERM_GREEN);
 
-    if(entry && entry->draw_icon)
-        entry->draw_icon(x, y, fg, bg);
+    if(draw_icon)
+        draw_icon(x, y, fg, bg);
 }

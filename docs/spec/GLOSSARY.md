@@ -71,7 +71,7 @@ capability; the terms are not synonyms.
 ### Runtime
 
 The **runtime** creates and stops application instances, issues declared
-capability handles, dispatches events/ticks, and guarantees cleanup. It does not
+capability handles, dispatches events, and guarantees cleanup. It does not
 include every firmware subsystem and MUST NOT expose undeclared hardware access
 to an app.
 

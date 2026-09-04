@@ -23,6 +23,8 @@ typedef struct
     uint64_t sequences[16];
     uint8_t event_count;
     uint8_t back_during_start;
+    uint8_t back_input_during_start;
+    uint8_t close_on_back;
     uint8_t start_fails;
     uint8_t deadline_fails;
     uint8_t render_fails;
@@ -32,7 +34,6 @@ typedef struct
     uint32_t owner_open_count;
     uint32_t owner_cleanup_count;
     uint32_t stop_count;
-    uint32_t cleanup_count;
     uint32_t tick_count;
     uint32_t render_count;
     uint32_t legacy_open_count;
@@ -50,18 +51,6 @@ typedef struct
 static fixture_t *s_fixture;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[64];
 
-static hk_result_t app_probe(const hk_app_context_t *ctx)
-{
-    (void)ctx;
-    return HK_OK;
-}
-
-static hk_result_t app_prepare(const hk_app_context_t *ctx)
-{
-    (void)ctx;
-    return HK_OK;
-}
-
 static hk_result_t app_start(const hk_app_context_t *ctx)
 {
     (void)ctx;
@@ -69,6 +58,18 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
     {
         if(hk_app_switch_close(
                &s_fixture->switcher, HK_APP_STOP_BACK) != HK_PENDING)
+            return HK_ERR_INTERNAL;
+    }
+    if(s_fixture->back_input_during_start)
+    {
+        uint8_t consumed = 0U;
+        hk_input_event_t input = {0};
+
+        input.changed = HK_INPUT_BUTTON_BACK;
+        input.pressed = HK_INPUT_BUTTON_BACK;
+        input.state = HK_INPUT_BUTTON_BACK;
+        if(hk_app_switch_input(&s_fixture->switcher, &input, &consumed) != HK_OK ||
+           !consumed)
             return HK_ERR_INTERNAL;
     }
     return s_fixture->start_fails ? HK_ERR_IO : HK_OK;
@@ -87,16 +88,15 @@ static hk_result_t app_event(
     if(event->kind == HK_APP_EVENT_TIMER)
     {
         static const hk_display_rect_t region = {1, 2, 3U, 4U};
+
+        s_fixture->tick_count++;
         return hk_app_context_request_render(ctx, &region);
     }
-    return HK_OK;
-}
-
-static hk_result_t app_tick(const hk_app_context_t *ctx, uint64_t now_us)
-{
-    (void)ctx;
-    (void)now_us;
-    s_fixture->tick_count++;
+    if(event->kind == HK_APP_EVENT_RUNTIME_CLOSE)
+        s_fixture->stop_reason = event->data.close.reason;
+    if(event->kind == HK_APP_EVENT_INPUT && s_fixture->close_on_back &&
+       (event->data.input.pressed & HK_INPUT_BUTTON_BACK))
+        return hk_app_context_request_close(ctx);
     return HK_OK;
 }
 
@@ -119,36 +119,21 @@ static hk_result_t app_render(
     return s_fixture->render_fails ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t app_stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
+static hk_result_t app_stop(const hk_app_context_t *ctx)
 {
     hk_deadline_t deadline;
 
     s_fixture->stop_count++;
-    s_fixture->stop_reason = reason;
-    return hk_app_context_teardown_deadline(ctx, &deadline);
-}
-
-static hk_result_t app_cleanup(const hk_app_context_t *ctx)
-{
-    hk_deadline_t deadline;
-
-    s_fixture->cleanup_count++;
     return hk_app_context_teardown_deadline(ctx, &deadline);
 }
 
 static const hk_app_v2_entry_t s_v2_entry = {
     .state_storage = s_state,
     .state_capacity_bytes = sizeof(s_state),
-    .probe = app_probe,
-    .prepare = app_prepare,
     .start = app_start,
     .event = app_event,
-    .tick = app_tick,
     .render = app_render,
     .stop = app_stop,
-    .cleanup = app_cleanup,
 };
 
 static void legacy_enter(const hk_input_snapshot_t *input)
@@ -503,7 +488,10 @@ static int check_mixed_switch_and_events(void)
     input.changed = HK_INPUT_BUTTON_BACK;
     input.pressed = HK_INPUT_BUTTON_BACK;
     CHECK(hk_app_switch_input(&fixture.switcher, &input, &consumed) == HK_OK);
-    CHECK(consumed && fixture.events[4] == HK_APP_EVENT_RUNTIME_CLOSE);
+    CHECK(consumed && fixture.events[4] == HK_APP_EVENT_INPUT);
+    CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
+    CHECK(hk_app_switch_close(&fixture.switcher, HK_APP_STOP_BACK) == HK_OK);
+    CHECK(fixture.events[5] == HK_APP_EVENT_RUNTIME_CLOSE);
     for(uint8_t index = 0U; index < fixture.event_count; index++)
         CHECK(fixture.sequences[index] == (uint64_t)index + 1U);
     CHECK(fixture.stop_reason == HK_APP_STOP_BACK);
@@ -531,9 +519,25 @@ static int check_back_during_start(void)
     fixture.back_during_start = 1U;
     CHECK(hk_app_switch_open(&fixture.switcher, &v2, NULL) == HK_ERR_CANCELLED);
     CHECK(hk_app_switch_active(&fixture.switcher) == NULL);
-    CHECK(fixture.stop_count == 1U && fixture.cleanup_count == 1U);
+    CHECK(fixture.stop_count == 1U);
     CHECK(fixture.owner_cleanup_count == 1U);
     CHECK(fixture.stop_reason == HK_APP_STOP_BACK);
+    return 0;
+}
+
+static int check_back_input_during_start(void)
+{
+    fixture_t fixture;
+    hk_app_t v2 = v2_descriptor();
+
+    CHECK(reset_fixture(&fixture) == 0);
+    fixture.back_input_during_start = 1U;
+    CHECK(hk_app_switch_open(&fixture.switcher, &v2, NULL) == HK_OK);
+    CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
+    CHECK(fixture.event_count == 1U);
+    CHECK(fixture.events[0] == HK_APP_EVENT_INPUT);
+    CHECK(fixture.stop_count == 0U);
+    CHECK(hk_app_switch_close(&fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     return 0;
 }
 
@@ -618,6 +622,7 @@ int main(void)
 {
     CHECK(check_mixed_switch_and_events() == 0);
     CHECK(check_back_during_start() == 0);
+    CHECK(check_back_input_during_start() == 0);
     CHECK(check_timeout_and_render_failures() == 0);
     CHECK(check_render_requested_during_render_is_immediate() == 0);
     CHECK(check_autostart_failure_fallback() == 0);

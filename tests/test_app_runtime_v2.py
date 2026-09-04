@@ -138,9 +138,27 @@ class AppRuntimeV2Tests(unittest.TestCase):
 
         self.assertRegex(
             public_runtime,
-            r"typedef hk_result_t \(\*hk_app_cleanup_fn\)\("
+            r"typedef hk_result_t \(\*hk_app_start_fn\)\("
             r"const hk_app_context_t \*ctx\);",
         )
+        self.assertRegex(
+            public_runtime,
+            r"typedef hk_result_t \(\*hk_app_event_fn\)\(",
+        )
+        self.assertRegex(
+            public_runtime,
+            r"typedef hk_result_t \(\*hk_app_render_fn\)\(",
+        )
+        self.assertRegex(
+            public_runtime,
+            r"typedef hk_result_t \(\*hk_app_stop_fn\)\("
+            r"const hk_app_context_t \*ctx\);",
+        )
+        self.assertIn("hk_app_context_request_close", public_runtime)
+        self.assertNotIn("hk_app_probe_fn", public_runtime)
+        self.assertNotIn("hk_app_prepare_fn", public_runtime)
+        self.assertNotIn("hk_app_tick_fn", public_runtime)
+        self.assertNotIn("hk_app_cleanup_fn", public_runtime)
         self.assertNotIn("typedef hk_result_t (*hk_app_cleanup_fn)", private_header)
         self.assertIn("hk_owner_t owner;", private_header)
         self.assertIn(

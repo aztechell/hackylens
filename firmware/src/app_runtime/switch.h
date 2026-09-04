@@ -25,10 +25,12 @@ typedef struct
     const hk_app_t *active;
     hk_app_surface_t surface;
     uint64_t next_tick_us;
+    hk_input_event_t pending_input;
     hk_app_stop_reason_t pending_close_reason;
     uint8_t transition_active;
     uint8_t opening;
     uint8_t pending_close;
+    uint8_t pending_input_valid;
 } hk_app_switch_t;
 
 hk_result_t hk_app_switch_init(

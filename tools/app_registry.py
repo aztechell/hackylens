@@ -81,9 +81,12 @@ def generated_source(
             "hk_legacy_app_entry_t" if lifecycle == "legacy"
             else "hk_app_v2_entry_t"
         )
+        icon_symbol = str(app["id"]).replace("-", "_") + "_draw_icon"
         lines.extend([
             f"#if {guard}",
             f"extern const {entry_type} {app['entry']};",
+            f"extern void {icon_symbol}("
+            "uint16_t x, uint16_t y, uint16_t color, uint16_t bg);",
             "",
         ])
 
@@ -181,6 +184,7 @@ def generated_source(
             f"    .capability_count = {capability_count},",
             f"    .services = {service_pointer},",
             f"    .service_count = {service_count},",
+            f"    .draw_icon = {icon_symbol},",
             "};",
             f"#endif /* {guard} */",
             "",

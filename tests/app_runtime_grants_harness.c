@@ -32,12 +32,11 @@ typedef struct
     hk_app_runtime_t *runtime;
     mode_t mode;
     uint32_t resolve_calls;
-    uint32_t probe_calls;
+    uint32_t start_calls;
     uint32_t owner_open_calls;
     uint32_t acquire_calls;
     uint32_t service_acquire_calls;
-    uint32_t prepare_calls;
-    uint32_t cleanup_calls;
+    uint32_t stop_calls;
     uint32_t owner_cleanup_calls;
     uint32_t next_owner_generation;
     uint8_t owner_live;
@@ -83,43 +82,25 @@ static const hk_app_service_request_t s_services[] = {
     {"hackylens.service.settings", "fixture.settings"},
 };
 
-static hk_result_t probe(const hk_app_context_t *ctx)
+static hk_result_t start(const hk_app_context_t *ctx)
 {
     const char *app_id = NULL;
     const char *fallback = NULL;
     hk_owner_t owner = HK_OWNER_NONE;
-    hk_time_t time = {0};
-    uint32_t generation = 0U;
-    uint8_t available = 0U;
-
-    s_fixture->probe_calls++;
-    if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
-       strcmp(app_id, "grant-fixture") != 0 || generation == 0U ||
-       !hk_owner_is_zero(owner) ||
-       hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_TIME, 0U, &available, &fallback) != HK_OK ||
-       !available || fallback != NULL ||
-       hk_app_context_time(ctx, 0U, &time) != HK_ERR_INVALID_STATE)
-        return HK_ERR_INTERNAL;
-
-    if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
-       strcmp(fallback, "headless") != 0)
-        return HK_ERR_INTERNAL;
-    if((s_fixture->mode == MODE_OPTIONAL_ABSENT && available) ||
-       (s_fixture->mode != MODE_OPTIONAL_ABSENT && !available))
-        return HK_ERR_INTERNAL;
-    return HK_OK;
-}
-
-static hk_result_t prepare(const hk_app_context_t *ctx)
-{
     hk_input_t input = {0};
     hk_lights_t lights = {0};
     hk_app_service_t service = {0};
+    uint32_t generation = 0U;
+    uint8_t available = 0U;
 
-    s_fixture->prepare_calls++;
-    if(hk_app_context_time(ctx, 0U, &s_fixture->copied_time) != HK_OK ||
+    s_fixture->start_calls++;
+    if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
+       strcmp(app_id, "grant-fixture") != 0 || generation == 0U ||
+       hk_owner_is_zero(owner) ||
+       hk_app_context_capability_status(
+           ctx, HK_CAPABILITY_ID_TIME, 0U, &available, &fallback) != HK_OK ||
+       !available || fallback != NULL ||
+       hk_app_context_time(ctx, 0U, &s_fixture->copied_time) != HK_OK ||
        !s_fixture->owner_live ||
        s_fixture->copied_time.lease.owner.generation !=
            s_fixture->live_owner.generation ||
@@ -130,6 +111,14 @@ static hk_result_t prepare(const hk_app_context_t *ctx)
        service.owner.generation != s_fixture->live_owner.generation ||
        fake_direct_acquire(ctx->owner, HK_CAPABILITY_ID_LIGHTS) !=
            HK_ERR_NOT_DECLARED)
+        return HK_ERR_INTERNAL;
+
+    if(hk_app_context_capability_status(
+           ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
+       strcmp(fallback, "headless") != 0)
+        return HK_ERR_INTERNAL;
+    if((s_fixture->mode == MODE_OPTIONAL_ABSENT && available) ||
+       (s_fixture->mode != MODE_OPTIONAL_ABSENT && !available))
         return HK_ERR_INTERNAL;
     if(s_fixture->mode == MODE_OPTIONAL_ABSENT)
     {
@@ -144,25 +133,12 @@ static hk_result_t prepare(const hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t start(const hk_app_context_t *ctx)
-{
-    (void)ctx;
-    return HK_OK;
-}
-
 static hk_result_t event(
     const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *runtime_event)
 {
     (void)ctx;
     (void)runtime_event;
-    return HK_OK;
-}
-
-static hk_result_t tick(const hk_app_context_t *ctx, uint64_t now_us)
-{
-    (void)ctx;
-    (void)now_us;
     return HK_OK;
 }
 
@@ -175,20 +151,11 @@ static hk_result_t render(
     return HK_OK;
 }
 
-static hk_result_t stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
-{
-    (void)ctx;
-    (void)reason;
-    return HK_OK;
-}
-
-static hk_result_t cleanup(const hk_app_context_t *ctx)
+static hk_result_t stop(const hk_app_context_t *ctx)
 {
     hk_time_t time = {0};
 
-    s_fixture->cleanup_calls++;
+    s_fixture->stop_calls++;
     if(!s_fixture->owner_live ||
        hk_app_context_time(ctx, 0U, &time) != HK_OK ||
        time.lease.owner.generation != s_fixture->live_owner.generation)
@@ -204,14 +171,10 @@ static hk_result_t cleanup(const hk_app_context_t *ctx)
 static const hk_app_v2_entry_t s_entry = {
     .state_storage = s_state,
     .state_capacity_bytes = sizeof(s_state),
-    .probe = probe,
-    .prepare = prepare,
     .start = start,
     .event = event,
-    .tick = tick,
     .render = render,
     .stop = stop,
-    .cleanup = cleanup,
 };
 
 static hk_app_t descriptor(void)
@@ -513,7 +476,7 @@ static int check_preflight_failures(void)
         fixture.mode = modes[index];
         CHECK(hk_app_runtime_launch(&runtime, &app) == expected[index]);
         CHECK(fixture.resolve_calls == 1U);
-        CHECK(fixture.probe_calls == 0U);
+        CHECK(fixture.start_calls == 0U);
         CHECK(fixture.owner_open_calls == 0U);
         CHECK(fixture.owner_cleanup_calls == 0U);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
@@ -541,14 +504,14 @@ static int check_grants_and_retirement(void)
     CHECK(init_fixture(&fixture, &runtime) == 0);
     fixture.mode = MODE_OPTIONAL_ABSENT;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
-    CHECK(fixture.resolve_calls == 2U && fixture.probe_calls == 1U);
+    CHECK(fixture.resolve_calls == 2U && fixture.start_calls == 1U);
     CHECK(fixture.owner_open_calls == 1U && fixture.acquire_calls == 1U);
-    CHECK(fixture.service_acquire_calls == 1U && fixture.prepare_calls == 1U);
+    CHECK(fixture.service_acquire_calls == 1U);
     CHECK(fake_handle_is_live(&fixture, &fixture.copied_time));
     first_time = fixture.copied_time;
     first_context = fixture.copied_context;
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_COMPLETED) == HK_OK);
-    CHECK(fixture.cleanup_calls == 1U && fixture.owner_cleanup_calls == 1U);
+    CHECK(fixture.stop_calls == 1U && fixture.owner_cleanup_calls == 1U);
     CHECK(!fake_handle_is_live(&fixture, &first_time));
     CHECK(hk_app_context_time(
         &first_context, 0U, &fixture.copied_time) == HK_ERR_STALE_HANDLE);
@@ -573,14 +536,14 @@ static int check_partial_injection_and_owner_exhaustion(void)
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_IO);
     CHECK(fixture.acquire_calls == 2U);
     CHECK(fixture.service_acquire_calls == 1U);
-    CHECK(fixture.prepare_calls == 0U && fixture.cleanup_calls == 0U);
+    CHECK(fixture.start_calls == 0U && fixture.stop_calls == 0U);
     CHECK(fixture.owner_cleanup_calls == 1U && !fixture.owner_live);
 
     CHECK(init_fixture(&fixture, &runtime) == 0);
     fixture.mode = MODE_OWNER_EXHAUSTED;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_LIMIT);
-    CHECK(fixture.probe_calls == 1U && fixture.owner_open_calls == 1U);
-    CHECK(fixture.acquire_calls == 0U && fixture.prepare_calls == 0U);
+    CHECK(fixture.start_calls == 0U && fixture.owner_open_calls == 1U);
+    CHECK(fixture.acquire_calls == 0U);
     CHECK(fixture.owner_cleanup_calls == 0U);
     return 0;
 }
@@ -594,17 +557,17 @@ static int check_stable_optional_and_private_owner(void)
     CHECK(init_fixture(&fixture, &runtime) == 0);
     fixture.mode = MODE_OPTIONAL_ACQUIRE_BUSY;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_BUSY);
-    CHECK(fixture.probe_calls == 1U);
+    CHECK(fixture.start_calls == 0U);
     CHECK(fixture.acquire_calls == 2U);
     CHECK(fixture.service_acquire_calls == 0U);
-    CHECK(fixture.prepare_calls == 0U && fixture.cleanup_calls == 0U);
+    CHECK(fixture.stop_calls == 0U);
     CHECK(fixture.owner_cleanup_calls == 1U && !fixture.owner_live);
 
     CHECK(init_fixture(&fixture, &runtime) == 0);
     fixture.mode = MODE_CORRUPT_PUBLIC_OWNER;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_COMPLETED) == HK_ERR_IO);
-    CHECK(fixture.cleanup_calls == 1U);
+    CHECK(fixture.stop_calls == 1U);
     CHECK(fixture.owner_cleanup_calls == 1U && !fixture.owner_live);
     return 0;
 }
@@ -621,7 +584,7 @@ static int check_descriptor_capacity_guards(void)
     app = descriptor();
     app.service_count = HK_APP_CONTEXT_MAX_SERVICES + 1U;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
-    CHECK(fixture.resolve_calls == 0U && fixture.probe_calls == 0U);
+    CHECK(fixture.resolve_calls == 0U && fixture.start_calls == 0U);
     return 0;
 }
 

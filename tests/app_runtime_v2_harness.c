@@ -28,20 +28,17 @@
 typedef enum
 {
     FAIL_NONE = 0,
-    FAIL_PROBE,
     FAIL_INJECT_NO_OWNER,
     FAIL_INJECT_WITH_OWNER,
-    FAIL_PREPARE,
     FAIL_START,
     FAIL_EVENT,
     FAIL_TICK,
     FAIL_RENDER,
     FAIL_STOP,
-    FAIL_CLEANUP,
     FAIL_OWNER_CLEANUP,
     FAIL_DEADLINE,
     FAIL_INVALID_DEADLINE,
-    PENDING_PROBE,
+    PENDING_START,
 } fail_point_t;
 
 typedef struct
@@ -53,10 +50,8 @@ typedef struct
     uint32_t deadline_calls;
     uint32_t owner_cleanup_calls;
     uint32_t stop_calls;
-    uint32_t cleanup_calls;
     uint32_t close_event_calls;
     hk_deadline_t stop_deadline;
-    hk_deadline_t cleanup_deadline;
     hk_deadline_t owner_deadline;
     hk_app_stop_reason_t observed_reason;
     hk_app_stop_reason_t close_reason;
@@ -65,6 +60,7 @@ typedef struct
     hk_result_t reentrant_event;
     uint8_t test_reentrant;
     uint8_t close_event_fails;
+    uint8_t request_close;
     volatile uint32_t callback_count;
 } fixture_t;
 
@@ -101,45 +97,18 @@ static hk_result_t callback_state(const hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t fake_probe(const hk_app_context_t *ctx)
-{
-    hk_deadline_t deadline;
-
-    trace('P');
-    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_INACTIVE ||
-       hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_PROBING ||
-       !hk_owner_is_zero(ctx->owner) ||
-       callback_state(ctx) != HK_OK ||
-       hk_app_context_teardown_deadline(ctx, &deadline) != HK_ERR_INVALID_STATE)
-        return HK_ERR_INTERNAL;
-    if(s_fixture->fail == PENDING_PROBE)
-        return HK_PENDING;
-    return s_fixture->fail == FAIL_PROBE ? HK_ERR_IO : HK_OK;
-}
-
-static hk_result_t fake_prepare(const hk_app_context_t *ctx)
-{
-    trace('A');
-    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_INJECTING ||
-       hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_PREPARING ||
-       ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
-       callback_state(ctx) != HK_OK)
-        return HK_ERR_INTERNAL;
-    s_state[0] = 0x5aU;
-    return s_fixture->fail == FAIL_PREPARE ? HK_ERR_IO : HK_OK;
-}
-
 static hk_result_t fake_start(const hk_app_context_t *ctx)
 {
     hk_app_runtime_event_t event = input_event();
 
     trace('S');
-    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_PREPARED ||
+    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_STARTING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_STARTING ||
        ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
        callback_state(ctx) != HK_OK ||
        hk_app_context_deferred_token(ctx, &s_fixture->token) != HK_ERR_INVALID_STATE)
         return HK_ERR_INTERNAL;
+    s_state[0] = 0x5aU;
     if(s_fixture->test_reentrant)
     {
         s_fixture->reentrant_stop = hk_app_runtime_stop(
@@ -147,6 +116,8 @@ static hk_result_t fake_start(const hk_app_context_t *ctx)
         s_fixture->reentrant_event = hk_app_runtime_event(
             s_fixture->runtime, &event);
     }
+    if(s_fixture->fail == PENDING_START)
+        return HK_PENDING;
     return s_fixture->fail == FAIL_START ? HK_ERR_IO : HK_OK;
 }
 
@@ -154,8 +125,11 @@ static hk_result_t fake_event(
     const hk_app_context_t *ctx,
     const hk_app_runtime_event_t *event)
 {
-    trace('E');
     s_fixture->callback_count++;
+    if(event->kind == HK_APP_EVENT_TIMER)
+        trace('T');
+    else
+        trace('E');
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_RUNNING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_RUNNING ||
        callback_state(ctx) != HK_OK)
@@ -164,11 +138,15 @@ static hk_result_t fake_event(
     {
         s_fixture->close_event_calls++;
         s_fixture->close_reason = event->data.close.reason;
+        s_fixture->observed_reason = event->data.close.reason;
         if(s_fixture->close_event_fails)
             return HK_ERR_LIMIT;
     }
     if(event->kind == HK_APP_EVENT_INPUT && s_fixture->token.slot == 0U &&
        hk_app_context_deferred_token(ctx, &s_fixture->token) != HK_OK)
+        return HK_ERR_INTERNAL;
+    if(s_fixture->request_close && event->kind == HK_APP_EVENT_INPUT &&
+       hk_app_context_request_close(ctx) != HK_OK)
         return HK_ERR_INTERNAL;
     if(s_fixture->test_reentrant)
     {
@@ -177,18 +155,9 @@ static hk_result_t fake_event(
         s_fixture->reentrant_event = hk_app_runtime_event(
             s_fixture->runtime, event);
     }
+    if(event->kind == HK_APP_EVENT_TIMER)
+        return s_fixture->fail == FAIL_TICK ? HK_ERR_IO : HK_OK;
     return s_fixture->fail == FAIL_EVENT ? HK_ERR_IO : HK_OK;
-}
-
-static hk_result_t fake_tick(const hk_app_context_t *ctx, uint64_t now_us)
-{
-    (void)now_us;
-    trace('T');
-    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_RUNNING ||
-       hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_RUNNING ||
-       callback_state(ctx) != HK_OK)
-        return HK_ERR_INTERNAL;
-    return s_fixture->fail == FAIL_TICK ? HK_ERR_IO : HK_OK;
 }
 
 static hk_result_t fake_render(
@@ -204,13 +173,10 @@ static hk_result_t fake_render(
     return s_fixture->fail == FAIL_RENDER ? HK_ERR_IO : HK_OK;
 }
 
-static hk_result_t fake_stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
+static hk_result_t fake_stop(const hk_app_context_t *ctx)
 {
     trace('X');
     s_fixture->stop_calls++;
-    s_fixture->observed_reason = reason;
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_STOPPING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_STOPPING ||
        ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
@@ -218,36 +184,19 @@ static hk_result_t fake_stop(
        hk_app_context_teardown_deadline(
            ctx, &s_fixture->stop_deadline) != HK_OK)
         return HK_ERR_INTERNAL;
-    CHECK(hk_app_runtime_validate_token(
-        s_fixture->runtime, s_fixture->token) == HK_ERR_STALE_HANDLE);
-    return s_fixture->fail == FAIL_STOP ? HK_ERR_IO : HK_OK;
-}
-
-static hk_result_t fake_cleanup(const hk_app_context_t *ctx)
-{
-    trace('C');
-    s_fixture->cleanup_calls++;
-    if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_CLEANING ||
-       hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_APP_CLEANUP ||
-       ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
-       callback_state(ctx) != HK_OK ||
-       hk_app_context_teardown_deadline(
-           ctx, &s_fixture->cleanup_deadline) != HK_OK)
+    if(hk_app_runtime_validate_token(
+           s_fixture->runtime, s_fixture->token) != HK_ERR_STALE_HANDLE)
         return HK_ERR_INTERNAL;
-    return s_fixture->fail == FAIL_CLEANUP ? HK_ERR_IO : HK_OK;
+    return s_fixture->fail == FAIL_STOP ? HK_ERR_IO : HK_OK;
 }
 
 static const hk_app_v2_entry_t s_entry = {
     .state_storage = s_state,
     .state_capacity_bytes = sizeof(s_state),
-    .probe = fake_probe,
-    .prepare = fake_prepare,
     .start = fake_start,
     .event = fake_event,
-    .tick = fake_tick,
     .render = fake_render,
     .stop = fake_stop,
-    .cleanup = fake_cleanup,
 };
 
 static hk_app_t descriptor(void)
@@ -326,8 +275,8 @@ static hk_result_t fake_owner_open(
 
     (void)app;
     trace('I');
-    if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_INJECTING ||
-       hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_INJECTING)
+    if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_STARTING ||
+       hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_STARTING)
         return HK_ERR_INTERNAL;
     if(fixture->fail != FAIL_INJECT_NO_OWNER)
         *owner = (hk_owner_t){3U, 7U};
@@ -347,7 +296,7 @@ static hk_result_t fake_owner_cleanup(
     trace('O');
     fixture->owner_cleanup_calls++;
     fixture->owner_deadline = deadline;
-    if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_CLEANING ||
+    if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_STOPPING ||
        hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_OWNER_CLEANUP ||
        owner.slot != 3U || owner.generation != 7U ||
        (fixture->fail != FAIL_INJECT_WITH_OWNER && s_state[0] != 0x5aU))
@@ -413,7 +362,7 @@ static int check_normal_lifecycle(void)
 
     CHECK(reset_fixture(&fixture, &runtime) == 0);
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
-    CHECK(strcmp(fixture.trace, "PIAS") == 0);
+    CHECK(strcmp(fixture.trace, "IS") == 0);
     CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_RUNNING);
     CHECK(hk_app_runtime_stage(&runtime) == HK_APP_STAGE_RUNNING);
     retained = &runtime.context;
@@ -421,16 +370,16 @@ static int check_normal_lifecycle(void)
           HK_ERR_WRONG_CONTEXT);
     CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
     CHECK(hk_app_runtime_validate_token(&runtime, fixture.token) == HK_OK);
-    CHECK(hk_app_runtime_tick(&runtime, 123U) == HK_OK);
+    event.kind = HK_APP_EVENT_TIMER;
+    CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
     CHECK(hk_app_runtime_render(&runtime, &surface) == HK_OK);
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_BACK) == HK_OK);
-    CHECK(strcmp(fixture.trace, "PIASETREDXCO") == 0);
+    CHECK(strcmp(fixture.trace, "ISETREDXO") == 0);
     CHECK(fixture.deadline_calls == 1U);
     CHECK(fixture.owner_cleanup_calls == 1U);
-    CHECK(fixture.stop_calls == 1U && fixture.cleanup_calls == 1U);
+    CHECK(fixture.stop_calls == 1U);
     CHECK(fixture.observed_reason == HK_APP_STOP_BACK);
     CHECK(fixture.stop_deadline.at_us == UINT64_C(987654321));
-    CHECK(fixture.cleanup_deadline.at_us == fixture.stop_deadline.at_us);
     CHECK(fixture.owner_deadline.at_us == fixture.stop_deadline.at_us);
     CHECK(hk_app_runtime_validate_token(&runtime, fixture.token) ==
           HK_ERR_STALE_HANDLE);
@@ -439,7 +388,7 @@ static int check_normal_lifecycle(void)
     CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
     CHECK(hk_app_runtime_stage(&runtime) == HK_APP_STAGE_REUSABLE);
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_SWITCH) == HK_OK);
-    CHECK(fixture.stop_calls == 1U && fixture.cleanup_calls == 1U);
+    CHECK(fixture.stop_calls == 1U);
     for(uint32_t index = 0U; index < sizeof(s_state); index++)
         CHECK(s_state[index] == 0U);
 
@@ -452,6 +401,7 @@ static int check_normal_lifecycle(void)
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
         CHECK(hk_app_runtime_validate_token(&runtime, stale) ==
               HK_ERR_STALE_HANDLE);
+        event.kind = HK_APP_EVENT_INPUT;
         CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
         CHECK(hk_app_runtime_validate_token(&runtime, fixture.token) == HK_OK);
         CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_COMPLETED) == HK_OK);
@@ -467,16 +417,13 @@ static int check_launch_faults(void)
         hk_result_t expected;
         const char *trace;
         uint32_t stop_calls;
-        uint32_t cleanup_calls;
         uint32_t owner_calls;
         uint32_t deadline_calls;
     } cases[] = {
-        {FAIL_PROBE, HK_ERR_IO, "P", 0U, 0U, 0U, 0U},
-        {PENDING_PROBE, HK_ERR_INVALID_STATE, "P", 0U, 0U, 0U, 0U},
-        {FAIL_INJECT_NO_OWNER, HK_ERR_NOT_DECLARED, "PI", 0U, 0U, 0U, 0U},
-        {FAIL_INJECT_WITH_OWNER, HK_ERR_NOT_DECLARED, "PIDO", 0U, 0U, 1U, 1U},
-        {FAIL_PREPARE, HK_ERR_IO, "PIADCO", 0U, 1U, 1U, 1U},
-        {FAIL_START, HK_ERR_IO, "PIASDXCO", 1U, 1U, 1U, 1U},
+        {FAIL_INJECT_NO_OWNER, HK_ERR_NOT_DECLARED, "I", 0U, 0U, 0U},
+        {FAIL_INJECT_WITH_OWNER, HK_ERR_NOT_DECLARED, "IDO", 0U, 1U, 1U},
+        {FAIL_START, HK_ERR_IO, "ISDXO", 1U, 1U, 1U},
+        {PENDING_START, HK_ERR_INVALID_STATE, "ISDXO", 1U, 1U, 1U},
     };
 
     for(uint32_t index = 0U; index < sizeof(cases) / sizeof(cases[0]); index++)
@@ -490,7 +437,6 @@ static int check_launch_faults(void)
         CHECK(hk_app_runtime_launch(&runtime, &app) == cases[index].expected);
         CHECK(strcmp(fixture.trace, cases[index].trace) == 0);
         CHECK(fixture.stop_calls == cases[index].stop_calls);
-        CHECK(fixture.cleanup_calls == cases[index].cleanup_calls);
         CHECK(fixture.owner_cleanup_calls == cases[index].owner_calls);
         CHECK(fixture.deadline_calls == cases[index].deadline_calls);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
@@ -520,14 +466,17 @@ static int check_running_faults(void)
         if(failures[index] == FAIL_EVENT)
             result = hk_app_runtime_event(&runtime, &event);
         else if(failures[index] == FAIL_TICK)
-            result = hk_app_runtime_tick(&runtime, 1U);
+        {
+            event.kind = HK_APP_EVENT_TIMER;
+            result = hk_app_runtime_event(&runtime, &event);
+        }
         else
             result = hk_app_runtime_render(&runtime, &surface);
         CHECK(result == HK_ERR_IO);
         CHECK(fixture.close_event_calls == 1U);
         CHECK(fixture.close_reason == HK_APP_STOP_CALLBACK_FAILED);
         CHECK(fixture.observed_reason == HK_APP_STOP_CALLBACK_FAILED);
-        CHECK(fixture.stop_calls == 1U && fixture.cleanup_calls == 1U);
+        CHECK(fixture.stop_calls == 1U);
         CHECK(fixture.owner_cleanup_calls == 1U && fixture.deadline_calls == 1U);
         CHECK(hk_app_runtime_first_error(&runtime) == HK_ERR_IO);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
@@ -538,7 +487,7 @@ static int check_running_faults(void)
 static int check_teardown_faults_and_reentrancy(void)
 {
     static const fail_point_t failures[] = {
-        FAIL_DEADLINE, FAIL_INVALID_DEADLINE, FAIL_STOP, FAIL_CLEANUP,
+        FAIL_DEADLINE, FAIL_INVALID_DEADLINE, FAIL_STOP,
         FAIL_OWNER_CLEANUP,
     };
 
@@ -556,14 +505,12 @@ static int check_teardown_faults_and_reentrancy(void)
                                                         HK_ERR_IO));
         CHECK(fixture.deadline_calls == 1U);
         CHECK(fixture.stop_calls == 1U);
-        CHECK(fixture.cleanup_calls == 1U);
         CHECK(fixture.owner_cleanup_calls == 1U);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
         if(failures[index] == FAIL_DEADLINE ||
            failures[index] == FAIL_INVALID_DEADLINE)
         {
             CHECK(fixture.stop_deadline.at_us == 0U);
-            CHECK(fixture.cleanup_deadline.at_us == 0U);
             CHECK(fixture.owner_deadline.at_us == 0U);
         }
     }
@@ -633,6 +580,23 @@ static int check_stop_reasons_and_descriptor_guards(void)
     return 0;
 }
 
+static int check_request_close(void)
+{
+    fixture_t fixture;
+    hk_app_runtime_t runtime;
+    hk_app_runtime_event_t event = input_event();
+    hk_app_t app = descriptor();
+
+    CHECK(reset_fixture(&fixture, &runtime) == 0);
+    CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
+    fixture.request_close = 1U;
+    CHECK(hk_app_runtime_event(&runtime, &event) == HK_OK);
+    CHECK(fixture.close_reason == HK_APP_STOP_COMPLETED);
+    CHECK(fixture.stop_calls == 1U);
+    CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
+    return 0;
+}
+
 static int check_generation_retirement(void)
 {
     fixture_t fixture;
@@ -696,15 +660,6 @@ static hk_result_t benchmark_event(
     return HK_OK;
 }
 
-static hk_result_t benchmark_tick(
-    const hk_app_context_t *ctx,
-    uint64_t now_us)
-{
-    (void)ctx;
-    (void)now_us;
-    return HK_OK;
-}
-
 static hk_result_t benchmark_render(
     const hk_app_context_t *ctx,
     hk_app_runtime_surface_t *surface)
@@ -714,12 +669,9 @@ static hk_result_t benchmark_render(
     return HK_OK;
 }
 
-static hk_result_t benchmark_stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
+static hk_result_t benchmark_stop(const hk_app_context_t *ctx)
 {
     (void)ctx;
-    (void)reason;
     return HK_OK;
 }
 
@@ -765,14 +717,10 @@ static int check_lifecycle_latency(
     static const hk_app_v2_entry_t benchmark_entry = {
         .state_storage = benchmark_state,
         .state_capacity_bytes = sizeof(benchmark_state),
-        .probe = benchmark_callback,
-        .prepare = benchmark_callback,
         .start = benchmark_callback,
         .event = benchmark_event,
-        .tick = benchmark_tick,
         .render = benchmark_render,
         .stop = benchmark_stop,
-        .cleanup = benchmark_callback,
     };
     const hk_app_runtime_ops_t ops = {
         .resolve_capability = fake_resolve_capability,
@@ -851,6 +799,7 @@ int main(void)
     CHECK(check_running_faults() == 0);
     CHECK(check_teardown_faults_and_reentrancy() == 0);
     CHECK(check_stop_reasons_and_descriptor_guards() == 0);
+    CHECK(check_request_close() == 0);
     CHECK(check_generation_retirement() == 0);
     CHECK(check_lifecycle_latency(
         &event_p99_ns, &launch_p99_ns, &stop_p99_ns) == 0);

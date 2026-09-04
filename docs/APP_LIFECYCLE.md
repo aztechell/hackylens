@@ -25,11 +25,15 @@ autostart ID and cannot be selected as boot targets.
 
 After settings load, boot UI, and SD mount, startup resolves the persisted autostart ID through the registry and calls the target's normal `enter` with an empty input snapshot. The menu index is set to the target before entry, so BACK returns with that item selected. OFF or a target omitted by the current build opens the menu; an omitted target remains persisted and becomes active again when a later build restores it. `HKMENU` and ordinary exits never retrigger autostart.
 
-Menu selection, legacy/v2 replacement, BACK, autostart failure, safe-mode BACK
-suppression, and `HKMENU` use that same switch/owner boundary. Legacy behavior
-is unchanged, but an adapter cannot skip owner-wide capability cleanup. A
-lifecycle-v2 app uses private `SCREEN_APP_SLOT_0` only as a shell compatibility
-marker; `screen_t` is not part of the public Feature App SDK.
+Menu selection, legacy/v2 replacement, app-requested close, autostart failure,
+safe-mode BACK suppression, and `HKMENU` use that same switch/owner boundary.
+Legacy BACK behavior is unchanged. A lifecycle-v2 app receives BACK as an
+ordinary Input event; portable v2 code requests close through
+`hk_app_context_request_close` and MUST NOT call menu or screen runtime. An
+adapter cannot skip owner-wide capability cleanup. A lifecycle-v2 app uses
+private `SCREEN_APP_SLOT_0` only as a shell compatibility marker; `screen_t` is
+not part of the public Feature App SDK. Menu icons remain descriptor/menu
+hooks (`draw_icon`) and are not v2 lifecycle callbacks.
 
 Autostart identity is a stable uint16 manifest value. Settings schema v5 stores
 it without narrowing and migrates schema-v4 uint8 values by zero extension.

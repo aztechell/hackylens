@@ -7,7 +7,7 @@ phase: 3
 schema-major: 1
 format-scope: native-app-build
 runtime-parsed: false
-compatibility-app-runtime: >=0.1.0,<0.2.0
+compatibility-app-runtime: >=0.2.0,<0.3.0
 compatibility-capability-api: >=0.1.0,<0.2.0
 ---
 
@@ -143,7 +143,11 @@ instances, provider vtables, drivers, or HAL objects.
 
 The generated descriptor contains identity, menu visibility and order, stable
 autostart identity, lifecycle kind and typed entry reference, debug text, the
-tick interval derived from `tick_ms`, and expanded capability/service requests.
+tick interval derived from `tick_ms`, expanded capability/service requests, and
+the menu presentation hook `{id_with_hyphens_as_underscores}_draw_icon`. That
+icon symbol is a descriptor field, not a lifecycle callback. `lifecycle` and
+`entry` remain the temporary build-time boundary between the v2 model and the
+one private legacy adapter.
 A canonical descriptor array is ordered by app ID; the separate menu view is
 ordered only by explicit `menu_order`. Conditional build flags remove a disabled
 descriptor and its entry reference without renumbering persisted autostart IDs.
@@ -175,9 +179,10 @@ discovery record. Those concerns belong to the future Phase 4 Project Format.
 
 ## Compatibility
 
-Native App Manifest contract `0.1.x` is accepted with App Runtime `0.1.x` and
-Capability API `0.1.x`. Experimental consumers request `[0.1.0, 0.2.0)`.
-Changing one version axis does not implicitly change the others.
+Native App Manifest contract `0.1.x` is accepted with App Runtime `0.2.x` and
+Capability API `0.1.x`. Experimental App Runtime consumers request
+`[0.2.0, 0.3.0)`. Changing one version axis does not implicitly change the
+others.
 
 ## References
 

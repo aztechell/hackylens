@@ -49,10 +49,13 @@ static hk_result_t consume_callback_budget(const hk_app_context_t *ctx)
     return hk_time_sleep_until(owner, &time, wake, wake, NULL);
 }
 
-static hk_result_t slow_tick(const hk_app_context_t *ctx, uint64_t now_us)
+static hk_result_t slow_timer_event(
+    const hk_app_context_t *ctx,
+    const hk_app_event_t *event)
 {
-    (void)now_us;
-    return consume_callback_budget(ctx);
+    if(event && event->kind == HK_APP_EVENT_TIMER)
+        return consume_callback_budget(ctx);
+    return HK_OK;
 }
 
 static int init_minimal(
@@ -77,8 +80,8 @@ int main(void)
     uint32_t index;
 
     CHECK(HK_APP_SDK_VERSION_MAJOR == 0U);
-    CHECK(HK_APP_SDK_VERSION_MINOR == 1U);
-    CHECK(HK_APP_SDK_RUNTIME_MAXIMUM_EXCLUSIVE_MINOR == 2U);
+    CHECK(HK_APP_SDK_VERSION_MINOR == 2U);
+    CHECK(HK_APP_SDK_RUNTIME_MAXIMUM_EXCLUSIVE_MINOR == 3U);
     CHECK(HK_APP_SDK_MANIFEST_SCHEMA_MAJOR == 1U);
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
@@ -144,7 +147,7 @@ int main(void)
     entry = minimal_app_entry;
     entry.state_storage = s_slow_tick_storage;
     entry.state_capacity_bytes = sizeof(s_slow_tick_storage);
-    entry.tick = slow_tick;
+    entry.event = slow_timer_event;
     CHECK(init_minimal(&host, &app, &entry) == 0);
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) == HK_OK);

@@ -62,8 +62,7 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
        descriptor->service_count > HK_APP_CONTEXT_MAX_SERVICES ||
        (descriptor->capability_count > 0U && !descriptor->capabilities) ||
        (descriptor->service_count > 0U && !descriptor->services) ||
-       !entry->probe || !entry->prepare || !entry->start || !entry->event ||
-       !entry->tick || !entry->render || !entry->stop || !entry->cleanup)
+       !entry->start || !entry->event || !entry->render || !entry->stop)
         return HK_ERR_INVALID_ARGUMENT;
     for(index = 0U; index < descriptor->capability_count; index++)
     {
@@ -292,10 +291,9 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     memset(runtime->invalidations, 0, sizeof(runtime->invalidations));
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
-    runtime->prepare_entered = 0U;
     runtime->start_entered = 0U;
     runtime->stop_called = 0U;
-    runtime->cleanup_called = 0U;
+    runtime->close_requested = 0U;
     runtime->teardown_started = 0U;
     runtime->invalidation_count = 0U;
     runtime->full_invalidation = 0U;
@@ -307,6 +305,7 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     runtime->retired = exhausted;
     runtime->stage = exhausted ? HK_APP_STAGE_INVALIDATING : HK_APP_STAGE_REUSABLE;
     runtime->state = exhausted ? HK_APP_RUNTIME_FAULTED : HK_APP_RUNTIME_INACTIVE;
+    runtime->close_requested = 0U;
 }
 
 static hk_result_t teardown(
@@ -352,27 +351,14 @@ static hk_result_t teardown(
         runtime->stop_called = 1U;
         if(enter_callback(runtime) == HK_OK)
         {
-            result = finish_callback(
-                runtime,
-                entry->stop(&runtime->context, runtime->stop_reason));
-            retain_error(runtime, result);
-        }
-    }
-
-    runtime->state = HK_APP_RUNTIME_CLEANING;
-    if(runtime->prepare_entered && !runtime->cleanup_called)
-    {
-        runtime->stage = HK_APP_STAGE_APP_CLEANUP;
-        runtime->cleanup_called = 1U;
-        if(enter_callback(runtime) == HK_OK)
-        {
-            result = finish_callback(runtime, entry->cleanup(&runtime->context));
+            result = finish_callback(runtime, entry->stop(&runtime->context));
             retain_error(runtime, result);
         }
     }
 
     if(!hk_owner_is_zero(runtime->owner))
     {
+        runtime->state = HK_APP_RUNTIME_STOPPING;
         runtime->stage = HK_APP_STAGE_OWNER_CLEANUP;
         result = runtime->ops.owner_cleanup(
             runtime->ops.user,
@@ -487,16 +473,8 @@ hk_result_t hk_app_runtime_launch(
     if(result != HK_OK)
         return fail_without_teardown(runtime, result);
 
-    runtime->stage = HK_APP_STAGE_PROBING;
-    if(enter_callback(runtime) != HK_OK)
-        return fail_without_teardown(runtime, HK_ERR_INVALID_STATE);
-    result = finish_callback(runtime, entry->probe(&runtime->context));
-    if(result != HK_OK)
-        return fail_without_teardown(runtime, result);
-    runtime->state = HK_APP_RUNTIME_PROBED;
-
-    runtime->stage = HK_APP_STAGE_INJECTING;
-    runtime->state = HK_APP_RUNTIME_INJECTING;
+    runtime->stage = HK_APP_STAGE_STARTING;
+    runtime->state = HK_APP_RUNTIME_STARTING;
     result = runtime->ops.owner_open(runtime->ops.user, descriptor, &owner);
     runtime->owner = owner;
     runtime->context.owner = owner;
@@ -519,19 +497,6 @@ hk_result_t hk_app_runtime_launch(
         return teardown(runtime, HK_APP_STOP_FORCED);
     }
 
-    runtime->stage = HK_APP_STAGE_PREPARING;
-    runtime->prepare_entered = 1U;
-    if(enter_callback(runtime) != HK_OK)
-        return teardown(runtime, HK_APP_STOP_FORCED);
-    result = finish_callback(runtime, entry->prepare(&runtime->context));
-    if(result != HK_OK)
-    {
-        retain_error(runtime, result);
-        return teardown(runtime, HK_APP_STOP_FORCED);
-    }
-    runtime->state = HK_APP_RUNTIME_PREPARED;
-
-    runtime->stage = HK_APP_STAGE_STARTING;
     runtime->start_entered = 1U;
     if(enter_callback(runtime) != HK_OK)
         return teardown(runtime, HK_APP_STOP_START_FAILED);
@@ -545,6 +510,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->state = HK_APP_RUNTIME_RUNNING;
     runtime->full_invalidation = 1U;
     runtime->invalidation_count = 0U;
+    runtime->close_requested = 0U;
     return HK_OK;
 }
 
@@ -569,11 +535,15 @@ static hk_result_t dispatch_result(
 {
     hk_result_t result = finish_callback(runtime, callback_status);
 
-    if(result == HK_OK)
-        return HK_OK;
-    retain_error(runtime, result);
-    (void)terminate_running(runtime, HK_APP_STOP_CALLBACK_FAILED);
-    return result;
+    if(result != HK_OK)
+    {
+        retain_error(runtime, result);
+        (void)terminate_running(runtime, HK_APP_STOP_CALLBACK_FAILED);
+        return result;
+    }
+    if(runtime->close_requested)
+        return terminate_running(runtime, HK_APP_STOP_COMPLETED);
+    return HK_OK;
 }
 
 hk_result_t hk_app_runtime_event(
@@ -590,18 +560,6 @@ hk_result_t hk_app_runtime_event(
     (void)enter_callback(runtime);
     return dispatch_result(
         runtime, runtime->descriptor->entry.v2->event(&runtime->context, event));
-}
-
-hk_result_t hk_app_runtime_tick(hk_app_runtime_t *runtime, uint64_t now_us)
-{
-    if(!runtime)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(runtime->state != HK_APP_RUNTIME_RUNNING || runtime->callback_active)
-        return HK_ERR_INVALID_STATE;
-    runtime->stage = HK_APP_STAGE_RUNNING;
-    (void)enter_callback(runtime);
-    return dispatch_result(
-        runtime, runtime->descriptor->entry.v2->tick(&runtime->context, now_us));
 }
 
 hk_result_t hk_app_runtime_render(
@@ -822,10 +780,22 @@ hk_result_t hk_app_context_teardown_deadline(
     if(result != HK_OK)
         return result;
     if(!s_callback_runtime->teardown_deadline_valid ||
-       (s_callback_runtime->stage != HK_APP_STAGE_STOPPING &&
-        s_callback_runtime->stage != HK_APP_STAGE_APP_CLEANUP))
+       s_callback_runtime->stage != HK_APP_STAGE_STOPPING)
         return HK_ERR_INVALID_STATE;
     *deadline = s_callback_runtime->teardown_deadline;
+    return HK_OK;
+}
+
+hk_result_t hk_app_context_request_close(const hk_app_context_t *ctx)
+{
+    hk_app_runtime_t *runtime = NULL;
+    hk_result_t result = validate_callback_context(ctx, &runtime);
+
+    if(result != HK_OK)
+        return result;
+    if(runtime->state != HK_APP_RUNTIME_RUNNING)
+        return HK_ERR_INVALID_STATE;
+    runtime->close_requested = 1U;
     return HK_OK;
 }
 

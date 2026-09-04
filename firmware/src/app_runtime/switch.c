@@ -52,6 +52,8 @@ static hk_result_t close_active(
     }
     switcher->active = NULL;
     switcher->next_tick_us = 0U;
+    switcher->pending_input_valid = 0U;
+    memset(&switcher->pending_input, 0, sizeof(switcher->pending_input));
     hk_app_surface_private_invalidate(&switcher->surface);
     return first;
 }
@@ -101,6 +103,7 @@ hk_result_t hk_app_switch_open(
 
     switcher->opening = 1U;
     switcher->pending_close = 0U;
+    switcher->pending_input_valid = 0U;
     switcher->active = app;
     if(app->lifecycle == HK_APP_LIFECYCLE_V2)
     {
@@ -147,6 +150,16 @@ hk_result_t hk_app_switch_open(
         switcher->pending_close = 0U;
         result = close_active(switcher, reason);
         return result == HK_OK ? HK_ERR_CANCELLED : result;
+    }
+    if(switcher->pending_input_valid && active_is_v2(switcher))
+    {
+        uint8_t consumed = 0U;
+        hk_input_event_t pending = switcher->pending_input;
+
+        switcher->pending_input_valid = 0U;
+        result = hk_app_switch_input(switcher, &pending, &consumed);
+        if(result != HK_OK)
+            return result;
     }
     return HK_OK;
 }
@@ -203,8 +216,12 @@ hk_result_t hk_app_switch_input(
     *consumed = active_is_v2(switcher);
     if(!*consumed)
         return HK_OK;
-    if(input->pressed & HK_INPUT_BUTTON_BACK)
-        return hk_app_switch_close(switcher, HK_APP_STOP_BACK);
+    if(switcher->opening)
+    {
+        switcher->pending_input = *input;
+        switcher->pending_input_valid = 1U;
+        return HK_OK;
+    }
     event.kind = HK_APP_EVENT_INPUT;
     event.timestamp_us = input->timestamp_us;
     event.data.input = *input;
@@ -285,10 +302,6 @@ static hk_result_t poll_tick(hk_app_switch_t *switcher, uint64_t now_us)
     event.data.timer.scheduled_us = switcher->next_tick_us;
     event.data.timer.now_us = started_us;
     result = dispatch_event(switcher, &event);
-    if(result != HK_OK || !active_is_v2(switcher))
-        return result;
-    result = hk_app_runtime_tick(&switcher->runtime, started_us);
-    sync_v2_state(switcher);
     if(result != HK_OK || !active_is_v2(switcher))
         return result;
     result = switcher->ops.now_us(switcher->ops.user, &finished_us);

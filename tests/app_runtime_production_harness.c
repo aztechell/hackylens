@@ -40,7 +40,6 @@ typedef struct
     uint32_t render_count;
     uint32_t tick_count;
     uint32_t stop_count;
-    uint32_t cleanup_count;
     uint32_t display_begin_count;
     uint32_t display_dirty_count;
     uint32_t display_clear_count;
@@ -77,13 +76,7 @@ static const hk_app_capability_request_t s_capabilities[] = {
     },
 };
 
-static hk_result_t app_probe(const hk_app_context_t *ctx)
-{
-    (void)ctx;
-    return HK_OK;
-}
-
-static hk_result_t app_prepare(const hk_app_context_t *ctx)
+static hk_result_t app_start(const hk_app_context_t *ctx)
 {
     hk_display_t display;
     hk_input_t input;
@@ -93,12 +86,6 @@ static hk_result_t app_prepare(const hk_app_context_t *ctx)
        hk_app_context_input(ctx, 0U, &input) != HK_OK ||
        hk_app_context_time(ctx, 0U, &time) != HK_OK)
         return HK_ERR_INTERNAL;
-    return HK_OK;
-}
-
-static hk_result_t app_start(const hk_app_context_t *ctx)
-{
-    (void)ctx;
     return HK_OK;
 }
 
@@ -112,14 +99,10 @@ static hk_result_t app_event(
     s_fixture.sequences[s_fixture.event_count++] = event->sequence;
     if(event->kind == HK_APP_EVENT_INPUT)
         return hk_app_context_wakeup_token(ctx, 91U, &s_fixture.wakeup);
-    return HK_OK;
-}
-
-static hk_result_t app_tick(const hk_app_context_t *ctx, uint64_t now_us)
-{
-    (void)ctx;
-    (void)now_us;
-    s_fixture.tick_count++;
+    if(event->kind == HK_APP_EVENT_TIMER)
+        s_fixture.tick_count++;
+    if(event->kind == HK_APP_EVENT_RUNTIME_CLOSE)
+        s_fixture.stop_reason = event->data.close.reason;
     return HK_OK;
 }
 
@@ -136,36 +119,21 @@ static hk_result_t app_render(
     return HK_OK;
 }
 
-static hk_result_t app_stop(
-    const hk_app_context_t *ctx,
-    hk_app_stop_reason_t reason)
+static hk_result_t app_stop(const hk_app_context_t *ctx)
 {
     hk_deadline_t deadline;
 
     s_fixture.stop_count++;
-    s_fixture.stop_reason = reason;
-    return hk_app_context_teardown_deadline(ctx, &deadline);
-}
-
-static hk_result_t app_cleanup(const hk_app_context_t *ctx)
-{
-    hk_deadline_t deadline;
-
-    s_fixture.cleanup_count++;
     return hk_app_context_teardown_deadline(ctx, &deadline);
 }
 
 static const hk_app_v2_entry_t s_v2_entry = {
     .state_storage = s_state,
     .state_capacity_bytes = sizeof(s_state),
-    .probe = app_probe,
-    .prepare = app_prepare,
     .start = app_start,
     .event = app_event,
-    .tick = app_tick,
     .render = app_render,
     .stop = app_stop,
-    .cleanup = app_cleanup,
 };
 
 static const hk_app_t s_v2_app = {
@@ -643,7 +611,7 @@ int main(void)
     CHECK(s_fixture.event_count == 5U);
     for(uint8_t index = 0U; index < s_fixture.event_count; index++)
         CHECK(s_fixture.sequences[index] == (uint64_t)index + 1U);
-    CHECK(s_fixture.stop_count == 1U && s_fixture.cleanup_count == 1U);
+    CHECK(s_fixture.stop_count == 1U);
     CHECK(s_fixture.owner_close_count == 1U);
     CHECK(s_fixture.stop_reason == HK_APP_STOP_BACK);
     CHECK(app_runtime_integration_active() == NULL);

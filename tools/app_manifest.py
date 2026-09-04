@@ -33,6 +33,7 @@ DESCRIPTOR_VERSION = "0.1.0"
 PLACEHOLDER_STATIC_RAM_BYTES = 1_048_576
 PLACEHOLDER_STACK_BYTES = 16_384
 PLACEHOLDER_STATE_BYTES = 262_144
+V2_STATE_BYTES = 1_024
 PLACEHOLDER_TICK_BUDGET_US = 1_000
 PLACEHOLDER_RENDER_BUDGET_US = 10_000
 DEFAULT_DEBUG = "No app-specific debug commands."
@@ -445,7 +446,9 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         "limits": {
             "static_ram_bytes": PLACEHOLDER_STATIC_RAM_BYTES,
             "stack_bytes": PLACEHOLDER_STACK_BYTES,
-            "state_bytes": PLACEHOLDER_STATE_BYTES,
+            "state_bytes": (
+                V2_STATE_BYTES if lifecycle == "v2" else PLACEHOLDER_STATE_BYTES
+            ),
             "tick_interval_us": tick_interval_us,
             "tick_budget_us": tick_budget_us,
             "render_budget_us": PLACEHOLDER_RENDER_BUDGET_US,

@@ -124,6 +124,7 @@ typedef struct hk_app
     uint16_t service_count;
     screen_t screen;
     void (*handle_input)(const hk_input_snapshot_t *input);
+    void (*draw_icon)(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
 } hk_app_t;
 
 static inline const hk_legacy_app_entry_t *hk_app_legacy_entry(

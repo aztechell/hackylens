@@ -129,6 +129,14 @@ class AppRegistryTests(unittest.TestCase):
 
 const hk_legacy_app_entry_t buttons_legacy_entry = {0};
 const hk_legacy_app_entry_t terminal_legacy_entry = {0};
+void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)x; (void)y; (void)color; (void)bg;
+}
+void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)x; (void)y; (void)color; (void)bg;
+}
 
 int main(void)
 {

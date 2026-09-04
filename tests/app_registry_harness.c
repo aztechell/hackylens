@@ -42,6 +42,64 @@ static uint8_t owns_camera_settings(screen_t screen)
     return screen == SCREEN_CAMERA_SETTINGS ? 1U : 0U;
 }
 
+static void dummy_draw_icon(
+    uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)x;
+    (void)y;
+    (void)color;
+    (void)bg;
+}
+
+void apriltag_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void face_detect_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void micropython_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void object_detect_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void settings_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+
 const hk_legacy_app_entry_t apriltag_legacy_entry = {
     .screen = SCREEN_APRILTAG,
     .enter = noop_enter,

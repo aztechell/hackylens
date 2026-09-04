@@ -94,7 +94,7 @@ class FeatureAppSdkTests(unittest.TestCase):
         self.assertNotIn("HackyLens::AppHostFake", cmake)
         self.assertNotIn("HACKYLENS_APP_HOST_FAKE_SOURCES", make)
         self.assertNotIn("host_fake", cmake)
-        self.assertIn("HK_APP_SDK_VERSION_MINOR 1U", public)
+        self.assertIn("HK_APP_SDK_VERSION_MINOR 2U", public)
         self.assertIn("HK_APP_SDK_MANIFEST_SCHEMA_MAJOR 1U", public)
         self.assertIn("typedef struct hk_app_v2_entry", runtime)
 

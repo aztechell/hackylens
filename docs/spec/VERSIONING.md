@@ -29,14 +29,19 @@ promote any firmware, protocol, API, or format to stable.
 | HMPY | `1.1.0` (wire major `1`) | Experimental | HMPY contract and codec constants |
 | Board Port Contract | `0.1.0` | Experimental | `BOARD_PORT.md` and board descriptors |
 | Capability API | `0.1.0` | Experimental | `CAPABILITY_API.md` |
-| App Runtime | `0.1.0` | Experimental | `APP_RUNTIME.md` |
+| App Runtime | `0.2.0` | Experimental | `APP_RUNTIME.md` |
 | Native App Manifest | `0.1.0` | Experimental; build-time-only | `APP_MANIFEST.md` |
-| Feature App SDK | `0.1.0` | Experimental | `APP_SDK.md` |
+| Feature App SDK | `0.2.0` | Experimental | `APP_SDK.md` |
 | Project Format | Unpublished | No public contract | Future Project Format spec |
 
 The first published experimental Capability API, App Runtime, Native App
-Manifest, Feature App SDK, or Project Format contract starts at `0.1.0`. A
-version change on one axis MUST NOT implicitly change any other axis. Native App
+Manifest, Feature App SDK, or Project Format contract starts at `0.1.0`. App
+Runtime and Feature App SDK `0.2.0` are the first experimental breaking MINOR
+on those axes: the public lifecycle is `start`/`event`/`render`/`stop`, with
+timer-as-event and no probe/prepare/tick/app-cleanup compatibility wrapper.
+The authority for that change is `docs/SIMPLIFICATION_MASTERPLAN.md` package
+S6 rather than a new ADR. Native App Manifest remains `0.1.0`. A version
+change on one axis MUST NOT implicitly change any other axis. Native App
 Manifest contract `0.1.0` is independently encoded and is not the future Project
 Format schema.
 

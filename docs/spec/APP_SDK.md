@@ -1,10 +1,10 @@
 ---
 contract-id: hackylens.feature-app-sdk
 owner: platform-architecture
-version: 0.1.0
+version: 0.2.0
 stability: experimental
 phase: 3
-compatibility-app-runtime: >=0.1.0,<0.2.0
+compatibility-app-runtime: >=0.2.0,<0.3.0
 compatibility-app-manifest: >=0.1.0,<0.2.0
 compatibility-capability-api: >=0.1.0,<0.2.0
 ---
@@ -32,23 +32,25 @@ language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 
 The canonical umbrella is `sdk/include/hackylens/app.h`. It publishes the
-Feature App SDK `0.1.0` version, the accepted App Runtime and Capability API
-range `[0.1.0, 0.2.0)`, and Native App Manifest schema major `1` as numeric
-compile-time metadata. `sdk/include/hackylens/app/runtime.h` owns the public
-lifecycle callback typedefs and immutable `hk_app_v2_entry_t` definition; the
-firmware runtime consumes that definition and MUST NOT maintain a private
+Feature App SDK `0.2.0` version, the accepted App Runtime range `[0.2.0, 0.3.0)`,
+Capability API range `[0.1.0, 0.2.0)`, and Native App Manifest schema major `1`
+as numeric compile-time metadata. `sdk/include/hackylens/app/runtime.h` owns the
+public lifecycle callback typedefs and immutable `hk_app_v2_entry_t` definition;
+the firmware runtime consumes that definition and MUST NOT maintain a private
 parallel lifecycle ABI.
 
 ## App-facing contracts
 
-SDK `0.1.x` defines or re-exports only:
+SDK `0.2.x` defines or re-exports only:
 
-- lifecycle callback types and stop reasons from App Runtime `0.1.x`;
+- lifecycle callback types `start`, `event`, `render`, and `stop`, plus stop
+  reasons from App Runtime `0.2.x`;
 - the borrowed, generation-checked `hk_app_context_t` interface;
-- ordered app event and monotonic tick values;
+- ordered app events, including Timer and Runtime Close;
 - the bounded view/surface interface backed by an injected Display handle;
 - declared capability and app-scoped service handle access;
 - fixed-capacity private app-state access;
+- `hk_app_context_request_close` as the portable close-request seam;
 - result, version, deadline, cancellation, buffer, and capability types from
   Capability API `0.1.x`.
 
@@ -67,25 +69,24 @@ discovery surfaces. Lifecycle callbacks receive the context through a
 `const hk_app_context_t *`; writable app state remains available through
 `hk_app_context_state` rather than by making the context mutable.
 
-During `probe`, identity and declaration status accessors are valid while the
-owner remains zero; typed handle access returns `HK_ERR_INVALID_STATE` because
-acquisition has not occurred. From `prepare` through app `cleanup`, typed
-accessors return the existing public Capability API handle for an available
-declared `(id, instance)`. An absent optional returns
-`HK_ERR_CAPABILITY_ABSENT` and its status accessor returns the exact manifest
-fallback. An undeclared capability or service returns `HK_ERR_NOT_DECLARED`
-without calling a provider. App-scoped service handles carry the same owner and
-context generation. Availability observed by `probe` is stable: failure to
-acquire a grant reported available fails launch and triggers owner-wide unwind;
-it cannot become an implicit fallback before `prepare`.
+During `start` through `stop`, identity, declaration status, and typed handle
+accessors are valid after injection. Typed accessors return the existing public
+Capability API handle for an available declared `(id, instance)`. An absent
+optional returns `HK_ERR_CAPABILITY_ABSENT` and its status accessor returns the
+exact manifest fallback. An undeclared capability or service returns
+`HK_ERR_NOT_DECLARED` without calling a provider. App-scoped service handles
+carry the same owner and context generation. Availability observed by `start`
+is stable: failure to acquire a grant reported available fails launch before
+`start` and triggers owner-wide unwind; it cannot become an implicit fallback.
 
 The event, stop-reason, wakeup-token, and render-surface definitions are in
 `sdk/include/hackylens/app/runtime.h`. `hk_app_event_t` is a bounded
 size/versioned union for Input, SD/media, Timer, Runtime Close, and Wakeup. Its
 runtime sequence is strictly increasing within one generation. Input embeds
 the public Capability API `hk_input_event_t`; no parallel input or button type
-is introduced. BACK remains runtime navigation and is not delivered as an
-ordinary Input event to the closing app.
+is introduced. BACK is delivered as an ordinary Input event. An app that should
+leave on BACK calls `hk_app_context_request_close`; the runtime does not
+intercept BACK as navigation.
 
 `hk_app_context_wakeup_token` creates a fixed slot/context-generation/epoch
 token with one app-private value. Holding the token creates no work and grants
@@ -107,8 +108,8 @@ pending pass immediately rather than waiting for the next manifest tick.
 
 Tick and render intervals/budgets come only from the immutable generated
 descriptor. Apps cannot refresh them or create a catch-up loop. Timer events
-and `tick(ctx, monotonic_now)` run synchronously on the existing firmware loop;
-render runs only for a pending invalidation and runtime owns Display
+run synchronously on the existing firmware loop; there is no public `tick`
+callback. Render runs only for a pending invalidation and runtime owns Display
 begin/present/abort.
 
 ## Lifecycle teardown deadline access
@@ -121,19 +122,19 @@ hk_result_t hk_app_context_teardown_deadline(
     hk_deadline_t *deadline);
 ```
 
-During `stop` and app `cleanup`, this accessor returns the one finite absolute
-monotonic deadline stored by App Runtime when teardown began. It returns
-`HK_ERR_INVALID_STATE` outside teardown. Repeated calls return the same
-`hk_deadline_t`; the accessor MUST NOT refresh, extend, partition, or derive a
-per-stage or per-provider deadline.
+During `stop`, this accessor returns the one finite absolute monotonic deadline
+stored by App Runtime when teardown began. It returns `HK_ERR_INVALID_STATE`
+outside teardown. Repeated calls return the same `hk_deadline_t`; the accessor
+MUST NOT refresh, extend, partition, or derive a per-stage or per-provider
+deadline.
 
-Stop and cleanup code passes this value unchanged to deadline-aware capability
-and service release operations. It does not call a raw clock, choose a hardware
-timer, or acquire a second Time implementation. App Runtime creates the value
-exactly once through public `hk_time_deadline_after_us`, its private runtime
-owner, the one composed Time Capability provider, and a runtime-controlled
-finite policy budget; the manifest and app cannot configure or extend it. An
-already-expired value remains the required value for later owner-wide cleanup.
+Stop code passes this value unchanged to deadline-aware capability and service
+release operations. It does not call a raw clock, choose a hardware timer, or
+acquire a second Time implementation. App Runtime creates the value exactly once
+through public `hk_time_deadline_after_us`, its private runtime owner, the one
+composed Time Capability provider, and a runtime-controlled finite policy
+budget; the manifest and app cannot configure or extend it. An already-expired
+value remains the required value for later owner-wide cleanup.
 
 ## Ownership and memory
 
@@ -141,7 +142,7 @@ Contexts, handles, surfaces, events, and state views are borrowed for the
 lifetimes specified by App Runtime and the corresponding capability. Apps MUST
 NOT retain a callback-scoped context or surface after the callback returns.
 Every handle is scoped to the current app owner and generation and is invalid
-after teardown. Handles remain valid during app `cleanup`; runtime then attempts
+after teardown. Handles remain valid during `stop`; runtime then attempts
 owner-wide cleanup before invalidating handles and context. Copying either the
 context or a handle does not extend its lifetime or allow access to a later
 generation.
@@ -168,12 +169,12 @@ capability/service operations, call the production runtime API, and record
 traces or inject faults at those seams. It MUST NOT implement its own
 lifecycle states, transitions, unwind, teardown ordering, or generation model.
 
-Public lifecycle callbacks remain `probe`, `prepare`, `start`, `event`, `tick`,
-`render`, `stop`, and `cleanup`. `hk_app_context_request_render` remains legal
+Public lifecycle callbacks are `start`, `event`, `render`, and `stop(ctx)`.
+`hk_app_context_request_render` and `hk_app_context_request_close` remain legal
 only in `RUNNING`, never while `start` is executing. Lifecycle `HK_PENDING` is
 normalized to `HK_ERR_INVALID_STATE` by production Runtime. Teardown creates
 one finite absolute monotonic deadline at teardown start and uses that same
-deadline for stop, app cleanup, and owner-wide provider cleanup.
+deadline for stop and owner-wide provider cleanup.
 
 Capability operations keep Phase 2 semantics. Every Input lease has an
 independent sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
@@ -210,11 +211,12 @@ headers is not SDK conformance.
 
 ## Compatibility
 
-SDK `0.1.x` accepts App Runtime `0.1.x`, Native App Manifest `0.1.x` schema major
-`1`, and Capability API `0.1.x`; every range is `[0.1.0, 0.2.0)`. An
-experimental breaking change increments MINOR. Publishing this SDK does not
-change Firmware `0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle
-`0.2.0`, or MicroPython API `1.0.0`.
+SDK `0.2.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` schema major
+`1`, and Capability API `0.1.x`. Runtime and SDK consumers request
+`[0.2.0, 0.3.0)`; Capability API remains `[0.1.0, 0.2.0)`. An experimental
+breaking change increments MINOR. Publishing this SDK does not change Firmware
+`0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle `0.2.0`, or
+MicroPython API `1.0.0`.
 
 The legacy adapter is runtime implementation, not a second public SDK. The one
 foreground switch boundary is shared by lifecycle-v2 and legacy apps, so menu,
