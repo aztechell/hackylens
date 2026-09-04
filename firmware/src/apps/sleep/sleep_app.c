@@ -1,5 +1,7 @@
 #include "sleep_app.h"
 
+#include <stddef.h>
+
 #include "sleep_controller.h"
 #include "sleep_view.h"
 
