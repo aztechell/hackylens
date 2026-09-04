@@ -85,9 +85,12 @@ typedef struct
     uint8_t editing;
     uint32_t repeat_button;
     uint8_t repeat_ticks;
+    uint8_t headless;
 } settings_menu_session_t;
 
 uint8_t settings_menu_open(settings_menu_session_t *session,
+                           const settings_menu_definition_t *definition);
+uint8_t settings_menu_bind(settings_menu_session_t *session,
                            const settings_menu_definition_t *definition);
 void settings_menu_close(settings_menu_session_t *session);
 uint8_t settings_menu_active(const settings_menu_session_t *session);
@@ -96,5 +99,13 @@ settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *sessio
 void settings_menu_tick(settings_menu_session_t *session, const hk_input_snapshot_t *input);
 void settings_menu_redraw_item(settings_menu_session_t *session, uint16_t id);
 void settings_menu_redraw_all(settings_menu_session_t *session);
+uint8_t settings_menu_visible_slot(
+    const settings_menu_session_t *session,
+    uint8_t slot,
+    const char **title,
+    char *value,
+    size_t value_size,
+    uint8_t *selected,
+    uint8_t *editing);
 
 #endif

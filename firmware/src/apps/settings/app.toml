@@ -1,7 +1,7 @@
 id = "settings"
 name = "SETTINGS"
-lifecycle = "legacy"
-entry = "settings_legacy_entry"
+lifecycle = "v2"
+entry = "settings_v2_entry"
 sources = ["settings_app.c", "settings_controller.c", "settings_menu.c", "settings_view.c"]
 requires = ["display", "input", "lights"]
 optional = ["external-link"]

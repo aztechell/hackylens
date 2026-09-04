@@ -287,8 +287,8 @@ int main(void)
         )
 
     def test_mixed_legacy_and_v2_entries_are_typed(self) -> None:
-        settings = copy.deepcopy(next(
-            app for app in self.model["apps"] if app["id"] == "settings"
+        sleep = copy.deepcopy(next(
+            app for app in self.model["apps"] if app["id"] == "sleep"
         ))
         buttons = copy.deepcopy(next(
             app for app in self.model["apps"] if app["id"] == "buttons"
@@ -296,14 +296,14 @@ int main(void)
         buttons["lifecycle"] = "v2"
         buttons["entry"] = "buttons_v2_entry"
         source = app_registry.generated_source(
-            {"schema": 1, "apps": [buttons, settings]},
+            {"schema": 1, "apps": [buttons, sleep]},
             app_composition.enable_definition,
         )
         self.assertIn(
-            "extern const hk_legacy_app_entry_t settings_legacy_entry;", source
+            "extern const hk_legacy_app_entry_t sleep_legacy_entry;", source
         )
         self.assertIn("extern const hk_app_v2_entry_t buttons_v2_entry;", source)
-        self.assertIn("{.legacy = &settings_legacy_entry}", source)
+        self.assertIn("{.legacy = &sleep_legacy_entry}", source)
         self.assertIn("{.v2 = &buttons_v2_entry}", source)
 
     def test_fixture_manifest_changes_generated_output_not_generic_runtime(self) -> None:

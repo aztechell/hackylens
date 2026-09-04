@@ -37,7 +37,7 @@ static void settings_menu_ensure_visible(settings_menu_session_t *session)
         session->top = (uint8_t)(session->index - SETTINGS_MENU_VISIBLE_ROWS + 1U);
     if(session->top + SETTINGS_MENU_VISIBLE_ROWS > item_count)
         session->top = item_count > SETTINGS_MENU_VISIBLE_ROWS ?
-                       item_count - SETTINGS_MENU_VISIBLE_ROWS : 0U;
+                       (uint8_t)(item_count - SETTINGS_MENU_VISIBLE_ROWS) : 0U;
 }
 
 static int32_t settings_menu_read_value(const settings_menu_session_t *session,
@@ -109,6 +109,8 @@ static void settings_menu_draw_index(settings_menu_session_t *session, uint8_t i
     const settings_menu_item_t *item;
     char value[SETTINGS_MENU_VALUE_SIZE];
 
+    if(session->headless)
+        return;
     if(index < session->top || index >= session->top + SETTINGS_MENU_VISIBLE_ROWS ||
        index >= session->definition->item_count)
         return;
@@ -123,7 +125,7 @@ static void settings_menu_draw_index(settings_menu_session_t *session, uint8_t i
 
 void settings_menu_redraw_all(settings_menu_session_t *session)
 {
-    if(!session || !session->active || !session->definition)
+    if(!session || !session->active || !session->definition || session->headless)
         return;
     settings_menu_ensure_visible(session);
     settings_menu_view_clear_rows();
@@ -176,6 +178,20 @@ uint8_t settings_menu_open(settings_menu_session_t *session,
     session->active = 1U;
     settings_menu_view_open(definition->title);
     settings_menu_redraw_all(session);
+    return 1U;
+}
+
+uint8_t settings_menu_bind(settings_menu_session_t *session,
+                           const settings_menu_definition_t *definition)
+{
+    if(!session || !definition || !definition->items || definition->item_count == 0U)
+        return 0U;
+    if(session->active)
+        settings_menu_close(session);
+    memset(session, 0, sizeof(*session));
+    session->definition = definition;
+    session->active = 1U;
+    session->headless = 1U;
     return 1U;
 }
 
@@ -365,4 +381,34 @@ void settings_menu_tick(settings_menu_session_t *session, const hk_input_snapsho
     }
     settings_menu_adjust(session, session->repeat_button == BUTTON_LEFT ? -1 : 1);
     session->repeat_ticks = SETTINGS_MENU_REPEAT_NEXT_TICKS;
+}
+
+uint8_t settings_menu_visible_slot(
+    const settings_menu_session_t *session,
+    uint8_t slot,
+    const char **title,
+    char *value,
+    size_t value_size,
+    uint8_t *selected,
+    uint8_t *editing)
+{
+    uint8_t index;
+    const settings_menu_item_t *item;
+
+    if(!session || !session->active || !session->definition ||
+       slot >= SETTINGS_MENU_VISIBLE_ROWS)
+        return 0U;
+    index = (uint8_t)(session->top + slot);
+    if(index >= session->definition->item_count)
+        return 0U;
+    item = &session->definition->items[index];
+    if(title)
+        *title = item->title ? item->title : "";
+    if(value && value_size > 0U)
+        settings_menu_format_value(session, item, value, value_size);
+    if(selected)
+        *selected = (uint8_t)(index == session->index);
+    if(editing)
+        *editing = (uint8_t)(index == session->index && session->editing);
+    return 1U;
 }

@@ -1,8 +1,11 @@
 #ifndef HK_SETTINGS_VIEW_H
 #define HK_SETTINGS_VIEW_H
 
-#include <stdint.h>
+#include <hackylens/app.h>
 
-void settings_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
+#include "settings_menu.h"
+
+hk_result_t settings_view_render(
+    hk_app_surface_t *surface, const settings_menu_session_t *session);
 
 #endif

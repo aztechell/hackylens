@@ -200,9 +200,38 @@ const hk_legacy_app_entry_t qr_camera_legacy_entry = {
     .screen = SCREEN_QR_CAMERA,
     .enter = noop_enter,
 };
-const hk_legacy_app_entry_t settings_legacy_entry = {
-    .screen = SCREEN_SETTINGS,
-    .enter = noop_enter,
+static uint8_t s_settings_v2_storage[16];
+static hk_result_t dummy_settings_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_settings_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_settings_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+static hk_result_t dummy_settings_stop(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+const hk_app_v2_entry_t settings_v2_entry = {
+    .state_storage = s_settings_v2_storage,
+    .state_capacity_bytes = sizeof(s_settings_v2_storage),
+    .start = dummy_settings_start,
+    .event = dummy_settings_event,
+    .render = dummy_settings_render,
+    .stop = dummy_settings_stop,
 };
 const hk_legacy_app_entry_t sleep_legacy_entry = {
     .screen = SCREEN_SLEEP,

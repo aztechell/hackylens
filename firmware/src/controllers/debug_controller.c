@@ -51,6 +51,29 @@ void debug_uart_handle_command(const char *cmd)
         shell_show_menu_reason(HK_APP_STOP_FORCED);
         return;
     }
+    if(str_eq_ci(cmd, "HKSETTINGS"))
+    {
+        const hk_app_t *settings = NULL;
+        uint8_t index;
+
+        activity_note();
+        for(index = 0U; index < g_menu_item_count; index++)
+        {
+            const hk_app_t *app = g_menu_items[index];
+
+            if(app && app->id && str_eq_ci(app->id, "settings"))
+            {
+                settings = app;
+                break;
+            }
+        }
+        if(!settings)
+            return;
+        if(hk_screen_get() != SCREEN_MENU)
+            shell_show_menu();
+        (void)shell_open_app(settings, NULL);
+        return;
+    }
     if(str_eq_ci(cmd, "HKPING"))
     {
         debug_console_write_text("HKPONG\n");
@@ -74,7 +97,7 @@ void debug_uart_handle_command(const char *cmd)
                 debug_console_write_text(" ");
             }
         }
-        debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKPING\n");
+        debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKSETTINGS HKPING\n");
         return;
     }
 }
