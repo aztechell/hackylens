@@ -5,6 +5,7 @@
 #include "hk_config.h"
 #include "firmware/generated/app_registry/registry.h"
 #include "firmware/src/core/hk_app_registry.h"
+#include <hackylens/app.h>
 
 #define CHECK(expression)                                                     \
     do                                                                        \
@@ -104,9 +105,38 @@ const hk_legacy_app_entry_t apriltag_legacy_entry = {
     .screen = SCREEN_APRILTAG,
     .enter = noop_enter,
 };
-const hk_legacy_app_entry_t buttons_legacy_entry = {
-    .screen = SCREEN_BUTTONS,
-    .enter = noop_enter,
+static uint8_t s_buttons_v2_storage[16];
+static hk_result_t dummy_buttons_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_buttons_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_buttons_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+static hk_result_t dummy_buttons_stop(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+const hk_app_v2_entry_t buttons_v2_entry = {
+    .state_storage = s_buttons_v2_storage,
+    .state_capacity_bytes = sizeof(s_buttons_v2_storage),
+    .start = dummy_buttons_start,
+    .event = dummy_buttons_event,
+    .render = dummy_buttons_render,
+    .stop = dummy_buttons_stop,
 };
 const hk_legacy_app_entry_t camera_legacy_entry = {
     .screen = SCREEN_CAMERA,

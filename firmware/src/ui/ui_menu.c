@@ -75,3 +75,12 @@ void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
     if(draw_icon)
         draw_icon(x, y, fg, bg);
 }
+
+void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_draw_rect(x + 13, y + 12, 14, 14, 2, color);
+    hk_ui_display_draw_rect(x + 33, y + 12, 14, 14, 2, color);
+    hk_ui_display_draw_rect(x + 13, y + 34, 14, 14, 2, color);
+    hk_ui_display_draw_rect(x + 33, y + 34, 14, 14, 2, color);
+}

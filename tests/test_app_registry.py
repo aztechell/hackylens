@@ -68,6 +68,8 @@ class AppRegistryTests(unittest.TestCase):
                 self.compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                 f"-I{temporary}",
                 f"-I{ROOT / 'firmware' / 'src'}",
+                f"-I{ROOT / 'sdk' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'include'}",
                 str(generated / "registry.c"),
                 str(core / "hk_app_registry.c"),
                 str(ROOT / "tests/app_registry_harness.c"),
@@ -126,8 +128,36 @@ class AppRegistryTests(unittest.TestCase):
 #include "hk_config.h"
 #include "firmware/generated/app_registry/registry.h"
 #include "firmware/src/core/hk_app_registry.h"
+#include <hackylens/app.h>
 
-const hk_legacy_app_entry_t buttons_legacy_entry = {0};
+static uint8_t s_buttons_storage[16];
+static hk_result_t dummy_ok(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+const hk_app_v2_entry_t buttons_v2_entry = {
+    .state_storage = s_buttons_storage,
+    .state_capacity_bytes = sizeof(s_buttons_storage),
+    .start = dummy_ok,
+    .event = dummy_event,
+    .render = dummy_render,
+    .stop = dummy_ok,
+};
 const hk_legacy_app_entry_t terminal_legacy_entry = {0};
 void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
@@ -169,7 +199,10 @@ int main(void)
             )
             subprocess.run([
                 self.compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-                f"-I{temporary}", str(generated / "registry.c"),
+                f"-I{temporary}",
+                f"-I{ROOT / 'sdk' / 'include'}",
+                f"-I{ROOT / 'firmware' / 'include'}",
+                str(generated / "registry.c"),
                 str(core / "hk_app_registry.c"), str(harness), "-o", str(executable),
             ], cwd=ROOT, check=True)
             result = subprocess.run(
@@ -270,6 +303,7 @@ int main(void)
             app for app in self.model["apps"] if app["id"] == "buttons"
         ))
         fixture["id"] = "fixture-app"
+        fixture["lifecycle"] = "legacy"
         fixture["entry"] = "fixture_legacy_entry"
         fixture["generated_symbol"] = "hk_generated_app_fixture"
         fixture["menu"]["order"] = 99
