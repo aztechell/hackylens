@@ -145,6 +145,9 @@ hk_result_t hk_app_surface_blit(
     const hk_display_rect_t *destination,
     const hk_buffer_view_t *pixels,
     uint32_t pixel_format);
+hk_result_t hk_app_surface_lock(
+    hk_app_surface_t *surface,
+    hk_display_surface_t *pixels);
 
 #ifdef __cplusplus
 }

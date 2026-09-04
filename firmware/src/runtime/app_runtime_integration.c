@@ -17,8 +17,10 @@ typedef struct
     hk_time_t time;
     hk_display_t display;
     hk_display_info_t display_info;
+    hk_display_surface_t locked_surface;
     uint8_t initialized;
     uint8_t display_batch_active;
+    uint8_t display_surface_active;
 } app_runtime_integration_t;
 
 static app_runtime_integration_t s_integration;
@@ -213,6 +215,9 @@ static hk_result_t surface_invalidate(
 static hk_result_t surface_clear(void *user, uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+
+    if(integration->display_surface_active)
+        return HK_ERR_INVALID_STATE;
     return hk_display_clear(
         integration->switcher.runtime.owner,
         &integration->display, rgb565);
@@ -224,6 +229,9 @@ static hk_result_t surface_fill_rect(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+
+    if(integration->display_surface_active)
+        return HK_ERR_INVALID_STATE;
     return hk_display_fill_rect(
         integration->switcher.runtime.owner,
         &integration->display, rect, rgb565);
@@ -235,6 +243,9 @@ static hk_result_t surface_stroke_rect(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+
+    if(integration->display_surface_active)
+        return HK_ERR_INVALID_STATE;
     return hk_display_stroke_rect(
         integration->switcher.runtime.owner,
         &integration->display, rect, rgb565);
@@ -248,6 +259,9 @@ static hk_result_t surface_text(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+
+    if(integration->display_surface_active)
+        return HK_ERR_INVALID_STATE;
     return hk_display_text(
         integration->switcher.runtime.owner,
         &integration->display, bounds, utf8, size_bytes, rgb565);
@@ -260,9 +274,42 @@ static hk_result_t surface_blit(
     uint32_t pixel_format)
 {
     app_runtime_integration_t *integration = user;
+
+    if(integration->display_surface_active)
+        return HK_ERR_INVALID_STATE;
     return hk_display_blit(
         integration->switcher.runtime.owner,
         &integration->display, destination, pixels, pixel_format);
+}
+
+static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
+{
+    app_runtime_integration_t *integration = user;
+    hk_result_t result;
+
+    if(!pixels)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(integration->display_surface_active)
+    {
+        *pixels = integration->locked_surface;
+        return HK_OK;
+    }
+    if(integration->display_batch_active)
+    {
+        result = hk_display_abort(
+            integration->switcher.runtime.owner, &integration->display);
+        if(result != HK_OK)
+            return result;
+        integration->display_batch_active = 0U;
+    }
+    result = hk_display_surface_acquire(
+        integration->switcher.runtime.owner,
+        &integration->display, pixels);
+    if(result != HK_OK)
+        return result;
+    integration->locked_surface = *pixels;
+    integration->display_surface_active = 1U;
+    return HK_OK;
 }
 
 static hk_result_t render_begin(
@@ -277,6 +324,7 @@ static hk_result_t render_begin(
         .stroke_rect = surface_stroke_rect,
         .text = surface_text,
         .blit = surface_blit,
+        .lock = surface_lock,
     };
     app_runtime_integration_t *integration = user;
     const hk_app_context_t *ctx = &runtime->context;
@@ -327,7 +375,11 @@ static hk_result_t render_present(void *user, hk_deadline_t deadline)
         &integration->display, deadline, NULL);
 
     if(result == HK_OK)
+    {
         integration->display_batch_active = 0U;
+        integration->display_surface_active = 0U;
+        integration->locked_surface = (hk_display_surface_t){0};
+    }
     return result;
 }
 
@@ -336,13 +388,18 @@ static hk_result_t render_abort(void *user)
     app_runtime_integration_t *integration = user;
     hk_result_t result;
 
-    if(!integration->display_batch_active)
+    if(!integration->display_batch_active &&
+       !integration->display_surface_active)
         return HK_OK;
     result = hk_display_abort(
         integration->switcher.runtime.owner,
         &integration->display);
     if(result == HK_OK)
+    {
         integration->display_batch_active = 0U;
+        integration->display_surface_active = 0U;
+        integration->locked_surface = (hk_display_surface_t){0};
+    }
     return result;
 }
 

@@ -1,7 +1,7 @@
 id = "terminal"
 name = "TERMINAL"
-lifecycle = "legacy"
-entry = "terminal_legacy_entry"
+lifecycle = "v2"
+entry = "terminal_v2_entry"
 sources = ["terminal_app.c", "terminal_buffer.c", "terminal_controller.c", "terminal_view.c"]
 requires = ["display", "input"]
 menu_order = 1

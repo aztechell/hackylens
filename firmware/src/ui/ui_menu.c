@@ -94,3 +94,17 @@ void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_fill_rect(x + 18, y + 16, 2, 2, color);
     hk_ui_display_fill_rect(x + 40, y + 42, 2, 2, color);
 }
+
+void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_draw_rect(x + 8U, y + 12U, 44U, 36U, 2U, color);
+    hk_ui_display_fill_rect(x + 10U, y + 18U, 40U, 2U, color);
+    hk_ui_display_fill_rect(x + 15U, y + 26U, 2U, 2U, color);
+    hk_ui_display_fill_rect(x + 17U, y + 28U, 2U, 2U, color);
+    hk_ui_display_fill_rect(x + 15U, y + 30U, 2U, 2U, color);
+    hk_ui_display_fill_rect(x + 24U, y + 31U, 10U, 2U, color);
+    hk_ui_display_fill_rect(x + 38U, y + 29U, 3U, 7U, color);
+    hk_ui_display_fill_rect(x + 15U, y + 39U, 26U, 2U, color);
+    hk_ui_display_fill_rect(x + 15U, y + 43U, 18U, 2U, color);
+}

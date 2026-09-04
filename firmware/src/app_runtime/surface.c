@@ -130,4 +130,20 @@ hk_result_t hk_app_surface_blit(
     HK_APP_SURFACE_CALL(blit, destination, pixels, pixel_format);
 }
 
+hk_result_t hk_app_surface_lock(
+    hk_app_surface_t *surface,
+    hk_display_surface_t *pixels)
+{
+    hk_result_t result;
+
+    if(!pixels)
+        return HK_ERR_INVALID_ARGUMENT;
+    result = validate_surface(surface);
+    if(result != HK_OK)
+        return result;
+    if(!surface->ops.lock)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    return surface->ops.lock(surface->ops.user, pixels);
+}
+
 #undef HK_APP_SURFACE_CALL

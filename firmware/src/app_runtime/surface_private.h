@@ -18,6 +18,7 @@ typedef struct
     hk_result_t (*blit)(
         void *user, const hk_display_rect_t *destination,
         const hk_buffer_view_t *pixels, uint32_t pixel_format);
+    hk_result_t (*lock)(void *user, hk_display_surface_t *pixels);
 } hk_app_surface_ops_t;
 
 struct hk_app_surface

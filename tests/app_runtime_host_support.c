@@ -434,6 +434,27 @@ static hk_result_t surface_blit(
     return HK_OK;
 }
 
+static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
+{
+    static uint8_t s_pixels[
+        HK_FAKE_DISPLAY_WIDTH * HK_FAKE_DISPLAY_HEIGHT * 2U];
+
+    (void)user;
+    if(!pixels)
+        return HK_ERR_INVALID_ARGUMENT;
+    *pixels = (hk_display_surface_t){
+        sizeof(hk_display_surface_t), HK_DISPLAY_SURFACE_VERSION,
+        {
+            s_pixels, sizeof(s_pixels),
+            HK_FAKE_DISPLAY_WIDTH * 2U,
+            HK_BUFFER_ACCESS_READABLE | HK_BUFFER_ACCESS_WRITABLE,
+        },
+        HK_FAKE_DISPLAY_WIDTH, HK_FAKE_DISPLAY_HEIGHT,
+        HK_DISPLAY_FORMAT_RGB565_BE, 0U,
+    };
+    return HK_OK;
+}
+
 static hk_result_t render_begin(
     void *user,
     const hk_app_runtime_t *runtime,
@@ -457,6 +478,7 @@ static hk_result_t render_begin(
         .stroke_rect = surface_rect,
         .text = surface_text,
         .blit = surface_blit,
+        .lock = surface_lock,
     };
 
     host->batch_active = 1U;

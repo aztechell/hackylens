@@ -158,7 +158,15 @@ const hk_app_v2_entry_t buttons_v2_entry = {
     .render = dummy_render,
     .stop = dummy_ok,
 };
-const hk_legacy_app_entry_t terminal_legacy_entry = {0};
+static uint8_t s_terminal_storage[16];
+const hk_app_v2_entry_t terminal_v2_entry = {
+    .state_storage = s_terminal_storage,
+    .state_capacity_bytes = sizeof(s_terminal_storage),
+    .start = dummy_ok,
+    .event = dummy_event,
+    .render = dummy_render,
+    .stop = dummy_ok,
+};
 void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)x; (void)y; (void)color; (void)bg;
@@ -279,8 +287,8 @@ int main(void)
         )
 
     def test_mixed_legacy_and_v2_entries_are_typed(self) -> None:
-        terminal = copy.deepcopy(next(
-            app for app in self.model["apps"] if app["id"] == "terminal"
+        settings = copy.deepcopy(next(
+            app for app in self.model["apps"] if app["id"] == "settings"
         ))
         buttons = copy.deepcopy(next(
             app for app in self.model["apps"] if app["id"] == "buttons"
@@ -288,14 +296,14 @@ int main(void)
         buttons["lifecycle"] = "v2"
         buttons["entry"] = "buttons_v2_entry"
         source = app_registry.generated_source(
-            {"schema": 1, "apps": [buttons, terminal]},
+            {"schema": 1, "apps": [buttons, settings]},
             app_composition.enable_definition,
         )
         self.assertIn(
-            "extern const hk_legacy_app_entry_t terminal_legacy_entry;", source
+            "extern const hk_legacy_app_entry_t settings_legacy_entry;", source
         )
         self.assertIn("extern const hk_app_v2_entry_t buttons_v2_entry;", source)
-        self.assertIn("{.legacy = &terminal_legacy_entry}", source)
+        self.assertIn("{.legacy = &settings_legacy_entry}", source)
         self.assertIn("{.v2 = &buttons_v2_entry}", source)
 
     def test_fixture_manifest_changes_generated_output_not_generic_runtime(self) -> None:

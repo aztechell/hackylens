@@ -157,11 +157,13 @@ full invalidation. The app cannot present, begin/abort a Display batch, select
 an LCD plane, obtain a framebuffer owner, or call a driver through this API.
 
 For a render pass the runtime borrows the app's injected public Display handle,
-opens one bounded provider batch, applies the pending invalidations, and passes
-an opaque `hk_app_surface_t` to `render`. The surface exposes bounded clear,
-rectangle, text, blit, information, and invalidation calls only. It is valid
-only during that render callback and is invalidated before any later app work.
-Runtime alone presents or aborts the batch with one absolute deadline derived
+opens one bounded provider transaction, applies the pending invalidations, and
+passes an opaque `hk_app_surface_t` to `render`. Command-batch drawing
+(clear/rectangle/text/blit) and `hk_app_surface_lock` of the existing BASE
+backing store are mutually exclusive for that pass; lock does not allocate a
+second framebuffer. The surface is valid only during that render callback and
+is invalidated before any later app work. Runtime alone presents or aborts the
+transaction with one absolute deadline derived
 from `limits.render_budget_us`; measured callback time uses the same monotonic
 Time provider. A callback, provider, present, or budget failure aborts the
 batch where possible and enters the common unwind. If an optional Display grant

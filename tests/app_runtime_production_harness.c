@@ -483,6 +483,31 @@ hk_result_t hk_display_abort(
     return HK_OK;
 }
 
+hk_result_t hk_display_surface_acquire(
+    hk_owner_t owner,
+    const hk_display_t *handle,
+    hk_display_surface_t *surface)
+{
+    static uint8_t pixels[8];
+
+    if(hk_owner_is_zero(owner) || !handle || !surface)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(s_fixture.batch_active)
+    {
+        s_fixture.batch_active = 0U;
+        s_fixture.display_abort_count++;
+    }
+    *surface = (hk_display_surface_t){
+        sizeof(*surface), HK_DISPLAY_SURFACE_VERSION,
+        {
+            pixels, sizeof(pixels), 2U,
+            HK_BUFFER_ACCESS_READABLE | HK_BUFFER_ACCESS_WRITABLE,
+        },
+        1U, 1U, HK_DISPLAY_FORMAT_RGB565_BE, 0U,
+    };
+    return HK_OK;
+}
+
 hk_result_t hk_lights_acquire(
     hk_owner_t owner,
     const hk_capability_request_t *request,

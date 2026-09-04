@@ -208,9 +208,38 @@ const hk_legacy_app_entry_t sleep_legacy_entry = {
     .screen = SCREEN_SLEEP,
     .enter = noop_enter,
 };
-const hk_legacy_app_entry_t terminal_legacy_entry = {
-    .screen = SCREEN_APP_SLOT_1,
-    .enter = noop_enter,
+static uint8_t s_terminal_v2_storage[16];
+static hk_result_t dummy_terminal_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_terminal_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_terminal_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+static hk_result_t dummy_terminal_stop(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+const hk_app_v2_entry_t terminal_v2_entry = {
+    .state_storage = s_terminal_v2_storage,
+    .state_capacity_bytes = sizeof(s_terminal_v2_storage),
+    .start = dummy_terminal_start,
+    .event = dummy_terminal_event,
+    .render = dummy_terminal_render,
+    .stop = dummy_terminal_stop,
 };
 
 static const hk_app_t *app_by_id(const char *id)

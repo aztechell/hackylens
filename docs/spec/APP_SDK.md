@@ -96,9 +96,11 @@ bounded completion path; stale tokens are rejected before app dispatch.
 `hk_app_context_request_render` records a full or rectangular invalidation.
 The fixed limit is eight rectangles. `hk_app_surface_t` is opaque and borrowed
 only for the current `render` callback. Its API permits display information,
-invalidation, clear, rectangle, text, and blit operations; it deliberately has
+invalidation, clear, rectangle, text, blit, and lock of the runtime-owned BASE
+backing store; it deliberately has
 no present, batch, plane-ownership, framebuffer-ownership, LCD, driver, HAL, or
-platform operation. Retaining a surface pointer after callback return is an SDK
+platform operation. `hk_app_surface_lock` and command-batch drawing are
+mutually exclusive for one render pass. Retaining a surface pointer after callback return is an SDK
 contract violation and every use outside that borrow returns a stale-handle
 error when observable by the runtime.
 
