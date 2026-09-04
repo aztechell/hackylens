@@ -358,7 +358,7 @@ Host tests должны исполнять production runtime core, а не от
 
 Риск: **высокий**. Начинаются production runtime changes.
 
-Статус: `[~]`.
+Статус: `[x]`.
 
 ### Цель
 
