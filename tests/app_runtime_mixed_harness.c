@@ -29,6 +29,7 @@ typedef struct
     uint8_t deadline_fails;
     uint8_t render_fails;
     uint8_t present_fails;
+    uint8_t begin_busy;
     uint8_t render_requests_again;
     uint8_t batch_active;
     uint32_t owner_open_count;
@@ -381,6 +382,8 @@ static hk_result_t render_begin(
         .blit = surface_blit,
     };
 
+    if(fixture->begin_busy)
+        return HK_ERR_BUSY;
     fixture->batch_active = 1U;
     return hk_app_surface_private_init(
         surface, runtime->context_generation, &info, &ops);
@@ -579,6 +582,23 @@ static int check_timeout_and_render_failures(void)
     return 0;
 }
 
+static int check_busy_begin_skips_surface_present(void)
+{
+    fixture_t fixture;
+    hk_app_t v2 = v2_descriptor();
+
+    CHECK(reset_fixture(&fixture) == 0);
+    fixture.begin_busy = 1U;
+    CHECK(hk_app_switch_open(&fixture.switcher, &v2, NULL) == HK_OK);
+    CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
+    CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
+    CHECK(fixture.render_count == 0U);
+    CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
+    CHECK(hk_app_switch_close(
+        &fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
+    return 0;
+}
+
 static int check_render_requested_during_render_is_immediate(void)
 {
     fixture_t fixture;
@@ -624,6 +644,7 @@ int main(void)
     CHECK(check_back_during_start() == 0);
     CHECK(check_back_input_during_start() == 0);
     CHECK(check_timeout_and_render_failures() == 0);
+    CHECK(check_busy_begin_skips_surface_present() == 0);
     CHECK(check_render_requested_during_render_is_immediate() == 0);
     CHECK(check_autostart_failure_fallback() == 0);
     printf("APP_RUNTIME_MIXED_OK\n");

@@ -331,7 +331,7 @@ static hk_result_t poll_render(hk_app_switch_t *switcher)
         return HK_OK;
     result = switcher->ops.render_begin(
         switcher->ops.user, &switcher->runtime, &switcher->surface);
-    if(result == HK_ERR_CAPABILITY_ABSENT)
+    if(result == HK_ERR_CAPABILITY_ABSENT || result == HK_ERR_BUSY)
     {
         hk_app_runtime_render_committed(&switcher->runtime);
         return HK_OK;
