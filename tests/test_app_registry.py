@@ -422,9 +422,10 @@ int main(void)
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
                     1000 if app_id in {
-                        "camera", "qr-camera", "face-detect", "apriltag",
+                        "camera", "face-detect", "apriltag",
                         "object-detect",
-                    } else 5000 if app_id == "micropython" else 20000,
+                    } else 100000 if app_id == "qr-camera" else
+                    5000 if app_id == "micropython" else 20000,
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],

@@ -430,6 +430,7 @@ int main(void)
     CHECK(app_by_id("files")->service_count == 0U);
     CHECK(app_by_id("qr-camera")->capability_count == 3U);
     CHECK(app_by_id("qr-camera")->service_count == 0U);
+    CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 100000U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)
     {
         const hk_app_capability_request_t *request =
