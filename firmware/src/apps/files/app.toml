@@ -6,4 +6,4 @@ sources = ["file_browser_state.c", "file_delete.c", "file_dir.c", "file_preview.
 requires = ["display", "time", "input"]
 menu_order = 7
 autostart_id = 6
-tick_ms = 20
+tick_ms = 200

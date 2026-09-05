@@ -428,6 +428,7 @@ int main(void)
     CHECK(sleep->capability_count == 3U);
     CHECK(app_by_id("files")->capability_count == 3U);
     CHECK(app_by_id("files")->service_count == 0U);
+    CHECK(app_by_id("files")->limits.tick_interval_us == 200000U);
     CHECK(app_by_id("qr-camera")->capability_count == 3U);
     CHECK(app_by_id("qr-camera")->service_count == 0U);
     CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 100000U);
