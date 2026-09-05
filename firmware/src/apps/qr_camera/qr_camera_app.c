@@ -82,6 +82,11 @@ uint8_t qr_debug_handle_command(const char *cmd)
     return s_debug_command[0](cmd);
 }
 
+void qr_camera_poll_decode(void)
+{
+    qr_camera_controller_poll_decode();
+}
+
 static hk_result_t qr_camera_state_from(
     const hk_app_context_t *ctx, qr_camera_state_t **state)
 {

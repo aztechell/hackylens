@@ -17,6 +17,7 @@ void files_controller_exit(files_state_t *state);
 void files_controller_handle_input(
     files_state_t *state, const hk_input_event_t *event);
 void files_controller_tick(files_state_t *state, uint32_t buttons);
+void files_controller_poll_animation(files_state_t *state);
 void files_controller_handle_media(
     files_state_t *state, hk_app_media_kind_t kind);
 

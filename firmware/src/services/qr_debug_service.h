@@ -4,5 +4,6 @@
 #include <stdint.h>
 
 uint8_t qr_debug_handle_command(const char *cmd);
+void qr_camera_poll_decode(void);
 
 #endif

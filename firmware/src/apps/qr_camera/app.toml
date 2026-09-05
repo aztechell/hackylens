@@ -6,5 +6,5 @@ sources = ["qr_camera_app.c", "qr_camera_controller.c", "qr_camera_frame_adapter
 requires = ["display", "time", "input"]
 menu_order = 3
 autostart_id = 3
-tick_ms = 500
+tick_ms = 200
 debug = "HKQRINFO HKQR/HKQRCAM HKQRDECODE"

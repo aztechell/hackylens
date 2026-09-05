@@ -13,7 +13,6 @@
 
 static uint8_t s_session_active;
 static uint8_t s_result_needs_paint;
-static uint8_t s_decode_pending;
 
 static hk_input_snapshot_t snapshot_from_event(const hk_input_event_t *event)
 {
@@ -37,7 +36,6 @@ void qr_camera_controller_enter(qr_camera_state_t *state)
     (void)state;
     s_session_active = 1U;
     s_result_needs_paint = 0U;
-    s_decode_pending = 0U;
     qr_service_enter();
     camera_runtime_enter(CAMERA_RUNTIME_QR, NULL);
 }
@@ -52,7 +50,6 @@ void qr_camera_controller_exit(qr_camera_state_t *state)
     camera_service_clear_mode();
     s_session_active = 0U;
     s_result_needs_paint = 0U;
-    s_decode_pending = 0U;
 }
 
 void qr_camera_controller_tick(const hk_input_snapshot_t *input)
@@ -77,23 +74,21 @@ void qr_camera_controller_tick(const hk_input_snapshot_t *input)
     {
         camera_service_freeze(1U);
         qr_settings_open();
-        s_decode_pending = 0U;
         return;
     }
-    if(s_decode_pending)
-    {
-        s_decode_pending = 0U;
-        if(qr_service_decode_maybe(0U) == QR_DECODE_FOUND)
-        {
-            qr_result_show();
-            camera_service_freeze(1U);
-            s_result_needs_paint = 1U;
-            printf("[QR] result show\r\n");
-        }
+    camera_runtime_tick(input);
+}
+
+void qr_camera_controller_poll_decode(void)
+{
+    if(!s_session_active || qr_settings_active() || qr_result_open())
         return;
-    }
-    if(camera_runtime_tick(input))
-        s_decode_pending = 1U;
+    if(qr_service_decode_maybe(0U) != QR_DECODE_FOUND)
+        return;
+    qr_result_show();
+    camera_service_freeze(1U);
+    s_result_needs_paint = 1U;
+    printf("[QR] result show\r\n");
 }
 
 void qr_camera_controller_handle_input(

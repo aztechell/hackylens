@@ -6,6 +6,7 @@
 #include "files_view.h"
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
+static files_state_t *s_active_state;
 
 _Static_assert(
     sizeof(files_state_t) <= sizeof(s_state_storage),
@@ -60,6 +61,7 @@ static hk_result_t files_start(const hk_app_context_t *ctx)
     state->input = input;
     state->time = time;
     files_controller_enter(state);
+    s_active_state = state;
     return HK_OK;
 }
 
@@ -110,6 +112,7 @@ static hk_result_t files_stop(const hk_app_context_t *ctx)
 
     if(result == HK_OK)
         files_controller_exit(state);
+    s_active_state = NULL;
     return hk_app_context_teardown_deadline(ctx, &deadline);
 }
 
@@ -121,3 +124,9 @@ const hk_app_v2_entry_t files_v2_entry = {
     .render = files_render,
     .stop = files_stop,
 };
+
+void files_poll_animation(void)
+{
+    if(s_active_state)
+        files_controller_poll_animation(s_active_state);
+}

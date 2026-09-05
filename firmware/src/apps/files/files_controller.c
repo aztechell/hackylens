@@ -298,8 +298,21 @@ void files_controller_tick(files_state_t *state, uint32_t buttons)
         return;
     now_us = files_time_now_us(state);
     files_controller_tick_delete(buttons, now_us);
-    if(files_mode() == FILES_MODE_IMAGE)
-        files_presenter_tick_image(now_us);
+}
+
+void files_controller_poll_animation(files_state_t *state)
+{
+    uint64_t started_us;
+    uint64_t finished_us;
+
+    if(!state || files_mode() != FILES_MODE_IMAGE)
+        return;
+    started_us = files_time_now_us(state);
+    files_presenter_tick_image(started_us);
+    finished_us = files_time_now_us(state);
+    if(finished_us > started_us && finished_us - started_us >= 5000ULL)
+        printf("[FILES] gif tick us=%u\r\n",
+               (unsigned)(finished_us - started_us));
 }
 
 void files_controller_handle_media(

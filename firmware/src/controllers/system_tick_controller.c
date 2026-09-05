@@ -18,6 +18,12 @@
 #include "../adapters/micropython/micropython_capability_bridge.h"
 #include "../services/micropython_runtime.h"
 #endif
+#if HK_ENABLE_APP_QR_CAMERA
+#include "../services/qr_debug_service.h"
+#endif
+#if HK_ENABLE_APP_FILES
+#include "../services/files_poll_service.h"
+#endif
 
 void system_tick_controller_tick(const hk_input_snapshot_t *input)
 {
@@ -40,4 +46,10 @@ void system_tick_controller_tick(const hk_input_snapshot_t *input)
             shell_handle_sd_event(sd_event);
     }
     settings_storage_tick();
+#if HK_ENABLE_APP_QR_CAMERA
+    qr_camera_poll_decode();
+#endif
+#if HK_ENABLE_APP_FILES
+    files_poll_animation();
+#endif
 }

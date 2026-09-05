@@ -17,6 +17,7 @@ void qr_camera_controller_exit(qr_camera_state_t *state);
 void qr_camera_controller_handle_input(
     qr_camera_state_t *state, const hk_input_event_t *event);
 void qr_camera_controller_tick(const hk_input_snapshot_t *input);
+void qr_camera_controller_poll_decode(void);
 uint8_t qr_camera_controller_settings_active(void);
 uint8_t qr_camera_session_active(void);
 
