@@ -884,7 +884,7 @@ quirc_decode_error_t quirc_decode(const struct quirc_code *code,
 				  struct quirc_data *data)
 {
 	quirc_decode_error_t err;
-	struct datastream ds;
+	static struct datastream ds;
 
 	if (code->size > QUIRC_MAX_GRID_SIZE)
 		return QUIRC_ERROR_INVALID_GRID_SIZE;
@@ -934,8 +934,10 @@ quirc_decode_error_t quirc_decode(const struct quirc_code *code,
 
 void quirc_flip(struct quirc_code *code)
 {
-	struct quirc_code flipped = {0};
+	static struct quirc_code flipped;
 	unsigned int offset = 0;
+
+	memset(&flipped, 0, sizeof(flipped));
 	for (int y = 0; y < code->size; y++) {
 		for (int x = 0; x < code->size; x++) {
 			if (grid_bit(code, y, x)) {

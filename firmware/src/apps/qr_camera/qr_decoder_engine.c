@@ -75,30 +75,31 @@ static uint8_t qr_decoder_init(uint16_t target_w, uint16_t target_h)
 
 static uint8_t qr_decode_codes(int count, uint8_t force, const char *mode)
 {
+    static struct quirc_code s_code;
+    static struct quirc_data s_data;
+
     for(int i = 0; i < count; i++)
     {
-        struct quirc_code code;
-        struct quirc_data data;
         quirc_decode_error_t err;
 
-        quirc_extract(g_qr_decoder, i, &code);
-        err = quirc_decode(&code, &data);
+        quirc_extract(g_qr_decoder, i, &s_code);
+        err = quirc_decode(&s_code, &s_data);
         if(err != QUIRC_SUCCESS)
         {
-            quirc_flip(&code);
-            err = quirc_decode(&code, &data);
+            quirc_flip(&s_code);
+            err = quirc_decode(&s_code, &s_data);
         }
 
         if(err == QUIRC_SUCCESS)
         {
-            qr_result_set_payload(data.payload, (uint16_t)data.payload_len);
+            qr_result_set_payload(s_data.payload, (uint16_t)s_data.payload_len);
             g_qr_last_decode_ok = 1;
             qr_result_set_status(mode);
             if(force)
                 printf("[QR] payload=%s mode=%s\r\n", qr_result_payload_text(), mode);
             else
                 printf("[QR] found mode=%s len=%u\r\n",
-                       mode, (unsigned)data.payload_len);
+                       mode, (unsigned)s_data.payload_len);
             return 1;
         }
 
