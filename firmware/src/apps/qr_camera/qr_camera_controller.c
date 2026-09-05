@@ -12,6 +12,7 @@
 #include "qr_settings.h"
 
 static uint8_t s_session_active;
+static uint8_t s_result_needs_paint;
 
 static hk_input_snapshot_t snapshot_from_event(const hk_input_event_t *event)
 {
@@ -34,6 +35,7 @@ void qr_camera_controller_enter(qr_camera_state_t *state)
 {
     (void)state;
     s_session_active = 1U;
+    s_result_needs_paint = 0U;
     qr_service_enter();
     camera_runtime_enter(CAMERA_RUNTIME_QR, NULL);
 }
@@ -47,6 +49,7 @@ void qr_camera_controller_exit(qr_camera_state_t *state)
     camera_stop();
     camera_service_clear_mode();
     s_session_active = 0U;
+    s_result_needs_paint = 0U;
 }
 
 void qr_camera_controller_tick(const hk_input_snapshot_t *input)
@@ -58,19 +61,28 @@ void qr_camera_controller_tick(const hk_input_snapshot_t *input)
         qr_settings_tick(input);
         return;
     }
-    if(!qr_result_open() && camera_runtime_ok_hold_triggered(input))
+    if(qr_result_open())
+    {
+        if(s_result_needs_paint)
+        {
+            qr_result_controller_render();
+            s_result_needs_paint = 0U;
+        }
+        return;
+    }
+    if(camera_runtime_ok_hold_triggered(input))
     {
         camera_service_freeze(1U);
         qr_settings_open();
         return;
     }
-    if(camera_runtime_tick(input) && !qr_result_open())
+    if(camera_runtime_tick(input))
     {
         if(qr_service_decode_maybe(0U) == QR_DECODE_FOUND)
         {
             qr_result_show();
             camera_service_freeze(1U);
-            qr_result_controller_render();
+            s_result_needs_paint = 1U;
         }
     }
 }
@@ -101,6 +113,7 @@ void qr_camera_controller_handle_input(
         qr_result_close_window();
         qr_result_view_clear();
         qr_camera_frame_result_close((input.state & HK_INPUT_BUTTON_OK) ? 1U : 0U);
+        s_result_needs_paint = 0U;
         printf("[QR] result close\r\n");
         return;
     }

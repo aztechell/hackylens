@@ -35,10 +35,14 @@ static void qr_result_view_draw_page_hint(uint16_t scroll_line, uint16_t max_scr
 
 void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t max_scroll)
 {
+    hk_ui_display_surface_t surface;
+
     if(!payload)
         payload = "";
     if(scroll_line > max_scroll)
         scroll_line = max_scroll;
+    if(!hk_ui_display_frame_acquire(&surface))
+        return;
 
     hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
     hk_ui_display_draw_text_centered(4, "QR RESULT", COLOR_TERM_GREEN, COLOR_BLACK);
@@ -76,6 +80,8 @@ void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t m
 
     qr_result_view_draw_page_hint(scroll_line, max_scroll);
     qr_result_view_draw_actions();
+    if(!hk_ui_display_frame_present(surface.lease_id))
+        hk_ui_display_frame_cancel(surface.lease_id);
 }
 
 void qr_result_view_clear(void)
