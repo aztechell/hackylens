@@ -2,10 +2,8 @@
 
 #include <string.h>
 
-#include "../../core/camera_types.h"
-#include "../../storage/fat32_types.h"
 #include "files_image_config.h"
-#include "../../core/hk_camera_sizes.h"
+#include "files_firmware.h"
 
 file_result_t files_open_raw565(const fat_file_entry_t *entry, const file_image_sink_t *sink)
 {

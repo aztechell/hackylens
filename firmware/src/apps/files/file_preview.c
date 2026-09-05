@@ -1,16 +1,10 @@
 #include "file_browser_state.h"
 
 #include <string.h>
-#include "../../storage/internal/fat32_state_private.h"
 
-#include "../../config/sd_config.h"
-#include "../../config/fat32_config.h"
 #include "files_config.h"
-#include "../../storage/fat32_allocation.h"
 #include "file_preview.h"
-#include "../../storage/fat32_file.h"
-#include "../../storage/fat32_volume.h"
-#include "../../storage/sd_card.h"
+#include "files_firmware.h"
 
 uint8_t files_read_preview(const fat_file_entry_t *entry)
 {

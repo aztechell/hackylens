@@ -1,18 +1,15 @@
 #include <stdint.h>
 #include <stdio.h>
-
-#include <hackylens/capability/time.h>
+#include <string.h>
 
 #include "../firmware/src/apps/files/files_controller.h"
 #include "../firmware/src/apps/files/file_browser_mode.h"
-#include "../firmware/src/apps/files/file_result.h"
-#include "../firmware/src/apps/files/image_decode.h"
-#include "../firmware/src/config/input_config.h"
+#include "../firmware/src/core/hk_events.h"
 
 static file_browser_mode_t g_mode;
 static uint64_t g_now_us;
 static uint8_t g_time_fails;
-static uint64_t g_requested_features;
+static unsigned g_now_calls;
 static unsigned g_open_selected;
 static unsigned g_delete_confirm;
 static unsigned g_failures;
@@ -26,39 +23,20 @@ static void check(int condition, const char *message)
     }
 }
 
-hk_owner_t capability_client_current_owner(void)
-{
-    return (hk_owner_t){1U, 1U};
-}
-
-hk_result_t hk_time_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request, hk_time_t *handle)
-{
-    (void)owner;
-    g_requested_features = request->required_features;
-    if(g_time_fails)
-        return HK_ERR_INVALID_STATE;
-    handle->lease.slot = 1U;
-    handle->lease.generation = 1U;
-    return HK_OK;
-}
-
 hk_result_t hk_time_now_us(
     hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
 {
     (void)owner;
     (void)handle;
+    g_now_calls++;
     if(g_time_fails)
         return HK_ERR_INVALID_STATE;
     *value = g_now_us;
     return HK_OK;
 }
 
-void hk_screen_set(screen_t screen) { (void)screen; }
-screen_t hk_screen_get(void) { return SCREEN_FILES; }
-void hk_back_exit_set_armed(uint8_t armed) { (void)armed; }
-void shell_show_menu(void) {}
 void files_backend_enter(void) {}
+void files_refresh_after_sd_event(hk_sd_event_t event) { (void)event; }
 void files_nav_delta(int8_t delta) { (void)delta; }
 uint8_t files_back_from_list(void) { return 0U; }
 void files_open_selected(void) { g_open_selected++; }
@@ -80,47 +58,49 @@ uint8_t files_presenter_toggle_image_pause(uint64_t now_us)
 file_browser_mode_t files_mode(void) { return g_mode; }
 void files_set_mode(file_browser_mode_t mode) { g_mode = mode; }
 
-static hk_input_snapshot_t snapshot(
-    uint32_t state, uint32_t pressed, uint32_t changed)
+static void tap_ok(files_state_t *state)
 {
-    hk_input_snapshot_t input = {state, pressed, changed};
-    return input;
-}
+    hk_input_event_t event = {0};
 
-static void tap_ok(void)
-{
-    hk_input_snapshot_t input = snapshot(BUTTON_OK, BUTTON_OK, BUTTON_OK);
-
-    files_controller_handle_buttons(&input);
-    input = snapshot(0U, 0U, BUTTON_OK);
-    files_controller_handle_buttons(&input);
+    event.state = HK_INPUT_BUTTON_OK;
+    event.pressed = HK_INPUT_BUTTON_OK;
+    event.changed = HK_INPUT_BUTTON_OK;
+    files_controller_handle_input(state, &event);
+    event.state = 0U;
+    event.pressed = 0U;
+    event.changed = HK_INPUT_BUTTON_OK;
+    files_controller_handle_input(state, &event);
 }
 
 int main(void)
 {
-    hk_input_snapshot_t input = snapshot(0U, 0U, 0U);
+    files_state_t state;
+    hk_input_event_t hold = {0};
 
     g_mode = FILES_MODE_LIST;
     g_now_us = 1000U;
-    files_controller_enter(&input);
-    tap_ok();
+    memset(&state, 0, sizeof(state));
+    state.owner.slot = 1U;
+    state.owner.generation = 1U;
+    state.time.lease.slot = 1U;
+    state.time.lease.generation = 1U;
+    files_controller_enter(&state);
+    tap_ok(&state);
     check(g_open_selected == 1U, "short OK must open selected entry");
-    check(
-        g_requested_features == HK_TIME_FEATURE_MONOTONIC_US,
-        "Files must request monotonic time only");
+    check(g_now_calls >= 1U, "Files must sample injected monotonic time");
 
     g_time_fails = 1U;
-    files_controller_reset_input();
-    tap_ok();
+    tap_ok(&state);
     check(
         g_open_selected == 2U,
         "short OK must remain usable when timing is unavailable");
 
-    files_controller_reset_input();
-    input = snapshot(BUTTON_OK, BUTTON_OK, BUTTON_OK);
-    files_controller_handle_buttons(&input);
+    hold.state = HK_INPUT_BUTTON_OK;
+    hold.pressed = HK_INPUT_BUTTON_OK;
+    hold.changed = HK_INPUT_BUTTON_OK;
+    files_controller_handle_input(&state, &hold);
     for(unsigned tick = 0U; tick < 100U; tick++)
-        files_controller_tick(&input);
+        files_controller_tick(&state, HK_INPUT_BUTTON_OK);
     check(
         g_delete_confirm == 0U,
         "missing timing must never trigger destructive hold action");

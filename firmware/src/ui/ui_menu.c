@@ -133,3 +133,19 @@ void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_fill_rect(x + 22, y + 44, 16, 2, color);
     hk_ui_display_fill_rect(x + 18, y + 49, 24, 2, color);
 }
+
+void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_fill_rect(x + 20, y + 8, 20, 2, color);
+    hk_ui_display_fill_rect(x + 18, y + 12, 2, 38, color);
+    hk_ui_display_fill_rect(x + 42, y + 14, 2, 36, color);
+    hk_ui_display_fill_rect(x + 20, y + 50, 22, 2, color);
+    hk_ui_display_fill_rect(x + 38, y + 8, 2, 8, color);
+    hk_ui_display_fill_rect(x + 40, y + 14, 4, 2, color);
+    hk_ui_display_fill_rect(x + 23, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 29, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 35, y + 15, 4, 8, color);
+    hk_ui_display_fill_rect(x + 24, y + 39, 14, 2, color);
+    hk_ui_display_fill_rect(x + 24, y + 44, 10, 2, color);
+}

@@ -6,6 +6,7 @@
 #include "../../core/hk_events.h"
 
 void files_backend_enter(void);
+void files_refresh_after_sd_event(hk_sd_event_t event);
 uint8_t files_on_sd_event(hk_sd_event_t event);
 void files_nav_delta(int8_t delta);
 uint8_t files_back_from_list(void);

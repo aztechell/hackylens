@@ -1,18 +1,9 @@
 #include "files_controller.h"
 
 #include <stdio.h>
+#include <string.h>
 
-#include <hackylens/capability/time.h>
-
-#include "../../core/hk_app.h"
-
-#include "../../config/input_config.h"
 #include "files_config.h"
-
-#include "../../core/hk_back_exit.h"
-#include "../../core/hk_menu.h"
-#include "../../core/hk_screen.h"
-#include "../../core/hk_capability_client.h"
 #include "file_browser_mode.h"
 #include "files_actions.h"
 #include "files_presenter.h"
@@ -22,33 +13,20 @@ static uint8_t g_files_repeat_ticks;
 static uint64_t g_files_ok_press_us;
 static uint8_t g_files_ok_active;
 static uint8_t g_files_ok_hold_fired;
-static hk_time_t s_files_time;
-static hk_owner_t s_files_time_owner;
 
-static uint64_t files_time_now_us(void)
+static uint64_t files_time_now_us(files_state_t *state)
 {
-    hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-    hk_owner_t owner = capability_client_current_owner();
     uint64_t value = 0U;
 
-    request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
-    if(hk_owner_is_zero(owner))
+    if(!state || hk_owner_is_zero(state->owner) ||
+       hk_lease_is_zero(&state->time.lease))
         return 0U;
-    if(owner.slot != s_files_time_owner.slot ||
-       owner.generation != s_files_time_owner.generation ||
-       hk_lease_is_zero(&s_files_time.lease))
-    {
-        s_files_time.lease = HK_LEASE_NONE;
-        s_files_time_owner = owner;
-        if(hk_time_acquire(owner, &request, &s_files_time) != HK_OK)
-            return 0U;
-    }
-    if(hk_time_now_us(owner, &s_files_time, &value) != HK_OK)
+    if(hk_time_now_us(state->owner, &state->time, &value) != HK_OK)
         return 0U;
     return value;
 }
 
-void files_controller_reset_input(void)
+static void files_controller_reset_input(void)
 {
     g_files_repeat_button = 0;
     g_files_repeat_ticks = 0;
@@ -108,7 +86,7 @@ static uint8_t files_ok_hold_ready(uint32_t input_state, uint64_t now_us)
        now_us == 0U ||
        now_us < g_files_ok_press_us ||
        g_files_ok_hold_fired ||
-       !(input_state & BUTTON_OK) ||
+       !(input_state & HK_INPUT_BUTTON_OK) ||
        now_us - g_files_ok_press_us < FILES_OK_HOLD_US)
         return 0;
 
@@ -122,10 +100,10 @@ static void files_controller_handle_nav_repeat(uint32_t input_state)
 {
     if(g_files_repeat_button == 0 || !(input_state & g_files_repeat_button))
     {
-        if(input_state & BUTTON_LEFT)
-            files_repeat_start(BUTTON_LEFT);
-        else if(input_state & BUTTON_RIGHT)
-            files_repeat_start(BUTTON_RIGHT);
+        if(input_state & HK_INPUT_BUTTON_LEFT)
+            files_repeat_start(HK_INPUT_BUTTON_LEFT);
+        else if(input_state & HK_INPUT_BUTTON_RIGHT)
+            files_repeat_start(HK_INPUT_BUTTON_RIGHT);
         else
             files_repeat_reset();
         return;
@@ -134,9 +112,9 @@ static void files_controller_handle_nav_repeat(uint32_t input_state)
     if(files_repeat_delay_active())
         return;
 
-    if(g_files_repeat_button == BUTTON_LEFT)
+    if(g_files_repeat_button == HK_INPUT_BUTTON_LEFT)
         files_nav_delta(-1);
-    else if(g_files_repeat_button == BUTTON_RIGHT)
+    else if(g_files_repeat_button == HK_INPUT_BUTTON_RIGHT)
         files_nav_delta(1);
 
     files_repeat_set_next_delay();
@@ -167,14 +145,14 @@ static void files_controller_tick_delete(uint32_t input_state, uint64_t now_us)
 
 static void files_controller_handle_delete_confirm(uint32_t pressed)
 {
-    if(pressed & BUTTON_BACK)
+    if(pressed & HK_INPUT_BUTTON_BACK)
     {
         files_repeat_reset();
         files_ok_reset();
         files_delete_cancel();
         return;
     }
-    if(pressed & BUTTON_OK)
+    if(pressed & HK_INPUT_BUTTON_OK)
     {
         files_repeat_reset();
         files_ok_reset();
@@ -182,9 +160,10 @@ static void files_controller_handle_delete_confirm(uint32_t pressed)
     }
 }
 
-static void files_controller_handle_preview_buttons(uint32_t pressed, uint32_t changed, uint32_t input_state, uint64_t now_us)
+static void files_controller_handle_preview_buttons(
+    uint32_t pressed, uint32_t changed, uint32_t input_state, uint64_t now_us)
 {
-    if(pressed & BUTTON_BACK)
+    if(pressed & HK_INPUT_BUTTON_BACK)
     {
         files_repeat_reset();
         files_presenter_close_image();
@@ -193,23 +172,23 @@ static void files_controller_handle_preview_buttons(uint32_t pressed, uint32_t c
         files_presenter_render_list();
         return;
     }
-    if(pressed & BUTTON_LEFT)
+    if(pressed & HK_INPUT_BUTTON_LEFT)
     {
         files_nav_delta(-1);
-        files_repeat_start(BUTTON_LEFT);
+        files_repeat_start(HK_INPUT_BUTTON_LEFT);
     }
-    if(pressed & BUTTON_RIGHT)
+    if(pressed & HK_INPUT_BUTTON_RIGHT)
     {
         files_nav_delta(1);
-        files_repeat_start(BUTTON_RIGHT);
+        files_repeat_start(HK_INPUT_BUTTON_RIGHT);
     }
-    if(pressed & BUTTON_OK)
+    if(pressed & HK_INPUT_BUTTON_OK)
     {
         files_repeat_reset();
         files_ok_press(now_us);
         return;
     }
-    if((changed & BUTTON_OK) && !(input_state & BUTTON_OK))
+    if((changed & HK_INPUT_BUTTON_OK) && !(input_state & HK_INPUT_BUTTON_OK))
     {
         if(files_ok_release_should_open() && files_mode() == FILES_MODE_IMAGE)
             (void)files_presenter_toggle_image_pause(now_us);
@@ -224,25 +203,26 @@ static uint8_t files_controller_handle_list_back(void)
     return files_back_from_list();
 }
 
-static void files_controller_handle_list_buttons(uint32_t pressed, uint32_t changed, uint32_t input_state, uint64_t now_us)
+static void files_controller_handle_list_buttons(
+    uint32_t pressed, uint32_t changed, uint32_t input_state, uint64_t now_us)
 {
-    if(pressed & BUTTON_LEFT)
+    if(pressed & HK_INPUT_BUTTON_LEFT)
     {
         files_nav_delta(-1);
-        files_repeat_start(BUTTON_LEFT);
+        files_repeat_start(HK_INPUT_BUTTON_LEFT);
     }
-    if(pressed & BUTTON_RIGHT)
+    if(pressed & HK_INPUT_BUTTON_RIGHT)
     {
         files_nav_delta(1);
-        files_repeat_start(BUTTON_RIGHT);
+        files_repeat_start(HK_INPUT_BUTTON_RIGHT);
     }
-    if(pressed & BUTTON_OK)
+    if(pressed & HK_INPUT_BUTTON_OK)
     {
         files_repeat_reset();
         files_ok_press(now_us);
         return;
     }
-    if((changed & BUTTON_OK) && !(input_state & BUTTON_OK))
+    if((changed & HK_INPUT_BUTTON_OK) && !(input_state & HK_INPUT_BUTTON_OK))
     {
         if(files_ok_release_should_open())
             files_open_selected();
@@ -250,61 +230,90 @@ static void files_controller_handle_list_buttons(uint32_t pressed, uint32_t chan
     }
 }
 
-void files_controller_enter(const hk_input_snapshot_t *input)
+static void files_controller_handle_buttons(
+    files_state_t *state, uint32_t state_bits, uint32_t pressed, uint32_t changed)
 {
-    hk_screen_set(SCREEN_FILES);
-    hk_back_exit_set_armed(0);
+    uint64_t now_us = files_time_now_us(state);
+
+    if(files_mode())
+    {
+        if(files_mode() == FILES_MODE_DELETE_CONFIRM)
+        {
+            files_controller_handle_delete_confirm(pressed);
+            return;
+        }
+
+        files_controller_handle_preview_buttons(
+            pressed, changed, state_bits, now_us);
+        return;
+    }
+
+    if(pressed & HK_INPUT_BUTTON_BACK)
+    {
+        if(files_controller_handle_list_back())
+            state->close_requested = 1U;
+        return;
+    }
+
+    files_controller_handle_list_buttons(pressed, changed, state_bits, now_us);
+}
+
+void files_controller_reset(files_state_t *state)
+{
+    if(!state)
+        return;
+    memset(state, 0, sizeof(*state));
+    files_controller_reset_input();
+}
+
+void files_controller_enter(files_state_t *state)
+{
+    (void)state;
     printf("[SHELL] screen FILES\r\n");
     files_controller_reset_input();
     files_backend_enter();
 }
 
-void files_controller_exit(void)
+void files_controller_exit(files_state_t *state)
 {
+    (void)state;
     files_presenter_close_image();
     files_controller_reset_input();
 }
 
-void files_controller_tick(const hk_input_snapshot_t *input)
+void files_controller_handle_input(
+    files_state_t *state, const hk_input_event_t *event)
+{
+    if(!state || !event)
+        return;
+    files_controller_handle_buttons(
+        state, event->state, event->pressed, event->changed);
+}
+
+void files_controller_tick(files_state_t *state, uint32_t buttons)
 {
     uint64_t now_us;
 
-    if(hk_screen_get() != SCREEN_FILES)
-    {
-        files_repeat_reset();
+    if(!state)
         return;
-    }
-
-    now_us = files_time_now_us();
-    files_controller_tick_delete(input->state, now_us);
+    now_us = files_time_now_us(state);
+    files_controller_tick_delete(buttons, now_us);
     if(files_mode() == FILES_MODE_IMAGE)
         files_presenter_tick_image(now_us);
 }
 
-void files_controller_handle_buttons(const hk_input_snapshot_t *input)
+void files_controller_handle_media(
+    files_state_t *state, hk_app_media_kind_t kind)
 {
-    if(files_mode())
-    {
-        if(files_mode() == FILES_MODE_DELETE_CONFIRM)
-        {
-            files_controller_handle_delete_confirm(input->pressed);
-            return;
-        }
+    hk_sd_event_t event = HK_SD_EVENT_ERROR;
 
-        files_controller_handle_preview_buttons(
-            input->pressed, input->changed, input->state,
-            files_time_now_us());
-        return;
-    }
-
-    if(input->pressed & BUTTON_BACK)
-    {
-        if(files_controller_handle_list_back())
-            shell_show_menu();
-        return;
-    }
-
-    files_controller_handle_list_buttons(
-        input->pressed, input->changed, input->state,
-        files_time_now_us());
+    (void)state;
+    files_controller_reset_input();
+    if(kind == HK_APP_MEDIA_INSERTED)
+        event = HK_SD_EVENT_INSERTED;
+    else if(kind == HK_APP_MEDIA_REMOVED)
+        event = HK_SD_EVENT_REMOVED;
+    else if(kind == HK_APP_MEDIA_MOUNTED)
+        event = HK_SD_EVENT_MOUNTED;
+    files_refresh_after_sd_event(event);
 }

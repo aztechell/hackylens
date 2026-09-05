@@ -8,6 +8,7 @@
 #include "../app_runtime/surface_private.h"
 #include "../capabilities/capability_inventory_binding.h"
 #include "../core/hk_capability_client.h"
+#include "../ui/display_binding.h"
 #include "capability_owner_runtime.h"
 
 typedef struct
@@ -111,6 +112,8 @@ static hk_result_t acquire_capability(
         result = hk_display_acquire(
             owner, request, HK_DISPLAY_PLANE_BASE, &handle);
         *lease = handle.lease;
+        if(result == HK_OK)
+            result = hk_ui_display_bind(owner, &handle);
         return result;
     }
     if(request->id == HK_CAPABILITY_ID_LIGHTS)

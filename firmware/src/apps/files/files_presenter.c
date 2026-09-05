@@ -5,9 +5,9 @@
 #include "files_view_port.h"
 #include "file_browser_list.h"
 #include "file_browser_mode.h"
-#include "../../storage/fat32_volume.h"
 #include "image_viewer.h"
 #include "file_preview.h"
+#include "files_firmware.h"
 
 static const files_view_ops_t *g_files_view_ops;
 

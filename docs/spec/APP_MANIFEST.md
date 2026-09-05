@@ -107,9 +107,11 @@ are limited to proven runtime acquire paths:
 SETTINGS and SLEEP do not declare `lights`. They apply persisted brightness
 through the existing `consumer:settings-lights` service. SETTINGS does not
 declare `external-link`; UART/I2C menu items still reconfigure
-`consumer:external-link-service`. Lifecycle-v2 preflight acquires every
-available declaration, so those persistent exclusive/channel leases would
-otherwise return `HK_ERR_BUSY` and the app would fail to open.
+`consumer:external-link-service`. FILES does not declare `sd-card`; storage
+access stays on the existing firmware mount/FAT32 path and foreground
+`HK_APP_EVENT_MEDIA` events. Lifecycle-v2 preflight acquires every available
+declaration, so persistent exclusive/channel leases and transitional legacy
+services would otherwise fail open.
 
 A missing required capability excludes the app; an explicit require-app build
 request turns that exclusion into a build error. Combined required and optional

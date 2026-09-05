@@ -3,18 +3,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../config/sd_config.h"
-#include "../../config/fat32_config.h"
 #include "files_config.h"
-#include "../../core/file_name.h"
-#include "../../core/hk_string.h"
 #include "file_browser_state.h"
-#include "../../storage/internal/fat32_state_private.h"
-#include "../../storage/file_mount.h"
-#include "../../storage/fat32_allocation.h"
-#include "../../storage/fat32_volume.h"
-#include "../../core/hk_binary.h"
-#include "../../storage/sd_card.h"
+#include "files_firmware.h"
 
 static void files_add_entry(const char *name, uint8_t attr, uint32_t cluster, uint32_t size,
                             uint32_t modified, uint32_t dir_ordinal, uint8_t lfn_count)

@@ -17,6 +17,7 @@
 static hk_display_t s_display;
 static hk_owner_t s_owner;
 static uint8_t s_ready;
+static uint8_t s_bound;
 static uint8_t s_frame_active;
 static uint32_t s_frame_lease_id;
 static uint32_t s_next_frame_lease_id;
@@ -71,6 +72,8 @@ hk_result_t hk_ui_display_release(void)
 {
     hk_result_t result;
 
+    if(s_bound)
+        return HK_ERR_BUSY;
     if(s_frame_active)
         hk_ui_display_frame_cancel(s_frame_lease_id);
     if(!s_ready)
@@ -79,8 +82,36 @@ hk_result_t hk_ui_display_release(void)
     if(result != HK_OK)
         return result;
     s_display = (hk_display_t){0};
+    s_owner = HK_OWNER_NONE;
     s_ready = 0U;
     return HK_OK;
+}
+
+hk_result_t hk_ui_display_bind(hk_owner_t owner, const hk_display_t *display)
+{
+    if(!display || hk_owner_is_zero(owner) || hk_lease_is_zero(&display->lease))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(s_ready && !s_bound)
+        return HK_ERR_BUSY;
+    if(s_frame_active)
+        hk_ui_display_frame_cancel(s_frame_lease_id);
+    s_owner = owner;
+    s_display = *display;
+    s_ready = 1U;
+    s_bound = 1U;
+    return HK_OK;
+}
+
+void hk_ui_display_unbind(void)
+{
+    if(!s_bound)
+        return;
+    if(s_frame_active)
+        hk_ui_display_frame_cancel(s_frame_lease_id);
+    s_display = (hk_display_t){0};
+    s_owner = HK_OWNER_NONE;
+    s_ready = 0U;
+    s_bound = 0U;
 }
 
 static hk_result_t surface_acquire(hk_display_surface_t *surface)

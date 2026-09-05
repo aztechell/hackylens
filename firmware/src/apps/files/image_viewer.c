@@ -2,10 +2,9 @@
 
 #include <string.h>
 
-#include "../../config/fat32_config.h"
 #include "image_viewer.h"
 #include "image_decode_gif.h"
-#include "../../core/hk_string.h"
+#include "files_firmware.h"
 
 static uint8_t files_name_is_bmp(const char *name)
 {

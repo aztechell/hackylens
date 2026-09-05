@@ -150,17 +150,46 @@ const hk_legacy_app_entry_t face_detect_legacy_entry = {
     .enter = noop_enter,
     .background_tick = count_background,
 };
-const hk_legacy_app_entry_t files_legacy_entry = {
-    .screen = SCREEN_FILES,
+const hk_legacy_app_entry_t object_detect_legacy_entry = {
+    .screen = SCREEN_OBJECT_DETECT,
     .enter = noop_enter,
     .handle_sd_event = count_sd,
 };
+static uint8_t s_files_v2_storage[16];
+static hk_result_t dummy_files_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+static hk_result_t dummy_files_event(
+    const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    (void)ctx;
+    (void)event;
+    return HK_OK;
+}
+static hk_result_t dummy_files_render(
+    const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    (void)ctx;
+    (void)surface;
+    return HK_OK;
+}
+static hk_result_t dummy_files_stop(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    return HK_OK;
+}
+const hk_app_v2_entry_t files_v2_entry = {
+    .state_storage = s_files_v2_storage,
+    .state_capacity_bytes = sizeof(s_files_v2_storage),
+    .start = dummy_files_start,
+    .event = dummy_files_event,
+    .render = dummy_files_render,
+    .stop = dummy_files_stop,
+};
 const hk_legacy_app_entry_t micropython_legacy_entry = {
     .screen = SCREEN_APP_SLOT_2,
-    .enter = noop_enter,
-};
-const hk_legacy_app_entry_t object_detect_legacy_entry = {
-    .screen = SCREEN_OBJECT_DETECT,
     .enter = noop_enter,
 };
 static uint8_t s_pong_v2_storage[16];
@@ -368,6 +397,8 @@ int main(void)
                  "hackylens.service.legacy-camera") == 0);
     CHECK(settings->capability_count == 2U);
     CHECK(sleep->capability_count == 3U);
+    CHECK(app_by_id("files")->capability_count == 3U);
+    CHECK(app_by_id("files")->service_count == 0U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)
     {
         const hk_app_capability_request_t *request =

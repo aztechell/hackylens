@@ -2,8 +2,8 @@
 
 #include <string.h>
 
-#include "../../storage/fat32_types.h"
 #include "files_image_config.h"
+#include "files_firmware.h"
 static uint8_t ppm_parse_header(const uint8_t *data, uint16_t len, uint16_t *width, uint16_t *height, uint32_t *data_offset)
 {
     uint32_t values[3] = {0};

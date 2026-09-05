@@ -2,10 +2,8 @@
 
 #include <string.h>
 
-#include "../../storage/fat32_types.h"
 #include "files_image_config.h"
-#include "files_image_config.h"
-#include "../../core/hk_binary.h"
+#include "files_firmware.h"
 
 file_result_t files_open_bmp(const fat_file_entry_t *entry, const file_image_sink_t *sink)
 {

@@ -1,9 +1,9 @@
 id = "files"
 name = "FILES"
-lifecycle = "legacy"
-entry = "files_legacy_entry"
+lifecycle = "v2"
+entry = "files_v2_entry"
 sources = ["file_browser_state.c", "file_delete.c", "file_dir.c", "file_preview.c", "files_actions.c", "files_app.c", "files_backend.c", "files_controller.c", "files_presenter.c", "files_view.c", "image_decode_bmp.c", "image_decode_common.c", "image_decode_gif.c", "image_decode_png.c", "image_decode_png_inflate.c", "image_decode_ppm.c", "image_decode_raw.c", "image_viewer.c"]
-requires = ["display", "time", "input", "sd-card"]
+requires = ["display", "time", "input"]
 menu_order = 7
 autostart_id = 6
 tick_ms = 20

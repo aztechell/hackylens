@@ -2,16 +2,9 @@
 
 #include <stdio.h>
 
-#include "../../config/sd_config.h"
-#include "../../config/fat32_config.h"
 #include "file_browser_state.h"
-#include "../../storage/internal/fat32_state_private.h"
 #include "file_dir.h"
-#include "../../storage/fat32_allocation.h"
-#include "../../storage/fat32_directory.h"
-#include "../../storage/fat32_volume.h"
-#include "../../core/hk_binary.h"
-#include "../../storage/sd_card.h"
+#include "files_firmware.h"
 
 static uint8_t files_delete_dir_contents(uint32_t dir_cluster)
 {

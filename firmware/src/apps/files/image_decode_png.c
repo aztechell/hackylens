@@ -5,12 +5,9 @@
 #include <string.h>
 
 #include "files_image_config.h"
-#include "files_image_config.h"
-#include "../../config/sd_config.h"
 #include "image_decode_png_inflate.h"
+#include "files_firmware.h"
 
-#include "../../core/hk_binary.h"
-#include "../../services/frame_workspace.h"
 
 static uint8_t g_png_comp[PNG_COMP_MAX] __attribute__((aligned(4), section(".bss")));
 

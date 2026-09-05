@@ -2,20 +2,16 @@
 
 #include <stdio.h>
 
-#include "../../config/display_config.h"
 #include "files_layout.h"
-#include "../../config/fat32_config.h"
-#include "../../core/file_name.h"
-#include "../../core/hk_string.h"
 #include "file_browser_list.h"
 #include "file_browser_mode.h"
 #include "file_browser_navigation.h"
 #include "file_dir.h"
 #include "file_preview.h"
 #include "file_delete.h"
-#include "../../storage/fat32_volume.h"
 #include "image_viewer.h"
 #include "files_presenter.h"
+#include "files_firmware.h"
 
 static void files_select_delta(int8_t delta);
 static uint8_t files_open_image_delta(int8_t delta);

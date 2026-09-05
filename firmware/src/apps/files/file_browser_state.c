@@ -4,10 +4,10 @@
 
 #include <string.h>
 
-#include "../../config/fat32_config.h"
 #include "files_config.h"
 #include "files_layout.h"
 #include "file_browser_mode.h"
+#include "files_firmware.h"
 
 static uint32_t g_files_cluster;
 static uint32_t g_files_stack[FILES_STACK_MAX];

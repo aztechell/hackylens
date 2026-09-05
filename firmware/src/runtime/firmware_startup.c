@@ -54,7 +54,10 @@ static uint8_t firmware_app_enter(
         printf("[APP] open %s failed result=%d\r\n",
                app && app->title ? app->title : "?", (int)result);
         if(app && app->lifecycle == HK_APP_LIFECYCLE_V2)
+        {
+            hk_ui_display_unbind();
             (void)hk_ui_display_prepare();
+        }
         return 0U;
     }
     return 1U;
@@ -66,6 +69,7 @@ static void firmware_app_exit(
 {
     (void)app;
     (void)app_runtime_integration_close(reason);
+    hk_ui_display_unbind();
     if(hk_ui_display_prepare() != HK_OK)
         printf("[DISPLAY] restore failed\r\n");
 }

@@ -1,14 +1,12 @@
 #include "files_actions.h"
 
-#include "../../core/hk_events.h"
 
 #include "file_browser_list.h"
 #include "file_browser_mode.h"
 #include "file_browser_navigation.h"
 #include "file_dir.h"
-#include "../../storage/file_mount.h"
-#include "../../storage/fat32_volume.h"
 #include "files_presenter.h"
+#include "files_firmware.h"
 
 uint8_t files_on_sd_event(hk_sd_event_t event)
 {
@@ -56,4 +54,17 @@ void files_backend_enter(void)
         return;
     }
     files_presenter_render_list();
+}
+
+void files_refresh_after_sd_event(hk_sd_event_t event)
+{
+    uint8_t ready;
+
+    ready = files_on_sd_event(event);
+    if(!hk_sd_present() || !hk_fat_mounted())
+        files_presenter_show_status("NO SD");
+    else if(!ready)
+        files_presenter_show_result(FILE_RESULT_READ_ERROR);
+    else
+        files_presenter_render_list();
 }

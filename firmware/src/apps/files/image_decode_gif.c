@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "files_image_config.h"
-#include "../../storage/fat32_stream.h"
+#include "files_firmware.h"
 
 #define GIF_SIGNATURE_SIZE 6U
 #define GIF_HEADER_SIZE 13U

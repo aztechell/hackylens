@@ -3,17 +3,12 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../ui/hk_ui.h"
 #include "files_types.h"
-#include "../../core/file_name.h"
-#include "../../core/hk_string.h"
 
-#include "../../config/display_config.h"
 #include "files_layout.h"
 
-#include "../../ui/display_binding.h"
-#include "../../services/frame_workspace.h"
 #include "files_view_port.h"
+#include "files_firmware.h"
 
 static hk_ui_display_surface_t g_animation_surface;
 static hk_indexed_frame_t g_animation_previous_frame;
@@ -399,20 +394,4 @@ void files_view_init(void)
     };
 
     files_view_register(&ops);
-}
-
-void files_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
-{
-    (void)bg;
-    hk_ui_display_fill_rect(x + 20, y + 8, 20, 2, color);
-    hk_ui_display_fill_rect(x + 18, y + 12, 2, 38, color);
-    hk_ui_display_fill_rect(x + 42, y + 14, 2, 36, color);
-    hk_ui_display_fill_rect(x + 20, y + 50, 22, 2, color);
-    hk_ui_display_fill_rect(x + 38, y + 8, 2, 8, color);
-    hk_ui_display_fill_rect(x + 40, y + 14, 4, 2, color);
-    hk_ui_display_fill_rect(x + 23, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 29, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 35, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 24, y + 39, 14, 2, color);
-    hk_ui_display_fill_rect(x + 24, y + 44, 10, 2, color);
 }
