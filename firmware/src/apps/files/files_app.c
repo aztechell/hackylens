@@ -1,5 +1,7 @@
 #include "files_app.h"
 
+#include <stddef.h>
+
 #include "files_controller.h"
 #include "files_view.h"
 
