@@ -70,13 +70,8 @@ OPTIONAL_FALLBACKS = {
 _DISPLAY_FEATURES = ("base-plane", "borrowed-surface", "dirty-regions", "rgb565")
 _INPUT_FEATURES = ("debounced-buttons", "events", "state")
 _TIME_SLEEP_UNTIL_APPS = frozenset({"apriltag", "camera", "micropython"})
-_LIGHTS_FEATURES = {
-    "settings": ("backlight", "illumination", "rgb"),
-    "sleep": ("backlight",),
-}
 _EXTERNAL_LINK_FEATURES = {
     "micropython": ("i2c-controller", "uart"),
-    "settings": ("i2c-target", "uart"),
 }
 
 
@@ -264,7 +259,7 @@ def _capability_features(name: str, app_id: str) -> tuple[str, ...]:
             return ("monotonic-us", "sleep-until")
         return ("monotonic-us",)
     if name == "lights":
-        return _LIGHTS_FEATURES.get(app_id, ("illumination", "rgb"))
+        return ("illumination", "rgb")
     if name == "external-link":
         return _EXTERNAL_LINK_FEATURES.get(app_id, ("i2c-controller", "uart"))
     raise ManifestError(f"unknown required service {name!r}")

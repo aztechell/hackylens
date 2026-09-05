@@ -4,27 +4,79 @@
 
 #include "settings_view_assets.h"
 
-static hk_result_t draw_text(
+static hk_result_t fill_rect(
     hk_app_surface_t *surface,
     int32_t x,
     int32_t y,
     uint32_t width,
     uint32_t height,
+    uint16_t rgb565)
+{
+    hk_display_rect_t rect = {x, y, width, height};
+
+    return hk_app_surface_fill_rect(surface, &rect, rgb565);
+}
+
+static hk_result_t draw_text(
+    hk_app_surface_t *surface,
+    int32_t x,
+    int32_t y,
+    uint32_t width,
     const char *text,
     uint16_t rgb565)
 {
-    hk_display_rect_t bounds = {x, y, width, height};
+    hk_display_rect_t bounds = {x, y, width, HACKYLENS_FONT_H};
 
     return hk_app_surface_text(
         surface, &bounds, text, (uint32_t)strlen(text), rgb565);
+}
+
+static hk_result_t draw_chrome(
+    hk_app_surface_t *surface, const hk_display_info_t *info, const char *title)
+{
+    uint32_t title_px;
+    int32_t title_x;
+    hk_result_t result;
+
+    result = fill_rect(surface, 0, 0, info->width, MENU_LINE, COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    result = fill_rect(
+        surface, 0, (int32_t)info->height - (int32_t)MENU_LINE,
+        info->width, MENU_LINE, COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    result = fill_rect(
+        surface, 0, 0, MENU_LINE, info->height, COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    result = fill_rect(
+        surface, (int32_t)info->width - (int32_t)MENU_LINE, 0,
+        MENU_LINE, info->height, COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    result = fill_rect(
+        surface, 0, MENU_BAR_H - MENU_LINE, info->width, MENU_LINE,
+        COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    result = draw_text(
+        surface, 4, 3, 3U * HACKYLENS_FONT_W, "<o>", COLOR_TERM_GREEN);
+    if(result != HK_OK)
+        return result;
+    title_px = (uint32_t)strlen(title) * HACKYLENS_FONT_W;
+    title_x = title_px < info->width ?
+        (int32_t)((info->width - title_px) / 2U) : 0;
+    if(title_px == 0U)
+        title_px = HACKYLENS_FONT_W;
+    return draw_text(
+        surface, title_x, 3, title_px, title, COLOR_TERM_GREEN);
 }
 
 hk_result_t settings_view_render(
     hk_app_surface_t *surface, const settings_menu_session_t *session)
 {
     hk_display_info_t info = {0};
-    hk_display_rect_t bar;
-    hk_display_rect_t rule;
     hk_display_rect_t row;
     const char *title = "SETTINGS";
     uint8_t slot;
@@ -38,21 +90,9 @@ hk_result_t settings_view_render(
     result = hk_app_surface_clear(surface, COLOR_BLACK);
     if(result != HK_OK)
         return result;
-    bar = (hk_display_rect_t){0, 0, info.width, info.height};
-    result = hk_app_surface_stroke_rect(surface, &bar, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    rule = (hk_display_rect_t){
-        0, MENU_BAR_H - MENU_LINE, info.width, MENU_LINE,
-    };
-    result = hk_app_surface_fill_rect(surface, &rule, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
     if(session->definition && session->definition->title)
         title = session->definition->title;
-    result = draw_text(
-        surface, 12, 6, info.width > 24U ? info.width - 24U : info.width,
-        16U, title, COLOR_TERM_GREEN);
+    result = draw_chrome(surface, &info, title);
     if(result != HK_OK)
         return result;
     for(slot = 0U; slot < SETTINGS_MENU_VISIBLE_ROWS; slot++)
@@ -66,6 +106,7 @@ hk_result_t settings_view_render(
         int32_t y;
         int32_t value_x;
         uint32_t row_width;
+        uint32_t title_width;
         size_t value_length;
 
         if(!settings_menu_visible_slot(
@@ -89,16 +130,16 @@ hk_result_t settings_view_render(
             value_x -= HACKYLENS_FONT_W;
         if(value_x < 10)
             value_x = 10;
+        title_width = value_x > 12 ? (uint32_t)(value_x - 12) : 0U;
         result = draw_text(
-            surface, 10, y + 3,
-            value_x > 12 ? (uint32_t)(value_x - 12) : 0U, 16U,
+            surface, 10, y + 3, title_width,
             row_title ? row_title : "", fg);
         if(result != HK_OK)
             return result;
         if(editing)
         {
             result = draw_text(
-                surface, value_x, y + 3, HACKYLENS_FONT_W, 16U, "*", fg);
+                surface, value_x, y + 3, HACKYLENS_FONT_W, "*", fg);
             if(result != HK_OK)
                 return result;
             value_x += HACKYLENS_FONT_W;
@@ -107,7 +148,7 @@ hk_result_t settings_view_render(
             surface, value_x, y + 3,
             info.width > (uint32_t)value_x ?
                 info.width - (uint32_t)value_x : 0U,
-            16U, value, fg);
+            value, fg);
         if(result != HK_OK)
             return result;
     }

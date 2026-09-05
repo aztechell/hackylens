@@ -127,7 +127,7 @@ def validate(root: Path = ROOT) -> list[str]:
                 failures.append(f"{app}: canonical required Input capability is missing")
         lights_apps = {
             "camera", "qr-camera", "face-detect", "apriltag",
-            "object-detect", "settings", "sleep", "micropython",
+            "object-detect", "micropython",
         }
         for app, requirements in generator.load_app_requirements(apps_root).items():
             if "lights" in requirements.legacy:

@@ -101,10 +101,15 @@ preserve the current grant/composition ABI. Per-app exceptions in that mapping
 are limited to proven runtime acquire paths:
 
 - `time` adds `sleep-until` for CAMERA, APRILTAG, and MICROPYTHON;
-- `lights` uses backlight-only for SLEEP, illumination+RGB for camera-family
-  apps, and all three channels for SETTINGS;
-- `external-link` uses UART+I2C-target for SETTINGS and UART+I2C-controller for
-  MICROPYTHON.
+- `lights` uses illumination+RGB for camera-family apps;
+- `external-link` uses UART+I2C-controller for MICROPYTHON.
+
+SETTINGS and SLEEP do not declare `lights`. They apply persisted brightness
+through the existing `consumer:settings-lights` service. SETTINGS does not
+declare `external-link`; UART/I2C menu items still reconfigure
+`consumer:external-link-service`. Lifecycle-v2 preflight acquires every
+available declaration, so those persistent exclusive/channel leases would
+otherwise return `HK_ERR_BUSY` and the app would fail to open.
 
 A missing required capability excludes the app; an explicit require-app build
 request turns that exclusion into a build error. Combined required and optional

@@ -314,8 +314,8 @@ int main(void)
 {
     const hk_app_t *camera;
     const hk_app_t *settings;
+    const hk_app_t *sleep;
     const hk_input_snapshot_t input = {0U, 0U, 0U};
-    uint8_t optional_found = 0U;
 
 #if HK_ENABLE_APP_MICROPYTHON
     CHECK(g_hk_generated_app_count == 12U);
@@ -355,7 +355,8 @@ int main(void)
 
     camera = app_by_id("camera");
     settings = app_by_id("settings");
-    CHECK(camera != NULL && settings != NULL);
+    sleep = app_by_id("sleep");
+    CHECK(camera != NULL && settings != NULL && sleep != NULL);
     CHECK(hk_app_for_screen(SCREEN_CAMERA) == camera);
     CHECK(hk_app_for_screen(SCREEN_CAMERA_SETTINGS) == camera);
     CHECK(hk_app_registry_sd_poll_allowed(SCREEN_CAMERA) == 0U);
@@ -365,15 +366,19 @@ int main(void)
     CHECK(camera->service_count == 2U);
     CHECK(strcmp(camera->services[0].id,
                  "hackylens.service.legacy-camera") == 0);
+    CHECK(settings->capability_count == 2U);
+    CHECK(sleep->capability_count == 3U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)
     {
         const hk_app_capability_request_t *request =
             &settings->capabilities[index];
-        if(request->optional && request->fallback &&
-           strcmp(request->fallback, "hide-external-link-menu") == 0)
-            optional_found = 1U;
+        CHECK(request->optional == 0U);
+        CHECK(strcmp(request->id, "hackylens.cap.lights") != 0);
+        CHECK(strcmp(request->id, "hackylens.cap.external-link") != 0);
     }
-    CHECK(optional_found == 1U);
+    for(uint16_t index = 0U; index < sleep->capability_count; index++)
+        CHECK(strcmp(sleep->capabilities[index].id,
+                     "hackylens.cap.lights") != 0);
 
     hk_app_registry_background_tick(&input);
     CHECK(s_background_calls == 1U);

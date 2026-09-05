@@ -336,8 +336,28 @@ int main(void)
             "boards/", "platforms/", "hal_", "driver_", "provider_vtable",
         ):
             self.assertNotIn(forbidden, first.casefold())
-        self.assertIn("hide-external-link-menu", first)
+        self.assertIn("settings_v2_entry", first)
         self.assertIn("hackylens.service.legacy-camera", first)
+
+    def test_settings_and_sleep_do_not_acquire_firmware_owned_caps(self) -> None:
+        apps = {app["id"]: app for app in self.model["apps"]}
+        settings_required = [
+            item["id"] for item in apps["settings"]["capabilities"]["required"]
+        ]
+        sleep_required = [
+            item["id"] for item in apps["sleep"]["capabilities"]["required"]
+        ]
+        self.assertEqual(settings_required, [
+            "hackylens.cap.display",
+            "hackylens.cap.input",
+        ])
+        self.assertEqual(apps["settings"]["capabilities"]["optional"], [])
+        self.assertEqual(sleep_required, [
+            "hackylens.cap.display",
+            "hackylens.cap.input",
+            "hackylens.cap.time",
+        ])
+        self.assertNotIn("hackylens.cap.lights", sleep_required)
 
     def test_current_legacy_menu_autostart_debug_and_tick_parity(self) -> None:
         expected_order = [
