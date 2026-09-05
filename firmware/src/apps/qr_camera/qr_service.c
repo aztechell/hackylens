@@ -2,20 +2,11 @@
 
 #include <stdio.h>
 
-#include <hackylens/capability/time.h>
-
-#include "../../services/camera_frame.h"
 #include "qr_camera_frame_adapter.h"
-
 #include "qr_config.h"
-
 #include "qr_decoder_engine.h"
 #include "qr_result.h"
-#include "../../core/hk_binary.h"
-#include "../../config/settings_config.h"
-#include "../../services/settings_persistence.h"
-#include "../../services/settings_service.h"
-#include "../../core/hk_capability_client.h"
+#include "qr_camera_firmware.h"
 
 static uint64_t g_qr_last_decode_us;
 static uint64_t g_qr_last_status_log_us;

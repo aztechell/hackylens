@@ -18,6 +18,7 @@ uint8_t camera_service_start(void);
 void camera_stop(void);
 const char *camera_service_fail_reason(void);
 void camera_service_enter_begin(uint8_t qr_mode, uint8_t ok_is_down);
+uint8_t camera_session_blocks_sd_poll(void);
 uint8_t camera_service_is_qr_mode(void);
 void camera_service_set_qvga_mode(uint8_t enabled);
 void camera_service_clear_mode(void);

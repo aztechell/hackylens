@@ -6,7 +6,6 @@
 #include "../config/input_config.h"
 
 #include "../core/hk_back_exit.h"
-#include "../core/hk_menu.h"
 #include "../core/hk_screen.h"
 #include "hal_time.h"
 #include "../services/camera_frame.h"
@@ -195,7 +194,6 @@ camera_runtime_input_event_t camera_runtime_handle_input(const hk_input_snapshot
     {
         camera_light_repeat_reset();
         camera_input_cancel();
-        shell_show_menu();
         return CAMERA_RUNTIME_INPUT_EXIT;
     }
 

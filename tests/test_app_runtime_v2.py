@@ -125,6 +125,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 "firmware/src/runtime/app_runtime_integration.c",
                 "firmware/src/runtime/hk_main.c",
             ),
+            (ROOT / "firmware" / "assets",),
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
 

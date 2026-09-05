@@ -232,5 +232,6 @@ void object_detect_controller_handle_buttons(
             shell_show_menu();
         return;
     }
-    (void)camera_runtime_handle_input(input);
+    if(camera_runtime_handle_input(input) == CAMERA_RUNTIME_INPUT_EXIT)
+        shell_show_menu();
 }

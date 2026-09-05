@@ -171,12 +171,13 @@ class LightsCapabilityTests(unittest.TestCase):
             runtime_board, apps, set(), set(), {"hackylens.cap.lights"},
         )
         for app in (
-            "camera", "qr-camera", "face-detect", "apriltag",
+            "camera", "face-detect", "apriltag",
             "object-detect", "micropython",
         ):
             self.assertIn(app, disabled.disabled_apps)
         self.assertNotIn("settings", disabled.disabled_apps)
         self.assertNotIn("sleep", disabled.disabled_apps)
+        self.assertNotIn("qr-camera", disabled.disabled_apps)
         with self.assertRaisesRegex(generator.CapabilityError, "required app"):
             generator.compose(
                 runtime_board, apps, set(), {"camera"},

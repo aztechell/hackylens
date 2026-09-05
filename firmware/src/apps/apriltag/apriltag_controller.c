@@ -221,7 +221,9 @@ void apriltag_controller_handle_buttons(const hk_input_snapshot_t *input)
         return;
     }
     event = camera_runtime_handle_input(input);
-    if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE && g_target_id >= 0)
+    if(event == CAMERA_RUNTIME_INPUT_EXIT)
+        shell_show_menu();
+    else if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE && g_target_id >= 0)
         (void)apriltag_settings_toggle_selected((uint16_t)g_target_id);
 }
 

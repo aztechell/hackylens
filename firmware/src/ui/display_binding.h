@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <hackylens/capability/common.h>
+#include <hackylens/capability/display.h>
 
 #include "hk_font.h"
 #include "../config/display_config.h"

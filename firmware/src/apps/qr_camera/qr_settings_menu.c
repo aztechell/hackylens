@@ -2,13 +2,9 @@
 
 #include <stdio.h>
 
-#include "hk_config.h"
-#include "../../core/camera_types.h"
-#include "../../services/camera_light.h"
-#include "../../services/camera_persist_settings.h"
-#include "../../services/settings_lights.h"
 #include "qr_config.h"
 #include "qr_service.h"
+#include "qr_camera_firmware.h"
 
 typedef enum
 {

@@ -2,11 +2,8 @@
 
 #include <stdio.h>
 
-#include "../../config/display_config.h"
-#include "../../config/menu_layout.h"
 #include "qr_layout.h"
-
-#include "../../ui/display_binding.h"
+#include "qr_camera_firmware.h"
 
 void qr_result_view_draw_status(const char *status)
 {

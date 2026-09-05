@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "../../controllers/camera_runtime_controller.h"
+#include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
 #include "../../services/camera_session.h"
 #include "../../ui/camera_view.h"
@@ -60,7 +61,11 @@ void camera_controller_handle_input(const hk_input_snapshot_t *input)
         return;
     }
 
-    if(camera_runtime_handle_input(input) == CAMERA_RUNTIME_INPUT_OK_RELEASE)
+    camera_runtime_input_event_t event = camera_runtime_handle_input(input);
+
+    if(event == CAMERA_RUNTIME_INPUT_EXIT)
+        shell_show_menu();
+    else if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE)
         camera_photo_controller_take(camera_runtime_redraw_preview);
 }
 

@@ -2,9 +2,7 @@
 
 #include <stddef.h>
 
-#include "../../services/camera_frame.h"
-#include "../../services/camera_input.h"
-#include "../../services/camera_session.h"
+#include "qr_camera_firmware.h"
 
 uint8_t qr_camera_frame_acquire(uint8_t force, qr_camera_decode_frame_t *frame)
 {

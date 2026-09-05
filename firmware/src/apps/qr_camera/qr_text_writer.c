@@ -1,19 +1,11 @@
-#include "../../storage/file_write_error.h"
+#include "qr_text_writer.h"
 
 #include <stddef.h>
-
 #include <stdio.h>
 #include <string.h>
 
-#include "../../config/sd_config.h"
-#include "../../config/fat32_config.h"
-#include "../../storage/file_mount.h"
-#include "../../storage/fat32_allocation.h"
-#include "../../storage/fat32_volume.h"
-#include "../../storage/internal/fat32_state_private.h"
 #include "qr_text_path.h"
-#include "qr_text_writer.h"
-#include "../../storage/sd_card.h"
+#include "qr_camera_firmware.h"
 
 static void qr_text_fill_bytes(const char *text, uint32_t offset, uint8_t *dst, uint16_t len)
 {

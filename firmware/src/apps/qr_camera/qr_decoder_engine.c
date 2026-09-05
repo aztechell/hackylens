@@ -3,11 +3,9 @@
 #include <stdio.h>
 
 #include "qr_config.h"
-
 #include "qr_luma.h"
 #include "qr_result.h"
-
-#include "quirc.h"
+#include "qr_camera_firmware.h"
 
 static struct quirc *g_qr_decoder;
 static uint8_t g_qr_decoder_ready;

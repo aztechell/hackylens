@@ -3,13 +3,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../config/input_config.h"
 #include "qr_layout.h"
-
 #include "qr_result.h"
-#include "../../storage/file_write_error.h"
 #include "qr_text_writer.h"
 #include "qr_result_view.h"
+#include "qr_camera_firmware.h"
 
 static uint16_t qr_result_line_count(void)
 {

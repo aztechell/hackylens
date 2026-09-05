@@ -350,6 +350,13 @@ hk_result_t hk_display_acquire(
     return HK_OK;
 }
 
+hk_result_t hk_ui_display_bind(hk_owner_t owner, const hk_display_t *display)
+{
+    if(hk_owner_is_zero(owner) || !display)
+        return HK_ERR_INVALID_ARGUMENT;
+    return HK_OK;
+}
+
 hk_result_t hk_display_get_info(
     hk_owner_t owner,
     const hk_display_t *handle,

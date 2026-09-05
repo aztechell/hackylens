@@ -2,12 +2,8 @@
 
 #include <stdio.h>
 
-#include "../../config/input_config.h"
-#include "../../controllers/settings_menu_controller.h"
-#include "../../core/hk_back_exit.h"
-#include "../../core/hk_screen.h"
-#include "../../services/camera_session.h"
 #include "qr_settings_menu.h"
+#include "qr_camera_firmware.h"
 
 static settings_menu_session_t g_qr_settings;
 

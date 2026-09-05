@@ -10,6 +10,9 @@
 #if HK_ENABLE_CAMERA_FEATURE
 #include "debug_camera_controller.h"
 #endif
+#if HK_ENABLE_APP_QR_CAMERA
+#include "../services/qr_debug_service.h"
+#endif
 #include "../services/debug_console_service.h"
 #include "../services/screenshot_source.h"
 #include "../services/debug_screenshot_stream.h"
@@ -41,6 +44,10 @@ void debug_uart_handle_command(const char *cmd)
     }
 #if HK_ENABLE_CAMERA_FEATURE
     if(debug_camera_controller_handle_command(cmd))
+        return;
+#endif
+#if HK_ENABLE_APP_QR_CAMERA
+    if(qr_debug_handle_command(cmd))
         return;
 #endif
     if(hk_app_registry_handle_debug_command(cmd))
@@ -85,6 +92,9 @@ void debug_uart_handle_command(const char *cmd)
         debug_console_write_text("HKHELP HKSHOT HKFRAME HKCAMINFO HKFPS/HKFPSON/HKFPSOFF HKCAMPROBE HKCAMREGS HKCAMDVP HKCAMBAR ");
 #else
         debug_console_write_text("HKHELP HKSHOT ");
+#endif
+#if HK_ENABLE_APP_QR_CAMERA
+        debug_console_write_text("HKQRINFO HKQR/HKQRCAM HKQRDECODE ");
 #endif
         for(uint8_t i = 0; i < g_menu_item_count; i++)
         {

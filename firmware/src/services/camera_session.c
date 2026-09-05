@@ -22,6 +22,8 @@
 #include "internal/camera_session_state.h"
 #include "internal/camera_settings_state.h"
 
+static uint8_t s_blocks_sd_poll;
+
 uint8_t camera_session_snapshot_capture(uint32_t wait_ms)
 {
     if(!camera_session_ready())
@@ -37,6 +39,7 @@ void camera_session_snapshot_resume(uint8_t resume_preview)
 
 void camera_service_enter_begin(uint8_t qr_mode, uint8_t ok_is_down)
 {
+    s_blocks_sd_poll = 1U;
     camera_session_set_qr_mode(qr_mode);
 
     camera_session_set_frozen(0);
@@ -162,6 +165,7 @@ uint8_t camera_service_consume_frame_timeout(void)
 
 void camera_stop(void)
 {
+    s_blocks_sd_poll = 0U;
     if(camera_service_light_active())
         camera_light_restore_global();
 
@@ -205,4 +209,9 @@ void camera_service_resume_from_settings(uint8_t ok_is_down)
     camera_session_set_frozen(0);
     camera_capture_reset_flow();
     camera_input_return_from_settings(ok_is_down);
+}
+
+uint8_t camera_session_blocks_sd_poll(void)
+{
+    return s_blocks_sd_poll;
 }

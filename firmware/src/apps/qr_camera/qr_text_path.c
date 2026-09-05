@@ -3,17 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../storage/fat32_types.h"
-
 #include "qr_config.h"
-#include "../../config/fat32_config.h"
-
-#include "../../storage/file_dir_scan.h"
-#include "../../storage/file_write_error.h"
-#include "../../storage/fat32_allocation.h"
-#include "../../storage/fat32_directory.h"
-#include "../../storage/fat32_volume.h"
-#include "../../core/hk_string.h"
+#include "qr_camera_firmware.h"
 
 static uint32_t g_qr_dir_cluster;
 

@@ -109,9 +109,12 @@ through the existing `consumer:settings-lights` service. SETTINGS does not
 declare `external-link`; UART/I2C menu items still reconfigure
 `consumer:external-link-service`. FILES does not declare `sd-card`; storage
 access stays on the existing firmware mount/FAT32 path and foreground
-`HK_APP_EVENT_MEDIA` events. Lifecycle-v2 preflight acquires every available
-declaration, so persistent exclusive/channel leases and transitional legacy
-services would otherwise fail open.
+`HK_APP_EVENT_MEDIA` events. QR-CAMERA does not declare `lights`, `camera`, or
+`sd-card`. Illumination stays on `consumer:settings-lights` / `camera_light`;
+the camera session and QR text writes stay on the existing firmware seams.
+Lifecycle-v2 preflight acquires every available declaration, so persistent
+exclusive/channel leases and transitional legacy services would otherwise fail
+open.
 
 A missing required capability excludes the app; an explicit require-app build
 request turns that exclusion into a build error. Combined required and optional
