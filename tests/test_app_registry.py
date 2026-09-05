@@ -424,7 +424,8 @@ int main(void)
                     1000 if app_id in {
                         "camera", "face-detect", "apriltag",
                         "object-detect",
-                    } else 200000 if app_id in {"qr-camera", "files"} else
+                    } else 500000 if app_id == "qr-camera" else
+                    200000 if app_id == "files" else
                     5000 if app_id == "micropython" else 20000,
                 )
                 self.assertEqual(

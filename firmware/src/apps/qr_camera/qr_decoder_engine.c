@@ -94,7 +94,11 @@ static uint8_t qr_decode_codes(int count, uint8_t force, const char *mode)
             qr_result_set_payload(data.payload, (uint16_t)data.payload_len);
             g_qr_last_decode_ok = 1;
             qr_result_set_status(mode);
-            printf("[QR] payload=%s mode=%s\r\n", qr_result_payload_text(), mode);
+            if(force)
+                printf("[QR] payload=%s mode=%s\r\n", qr_result_payload_text(), mode);
+            else
+                printf("[QR] found mode=%s len=%u\r\n",
+                       mode, (unsigned)data.payload_len);
             return 1;
         }
 

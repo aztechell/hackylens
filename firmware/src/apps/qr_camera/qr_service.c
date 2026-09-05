@@ -89,6 +89,8 @@ static qr_decode_result_t qr_decode_current_frame(uint8_t force)
     qr_camera_decode_frame_t camera_frame;
     qr_engine_frame_t engine_frame;
     qr_engine_result_t engine_result;
+    uint64_t started_us;
+    uint64_t finished_us;
 
     if(!qr_camera_frame_acquire(force, &camera_frame))
     {
@@ -102,7 +104,11 @@ static qr_decode_result_t qr_decode_current_frame(uint8_t force)
     engine_frame.pixels = camera_frame.pixels;
     engine_frame.width = camera_frame.width;
     engine_frame.height = camera_frame.height;
+    started_us = qr_time_now_us();
     engine_result = qr_decoder_engine_decode(&engine_frame, force);
+    finished_us = qr_time_now_us();
+    printf("[QR] decode us=%u result=%d\r\n",
+           (unsigned)(finished_us - started_us), (int)engine_result);
 
     if(engine_result == QR_ENGINE_DECODER_FAIL)
     {
@@ -112,7 +118,8 @@ static qr_decode_result_t qr_decode_current_frame(uint8_t force)
 
     if(engine_result == QR_ENGINE_FOUND)
     {
-        qr_log_info(force);
+        if(force)
+            qr_log_info(force);
         return QR_DECODE_FOUND;
     }
 
