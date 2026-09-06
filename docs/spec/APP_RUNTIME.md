@@ -249,7 +249,7 @@ range, and does not return that storage to `REUSABLE` until invalidation is
 complete. App state is never allocated from a heap and is not shared between
 generations.
 
-Descriptor identity, lifecycle kind, finite limits, capability/service
+Descriptor identity, typed entry, finite limits, capability/service
 requests, menu/autostart metadata, and help/debug text are immutable generated
 data. The runtime may retain a descriptor pointer for one instance but MUST NOT
 modify it, construct a replacement, register another descriptor at boot, or
