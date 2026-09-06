@@ -29,6 +29,7 @@ void files_open_selected(void) {}
 uint8_t files_delete_confirm_enter(void) { return 0U; }
 void files_delete_cancel(void) {}
 void files_delete_confirmed(void) {}
+void files_presenter_bind_input(hk_owner_t owner, const hk_input_t *input) { (void)owner; (void)input; }
 void files_presenter_close_image(void) { s_exit_calls++; }
 void files_presenter_render_list(void) {}
 void files_presenter_tick_image(uint64_t now_us) { (void)now_us; }

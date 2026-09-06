@@ -2,10 +2,12 @@
 #define FILES_PRESENTER_H
 
 #include <stdint.h>
+#include <hackylens/capability/input.h>
 
 #include "file_result.h"
 #include "image_decode.h"
 
+void files_presenter_bind_input(hk_owner_t owner, const hk_input_t *input);
 void files_presenter_enter(void);
 void files_presenter_show_status(const char *line);
 void files_presenter_show_result(file_result_t result);

@@ -13,6 +13,7 @@ static unsigned g_now_calls;
 static unsigned g_open_selected;
 static unsigned g_delete_confirm;
 static unsigned g_failures;
+static int g_nav;
 
 static void check(int condition, const char *message)
 {
@@ -37,7 +38,7 @@ hk_result_t hk_time_now_us(
 
 void files_backend_enter(void) {}
 void files_refresh_after_sd_event(hk_sd_event_t event) { (void)event; }
-void files_nav_delta(int8_t delta) { (void)delta; }
+void files_nav_delta(int8_t delta) { g_nav += delta; }
 uint8_t files_back_from_list(void) { return 0U; }
 void files_open_selected(void) { g_open_selected++; }
 uint8_t files_delete_confirm_enter(void)
@@ -47,6 +48,7 @@ uint8_t files_delete_confirm_enter(void)
 }
 void files_delete_cancel(void) {}
 void files_delete_confirmed(void) {}
+void files_presenter_bind_input(hk_owner_t owner, const hk_input_t *input) { (void)owner; (void)input; }
 void files_presenter_close_image(void) {}
 void files_presenter_render_list(void) {}
 void files_presenter_tick_image(uint64_t now_us) { (void)now_us; }
@@ -104,6 +106,36 @@ int main(void)
     check(
         g_delete_confirm == 0U,
         "missing timing must never trigger destructive hold action");
+
+    g_time_fails = 0U;
+    files_controller_enter(&state);
+    g_now_us = 1000000U;
+    hk_input_event_t right = {.state = HK_INPUT_BUTTON_RIGHT,
+        .pressed = HK_INPUT_BUTTON_RIGHT, .changed = HK_INPUT_BUTTON_RIGHT};
+    files_controller_handle_input(&state, &right);
+    check(g_nav == 1, "press moves exactly one entry");
+    for(unsigned tick = 0; tick < 24; tick++) {
+        g_now_us += 20000U;
+        files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    }
+    check(g_nav == 1, "fast timer must not accelerate initial repeat");
+    g_now_us = 1500000U;
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    check(g_nav == 2, "first repeat at 500 ms");
+    g_now_us += 179999U;
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    check(g_nav == 2, "repeat remains bounded by elapsed time");
+    g_now_us++;
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    check(g_nav == 3, "next repeat at 180 ms");
+    g_now_us += 2000000U;
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    check(g_nav == 4, "slow frames never cause catch-up scrolling");
+    files_controller_tick(&state, 0U);
+    g_now_us += 2000000U;
+    files_controller_tick(&state, 0U);
+    check(g_nav == 4, "release cancels repeat");
 
     if(g_failures)
         return 1;

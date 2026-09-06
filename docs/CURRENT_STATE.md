@@ -23,7 +23,9 @@ budget caused the reported return to menu. The budget is now 3 seconds, with a
 20 ms polling cadence. GIF deadlines and timer cadence count decoding time
 instead of adding extra waiting between frames.
 
-S7 is still under hardware acceptance and normal-push CI verification. The
+QR acceptance is confirmed by the user. FILES hold-repeat and heavy-GIF input
+handling have a follow-up fix awaiting device acceptance. S7 remains under
+hardware acceptance and CI verification for that follow-up. The
 sections below record earlier milestones and are historical where they mention
 mixed lifecycle composition or the legacy adapter. See [S7 evidence](S7_EVIDENCE.md).
 

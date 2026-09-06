@@ -7,9 +7,27 @@
 #include "file_browser_mode.h"
 #include "image_viewer.h"
 #include "file_preview.h"
-#include "files_firmware.h"
+#include "../../storage/fat32_volume.h"
 
 static const files_view_ops_t *g_files_view_ops;
+static hk_owner_t g_input_owner;
+static hk_input_t g_input;
+
+void files_presenter_bind_input(hk_owner_t owner, const hk_input_t *input)
+{
+    g_input_owner = owner;
+    g_input = input ? *input : (hk_input_t){0};
+}
+
+static void files_presenter_sample_input(void)
+{
+    uint32_t state;
+    /* Sample into the existing debounced event ring while a frame is decoded.
+       Never consume events or dispatch UI while the frame transaction is open. */
+    if(!hk_owner_is_zero(g_input_owner))
+        (void)hk_input_get_state(g_input_owner, &g_input, &state);
+}
+
 
 void files_view_register(const files_view_ops_t *ops)
 {
@@ -96,6 +114,7 @@ static void files_presenter_animation_render_indexed_row(void *context,
                                                          uint16_t palette_size)
 {
     (void)context;
+    files_presenter_sample_input();
     if(g_files_view_ops && g_files_view_ops->animation_render_indexed_row)
         g_files_view_ops->animation_render_indexed_row(frame, frame_row, indices,
                                                        palette, palette_size);

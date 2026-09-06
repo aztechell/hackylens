@@ -58,7 +58,7 @@ or long-running AI correctness.
 
 ## Acceptance still needed
 
-- Same physical QR stays in result view; GIF speed verified on SEN0305.
+- FILES hold-repeat and short-button handling on heavy GIFs after the follow-up fix.
 - Physical Sleep/wake and interactive BACK checks.
 - Normal-push CI. Historical runs do not qualify the current diff.
 
@@ -72,3 +72,27 @@ The user then explicitly authorized the existing GitHub remote and branch;
 implementation and evidence were pushed successfully. The initial verification
 run is [GitHub Actions 34032859242](https://github.com/aztechell/hackylens/actions/runs/34032859242).
 Hardware acceptance remains separate from the CI result.
+
+## FILES input follow-up
+
+The user confirmed QR works. They reported excessively fast LEFT/RIGHT hold
+scrolling and unreliable buttons on heavy GIFs. Hold repeat still used tick
+counts after FILES cadence changed to 20 ms. It now uses 500 ms initial delay
+and 180 ms subsequent intervals, without catch-up after slow frames.
+
+GIF row presentation now samples the injected Input handle into the existing
+debounced event ring. It never consumes events or dispatches app callbacks
+inside the frame transaction. A short press/release during one slow frame is
+retained for normal foreground dispatch. The binding is removed on app stop.
+The response still waits for the current frame; this is not an incremental
+decoder or a guarantee of sub-frame input latency.
+
+Regression tests exercise repeat cadence, delayed ticks, release cancellation,
+and a complete BACK press/release during a simulated 200 ms frame using the
+production Input debounce/event ring. Device acceptance of this follow-up is
+still pending.
+
+Follow-up validation: 232 host tests passed. Full firmware, SDK, generated/object
+architecture, linked composition, and S7 resource gates passed. Raw image is
+1,566,392 bytes; static RAM remains 2,898,472 bytes. The follow-up was flashed
+to COM10. Current normal-push CI and physical FILES acceptance are pending.
