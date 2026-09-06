@@ -9,7 +9,7 @@ with their implementation, not inferred from a roadmap or documentation update.
 > HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-## S7 working tree status (2026-09-06)
+## S7 accepted (2026-09-06)
 
 All twelve apps now share one native lifecycle. The legacy entry union,
 selector, adapter, and inactive-app background/media polling are removed.
@@ -23,9 +23,10 @@ budget caused the reported return to menu. The budget is now 3 seconds, with a
 20 ms polling cadence. GIF deadlines and timer cadence count decoding time
 instead of adding extra waiting between frames.
 
-QR acceptance is confirmed by the user. FILES hold-repeat and heavy-GIF input
-handling have a follow-up fix awaiting device acceptance. S7 remains under
-hardware acceptance and CI verification for that follow-up. The
+The user confirmed QR and Sleep and accepted FILES/GIF with the remaining
+heavy-GIF speed limitation. S7 is complete: 232 host tests and normal-push CI
+passed for firmware commit `0405a09`. Heavy GIFs may play below their nominal
+rate, and button handling waits for the current frame to finish. The
 sections below record earlier milestones and are historical where they mention
 mixed lifecycle composition or the legacy adapter. See [S7 evidence](S7_EVIDENCE.md).
 
@@ -285,8 +286,7 @@ matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
 App Runtime and Feature App SDK are `0.2.0 experimental`; the native manifest
 is `0.1.0`, schema major 1. All bundled apps share one runtime lifecycle.
-Remaining work is S7 hardware/CI acceptance followed by the explicitly planned
-S8 service simplification. Public storage, camera, vision and AI SDK interfaces
+The next planned work is S8 service simplification. Public storage, camera, vision and AI SDK interfaces
 are not provided merely by migrating the existing bundled app entry points.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,

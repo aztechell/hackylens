@@ -1,6 +1,9 @@
 # S7 verification — 2026-09-06
 
-Status: in progress; not hardware accepted or CI accepted yet.
+Status: accepted for S7. Firmware commit `0405a09` passed 232 host tests and
+[normal-push CI](https://github.com/aztechell/hackylens/actions/runs/34034164841).
+The user confirmed QR and Sleep, and explicitly accepted FILES/GIF despite
+heavy GIFs still playing below nominal speed.
 
 All 12 apps use one typed entry. The lifecycle selector, legacy entry union,
 adapter, and registry background/media iteration are removed. Only explicitly
@@ -56,15 +59,19 @@ KeyboardInterrupt output. QR preview subsequently ran at about 18.6 fps.
 This smoke does not prove QR recognition, GIF playback, button interaction,
 or long-running AI correctness.
 
-## Acceptance still needed
+## Acceptance scope and known limitation
 
-- FILES hold-repeat and short-button handling on heavy GIFs after the follow-up fix.
-- Physical Sleep/wake and interactive BACK checks.
-- Normal-push CI. Historical runs do not qualify the current diff.
+QR and Sleep are user-confirmed. The user accepted the improved FILES/GIF
+behavior for S7 while explicitly reporting that heavy GIFs still do not reach
+full playback speed. This remaining performance limitation is accepted and
+does not block S7. Button events are retained during decoding, but their
+handling waits until the current frame ends. Further heavy-GIF optimization
+is separate follow-up work, not claimed as completed here.
 
-The requested combined repair migrates apps in one working tree rather than
-claiming separate hardware-accepted commits per wave. S7 stays open until
-hardware and CI evidence exists.
+The requested combined repair migrated apps in one working tree. Acceptance
+uses the recorded UART smoke and user checks; it does not claim separate
+hardware-accepted commits per wave, exhaustive physical BACK testing, or
+long-run qualification of every AI path.
 
 Implementation commit: `4b7742f`. Local working-tree and staged whitespace
 checks passed. The first push was blocked by automatic approval review.
@@ -89,10 +96,12 @@ decoder or a guarantee of sub-frame input latency.
 
 Regression tests exercise repeat cadence, delayed ticks, release cancellation,
 and a complete BACK press/release during a simulated 200 ms frame using the
-production Input debounce/event ring. Device acceptance of this follow-up is
-still pending.
+production Input debounce/event ring. The user accepted this follow-up with
+the heavy-GIF performance limitation recorded above.
 
 Follow-up validation: 232 host tests passed. Full firmware, SDK, generated/object
 architecture, linked composition, and S7 resource gates passed. Raw image is
 1,566,392 bytes; static RAM remains 2,898,472 bytes. The follow-up was flashed
-to COM10. Current normal-push CI and physical FILES acceptance are pending.
+to COM10. Normal-push CI passed for `0405a09`, including both firmware profiles,
+and the user accepted FILES/GIF. No further firmware change was made to close
+the documentation status.
