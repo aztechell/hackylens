@@ -49,8 +49,8 @@ typedef struct
     uint32_t activity_count;
     uint32_t shell_input_count;
     uint32_t menu_failure_count;
-    uint32_t legacy_enter_count;
-    uint32_t legacy_exit_count;
+    uint32_t secondary_enter_count;
+    uint32_t secondary_exit_count;
     hk_app_stop_reason_t stop_reason;
 } fixture_t;
 
@@ -141,8 +141,7 @@ static const hk_app_t s_v2_app = {
     .struct_version = HK_APP_DESCRIPTOR_VERSION,
     .id = "production-host-v2",
     .title = "Production host v2",
-    .lifecycle = HK_APP_LIFECYCLE_V2,
-    .entry.v2 = &s_v2_entry,
+    .entry = &s_v2_entry,
     .limits = {
         sizeof(s_state), 256U, sizeof(s_state), HK_APP_STATE_ALIGNMENT,
         100U, 50U, 50U,
@@ -150,34 +149,35 @@ static const hk_app_t s_v2_app = {
     .capabilities = s_capabilities,
     .capability_count =
         (uint16_t)(sizeof(s_capabilities) / sizeof(s_capabilities[0])),
-    .screen = SCREEN_APP_SLOT_0,
 };
 
-static void legacy_enter(const hk_input_snapshot_t *input)
+static hk_result_t secondary_start(const hk_app_context_t *input)
 {
     (void)input;
-    s_fixture.legacy_enter_count++;
+    s_fixture.secondary_enter_count++;
+    return HK_OK;
 }
 
-static void legacy_exit(void)
+static hk_result_t secondary_stop(const hk_app_context_t *ctx)
 {
-    s_fixture.legacy_exit_count++;
+    (void)ctx;
+    s_fixture.secondary_exit_count++;
+    return HK_OK;
 }
 
-static const hk_legacy_app_entry_t s_legacy_entry = {
-    .screen = SCREEN_BUTTONS,
-    .enter = legacy_enter,
-    .exit = legacy_exit,
+static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_secondary_state[1024];
+static const hk_app_v2_entry_t s_secondary_entry = {
+    .state_storage = s_secondary_state, .state_capacity_bytes = sizeof(s_secondary_state),
+    .start = secondary_start, .event = app_event, .stop = secondary_stop,
 };
 
-static const hk_app_t s_legacy_app = {
+static const hk_app_t s_secondary_app = {
     .struct_size = sizeof(hk_app_t),
     .struct_version = HK_APP_DESCRIPTOR_VERSION,
-    .id = "production-host-legacy",
-    .title = "Production host legacy",
-    .lifecycle = HK_APP_LIFECYCLE_LEGACY,
-    .entry.legacy = &s_legacy_entry,
-    .screen = SCREEN_BUTTONS,
+    .id = "production-host-secondary",
+    .title = "Production host secondary",
+    .entry = &s_secondary_entry,
+    .limits = {1024U, 256U, 64U, HK_APP_STATE_ALIGNMENT, 100U, 100U, 100U},
 };
 
 static hk_lease_t lease_for(hk_owner_t owner, hk_capability_id_t id)
@@ -543,7 +543,7 @@ hk_result_t hk_external_link_acquire(
 
 screen_t hk_screen_get(void)
 {
-    return SCREEN_APP_SLOT_0;
+    return SCREEN_APP;
 }
 
 void activity_note(void)
@@ -570,7 +570,7 @@ void menu_tick(const hk_input_snapshot_t *input)
 
 const hk_app_t *hk_app_for_screen(screen_t screen)
 {
-    return screen == SCREEN_APP_SLOT_0 ? &s_v2_app : NULL;
+    return screen == SCREEN_APP ? &s_v2_app : NULL;
 }
 
 uint64_t hal_time_us(void)
@@ -653,11 +653,11 @@ int main(void)
     CHECK(s_fixture.stop_reason == HK_APP_STOP_BACK);
     CHECK(app_runtime_integration_active() == NULL);
 
-    CHECK(app_runtime_integration_open(&s_legacy_app, &snapshot) == HK_OK);
-    CHECK(s_fixture.legacy_enter_count == 1U);
+    CHECK(app_runtime_integration_open(&s_secondary_app, &snapshot) == HK_OK);
+    CHECK(s_fixture.secondary_enter_count == 1U);
     CHECK(app_runtime_integration_close(HK_APP_STOP_SWITCH) == HK_OK);
-    CHECK(s_fixture.legacy_exit_count == 1U);
-    CHECK(s_fixture.owner_exit_count == 1U);
+    CHECK(s_fixture.secondary_exit_count == 1U);
+    CHECK(s_fixture.owner_close_count == 2U);
     CHECK(s_fixture.owner_enter_count == 2U);
     CHECK(app_runtime_integration_active() == NULL);
     printf("APP_RUNTIME_PRODUCTION_OK\n");

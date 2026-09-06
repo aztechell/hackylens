@@ -1,6 +1,5 @@
 id = "terminal"
 name = "TERMINAL"
-lifecycle = "v2"
 entry = "terminal_v2_entry"
 sources = ["terminal_app.c", "terminal_buffer.c", "terminal_controller.c", "terminal_view.c"]
 requires = ["display", "input"]

@@ -293,25 +293,25 @@ int main(void)
         buttons = copy.deepcopy(next(
             app for app in self.model["apps"] if app["id"] == "buttons"
         ))
-        buttons["lifecycle"] = "v2"
+        buttons["entry"] = "buttons_v2_entry"
         buttons["entry"] = "buttons_v2_entry"
         source = app_registry.generated_source(
             {"schema": 1, "apps": [buttons, camera]},
             app_composition.enable_definition,
         )
         self.assertIn(
-            "extern const hk_legacy_app_entry_t camera_legacy_entry;", source
+            "extern const hk_app_v2_entry_t camera_v2_entry;", source
         )
         self.assertIn("extern const hk_app_v2_entry_t buttons_v2_entry;", source)
-        self.assertIn("{.legacy = &camera_legacy_entry}", source)
-        self.assertIn("{.v2 = &buttons_v2_entry}", source)
+        self.assertIn(".entry = &camera_v2_entry", source)
+        self.assertIn(".entry = &buttons_v2_entry", source)
 
     def test_fixture_manifest_changes_generated_output_not_generic_runtime(self) -> None:
         fixture = copy.deepcopy(next(
             app for app in self.model["apps"] if app["id"] == "buttons"
         ))
         fixture["id"] = "fixture-app"
-        fixture["lifecycle"] = "legacy"
+        fixture["entry"] = "fixture_entry"
         fixture["entry"] = "fixture_legacy_entry"
         fixture["generated_symbol"] = "hk_generated_app_fixture"
         fixture["menu"]["order"] = 99
@@ -339,7 +339,7 @@ int main(void)
         self.assertIn("settings_v2_entry", first)
         self.assertIn("files_v2_entry", first)
         self.assertIn("qr_camera_v2_entry", first)
-        self.assertIn("hackylens.service.legacy-camera", first)
+        self.assertNotIn("legacy", first)
 
     def test_settings_and_sleep_do_not_acquire_firmware_owned_caps(self) -> None:
         apps = {app["id"]: app for app in self.model["apps"]}
@@ -373,7 +373,7 @@ int main(void)
                 required = [
                     item["id"] for item in apps[app_id]["capabilities"]["required"]
                 ]
-                self.assertEqual(apps[app_id]["lifecycle"], "v2")
+                self.assertNotIn("lifecycle", apps[app_id])
                 self.assertEqual(set(required), expected)
                 self.assertEqual(apps[app_id]["services"], [])
                 self.assertNotIn("hackylens.cap.lights", required)
@@ -399,7 +399,7 @@ int main(void)
             "sleep": 0,
         }
         expected_debug = {
-            "camera": "HKCAMERA",
+            "camera": "HKCAMERA HKCAM",
             "qr-camera": "HKQRINFO HKQR/HKQRCAM HKQRDECODE",
             "face-detect": "HKFACEINFO",
             "apriltag": "HKTAG/HKTAGINFO",
@@ -421,15 +421,11 @@ int main(void)
                 self.assertEqual(app["autostart"]["id"], expected_autostart[app_id])
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
-                    1000 if app_id in {
-                        "camera", "face-detect", "apriltag",
-                        "object-detect",
-                    } else 200000 if app_id in {"qr-camera", "files"} else
                     5000 if app_id == "micropython" else 20000,
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],
-                    app["limits"]["tick_interval_us"],
+                    3_000_000 if app_id == "qr-camera" else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython"} else 20000,
                 )
                 self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:

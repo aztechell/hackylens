@@ -1,27 +1,17 @@
 #include "hk_app_registry.h"
 
 #include <stddef.h>
+#include <string.h>
+#include <ctype.h>
 
 #include "../../generated/app_registry/registry.h"
 
-const hk_app_t *hk_app_for_screen(screen_t screen)
+const hk_app_t *hk_app_for_id(const char *id)
 {
+    if(!id) return NULL;
     for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
-    {
-        const hk_app_t *app = g_hk_generated_apps[i];
-        const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-        if(entry && entry->screen == screen)
-            return app;
-    }
-    for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
-    {
-        const hk_app_t *app = g_hk_generated_apps[i];
-        const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-        if(entry && entry->owns_screen && entry->owns_screen(screen))
-            return app;
-    }
+        if(strcmp(g_hk_generated_apps[i]->id, id) == 0)
+            return g_hk_generated_apps[i];
     return NULL;
 }
 
@@ -75,48 +65,36 @@ const hk_app_t *hk_app_autostart_at(uint8_t index)
     return NULL;
 }
 
-void hk_app_registry_background_tick(const hk_input_snapshot_t *input)
+/* Match metadata before dispatch: only the explicitly addressed diagnostic
+ * service runs. Never broadcast a command into every inactive application. */
+static uint8_t command_matches(const char *commands, const char *command)
 {
-    for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
+    if(!commands || !command || !command[0]) return 0U;
+    while(*commands)
     {
-        const hk_legacy_app_entry_t *entry =
-            hk_app_legacy_entry(g_hk_generated_apps[i]);
-
-        if(entry && entry->background_tick)
-            entry->background_tick(input);
+        const char *start;
+        size_t length;
+        while(*commands == ' ' || *commands == '/') commands++;
+        start = commands;
+        while(*commands && *commands != ' ' && *commands != '/') commands++;
+        length = (size_t)(commands - start);
+        if(strlen(command) == length)
+        {
+            size_t i;
+            for(i = 0U; i < length; i++)
+                if(toupper((unsigned char)start[i]) != toupper((unsigned char)command[i])) break;
+            if(i == length) return 1U;
+        }
     }
+    return 0U;
 }
-
-void hk_app_registry_handle_sd_event(hk_sd_event_t event)
-{
-    for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
-    {
-        const hk_legacy_app_entry_t *entry =
-            hk_app_legacy_entry(g_hk_generated_apps[i]);
-
-        if(entry && entry->handle_sd_event)
-            entry->handle_sd_event(event);
-    }
-}
-
-uint8_t hk_app_registry_sd_poll_allowed(screen_t screen)
-{
-    const hk_app_t *app = hk_app_for_screen(screen);
-    const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-    return !entry || !entry->blocks_sd_poll;
-}
-
 uint8_t hk_app_registry_handle_debug_command(const char *cmd)
 {
     for(uint8_t i = 0U; i < g_hk_generated_app_count; i++)
     {
-        const hk_legacy_app_entry_t *entry =
-            hk_app_legacy_entry(g_hk_generated_apps[i]);
-
-        if(entry && entry->handle_debug_command &&
-           entry->handle_debug_command(cmd))
-            return 1U;
+        const hk_app_t *app = g_hk_generated_apps[i];
+        if(app->debug_command && command_matches(app->debug_help, cmd))
+            return app->debug_command(cmd);
     }
     return 0U;
 }

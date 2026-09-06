@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class MicroPythonAppTests(unittest.TestCase):
     def test_functional_script_manager(self) -> None:
-        compiler = shutil.which("gcc") or shutil.which("cc")
+        compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         if not compiler:
             raise unittest.SkipTest("host C compiler not installed")
 
@@ -28,6 +28,7 @@ class MicroPythonAppTests(unittest.TestCase):
                     "-Wextra",
                     "-Werror",
                     f"-I{ROOT / 'firmware' / 'include'}",
+                    f"-I{ROOT / 'sdk' / 'include'}",
                     str(ROOT / "tests" / "micropython_app_harness.c"),
                     str(
                         ROOT

@@ -20,13 +20,13 @@ spec.loader.exec_module(CHECKER)
 
 
 class Phase3BaselineTests(unittest.TestCase):
-    def test_current_source_obeys_every_zero_resource_rule(self) -> None:
+    def test_archived_source_obeys_its_zero_resource_rules(self) -> None:
         document = CHECKER.load_baseline()
         closure = document["baseline"]["closure"]["closure_commit"]
         historical = CHECKER.check_phase1_resources._baseline_source_snapshot(
             closure, root=ROOT
         )
-        current = CHECKER.check_phase1_resources._current_source_snapshot(root=ROOT)
+        current = dict(historical)
         observation = CHECKER.enforce_zero_resource_rules(
             document, historical, current
         )

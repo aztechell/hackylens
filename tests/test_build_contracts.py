@@ -127,7 +127,7 @@ class BuildContractsTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("PLACEHOLDER_RENDER_BUDGET_US = 500_000", manifest)
-        self.assertIn("tick_budget_us = tick_interval_us", manifest)
+        self.assertIn('table.get("tick_budget_ms", tick_ms)', manifest)
         self.assertIn("#define K210_DISPLAY_MAX_PRESENT_US 500000U", adapter)
         self.assertIn("#define UI_DISPLAY_PRESENT_TIMEOUT_US 500000ULL", ui)
         self.assertIn("[APP] poll failed result=%d", main)

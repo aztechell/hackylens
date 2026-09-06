@@ -22,4 +22,6 @@ void menu_repeat_reset(void);
 void menu_repeat_start(uint32_t button);
 void menu_tick(const hk_input_snapshot_t *input);
 
+uint8_t shell_open_app_id(const char *id, const hk_input_snapshot_t *input);
+
 #endif

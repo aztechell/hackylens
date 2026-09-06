@@ -37,10 +37,10 @@ typedef struct
     uint32_t stop_count;
     uint32_t tick_count;
     uint32_t render_count;
-    uint32_t legacy_open_count;
-    uint32_t legacy_enter_count;
-    uint32_t legacy_exit_count;
-    uint32_t legacy_close_count;
+    uint32_t secondary_open_count;
+    uint32_t secondary_enter_count;
+    uint32_t secondary_exit_count;
+    uint32_t secondary_close_count;
     uint32_t invalidate_count;
     uint32_t present_count;
     uint32_t abort_count;
@@ -137,21 +137,20 @@ static const hk_app_v2_entry_t s_v2_entry = {
     .stop = app_stop,
 };
 
-static void legacy_enter(const hk_input_snapshot_t *input)
+static hk_result_t secondary_start(const hk_app_context_t *ctx)
 {
-    (void)input;
-    s_fixture->legacy_enter_count++;
+    (void)ctx;
+    s_fixture->secondary_enter_count++;
+    return HK_OK;
 }
-
-static void legacy_exit(void)
-{
-    s_fixture->legacy_exit_count++;
-}
-
-static const hk_legacy_app_entry_t s_legacy_entry = {
-    .screen = SCREEN_BUTTONS,
-    .enter = legacy_enter,
-    .exit = legacy_exit,
+static hk_result_t secondary_event(const hk_app_context_t *ctx, const hk_app_event_t *event)
+{ (void)ctx; (void)event; return HK_OK; }
+static hk_result_t secondary_stop(const hk_app_context_t *ctx)
+{ (void)ctx; s_fixture->secondary_exit_count++; return HK_OK; }
+static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_secondary_state[64];
+static const hk_app_v2_entry_t s_secondary_entry = {
+    .state_storage = s_secondary_state, .state_capacity_bytes = sizeof(s_secondary_state),
+    .start = secondary_start, .event = secondary_event, .stop = secondary_stop,
 };
 
 static hk_app_t v2_descriptor(void)
@@ -162,8 +161,7 @@ static hk_app_t v2_descriptor(void)
     app.struct_version = HK_APP_DESCRIPTOR_VERSION;
     app.id = "mixed-v2";
     app.title = "Mixed v2";
-    app.lifecycle = HK_APP_LIFECYCLE_V2;
-    app.entry.v2 = &s_v2_entry;
+    app.entry = &s_v2_entry;
     app.limits.static_ram_bytes = sizeof(s_state);
     app.limits.stack_bytes = 256U;
     app.limits.state_bytes = sizeof(s_state);
@@ -174,17 +172,11 @@ static hk_app_t v2_descriptor(void)
     return app;
 }
 
-static hk_app_t legacy_descriptor(void)
+static hk_app_t secondary_descriptor(void)
 {
-    hk_app_t app = {0};
-
-    app.struct_size = sizeof(app);
-    app.struct_version = HK_APP_DESCRIPTOR_VERSION;
-    app.id = "mixed-legacy";
-    app.title = "Mixed legacy";
-    app.lifecycle = HK_APP_LIFECYCLE_LEGACY;
-    app.entry.legacy = &s_legacy_entry;
-    app.screen = SCREEN_BUTTONS;
+    hk_app_t app = v2_descriptor();
+    app.id = "secondary";
+    app.entry = &s_secondary_entry;
     return app;
 }
 
@@ -283,24 +275,6 @@ static hk_result_t fake_now(void *user, uint64_t *now_us)
 
     *now_us = fixture->now_us;
     fixture->now_us += fixture->now_step_us;
-    return HK_OK;
-}
-
-static hk_result_t fake_legacy_open(void *user, const hk_app_t *app)
-{
-    fixture_t *fixture = user;
-
-    (void)app;
-    fixture->legacy_open_count++;
-    return HK_OK;
-}
-
-static hk_result_t fake_legacy_close(void *user, const hk_app_t *app)
-{
-    fixture_t *fixture = user;
-
-    (void)app;
-    fixture->legacy_close_count++;
     return HK_OK;
 }
 
@@ -427,8 +401,6 @@ static int reset_fixture(fixture_t *fixture)
     };
     hk_app_switch_ops_t switch_ops = {
         .user = fixture,
-        .legacy_open = fake_legacy_open,
-        .legacy_close = fake_legacy_close,
         .now_us = fake_now,
         .render_begin = render_begin,
         .render_present = render_present,
@@ -446,7 +418,7 @@ static int reset_fixture(fixture_t *fixture)
 static int check_mixed_switch_and_events(void)
 {
     fixture_t fixture;
-    hk_app_t legacy = legacy_descriptor();
+    hk_app_t secondary = secondary_descriptor();
     hk_app_t v2 = v2_descriptor();
     hk_input_snapshot_t snapshot = {0};
     hk_input_event_t input = {0};
@@ -455,10 +427,10 @@ static int check_mixed_switch_and_events(void)
     uint8_t consumed = 0U;
 
     CHECK(reset_fixture(&fixture) == 0);
-    CHECK(hk_app_switch_open(&fixture.switcher, &legacy, &snapshot) == HK_OK);
-    CHECK(fixture.legacy_open_count == 1U && fixture.legacy_enter_count == 1U);
+    CHECK(hk_app_switch_open(&fixture.switcher, &secondary, &snapshot) == HK_OK);
+    CHECK(fixture.secondary_enter_count == 1U);
     CHECK(hk_app_switch_open(&fixture.switcher, &v2, &snapshot) == HK_OK);
-    CHECK(fixture.legacy_exit_count == 1U && fixture.legacy_close_count == 1U);
+    CHECK(fixture.secondary_exit_count == 1U);
     CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
 
     CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
@@ -503,7 +475,7 @@ static int check_mixed_switch_and_events(void)
           HK_ERR_STALE_HANDLE);
 
     CHECK(hk_app_switch_open(&fixture.switcher, &v2, &snapshot) == HK_OK);
-    CHECK(hk_app_switch_open(&fixture.switcher, &legacy, &snapshot) == HK_OK);
+    CHECK(hk_app_switch_open(&fixture.switcher, &secondary, &snapshot) == HK_OK);
     CHECK(fixture.stop_reason == HK_APP_STOP_SWITCH);
     CHECK(hk_app_switch_open(&fixture.switcher, &v2, &snapshot) == HK_OK);
     CHECK(hk_app_switch_wakeup(&fixture.switcher, stale, 1300U) ==
@@ -593,6 +565,10 @@ static int check_busy_begin_skips_surface_present(void)
     CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
     CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
     CHECK(fixture.render_count == 0U);
+    CHECK(hk_app_runtime_render_pending(&fixture.switcher.runtime));
+    fixture.begin_busy = 0U;
+    CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
+    CHECK(fixture.render_count == 1U);
     CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
     CHECK(hk_app_switch_close(
         &fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
@@ -624,7 +600,7 @@ static int check_autostart_failure_fallback(void)
 {
     fixture_t fixture;
     hk_app_t v2 = v2_descriptor();
-    hk_app_t fallback = legacy_descriptor();
+    hk_app_t fallback = secondary_descriptor();
 
     CHECK(reset_fixture(&fixture) == 0);
     fixture.start_fails = 1U;
@@ -633,8 +609,29 @@ static int check_autostart_failure_fallback(void)
     fixture.start_fails = 0U;
     CHECK(hk_app_switch_open(&fixture.switcher, &fallback, NULL) == HK_OK);
     CHECK(hk_app_switch_active(&fixture.switcher) == &fallback);
-    CHECK(fixture.legacy_enter_count == 1U);
+    CHECK(fixture.secondary_enter_count == 1U);
     CHECK(hk_app_switch_close(&fixture.switcher, HK_APP_STOP_FORCED) == HK_OK);
+    return 0;
+}
+
+static int check_service_timer_cadence_and_budget(void)
+{
+    fixture_t fixture;
+    hk_app_t app = secondary_descriptor();
+    CHECK(reset_fixture(&fixture) == 0);
+    app.limits.tick_interval_us = 20U;
+    app.limits.tick_budget_us = 200U;
+    CHECK(hk_app_switch_open(&fixture.switcher, &app, NULL) == HK_OK);
+    CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
+    fixture.now_us = fixture.switcher.next_tick_us;
+    uint64_t started = fixture.now_us;
+    fixture.now_step_us = 100U;
+    CHECK(hk_app_switch_poll(&fixture.switcher, started) == HK_OK);
+    CHECK(hk_app_switch_active(&fixture.switcher) == &app);
+    CHECK(fixture.switcher.next_tick_us == started + 20U);
+    CHECK(fixture.render_count == 0U && fixture.present_count == 0U);
+    fixture.now_step_us = 0U;
+    CHECK(hk_app_switch_close(&fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     return 0;
 }
 
@@ -647,6 +644,7 @@ int main(void)
     CHECK(check_busy_begin_skips_surface_present() == 0);
     CHECK(check_render_requested_during_render_is_immediate() == 0);
     CHECK(check_autostart_failure_fallback() == 0);
+    CHECK(check_service_timer_cadence_and_budget() == 0);
     printf("APP_RUNTIME_MIXED_OK\n");
     return 0;
 }

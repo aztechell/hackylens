@@ -10,6 +10,12 @@ compatibility-capability-api: >=0.1.0,<0.2.0
 
 # HackyLens App Runtime
 
+This is the current runtime contract, not the suspended Phase 3 execution plan.
+[Simplification](../SIMPLIFICATION_MASTERPLAN.md) controls migration order and
+may replace the broker/context machinery described below while preserving its
+required lifecycle and resource-safety behavior. Update this contract with the
+corresponding implementation change; see the [change process](README.md).
+
 ## Purpose and scope
 
 This contract defines the lifecycle, ownership, failure unwind, and stale-work
@@ -20,18 +26,12 @@ allocation-free.
 The runtime consumes immutable descriptors generated at build time. It does not
 parse TOML, discover apps on a filesystem, register apps during boot, load
 native code dynamically, or provide the Phase 4 Project Format and Program
-Manager. The existing [legacy lifecycle](../APP_LIFECYCLE.md) remains a separate
-compatibility surface until each app is migrated through an explicit adapter.
-For a legacy manifest, its `entry` symbol names one app-owned immutable
-`hk_legacy_app_entry_t` binding object. The generated descriptor stores a typed
-pointer to that object; generic registry code does not copy callback symbols or
-select concrete apps. A lifecycle-v2 manifest instead produces the typed v2
-descriptor branch consumed by the runtime defined here. The legacy binding is
-private firmware compatibility machinery, not an SDK ABI.
+Manager. All twelve bundled apps use the same typed entry and foreground
+switch. No legacy descriptor, selector, or adapter remains.
 
 ## Public lifecycle
 
-The public lifecycle is four callbacks:
+The lifecycle has `start`, `event`, optional `render`, and `stop`:
 
 ```text
 validate immutable descriptor
@@ -56,7 +56,8 @@ descriptor/menu presentation hook, not a lifecycle callback.
 
 All callbacks execute on the runtime dispatch context and MUST be synchronous,
 bounded, non-blocking except for operations bounded by an injected capability
-deadline, and free of heap allocation. A callback MUST NOT create a task, queue,
+deadline, and add no runtime allocation. Existing decoder/model services retain their
+resource ownership and bounded cleanup. A callback MUST NOT create a task, queue,
 core, hidden loop, or unbounded retry. `HK_PENDING` is not a valid lifecycle
 callback result. Every lifecycle callback receives
 `const hk_app_context_t *`; writable app state is obtained only through the
@@ -145,15 +146,18 @@ composed public Time Capability and sets the first due time to
 with scheduled and observed monotonic times. There is no separate `tick`
 callback. It measures that Timer-event callback against
 `limits.tick_budget_us`. There is no catch-up loop: after successful completion
-the next due time is `completion_now + tick_interval_us`. Clock failure,
+the next due time is `callback_started_now + tick_interval_us`. Clock failure,
 backward time, arithmetic overflow, or elapsed budget excess terminates the app
-with `HK_APP_STOP_DEADLINE`; the deadline is not refreshed into retries.
+with `HK_APP_STOP_DEADLINE`; the deadline is not refreshed into retries. Cadence and callback budget are
+independent: QR may legitimately spend more than one period decoding a frame.
 
 ## Render and invalidation
 
 `hk_app_context_request_render` records either a full invalidation or at most
-eight fixed-capacity dirty rectangles. A successful v2 start begins with one
-full invalidation. The app cannot present, begin/abort a Display batch, select
+eight fixed-capacity dirty rectangles. A successful start with a non-null
+`render` begins with one full invalidation. A null `render` means the app uses
+an existing firmware presentation service; runtime opens no competing batch
+and render requests return `HK_ERR_FEATURE_UNAVAILABLE`. The app cannot present, begin/abort a Display batch, select
 an LCD plane, obtain a framebuffer owner, or call a driver through this API.
 
 For a render pass the runtime borrows the app's injected public Display handle,
@@ -168,7 +172,8 @@ from `limits.render_budget_us`; measured callback time uses the same monotonic
 Time provider. A callback, provider, present, or budget failure aborts the
 batch where possible and enters the common unwind. If an optional Display grant
 is absent, the invalidation is deterministically consumed without opening a
-hardware path; a required absent Display has already failed preflight.
+hardware path; a required absent Display has already failed preflight. A busy
+Display keeps the invalidation pending for a later poll.
 
 If `render` requests another invalidation after runtime has consumed the
 current pending set, that invalidation remains pending for a new render pass.
@@ -394,7 +399,7 @@ does not wrap silently.
 ## Memory and timing
 
 Runtime tables, descriptors, tokens, state slots, and event storage have fixed
-capacities accounted for in the Phase 3 resource report. The runtime adds no
+capacities accounted for in the S7 resource comparison. The runtime adds no
 heap allocation, task, queue, core, or full framebuffer. Lifecycle dispatch
 overhead excludes callback body and provider I/O and is checked against the
 [Phase 3 baseline](../PHASE3_BASELINE.md).
@@ -407,8 +412,8 @@ runtime `[0.2.0, 0.3.0)`. Because the contract is experimental, a future `0.3.0`
 line may be breaking. Firmware, HMPY, Board Port, Legacy App Lifecycle, and
 MicroPython API versions do not change merely because this contract is
 published. The eight-callback `0.1.x` lifecycle is not retained behind a
-compatibility wrapper; remaining production apps use one private legacy
-adapter until they migrate.
+compatibility wrapper. The legacy adapter and manifest selector were removed
+in S7. Existing bundled camera/media services are not standalone SDK APIs.
 
 ## References
 

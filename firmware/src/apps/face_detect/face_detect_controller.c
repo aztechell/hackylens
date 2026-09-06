@@ -33,8 +33,7 @@ static void face_detect_start(const hk_input_snapshot_t *input)
     if(g_error)
     {
         vision_result_clear(VISION_SOURCE_FACE);
-        hk_screen_set(SCREEN_FACE_DETECT);
-        camera_status_view_draw("FACE ERROR",
+            camera_status_view_draw("FACE ERROR",
                                 face_detect_detector_error_label(result));
         printf("[FACE] load %s\r\n",
                face_detect_detector_error_label(result));
@@ -48,7 +47,6 @@ void face_detect_controller_enter(const hk_input_snapshot_t *input)
 {
     g_error = 0U;
     g_loading = 0U;
-    hk_screen_set(SCREEN_FACE_DETECT);
     camera_status_view_draw("FACE LOAD", "DETECT MODEL");
     face_detect_start(input);
 }
@@ -108,14 +106,15 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
     face_detect_view_draw_boxes(width, height, boxes, count);
 }
 
-void face_detect_controller_handle_buttons(const hk_input_snapshot_t *input)
+uint8_t face_detect_controller_handle_buttons(const hk_input_snapshot_t *input)
 {
     if(g_error || g_loading)
     {
         if(input && (input->pressed & BUTTON_BACK))
-            shell_show_menu();
-        return;
+            return 1U;
+        return 0U;
     }
     if(camera_runtime_handle_input(input) == CAMERA_RUNTIME_INPUT_EXIT)
-        shell_show_menu();
+        return 1U;
+    return 0U;
 }

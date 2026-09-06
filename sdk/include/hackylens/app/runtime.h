@@ -104,6 +104,7 @@ typedef struct hk_app_v2_entry
     uint32_t state_capacity_bytes;
     hk_app_start_fn start;
     hk_app_event_fn event;
+    /* NULL when presentation belongs to a shared service; no render transaction. */
     hk_app_render_fn render;
     hk_app_stop_fn stop;
 } hk_app_v2_entry_t;

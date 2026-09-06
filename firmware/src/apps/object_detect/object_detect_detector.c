@@ -1,3 +1,4 @@
+#include "../../services/resource_cleanup.h"
 #include "object_detect_detector.h"
 
 #include <stdio.h>
@@ -224,6 +225,7 @@ static uint8_t finish_inference(void)
 
 object_detect_load_result_t object_detect_detector_load(void)
 {
+    resource_cleanup_poll();
     ai_model_result_t result;
 
     if(!g_runtime_initialized)
@@ -268,6 +270,17 @@ object_detect_load_result_t object_detect_detector_load(void)
     return g_result;
 }
 
+static uint8_t finish_unload(void)
+{
+    object_detect_detector_service_tick();
+    return g_runtime.state == AI_MODEL_STATE_UNLOADED || g_runtime.state == AI_MODEL_STATE_FAULT;
+}
+
+void object_detect_detector_limit_unload(uint64_t deadline_us)
+{
+    ai_model_runtime_limit_unload(&g_runtime, deadline_us);
+}
+
 void object_detect_detector_unload(void)
 {
     camera_ai_input_cancel(&g_runtime);
@@ -278,6 +291,8 @@ void object_detect_detector_unload(void)
         g_session_epoch++;
     g_unload_requested = 1U;
     ai_model_runtime_request_unload(&g_runtime);
+    if(!finish_unload())
+        (void)resource_cleanup_schedule(RESOURCE_CLEANUP_KPU, finish_unload);
 }
 
 void object_detect_detector_service_tick(void)

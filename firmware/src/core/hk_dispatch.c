@@ -18,7 +18,6 @@ void shell_set_sd_event_handler(hk_sd_event_handler_t handler)
 
 void shell_handle_buttons(const hk_input_snapshot_t *input)
 {
-    const hk_app_t *app;
     uint32_t pressed = input->pressed;
     screen_t screen = hk_screen_get();
 
@@ -41,16 +40,6 @@ void shell_handle_buttons(const hk_input_snapshot_t *input)
         return;
     }
 
-    app = hk_app_for_screen(screen);
-    if(app)
-    {
-        const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-        if(entry && entry->handle_input)
-            entry->handle_input(input);
-        else if(app->handle_input)
-            app->handle_input(input);
-    }
 }
 
 void shell_handle_sd_event(hk_sd_event_t event)

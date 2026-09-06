@@ -46,6 +46,7 @@ typedef struct
     uint32_t last_inference_us;
     uint64_t started_us;
     uint64_t unload_requested_us;
+    uint64_t unload_deadline_us;
     volatile ai_model_state_t state;
     volatile uint8_t completion_pending;
     ai_model_result_t result;
@@ -59,6 +60,7 @@ uint8_t ai_model_runtime_take_completion(ai_model_runtime_t *runtime);
 int ai_model_runtime_get_output(ai_model_runtime_t *runtime, uint32_t index,
                                 const uint8_t **output, size_t *bytes);
 void ai_model_runtime_request_unload(ai_model_runtime_t *runtime);
+void ai_model_runtime_limit_unload(ai_model_runtime_t *runtime, uint64_t deadline_us);
 void ai_model_runtime_tick(ai_model_runtime_t *runtime);
 uint8_t ai_model_runtime_loaded(const ai_model_runtime_t *runtime);
 uint8_t ai_model_runtime_busy(const ai_model_runtime_t *runtime);

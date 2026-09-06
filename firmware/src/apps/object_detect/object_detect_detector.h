@@ -8,6 +8,7 @@
 
 object_detect_load_result_t object_detect_detector_load(void);
 void object_detect_detector_unload(void);
+void object_detect_detector_limit_unload(uint64_t deadline_us);
 void object_detect_detector_service_tick(void);
 uint8_t object_detect_detector_ready(void);
 object_detect_load_result_t object_detect_detector_result(void);

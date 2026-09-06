@@ -123,7 +123,6 @@ void object_detect_controller_enter(const hk_input_snapshot_t *input)
     object_detect_settings_apply_session();
     g_error = 0U;
     g_loading = 0U;
-    hk_screen_set(SCREEN_OBJECT_DETECT);
     camera_status_view_draw("OBJECT LOAD", "VOC20 MODEL");
     object_detect_start(input);
 }
@@ -208,7 +207,7 @@ void object_detect_controller_tick(const hk_input_snapshot_t *input)
                           width, height, items, count);
 }
 
-void object_detect_controller_handle_buttons(
+uint8_t object_detect_controller_handle_buttons(
     const hk_input_snapshot_t *input)
 {
     if(settings_menu_active(&g_settings_menu))
@@ -224,14 +223,15 @@ void object_detect_controller_handle_buttons(
             object_detect_detector_resume_capture();
             camera_view_clear();
         }
-        return;
+        return 0U;
     }
     if(g_error || g_loading)
     {
         if(input && (input->pressed & BUTTON_BACK))
-            shell_show_menu();
-        return;
+            return 1U;
+        return 0U;
     }
     if(camera_runtime_handle_input(input) == CAMERA_RUNTIME_INPUT_EXIT)
-        shell_show_menu();
+        return 1U;
+    return 0U;
 }

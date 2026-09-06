@@ -1,34 +1,22 @@
-# HackyLens Normative Specifications
+# HackyLens Technical Specifications
 
-This directory contains the normative governance baseline for HackyLens public
-contracts. Normative requirements use **MUST**, **MUST NOT**, **SHOULD**, and
-**MAY** in their ordinary RFC-style meanings. Implementation and audit documents
-remain informative unless they explicitly say otherwise.
+## Authority during simplification
 
-Every normative or grandfathered public contract has Markdown front matter with
-four required fields:
+[SIMPLIFICATION_MASTERPLAN.md](../SIMPLIFICATION_MASTERPLAN.md) controls the
+scope, order, invariants, and exit gates of current work. It takes precedence
+where older architecture or governance rules conflict with simplification.
+[Architecture](../ARCHITECTURE.md) describes the implementation;
+[Architecture Vision](../ARCHITECTURE_VISION.md) and
+[Roadmap](../ROADMAP.md) describe goals, not additional implementation gates.
 
-```yaml
----
-contract-id: hackylens.example
-owner: platform-architecture
-version: 0.1.0
-stability: experimental
----
-```
-
-The version identifies a compatibility line. Stability is independent: a
-`1.0.0` contract is not stable unless its `stability` field says `stable`.
-Contracts with an independently encoded generation also declare its canonical
-metadata explicitly: `wire-major`, `schema-major`, or `api-major`. These fields
-are not inferred from the semantic-version MAJOR component.
-
-## Normative governance contracts
-
-- [Architecture Vision](../ARCHITECTURE_VISION.md)
-- [Glossary](GLOSSARY.md)
-- [Versioning Policy](VERSIONING.md)
-- [Board Port Contract](BOARD_PORT.md)
+The specifications below describe existing technical interfaces and behavioral
+contracts. Their MUST/MUST NOT requirements still apply to the current
+implementation until the relevant interface is deliberately migrated. They do
+not require preserving a generic broker, inventory, version negotiation, or
+owner/lease representation after the corresponding simplification package.
+Changing a specification alone does not migrate its consumers or qualify a new
+implementation. MicroPython API v1/HMPY compatibility and the plan's resource
+safety invariants remain required.
 
 ## Native app contracts
 
@@ -38,6 +26,10 @@ are not inferred from the semantic-version MAJOR component.
 
 ## Capability contracts
 
+These describe the current broker-backed interfaces. S8 may replace their
+internal machinery service by service while preserving required app-facing
+semantics and testing the changed bindings.
+
 - [Capability API](CAPABILITY_API.md)
 - [Time Capability](capabilities/TIME.md)
 - [Input Capability](capabilities/INPUT.md)
@@ -45,35 +37,32 @@ are not inferred from the semantic-version MAJOR component.
 - [External Link Capability](capabilities/EXTERNAL_LINK.md)
 - [Lights Capability](capabilities/LIGHTS.md)
 
-## Existing technical contracts
+Camera and Storage do not require new generic Capability wrappers merely to
+appear in this index. A typed service boundary is sufficient when it serves the
+actual consumer and preserves architecture and resource ownership.
 
-Phase 0 keeps the following existing documents in their current locations and
-applies the same metadata policy to them:
+## Other technical references
 
+- [Board Port Contract](BOARD_PORT.md)
+- [Glossary](GLOSSARY.md)
+- [Versioning Policy](VERSIONING.md)
 - [HMPY Protocol](../HMPY_PROTOCOL.md)
 - [MicroPython API](../MICROPYTHON_API.md)
 - [External Link Protocol](../EXTERNAL_LINK_PROTOCOL.md)
 - [Current App Lifecycle](../APP_LIFECYCLE.md)
 - [AI Model Package](../AI_MODELS.md)
 
-New normative public contracts MUST be added under `docs/spec/` or a
-contract-specific subdirectory below it. Moving the five existing technical
-documents is intentionally deferred to avoid unrelated link churn during the
-governance baseline.
-
-## Logical owners
-
-- `platform-architecture`: architecture direction, terminology, and governance.
-- `device-protocols`: device/host and external wire protocols.
-- `micropython-runtime`: the public MicroPython programming surface.
-- `firmware-runtime`: the legacy and lifecycle-v2 native runtime contracts.
-- `ai-runtime`: AI model package and model-runtime contracts.
-
-Owner identifiers name stable components, not individual maintainers.
-
 ## Change process
 
-Contract changes MUST update the document version and stability metadata when
-required by the [Versioning Policy](VERSIONING.md). Architectural decisions are
-recorded under [`docs/adr/`](../adr/README.md). Pull requests identify affected
-layers, capabilities, contracts, compatibility, and evidence.
+Update affected public headers, build inputs, consumers, behavioral tests, and
+current API documentation together. Explain observable changes and compatibility
+or migration impact in ordinary prose. Use the existing version conventions
+when an interface changes; wire/API constants are not changed by documentation
+cleanup. Validate the affected behavior and hardware paths as required by the
+active plan.
+
+A separate ADR, mandatory front-matter schema, machine-readable migration
+route, phase receipt, or new checker is not required. Existing contract IDs,
+versions, stability fields, and logical owner labels remain useful reference
+metadata; they do not create a new governance gate. Historical decisions are
+available in [ADRs](../adr/README.md).

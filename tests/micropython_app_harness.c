@@ -97,7 +97,7 @@ static void select_action(uint8_t target)
 
 void hk_screen_set(screen_t screen)
 {
-    check(screen == HK_MICROPYTHON_SCREEN, "MicroPython screen selected");
+    check(screen == SCREEN_APP, "MicroPython screen selected");
 }
 
 void shell_show_menu(void)
@@ -406,12 +406,12 @@ int main(void)
           "RUN starts selected file and opens console");
     check(strcmp(g_run_name, g_view.selected_name) == 0,
           "RUN uses exact selected file");
-    micropython_background_tick(&input);
+    micropython_poll_output(&input);
     render();
     queue_output("one\ntwo\nthree\n");
     {
         unsigned renders = g_render_count;
-        micropython_background_tick(&input);
+        micropython_poll_output(&input);
         for(unsigned i = 0U; i + 1U < MICROPYTHON_CONSOLE_RENDER_TICKS; i++)
             micropython_tick(&input);
         check(g_render_count == renders,
@@ -429,7 +429,7 @@ int main(void)
           "BACK requests stop and stays in console");
     g_runtime.state = MICROPYTHON_RUNTIME_FINISHED;
     g_runtime.exit_reason = MICROPYTHON_EXIT_REQUESTED;
-    micropython_background_tick(&input);
+    micropython_poll_output(&input);
     press_button(BUTTON_BACK);
     render();
     check(g_view.mode == MICROPYTHON_UI_ACTIONS,
@@ -441,7 +441,7 @@ int main(void)
         snprintf(line, sizeof(line), "log%02u\n", i);
         queue_output(line);
     }
-    micropython_background_tick(&input);
+    micropython_poll_output(&input);
     select_action(MICROPYTHON_ACTION_LOGS);
     press_button(BUTTON_OK);
     render();
@@ -518,3 +518,7 @@ int main(void)
     puts("MICROPYTHON_APP_OK list=1 preview=1 actions=1 run=1 stop=1 logs=1");
     return 0;
 }
+
+hk_result_t hk_app_context_request_close(const hk_app_context_t *ctx) { (void)ctx; g_menu_count++; return HK_OK; }
+hk_result_t hk_app_context_teardown_deadline(const hk_app_context_t *ctx, hk_deadline_t *deadline)
+{ (void)ctx; *deadline = HK_DEADLINE_IMMEDIATE; return HK_OK; }

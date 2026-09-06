@@ -7,13 +7,10 @@
 #include "qr_service.h"
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
-static void (*s_tick[1])(const hk_input_snapshot_t *);
 
 _Static_assert(
     sizeof(qr_camera_state_t) <= sizeof(s_state_storage),
     "QR Camera state must fit the v2 storage slot");
-
-void qr_camera_tick(const hk_input_snapshot_t *input) { qr_camera_controller_tick(input); }
 
 uint8_t qr_camera_handle_debug_command(const char *cmd)
 {
@@ -69,22 +66,6 @@ uint8_t qr_camera_handle_debug_command(const char *cmd)
         return 1U;
     }
     return 0U;
-}
-
-uint8_t qr_debug_handle_command(const char *cmd)
-{
-    static uint8_t (*s_debug_command[1])(const char *);
-
-    if(s_debug_command[0] == NULL)
-        s_debug_command[0] = qr_camera_handle_debug_command;
-    if(s_debug_command[0] == NULL)
-        return 0U;
-    return s_debug_command[0](cmd);
-}
-
-void qr_camera_poll_decode(void)
-{
-    qr_camera_controller_poll_decode();
 }
 
 static hk_result_t qr_camera_state_from(
@@ -157,20 +138,10 @@ static hk_result_t qr_camera_event(
         if(hk_input_get_state(state->owner, &state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         input.state = buttons;
-        if(s_tick[0] == NULL)
-            s_tick[0] = qr_camera_tick;
-        if(s_tick[0] != NULL)
-            s_tick[0](&input);
+        qr_camera_controller_tick(&input);
+        qr_camera_controller_poll_decode();
         return qr_camera_finish_work(ctx, state);
     }
-    return HK_OK;
-}
-
-static hk_result_t qr_camera_render(
-    const hk_app_context_t *ctx, hk_app_surface_t *surface)
-{
-    (void)ctx;
-    (void)surface;
     return HK_OK;
 }
 
@@ -190,6 +161,6 @@ const hk_app_v2_entry_t qr_camera_v2_entry = {
     .state_capacity_bytes = sizeof(s_state_storage),
     .start = qr_camera_start,
     .event = qr_camera_event,
-    .render = qr_camera_render,
+    .render = NULL,
     .stop = qr_camera_stop,
 };

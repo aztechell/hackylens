@@ -72,14 +72,16 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 cwd=ROOT,
                 check=True,
             )
-            return subprocess.run(
+            result = subprocess.run(
                 [str(executable)],
                 cwd=ROOT,
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            return result
 
     def test_normative_lifecycle_and_latency(self) -> None:
         result = self.compile_and_run_harness("app_runtime_v2_harness.c")

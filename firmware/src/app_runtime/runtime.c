@@ -44,17 +44,15 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
 
     if(!descriptor || descriptor->struct_size != sizeof(hk_app_t) ||
        descriptor->struct_version != HK_APP_DESCRIPTOR_VERSION ||
-       descriptor->lifecycle != HK_APP_LIFECYCLE_V2 ||
-       !descriptor->entry.v2 || !descriptor->id)
+       !descriptor->entry || !descriptor->id)
         return HK_ERR_INVALID_ARGUMENT;
-    entry = descriptor->entry.v2;
+    entry = descriptor->entry;
     if(!entry->state_storage || descriptor->limits.static_ram_bytes == 0U ||
        descriptor->limits.stack_bytes == 0U ||
        descriptor->limits.state_bytes == 0U ||
        descriptor->limits.state_bytes > descriptor->limits.static_ram_bytes ||
        descriptor->limits.tick_interval_us == 0U ||
        descriptor->limits.tick_budget_us == 0U ||
-       descriptor->limits.tick_budget_us > descriptor->limits.tick_interval_us ||
        descriptor->limits.render_budget_us == 0U ||
        entry->state_capacity_bytes < descriptor->limits.state_bytes ||
        descriptor->limits.state_alignment != HK_APP_STATE_ALIGNMENT ||
@@ -62,7 +60,7 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
        descriptor->service_count > HK_APP_CONTEXT_MAX_SERVICES ||
        (descriptor->capability_count > 0U && !descriptor->capabilities) ||
        (descriptor->service_count > 0U && !descriptor->services) ||
-       !entry->start || !entry->event || !entry->render || !entry->stop)
+       !entry->start || !entry->event || !entry->stop)
         return HK_ERR_INVALID_ARGUMENT;
     for(index = 0U; index < descriptor->capability_count; index++)
     {
@@ -264,7 +262,7 @@ static hk_app_stop_reason_t normalized_reason(hk_app_stop_reason_t reason)
 
 static void invalidate_instance(hk_app_runtime_t *runtime)
 {
-    const hk_app_v2_entry_t *entry = runtime->descriptor->entry.v2;
+    const hk_app_v2_entry_t *entry = runtime->descriptor->entry;
     uint8_t exhausted = 0U;
 
     runtime->stage = HK_APP_STAGE_INVALIDATING;
@@ -322,7 +320,7 @@ static hk_result_t teardown(
 
     runtime->teardown_started = 1U;
     runtime->stop_reason = normalized_reason(reason);
-    entry = runtime->descriptor->entry.v2;
+    entry = runtime->descriptor->entry;
 
     if(runtime->active_epoch != UINT32_MAX)
         runtime->active_epoch++;
@@ -405,7 +403,7 @@ static hk_result_t terminate_running(
     {
         result = finish_callback(
             runtime,
-            runtime->descriptor->entry.v2->event(
+            runtime->descriptor->entry->event(
                 &runtime->context, &event));
     }
     retain_error(runtime, result);
@@ -466,7 +464,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->context_valid = 1U;
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
     runtime->teardown_deadline_valid = 0U;
-    entry = descriptor->entry.v2;
+    entry = descriptor->entry;
     memset(entry->state_storage, 0, descriptor->limits.state_bytes);
 
     result = resolve_declared_surface(runtime);
@@ -508,7 +506,7 @@ hk_result_t hk_app_runtime_launch(
     }
     runtime->stage = HK_APP_STAGE_RUNNING;
     runtime->state = HK_APP_RUNTIME_RUNNING;
-    runtime->full_invalidation = 1U;
+    runtime->full_invalidation = entry->render != NULL;
     runtime->invalidation_count = 0U;
     runtime->close_requested = 0U;
     return HK_OK;
@@ -559,7 +557,7 @@ hk_result_t hk_app_runtime_event(
     runtime->stage = HK_APP_STAGE_RUNNING;
     (void)enter_callback(runtime);
     return dispatch_result(
-        runtime, runtime->descriptor->entry.v2->event(&runtime->context, event));
+        runtime, runtime->descriptor->entry->event(&runtime->context, event));
 }
 
 hk_result_t hk_app_runtime_render(
@@ -570,10 +568,12 @@ hk_result_t hk_app_runtime_render(
         return HK_ERR_INVALID_ARGUMENT;
     if(runtime->state != HK_APP_RUNTIME_RUNNING || runtime->callback_active)
         return HK_ERR_INVALID_STATE;
+    if(!runtime->descriptor->entry->render)
+        return HK_ERR_FEATURE_UNAVAILABLE;
     runtime->stage = HK_APP_STAGE_RUNNING;
     (void)enter_callback(runtime);
     return dispatch_result(
-        runtime, runtime->descriptor->entry.v2->render(&runtime->context, surface));
+        runtime, runtime->descriptor->entry->render(&runtime->context, surface));
 }
 
 hk_app_runtime_state_t hk_app_runtime_state(const hk_app_runtime_t *runtime)
@@ -763,7 +763,7 @@ hk_result_t hk_app_context_state(
     result = validate_callback_context(ctx, NULL);
     if(result != HK_OK)
         return result;
-    *state = s_callback_runtime->descriptor->entry.v2->state_storage;
+    *state = s_callback_runtime->descriptor->entry->state_storage;
     *size_bytes = s_callback_runtime->descriptor->limits.state_bytes;
     return HK_OK;
 }
@@ -866,6 +866,8 @@ hk_result_t hk_app_context_request_render(
         return result;
     if(runtime->state != HK_APP_RUNTIME_RUNNING)
         return HK_ERR_INVALID_STATE;
+    if(!runtime->descriptor->entry->render)
+        return HK_ERR_FEATURE_UNAVAILABLE;
     if(!region)
     {
         runtime->full_invalidation = 1U;

@@ -13,6 +13,7 @@
 #include "hk_screen.h"
 
 static uint8_t s_menu_index;
+static const hk_app_t *s_active_app;
 static uint32_t s_menu_repeat_button;
 static uint8_t s_menu_repeat_ticks;
 static hk_menu_view_t s_menu_view;
@@ -64,13 +65,11 @@ void menu_render(void)
 
 void shell_show_menu_reason(hk_app_stop_reason_t reason)
 {
-    const hk_app_t *app = hk_app_for_screen(hk_screen_get());
-    const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
+    const hk_app_t *app = s_active_app;
+    s_active_app = NULL;
 
     if(s_owner_hooks.exit)
         s_owner_hooks.exit(app, reason);
-    else if(entry && entry->exit)
-        entry->exit();
     hk_screen_set(SCREEN_MENU);
     hk_back_exit_set_armed(0);
     menu_render();
@@ -86,10 +85,9 @@ void shell_show_menu(void)
 
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
-    const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
     uint8_t index;
 
-    if(!app || (!s_owner_hooks.enter && (!entry || !entry->enter)))
+    if(!app || !s_owner_hooks.enter)
         return 0U;
     for(index = 0U; index < g_menu_item_count; index++)
     {
@@ -106,12 +104,8 @@ uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
         if(!s_owner_hooks.enter(app, input))
             return 0U;
     }
-    else
-    {
-        entry->enter(input);
-    }
-    if(app->lifecycle == HK_APP_LIFECYCLE_V2)
-        hk_screen_set(SCREEN_APP_SLOT_0);
+    s_active_app = app;
+    hk_screen_set(SCREEN_APP);
     return 1U;
 }
 
@@ -214,4 +208,14 @@ void menu_tick(const hk_input_snapshot_t *input)
         menu_select_delta(1);
     }
     s_menu_repeat_ticks = MENU_REPEAT_NEXT_TICKS;
+}
+
+uint8_t shell_open_app_id(const char *id, const hk_input_snapshot_t *input)
+{
+    const hk_app_t *app = hk_app_for_id(id);
+    if(!app)
+        return 0U;
+    if(s_active_app)
+        shell_show_menu_reason(HK_APP_STOP_SWITCH);
+    return shell_open_app(app, input);
 }

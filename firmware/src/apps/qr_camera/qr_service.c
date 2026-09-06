@@ -16,7 +16,8 @@ static hk_owner_t s_qr_time_owner;
 
 static uint64_t qr_time_now_us(void)
 {
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
+    request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
     hk_owner_t owner = capability_client_current_owner();
     uint64_t value = 0U;
 

@@ -174,7 +174,7 @@ class AppManifestSchemaTests(unittest.TestCase):
             ('id = "alpha-tool"', f'id = "a{"a" * 63}"', "exceeds 63"),
             ('name = "Alpha Tool"', 'name = " Alpha Tool"', "trimmed string"),
             ('entry = "alpha_tool_app"', 'entry = "alpha-tool-app"', "invalid value"),
-            ('lifecycle = "v2"', 'lifecycle = "dynamic"', "lifecycle must be one of"),
+            ('tick_ms = 10', 'tick_ms = 10\nlifecycle = "legacy"', "unknown=lifecycle"),
             ("menu_order = 10", "menu_order = 0", "menu_order: outside"),
             ("autostart_id = 42", "autostart_id = 65536", "autostart_id: outside"),
         )
@@ -259,11 +259,6 @@ class AppManifestSchemaTests(unittest.TestCase):
                 'optional = ["display"]',
                 "optional = []",
                 "must not be empty",
-            ),
-            (
-                'requires = ["input", "settings"]',
-                'requires = ["input", "camera"]',
-                "transitional legacy services require lifecycle=legacy",
             ),
         )
         for old, new, expected in mutations:

@@ -23,7 +23,7 @@
 
 static void firmware_wake_from_sleep(void)
 {
-    if(hk_screen_get() != SCREEN_SLEEP && !sleep_session_active())
+    if(!sleep_session_active())
         return;
     screen_brightness_apply();
     illum_led_apply();
@@ -39,7 +39,7 @@ static uint8_t firmware_app_enter(
     hk_result_t result;
 
     /* Display BASE is exclusive. Menu UI holds it; v2 apps must take it. */
-    if(app && app->lifecycle == HK_APP_LIFECYCLE_V2)
+    if(app != NULL)
     {
         result = hk_ui_display_release();
         if(result != HK_OK)
@@ -53,7 +53,7 @@ static uint8_t firmware_app_enter(
     {
         printf("[APP] open %s failed result=%d\r\n",
                app && app->title ? app->title : "?", (int)result);
-        if(app && app->lifecycle == HK_APP_LIFECYCLE_V2)
+        if(app != NULL)
         {
             hk_ui_display_unbind();
             (void)hk_ui_display_prepare();

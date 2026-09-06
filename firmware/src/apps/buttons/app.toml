@@ -1,6 +1,5 @@
 id = "buttons"
 name = "BUTTONS"
-lifecycle = "v2"
 entry = "buttons_v2_entry"
 sources = ["buttons_app.c", "buttons_controller.c", "buttons_view.c"]
 requires = ["display", "input"]

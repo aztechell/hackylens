@@ -184,8 +184,7 @@ static hk_app_t descriptor(void)
     app.struct_size = sizeof(app);
     app.struct_version = HK_APP_DESCRIPTOR_VERSION;
     app.id = "grant-fixture";
-    app.lifecycle = HK_APP_LIFECYCLE_V2;
-    app.entry.v2 = &s_entry;
+    app.entry = &s_entry;
     app.limits.static_ram_bytes = sizeof(s_state);
     app.limits.stack_bytes = 256U;
     app.limits.state_bytes = sizeof(s_state);

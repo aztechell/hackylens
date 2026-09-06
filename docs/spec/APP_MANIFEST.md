@@ -36,8 +36,7 @@ Every production manifest declares:
 | --- | --- | --- |
 | `id` | yes | lowercase kebab app ID, at most 63 UTF-8 bytes |
 | `name` | yes | non-empty trimmed display text, at most 96 UTF-8 bytes |
-| `lifecycle` | yes | `legacy` or `v2`; retained until the remaining production apps share one lifecycle |
-| `entry` | yes | C symbol of the typed lifecycle entry object; it is not derived from `id` because existing bindings are not a uniform `{id}_{lifecycle}_entry` convention |
+| `entry` | yes | C symbol of the typed lifecycle entry object; it is not derived from `id` because entry symbols are explicit |
 | `sources` | yes | non-empty array of app-relative C/C++ translation units |
 | `requires` | yes | short names of required capabilities and/or build-time services; may be empty |
 | `optional` | no | non-empty short-name array of optional capabilities with named fallbacks |
@@ -45,6 +44,8 @@ Every production manifest declares:
 | `menu_order` | no | positive uint16 menu order; omit to hide the app |
 | `autostart_id` | no | stable uint16 autostart identity; omit or `0` means ineligible |
 | `tick_ms` | yes | positive tick period in milliseconds, at most 60_000 |
+| `tick_budget_ms` | no | callback budget, 1–5000 ms; defaults to `tick_ms`, independent of cadence |
+| `debug_entry` | no | C symbol of the explicitly addressed diagnostic handler |
 | `debug` | no | `HKHELP` command text when the app has a debug handler; omit otherwise |
 
 Identity MUST NOT depend on directory enumeration, source order, object order,
@@ -56,9 +57,8 @@ mapped to underscores.
 Canonical tokens use lowercase ASCII kebab form. An app ID starts with a
 lowercase ASCII letter and then uses lowercase letters, digits, and single
 hyphen-separated non-empty components. `entry` uses ordinary C identifier
-syntax. For `lifecycle = "legacy"`, `entry` names one app-owned immutable
-`hk_legacy_app_entry_t`. For `lifecycle = "v2"`, it names one immutable
-`hk_app_v2_entry_t`. The generator never guesses callback symbol names.
+syntax. `entry` names one immutable `hk_app_v2_entry_t`. The obsolete
+`lifecycle` field is rejected. The generator never guesses callback symbols.
 
 Omitting `menu_order` hides the app. Visible apps keep unique positive orders so
 enabling a hidden app cannot silently reorder another entry. An autostart-eligible
@@ -74,7 +74,7 @@ are rejected before compilation.
 ## Required services
 
 `requires` and `optional` use short names. One build-time mapping expands them
-to existing Capability API IDs or transitional legacy service IDs:
+to existing Capability API IDs or firmware service IDs:
 
 | Short name | Expansion |
 | --- | --- |
@@ -83,17 +83,16 @@ to existing Capability API IDs or transitional legacy service IDs:
 | `time` | `hackylens.cap.time` |
 | `lights` | `hackylens.cap.lights` |
 | `external-link` | `hackylens.cap.external-link` |
-| `camera` | `hackylens.service.legacy-camera` |
-| `sd-card` | `hackylens.service.legacy-sd-card` |
-| `internal-flash` | `hackylens.service.legacy-internal-flash` |
+| `camera` | `hackylens.firmware.camera` |
+| `sd-card` | `hackylens.firmware.sd-card` |
+| `internal-flash` | `hackylens.firmware.internal-flash` |
 | `settings` | `hackylens.service.settings` |
 
 Unknown names are errors. The same name cannot be both required and optional.
 Optional capabilities have a fixed named fallback from the same mapping:
 `display` → `headless`, `external-link` → `hide-external-link-menu`. Services
-cannot be optional. Transitional `legacy-*` services require `lifecycle =
-"legacy"` and remain build-only exclusions; they do not generate SDK handles or
-raw hardware access.
+cannot be optional. `hackylens.firmware.*` requirements are build-only
+exclusions, not injected SDK handles or permission to access hardware directly.
 
 Capability requests keep instance `0` and the current `[0.1.0, 0.2.0)` range.
 Feature bits stay in the mapping, not in `app.toml`, because they exist only to
@@ -112,8 +111,8 @@ access stays on the existing firmware mount/FAT32 path and foreground
 `HK_APP_EVENT_MEDIA` events. QR-CAMERA does not declare `lights`, `camera`, or
 `sd-card`. Illumination stays on `consumer:settings-lights` / `camera_light`;
 the camera session and QR text writes stay on the existing firmware seams.
-Lifecycle-v2 preflight acquires every available declaration, so persistent
-exclusive/channel leases and transitional legacy services would otherwise fail
+Runtime preflight acquires every available declaration, so persistent
+exclusive/channel leases and build-only firmware services would otherwise fail
 open.
 
 A missing required capability excludes the app; an explicit require-app build
@@ -152,12 +151,12 @@ read-only for the entire boot and expose no board routes, pins, peripheral
 instances, provider vtables, drivers, or HAL objects.
 
 The generated descriptor contains identity, menu visibility and order, stable
-autostart identity, lifecycle kind and typed entry reference, debug text, the
+autostart identity, typed entry reference, debug text and handler, the
 tick interval derived from `tick_ms`, expanded capability/service requests, and
 the menu presentation hook `{id_with_hyphens_as_underscores}_draw_icon`. That
-icon symbol is a descriptor field, not a lifecycle callback. `lifecycle` and
-`entry` remain the temporary build-time boundary between the v2 model and the
-one private legacy adapter.
+icon symbol is a descriptor field, not a lifecycle callback. There is one
+entry type and no legacy adapter. Tick cadence and callback budget are separate
+descriptor limits.
 A canonical descriptor array is ordered by app ID; the separate menu view is
 ordered only by explicit `menu_order`. Conditional build flags remove a disabled
 descriptor and its entry reference without renumbering persisted autostart IDs.

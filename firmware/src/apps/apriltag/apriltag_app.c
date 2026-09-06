@@ -13,16 +13,6 @@
 #include "apriltag_settings.h"
 #include "apriltag_view.h"
 
-void apriltag_enter(const hk_input_snapshot_t *input) { apriltag_controller_enter(input); }
-void apriltag_exit(void) { apriltag_controller_exit(); }
-void apriltag_tick(const hk_input_snapshot_t *input) { apriltag_controller_tick(input); }
-void apriltag_handle_buttons(const hk_input_snapshot_t *input) { apriltag_controller_handle_buttons(input); }
-void apriltag_background_tick(const hk_input_snapshot_t *input)
-{
-    (void)input;
-    apriltag_detector_service_tick();
-}
-
 uint8_t apriltag_handle_debug_command(const char *cmd)
 {
     char line[512];
@@ -31,7 +21,7 @@ uint8_t apriltag_handle_debug_command(const char *cmd)
     {
         if(hk_screen_get() != SCREEN_MENU)
             shell_show_menu();
-        apriltag_enter(NULL);
+        (void)shell_open_app_id("apriltag", NULL);
         debug_console_write_text("HKTAG OK\r\n");
         return 1;
     }
@@ -62,13 +52,70 @@ void apriltag_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     apriltag_view_draw_icon(x, y, color, bg);
 }
 
-const hk_legacy_app_entry_t apriltag_legacy_entry = {
-    .screen = SCREEN_APRILTAG,
-    .enter = apriltag_enter,
-    .exit = apriltag_exit,
-    .tick = apriltag_tick,
-    .handle_input = apriltag_handle_buttons,
-    .draw_icon = apriltag_draw_icon,
-    .background_tick = apriltag_background_tick,
-    .handle_debug_command = apriltag_handle_debug_command,
+
+static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
+
+typedef struct { hk_owner_t owner; hk_input_t input; } apriltag_state_t;
+
+static apriltag_state_t *app_state(const hk_app_context_t *ctx)
+{
+    void *state = NULL;
+    uint32_t bytes = 0U;
+    if(hk_app_context_state(ctx, &state, &bytes) != HK_OK || bytes < sizeof(apriltag_state_t))
+        return NULL;
+    return state;
+}
+
+static hk_result_t app_start(const hk_app_context_t *ctx)
+{
+    apriltag_state_t *state = app_state(ctx);
+    const char *id;
+    uint32_t generation;
+    hk_input_snapshot_t input = {0};
+    if(!state || hk_app_context_identity(ctx, &id, &generation, &state->owner) != HK_OK ||
+       hk_app_context_input(ctx, 0U, &state->input) != HK_OK ||
+       hk_input_get_state(state->owner, &state->input, &input.state) != HK_OK)
+        return HK_ERR_INTERNAL;
+    apriltag_controller_enter(&input);
+    return HK_OK;
+}
+
+static hk_result_t app_event(const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    apriltag_state_t *state = app_state(ctx);
+    hk_input_snapshot_t input = {0};
+    if(!state || !event)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(event->kind == HK_APP_EVENT_INPUT)
+    {
+        input.state = event->data.input.state;
+        input.changed = event->data.input.changed;
+        input.pressed = input.state & input.changed;
+        if(apriltag_controller_handle_buttons(&input))
+            return hk_app_context_request_close(ctx);
+    }
+    else if(event->kind == HK_APP_EVENT_TIMER)
+    {
+        if(hk_input_get_state(state->owner, &state->input, &input.state) != HK_OK)
+            return HK_ERR_INTERNAL;
+        apriltag_controller_tick(&input);
+    }
+    return HK_OK;
+}
+
+static hk_result_t app_stop(const hk_app_context_t *ctx)
+{
+    hk_deadline_t deadline;
+    hk_result_t result = hk_app_context_teardown_deadline(ctx, &deadline);
+    apriltag_controller_exit();
+    return result;
+}
+
+const hk_app_v2_entry_t apriltag_v2_entry = {
+    .state_storage = s_state_storage,
+    .state_capacity_bytes = sizeof(s_state_storage),
+    .start = app_start,
+    .event = app_event,
+    .render = NULL,
+    .stop = app_stop,
 };

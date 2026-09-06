@@ -11,6 +11,12 @@ compatibility-capability-api: >=0.1.0,<0.2.0
 
 # HackyLens Feature App SDK
 
+This document describes the currently exposed SDK. The
+[Simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md) controls ongoing
+app and service migrations; the SDK does not require restoring the suspended
+Phase 3 generator, host runtime fake, or future service contracts. Public
+interface changes follow the [current change process](README.md).
+
 ## Public entry surface
 
 The Feature App SDK is the public C entry surface for lifecycle-v2 native apps.
@@ -199,13 +205,11 @@ runtime framework and MUST NOT be installed or exported as an SDK target.
 The SDK conformance gate recursively checks public header closure, compiles C11
 and C++17 consumers, and builds/runs one minimal lifecycle-v2 app through both
 CMake and Make against the production runtime test support. The architecture
-guard rejects SDK dependencies on repository-private layers and rejects a
-lifecycle-v2 production app dependency outside the App SDK, standard language
-headers, and that app's own private headers.
-The C++ policy recognizes a bounded allocation-free C++17 standard-header
-allowlist (including `<array>` and `<cstdint>`) while continuing to reject
-undeclared third-party headers; accepting C++ syntax does not waive the Phase 3
-heap, task, queue, core, or framebuffer rules.
+guard rejects SDK dependencies on repository-private layers. Bundled apps are
+checked for architecture layering, cross-feature dependencies and raw platform
+access. Their existing portable firmware services are not exported by the SDK.
+Standalone fixtures still reject private and undeclared third-party headers;
+C++ syntax does not waive resource ownership rules.
 
 A native app is portable only when it builds against this entry surface and its
 declared public capabilities. Successful compilation against SEN0305 private
@@ -220,15 +224,17 @@ breaking change increments MINOR. Publishing this SDK does not change Firmware
 `0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle `0.2.0`, or
 MicroPython API `1.0.0`.
 
-The legacy adapter is runtime implementation, not a second public SDK. The one
-foreground switch boundary is shared by lifecycle-v2 and legacy apps, so menu,
-BACK, autostart, debug forced exit, safe-mode fallback, and rapid switching use
-one close/unwind decision. A legacy
-manifest `entry` names an app-owned const `hk_legacy_app_entry_t` binding object;
-the generated private descriptor references it and the generic registry invokes
-it. That type and binding are unavailable from `sdk/include`. Existing legacy
-apps remain compatible while migrated apps use the SDK; all apps remain subject
-to manifest composition and architecture guards.
+All twelve bundled apps use the same runtime entry. No legacy adapter or
+manifest lifecycle selector remains. Menu, BACK, autostart, debug forced exit,
+safe-mode fallback, and rapid switching use one close/unwind decision.
+
+Bundled apps may call the existing portable firmware services under architecture
+layer and feature-boundary guards. That does not make those services part of
+the standalone SDK. Standalone SDK fixtures and external apps still require
+strict public-header closure; migrating a lifecycle alone does not prove
+standalone portability. Diagnostic handlers run only for an explicitly matched
+command. Resource cleanup polls pending KPU/core1 completion, not inactive apps.
+
 
 ## References
 

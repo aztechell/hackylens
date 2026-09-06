@@ -2,22 +2,22 @@
 
 ## Статус и назначение
 
-Статус: `planned`.
+Статус: `historical / suspended`.
 
 Исходная ревизия для планирования:
 `ed2adcebb757ccf4c8bdaf5b7ba3f0b9c596eedb`.
 
-Этот документ — поэтапный план исполнения Phase 3. Нормативными источниками
-остаются [ROADMAP.md](ROADMAP.md),
-[ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md),
-[CURRENT_STATE.md](CURRENT_STATE.md),
-[CAPABILITY_API.md](spec/CAPABILITY_API.md),
-[GLOSSARY.md](spec/GLOSSARY.md) и
-[VERSIONING.md](spec/VERSIONING.md).
+Этот документ сохраняет исторический план Phase 3. Пакеты 3.1–3.8 исторически
+завершены; исполнение 3.9–3.17 приостановлено. Текущую работу определяет
+[SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md), включая миграцию
+всех production apps, минимальный lifecycle и последующее упрощение services.
 
-Номера `3.1`–`3.17` ниже — последовательные execution-пакеты. Они детализируют,
-но не заменяют тематические разделы `3.1`–`3.6` нормативного roadmap. Один turn
-выполняет только один пакет, если пользователь явно не расширил scope.
+Все требования, ограничения scope, порядок пакетов и exit gates ниже относятся
+к прежнему плану и не управляют текущей работой. В частности, восьмиcallback
+lifecycle, отдельный host runtime fake, generator, богатые manifest metadata
+и новые SDK contracts не являются текущими требованиями. Здесь не фиксируется
+следующая firmware version. Фактические интерфейсы описывают public headers и
+обновляемые [specs](spec/README.md); статус — [CURRENT_STATE.md](CURRENT_STATE.md).
 
 ## Итоговая цель
 

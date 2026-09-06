@@ -6,6 +6,6 @@
 void object_detect_controller_enter(const hk_input_snapshot_t *input);
 void object_detect_controller_exit(void);
 void object_detect_controller_tick(const hk_input_snapshot_t *input);
-void object_detect_controller_handle_buttons(const hk_input_snapshot_t *input);
+uint8_t object_detect_controller_handle_buttons(const hk_input_snapshot_t *input);
 
 #endif

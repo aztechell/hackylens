@@ -18,30 +18,14 @@
         }                                                                     \
     } while(0)
 
-static uint32_t s_background_calls;
-static uint32_t s_sd_calls;
 static uint32_t s_debug_calls;
-
-static void noop_enter(const hk_input_snapshot_t *input) { (void)input; }
-static void count_background(const hk_input_snapshot_t *input)
-{
-    (void)input;
-    s_background_calls++;
-}
-static void count_sd(hk_sd_event_t event)
-{
-    (void)event;
-    s_sd_calls++;
-}
-static uint8_t count_debug(const char *command)
-{
-    s_debug_calls++;
-    return command && strcmp(command, "APPDEBUG") == 0 ? 1U : 0U;
-}
-static uint8_t owns_camera_settings(screen_t screen)
-{
-    return screen == SCREEN_CAMERA_SETTINGS ? 1U : 0U;
-}
+#define DEBUG_HANDLER(name) uint8_t name##_handle_debug_command(const char *cmd) { (void)cmd; s_debug_calls++; return 1U; }
+DEBUG_HANDLER(camera)
+DEBUG_HANDLER(qr_camera)
+DEBUG_HANDLER(face_detect)
+DEBUG_HANDLER(object_detect)
+DEBUG_HANDLER(apriltag)
+DEBUG_HANDLER(micropython)
 
 static void dummy_draw_icon(
     uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -101,10 +85,7 @@ void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     dummy_draw_icon(x, y, color, bg);
 }
 
-const hk_legacy_app_entry_t apriltag_legacy_entry = {
-    .screen = SCREEN_APRILTAG,
-    .enter = noop_enter,
-};
+const hk_app_v2_entry_t apriltag_v2_entry = {0};
 static uint8_t s_buttons_v2_storage[16];
 static hk_result_t dummy_buttons_start(const hk_app_context_t *ctx)
 {
@@ -138,23 +119,9 @@ const hk_app_v2_entry_t buttons_v2_entry = {
     .render = dummy_buttons_render,
     .stop = dummy_buttons_stop,
 };
-const hk_legacy_app_entry_t camera_legacy_entry = {
-    .screen = SCREEN_CAMERA,
-    .enter = noop_enter,
-    .owns_screen = owns_camera_settings,
-    .blocks_sd_poll = 1U,
-    .handle_debug_command = count_debug,
-};
-const hk_legacy_app_entry_t face_detect_legacy_entry = {
-    .screen = SCREEN_FACE_DETECT,
-    .enter = noop_enter,
-    .background_tick = count_background,
-};
-const hk_legacy_app_entry_t object_detect_legacy_entry = {
-    .screen = SCREEN_OBJECT_DETECT,
-    .enter = noop_enter,
-    .handle_sd_event = count_sd,
-};
+const hk_app_v2_entry_t camera_v2_entry = {0};
+const hk_app_v2_entry_t face_detect_v2_entry = {0};
+const hk_app_v2_entry_t object_detect_v2_entry = {0};
 static uint8_t s_files_v2_storage[16];
 static hk_result_t dummy_files_start(const hk_app_context_t *ctx)
 {
@@ -188,10 +155,7 @@ const hk_app_v2_entry_t files_v2_entry = {
     .render = dummy_files_render,
     .stop = dummy_files_stop,
 };
-const hk_legacy_app_entry_t micropython_legacy_entry = {
-    .screen = SCREEN_APP_SLOT_2,
-    .enter = noop_enter,
-};
+const hk_app_v2_entry_t micropython_v2_entry = {0};
 static uint8_t s_pong_v2_storage[16];
 static hk_result_t dummy_pong_start(const hk_app_context_t *ctx)
 {
@@ -373,7 +337,6 @@ int main(void)
     const hk_app_t *camera;
     const hk_app_t *settings;
     const hk_app_t *sleep;
-    const hk_input_snapshot_t input = {0U, 0U, 0U};
 
 #if HK_ENABLE_APP_MICROPYTHON
     CHECK(g_hk_generated_app_count == 12U);
@@ -415,23 +378,19 @@ int main(void)
     settings = app_by_id("settings");
     sleep = app_by_id("sleep");
     CHECK(camera != NULL && settings != NULL && sleep != NULL);
-    CHECK(hk_app_for_screen(SCREEN_CAMERA) == camera);
-    CHECK(hk_app_for_screen(SCREEN_CAMERA_SETTINGS) == camera);
-    CHECK(hk_app_registry_sd_poll_allowed(SCREEN_CAMERA) == 0U);
-    CHECK(hk_app_registry_sd_poll_allowed(SCREEN_BUTTONS) == 1U);
-    CHECK(camera->limits.tick_interval_us == 1000U);
-    CHECK(app_by_id("buttons")->limits.tick_interval_us == 20000U);
-    CHECK(camera->service_count == 2U);
-    CHECK(strcmp(camera->services[0].id,
-                 "hackylens.service.legacy-camera") == 0);
+    CHECK(hk_app_for_id("camera") == camera);
+    CHECK(hk_app_for_id("absent") == NULL);
+    CHECK(camera->entry == &camera_v2_entry);
+    CHECK(camera->limits.tick_interval_us == 20000U);
+    CHECK(camera->service_count == 0U);
     CHECK(settings->capability_count == 2U);
     CHECK(sleep->capability_count == 3U);
     CHECK(app_by_id("files")->capability_count == 3U);
     CHECK(app_by_id("files")->service_count == 0U);
-    CHECK(app_by_id("files")->limits.tick_interval_us == 200000U);
+    CHECK(app_by_id("files")->limits.tick_interval_us == 20000U);
     CHECK(app_by_id("qr-camera")->capability_count == 3U);
     CHECK(app_by_id("qr-camera")->service_count == 0U);
-    CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 200000U);
+    CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 20000U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)
     {
         const hk_app_capability_request_t *request =
@@ -444,12 +403,14 @@ int main(void)
         CHECK(strcmp(sleep->capabilities[index].id,
                      "hackylens.cap.lights") != 0);
 
-    hk_app_registry_background_tick(&input);
-    CHECK(s_background_calls == 1U);
-    hk_app_registry_handle_sd_event(HK_SD_EVENT_INSERTED);
-    CHECK(s_sd_calls == 1U);
-    CHECK(hk_app_registry_handle_debug_command("APPDEBUG") == 1U);
+    CHECK(hk_app_registry_handle_debug_command("APPDEBUG") == 0U);
+    CHECK(s_debug_calls == 0U);
+    CHECK(hk_app_registry_handle_debug_command("HKCAM") == 1U);
     CHECK(s_debug_calls == 1U);
+    CHECK(hk_app_registry_handle_debug_command("hkqr") == 1U);
+    CHECK(s_debug_calls == 2U);
+    CHECK(hk_app_registry_handle_debug_command("HKCAMX") == 0U);
+    CHECK(s_debug_calls == 2U);
 
     printf("APP_REGISTRY_OK apps=%u menu=%u\n",
            g_hk_generated_app_count, g_menu_item_count);

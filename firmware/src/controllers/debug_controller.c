@@ -1,5 +1,7 @@
 #include "debug_controller.h"
 
+#include <string.h>
+
 #include "../config/debug_config.h"
 
 #include "../core/hk_menu_runtime.h"
@@ -9,9 +11,6 @@
 #include "hk_config.h"
 #if HK_ENABLE_CAMERA_FEATURE
 #include "debug_camera_controller.h"
-#endif
-#if HK_ENABLE_APP_QR_CAMERA
-#include "../services/qr_debug_service.h"
 #endif
 #include "../services/debug_console_service.h"
 #include "../services/screenshot_source.h"
@@ -27,6 +26,13 @@ static uint8_t g_debug_cmd_len;
 
 void debug_uart_handle_command(const char *cmd)
 {
+    if(strncmp(cmd, "HKAPP ", 6U) == 0)
+    {
+        activity_note();
+        debug_console_write_text(shell_open_app_id(cmd + 6U, NULL) ?
+                                 "HKAPP OK\n" : "HKAPP ERROR\n");
+        return;
+    }
 #if HK_ENABLE_APP_MICROPYTHON
     if(str_eq_ci(cmd, HMPY_LINE_HANDSHAKE))
     {
@@ -44,10 +50,6 @@ void debug_uart_handle_command(const char *cmd)
     }
 #if HK_ENABLE_CAMERA_FEATURE
     if(debug_camera_controller_handle_command(cmd))
-        return;
-#endif
-#if HK_ENABLE_APP_QR_CAMERA
-    if(qr_debug_handle_command(cmd))
         return;
 #endif
     if(hk_app_registry_handle_debug_command(cmd))
@@ -93,21 +95,17 @@ void debug_uart_handle_command(const char *cmd)
 #else
         debug_console_write_text("HKHELP HKSHOT ");
 #endif
-#if HK_ENABLE_APP_QR_CAMERA
-        debug_console_write_text("HKQRINFO HKQR/HKQRCAM HKQRDECODE ");
-#endif
         for(uint8_t i = 0; i < g_menu_item_count; i++)
         {
             const hk_app_t *app = g_menu_items[i];
-            const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
 
-            if(entry && entry->handle_debug_command && app->debug_help)
+            if(app->debug_command && app->debug_help)
             {
                 debug_console_write_text(app->debug_help);
                 debug_console_write_text(" ");
             }
         }
-        debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKSETTINGS HKPING\n");
+        debug_console_write_text("HKLINKINFO HKLINKUART HKLINKI2C HKLINK9600 HKLINK115200 HKLINK1000000 HKMENU HKAPP <id> HKSETTINGS HKPING\n");
         return;
     }
 }

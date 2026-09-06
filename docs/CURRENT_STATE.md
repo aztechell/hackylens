@@ -1,7 +1,31 @@
 # Current Project State
 
+This document records implementation history and evidence limitations.
+[SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md) controls current
+work; historical phase completion does not require retaining superseded
+governance, runtime, or broker mechanisms. API and binding changes are recorded
+with their implementation, not inferred from a roadmap or documentation update.
+
 > HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
+
+## S7 working tree status (2026-09-06)
+
+All twelve apps now share one native lifecycle. The legacy entry union,
+selector, adapter, and inactive-app background/media polling are removed.
+Camera/media apps use their existing portable presentation services with an
+optional null runtime render callback. This is lifecycle convergence, not a
+claim that every bundled app is a standalone SDK app.
+
+QR preview uses monotonic time without requesting an undeclared sleep feature.
+A measured successful QR decode took 1,276,190 us; its former 1-second callback
+budget caused the reported return to menu. The budget is now 3 seconds, with a
+20 ms polling cadence. GIF deadlines and timer cadence count decoding time
+instead of adding extra waiting between frames.
+
+S7 is still under hardware acceptance and normal-push CI verification. The
+sections below record earlier milestones and are historical where they mention
+mixed lifecycle composition or the legacy adapter. See [S7 evidence](S7_EVIDENCE.md).
 
 ## Phase 1 status
 
@@ -257,15 +281,11 @@ backing store, while retained command batches remain transactional. Phase 2
 records physical display observations and explicitly retains the missing
 matched-workload timing dataset as an evidence limitation rather than inventing
 measurements. Later packages may extend qualification on new hardware.
-Public App Runtime, Native App Manifest, and Feature App SDK contracts are fixed
-at `0.1.0 experimental` by the Phase 3.1 governance baseline. Native manifest
-schema validation, production manifests, generated build composition, the
-generated registry/legacy adapter, the private lifecycle-v2 state machine, its
-public context/capability injection, and the production foreground switching,
-event, tick, and render integration are implemented. BUTTONS and PONG already
-use the minimal v2 lifecycle; remaining production-app migrations and legacy
-adapter removal remain later Phase 3 work.
-Public storage, camera, vision, and AI capabilities also remain Phase 3+.
+App Runtime and Feature App SDK are `0.2.0 experimental`; the native manifest
+is `0.1.0`, schema major 1. All bundled apps share one runtime lifecycle.
+Remaining work is S7 hardware/CI acceptance followed by the explicitly planned
+S8 service simplification. Public storage, camera, vision and AI SDK interfaces
+are not provided merely by migrating the existing bundled app entry points.
 
 Other product gaps remain unchanged: broader MicroPython hardware APIs,
 full project/package management, multi-project IDE workflows, formal

@@ -167,22 +167,14 @@ class LightsCapabilityTests(unittest.TestCase):
             [item.id for item in conformance.capabilities],
             ["hackylens.cap.time"],
         )
-        disabled = generator.compose(
-            runtime_board, apps, set(), set(), {"hackylens.cap.lights"},
-        )
-        for app in (
-            "camera", "face-detect", "apriltag",
-            "object-detect", "micropython",
-        ):
-            self.assertIn(app, disabled.disabled_apps)
-        self.assertNotIn("settings", disabled.disabled_apps)
-        self.assertNotIn("sleep", disabled.disabled_apps)
-        self.assertNotIn("qr-camera", disabled.disabled_apps)
-        with self.assertRaisesRegex(generator.CapabilityError, "required app"):
-            generator.compose(
-                runtime_board, apps, set(), {"camera"},
-                {"hackylens.cap.lights"},
-            )
+        # Native UI uses a shared service with a no-lights fallback. The VM's
+        # public API requires Lights through its adapter, not a second app lease.
+        with self.assertRaisesRegex(generator.CapabilityError, "micropython-adapter"):
+            generator.compose(runtime_board, apps, set(), set(), {"hackylens.cap.lights"})
+        disabled = generator.compose(runtime_board, apps, {"micropython"}, set(), {"hackylens.cap.lights"})
+        for app in ("camera", "face-detect", "apriltag", "object-detect", "qr-camera", "settings", "sleep"):
+            self.assertNotIn(app, disabled.disabled_apps)
+
 
 
 if __name__ == "__main__":

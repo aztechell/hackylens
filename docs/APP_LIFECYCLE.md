@@ -5,7 +5,11 @@ version: 0.2.0
 stability: experimental
 ---
 
-# App Lifecycle
+# App Lifecycle — archived legacy contract
+
+> Historical only. S7 removes this adapter and its manifest selector. Current
+> firmware follows [App Runtime](spec/APP_RUNTIME.md) for every bundled app.
+> The descriptions below do not impose requirements on the current runtime.
 
 This document describes the lifecycle shipped by firmware `0.2.0`. The matching
 version is historical and does not permanently couple firmware releases to the

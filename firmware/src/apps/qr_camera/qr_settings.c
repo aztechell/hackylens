@@ -10,7 +10,6 @@ static settings_menu_session_t g_qr_settings;
 void qr_settings_open(void)
 {
     camera_service_freeze(1U);
-    hk_screen_set(SCREEN_CAMERA_SETTINGS);
     hk_back_exit_set_armed(0U);
     (void)settings_menu_open(&g_qr_settings, qr_settings_menu_definition());
     printf("[SHELL] screen QR SETTINGS\r\n");

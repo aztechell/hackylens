@@ -76,11 +76,8 @@ def generated_source(
 
     for app_index, app in enumerate(apps):
         guard = enable_definition(str(app["id"]))
-        lifecycle = str(app["lifecycle"])
-        entry_type = (
-            "hk_legacy_app_entry_t" if lifecycle == "legacy"
-            else "hk_app_v2_entry_t"
-        )
+        entry_type = "hk_app_v2_entry_t"
+        debug_symbol = app["metadata"].get("debug_entry") or "NULL"
         icon_symbol = str(app["id"]).replace("-", "_") + "_draw_icon"
         lines.extend([
             f"#if {guard}",
@@ -89,6 +86,9 @@ def generated_source(
             "uint16_t x, uint16_t y, uint16_t color, uint16_t bg);",
             "",
         ])
+
+        if debug_symbol != "NULL":
+            lines.append(f"extern uint8_t {debug_symbol}(const char *command);")
 
         requests = _request_rows(app)
         for request_index, (request, _) in enumerate(requests):
@@ -127,7 +127,8 @@ def generated_source(
                 ])
             lines.extend(["};", ""])
 
-        services = list(app["services"])
+        services = [service for service in app["services"]
+                    if not service["id"].startswith("hackylens.firmware.")]
         service_array = f"s_app_{app_index}_services"
         if services:
             lines.append(f"static const hk_app_service_request_t {service_array}[] = {{")
@@ -150,11 +151,6 @@ def generated_source(
             _count_expression(service_array, "hk_app_service_request_t")
             if services else "0U"
         )
-        entry_member = "legacy" if lifecycle == "legacy" else "v2"
-        lifecycle_value = (
-            "HK_APP_LIFECYCLE_LEGACY" if lifecycle == "legacy"
-            else "HK_APP_LIFECYCLE_V2"
-        )
         limits = app["limits"]
         lines.extend([
             f"const hk_app_t {app['generated_symbol']} = {{",
@@ -167,8 +163,7 @@ def generated_source(
             f"    .menu_visible = {1 if app['menu']['visible'] else 0}U,",
             f"    .autostart_id = {int(app['autostart']['id'])}U,",
             f"    .autostart_eligible = {1 if app['autostart']['eligible'] else 0}U,",
-            f"    .lifecycle = {lifecycle_value},",
-            f"    .entry = {{.{entry_member} = &{app['entry']}}},",
+            f"    .entry = &{app['entry']},",
             f"    .help = {_c_string(str(app['metadata']['help']))},",
             f"    .debug_help = {_c_string(str(app['metadata']['debug']))},",
             "    .limits = {",
@@ -185,6 +180,7 @@ def generated_source(
             f"    .services = {service_pointer},",
             f"    .service_count = {service_count},",
             f"    .draw_icon = {icon_symbol},",
+            f"    .debug_command = {debug_symbol},",
             "};",
             f"#endif /* {guard} */",
             "",

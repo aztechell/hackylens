@@ -1,10 +1,11 @@
 id = "micropython"
 name = "MICRO-PYTHON"
-lifecycle = "legacy"
-entry = "micropython_legacy_entry"
+entry = "micropython_v2_entry"
 sources = ["micropython_app.c", "micropython_bindings.c", "micropython_view.c"]
-requires = ["display", "time", "input", "lights", "external-link", "internal-flash"]
+requires = ["display", "time", "input", "internal-flash"]
 menu_order = 12
 autostart_id = 10
 tick_ms = 5
+tick_budget_ms = 1000
 debug = "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST HKMPFORMAT-CONFIRM"
+debug_entry = "micropython_handle_debug_command"

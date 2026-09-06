@@ -1,6 +1,5 @@
 id = "zeta-legacy"
 name = "Zeta Legacy"
-lifecycle = "legacy"
 entry = "zeta_legacy_enter"
 sources = ["src/zeta_view.c", "src/zeta_legacy.c"]
 private_includes = ["include"]

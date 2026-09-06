@@ -206,8 +206,7 @@ static hk_app_t descriptor(void)
     app.struct_size = sizeof(hk_app_t);
     app.struct_version = HK_APP_DESCRIPTOR_VERSION;
     app.id = "fixture";
-    app.lifecycle = HK_APP_LIFECYCLE_V2;
-    app.entry.v2 = &s_entry;
+    app.entry = &s_entry;
     app.limits.static_ram_bytes = sizeof(s_state);
     app.limits.stack_bytes = 256U;
     app.limits.state_bytes = sizeof(s_state);
@@ -567,14 +566,14 @@ static int check_stop_reasons_and_descriptor_guards(void)
         app.limits.state_alignment = 8U;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
         app = descriptor();
-        app.limits.tick_budget_us = app.limits.tick_interval_us + 1U;
+        app.limits.tick_budget_us = 0U;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
         app = descriptor();
         bad_entry.state_storage = &s_state[1];
-        app.entry.v2 = &bad_entry;
+        app.entry = &bad_entry;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
         app = descriptor();
-        app.lifecycle = HK_APP_LIFECYCLE_LEGACY;
+        app.entry = NULL;
         CHECK(hk_app_runtime_launch(&runtime, &app) == HK_ERR_INVALID_ARGUMENT);
     }
     return 0;
@@ -738,7 +737,7 @@ static int check_lifecycle_latency(
     uint64_t launch_samples[SAMPLE_COUNT];
     uint64_t stop_samples[SAMPLE_COUNT];
 
-    app.entry.v2 = &benchmark_entry;
+    app.entry = &benchmark_entry;
     app.limits.static_ram_bytes = sizeof(benchmark_state);
     app.limits.state_bytes = sizeof(benchmark_state);
     CHECK(hk_app_runtime_init(

@@ -7,6 +7,13 @@ stability: experimental
 
 # HackyLens Capability API
 
+During [simplification](../SIMPLIFICATION_MASTERPLAN.md), this document
+describes the current broker-backed API. Its inventory, negotiation, and
+owner/lease representation may be replaced through S8; they are not mandatory
+machinery for new typed services. Existing consumers and resource-safety
+semantics remain valid until deliberately migrated and tested. See the
+[specification authority and change process](README.md).
+
 ## Purpose and scope
 
 This contract defines the common native ABI and lifecycle for portable

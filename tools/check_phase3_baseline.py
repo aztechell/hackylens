@@ -549,17 +549,29 @@ def compiler() -> str:
 
 def measure_dispatch(document: dict[str, Any]) -> int:
     dispatch = document["baseline"]["dispatch"]
+    historical = check_phase1_resources._baseline_source_snapshot(
+        document["baseline"]["closure"]["closure_commit"], root=ROOT
+    )
     with tempfile.TemporaryDirectory(prefix="hackylens-phase3-dispatch-") as temp:
         executable = Path(temp) / (
             "phase3_dispatch.exe" if os.name == "nt" else "phase3_dispatch"
         )
+        reproduction = Path(temp) / "historical"
+        for name, text in historical.items():
+            if name.startswith("firmware/src/core/") or name.startswith("firmware/src/config/"):
+                target = reproduction / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+        harness = reproduction / dispatch["harness_path"]
+        harness.parent.mkdir(parents=True, exist_ok=True)
+        harness.write_bytes((ROOT / dispatch["harness_path"]).read_bytes())
         subprocess.run([
             compiler(), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
             f"-I{ROOT / 'sdk' / 'include'}",
             f"-I{ROOT / 'firmware' / 'include'}",
             f"-I{ROOT / 'firmware' / 'src'}",
-            str(ROOT / dispatch["harness_path"]),
-            str(ROOT / dispatch["source_path"]),
+            str(harness),
+            str(reproduction / dispatch["source_path"]),
             "-o", str(executable),
         ], cwd=ROOT, check=True)
         result = subprocess.run(

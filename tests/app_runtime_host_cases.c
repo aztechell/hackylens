@@ -405,7 +405,7 @@ static int check_invalid_tick_budget(void)
     hk_app_t app;
 
     CHECK(reset_simple(&host, &app) == 0);
-    app.limits.tick_budget_us = app.limits.tick_interval_us + 1U;
+    app.limits.tick_budget_us = 0U;
     CHECK(open_app(&host, &app, HK_ERR_INVALID_ARGUMENT) == 0);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 0U);
     return 0;

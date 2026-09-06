@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "files_image_config.h"
-#include "files_firmware.h"
 
 #define GIF_SIGNATURE_SIZE 6U
 #define GIF_HEADER_SIZE 13U
@@ -583,7 +582,8 @@ file_result_t files_gif_tick(uint64_t now_us)
         files_gif_close();
         return result;
     }
-    g_gif.deadline_armed = 0;
+    g_gif.deadline_us = now_us + (uint64_t)g_gif.current_delay_ms * 1000ULL;
+    g_gif.deadline_armed = 1;
     return FILE_RESULT_OK;
 }
 

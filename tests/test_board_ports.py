@@ -479,7 +479,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         )
         self.assertTrue(any(
             request.id == "hackylens.cap.lights"
-            for request in capability_requirements["micropython"].required
+            for request in build_firmware.capability_inventory.load_consumer_requirements()["consumer:micropython-adapter"].required
         ))
 
     def test_app_binding_still_forbids_board_hal_and_sdk(self) -> None:

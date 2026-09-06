@@ -5,9 +5,13 @@ HackyLens 0.4.0 is modular firmware built from common `firmware/src` layers, the
 > HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-This document describes the implemented v0.4 architecture. The normative
-direction is defined in [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md), and
-the remaining gaps are recorded in [CURRENT_STATE.md](CURRENT_STATE.md).
+This document describes the implemented v0.4 architecture. During simplification,
+[SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md) controls work scope,
+ordering, and exit gates. [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md) records
+design goals; [CURRENT_STATE.md](CURRENT_STATE.md) records implementation status
+and evidence limitations. Existing broker and legacy paths described below
+remain current until migrated; their description does not require retaining
+them after the corresponding simplification package.
 
 `firmware/targets/full.c` is a small composition root. It configures the runtime loop in `runtime/hk_main.c`, whose input polling and sleep timing remain platform-dependent. `core` owns app contracts, screen model, dispatch contracts, and neutral data contracts such as `core/pixel_source.h`; it does not access `hk_input` or `hal_time` directly.
 

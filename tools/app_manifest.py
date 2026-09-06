@@ -15,16 +15,15 @@ APP_ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 TOKEN_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 C_SYMBOL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
-LEGACY_SERVICE_PREFIX = "hackylens.service.legacy-"
+FIRMWARE_SERVICE_PREFIX = "hackylens.firmware."
 
 REQUIRED_FIELDS = {
-    "id", "name", "lifecycle", "entry", "sources", "requires", "tick_ms",
+    "id", "name", "entry", "sources", "requires", "tick_ms",
 }
 OPTIONAL_FIELDS = {
-    "private_includes", "menu_order", "autostart_id", "optional", "debug",
+    "private_includes", "menu_order", "autostart_id", "optional", "debug", "tick_budget_ms", "debug_entry",
 }
 ALLOWED_FIELDS = REQUIRED_FIELDS | OPTIONAL_FIELDS
-LIFECYCLE_KINDS = {"legacy", "v2"}
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 
 CAPABILITY_MINIMUM = "0.1.0"
@@ -58,9 +57,9 @@ CAPABILITY_IDS = {
     "external-link": "hackylens.cap.external-link",
 }
 SERVICE_IDS = {
-    "camera": "hackylens.service.legacy-camera",
-    "sd-card": "hackylens.service.legacy-sd-card",
-    "internal-flash": "hackylens.service.legacy-internal-flash",
+    "camera": "hackylens.firmware.camera",
+    "sd-card": "hackylens.firmware.sd-card",
+    "internal-flash": "hackylens.firmware.internal-flash",
     "settings": "hackylens.service.settings",
 }
 OPTIONAL_FALLBACKS = {
@@ -291,7 +290,6 @@ def _expand_names(
     names: Sequence[str],
     label: str,
     app_id: str,
-    lifecycle: str,
     *,
     optional: bool,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -306,13 +304,6 @@ def _expand_names(
         if name in SERVICE_IDS:
             if optional:
                 raise ManifestError(f"{label}: services cannot be optional")
-            if (
-                SERVICE_IDS[name].startswith(LEGACY_SERVICE_PREFIX)
-                and lifecycle != "legacy"
-            ):
-                raise ManifestError(
-                    f"{label}: transitional legacy services require lifecycle=legacy"
-                )
             services.append(_service_request(name, app_id))
             continue
         raise ManifestError(f"{label}: unknown required service {name!r}")
@@ -344,9 +335,6 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
     name = _string(
         table["name"], f"{path}: name", maximum_bytes=MAX_DISPLAY_NAME_BYTES
     )
-    lifecycle = _string(
-        table["lifecycle"], f"{path}: lifecycle", pattern=TOKEN_RE
-    )
     sources = _path_array(
         table["sources"], f"{path}: sources", directory_real,
         expected="file", suffixes=SOURCE_SUFFIXES, non_empty=True,
@@ -377,9 +365,10 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
 
     tick_ms = _integer(table["tick_ms"], f"{path}: tick_ms", 1, MAX_TICK_MS)
     tick_interval_us = tick_ms * 1000
-    # TIMER callbacks are measured against tick_budget_us. The legal maximum is
-    # the tick interval; a 1 ms placeholder cannot host K210 TIMER + input.
-    tick_budget_us = tick_interval_us
+    # Cadence and maximum callback duration are independent on cooperative hardware.
+    tick_budget_us = _integer(
+        table.get("tick_budget_ms", tick_ms), f"{path}: tick_budget_ms", 1, 5000
+    ) * 1000
 
     required_names = _name_array(
         table["requires"], f"{path}: requires", allow_empty=True
@@ -394,10 +383,10 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
             f"{path}: capability cannot be both required and optional"
         )
     required, required_services = _expand_names(
-        required_names, f"{path}: requires", app_id, lifecycle, optional=False
+        required_names, f"{path}: requires", app_id, optional=False
     )
     optional, extra_services = _expand_names(
-        optional_names, f"{path}: optional", app_id, lifecycle, optional=True
+        optional_names, f"{path}: optional", app_id, optional=True
     )
     services = required_services + extra_services
     capability_keys = [(item["id"], item["instance"]) for item in required + optional]
@@ -421,10 +410,7 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         )
         if "debug" in table else DEFAULT_DEBUG
     )
-    help_text = (
-        f"{name} legacy feature app." if lifecycle == "legacy"
-        else f"{name} feature app."
-    )
+    help_text = f"{name} feature app."
 
     return {
         "directory": directory,
@@ -434,7 +420,6 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         "version": DESCRIPTOR_VERSION,
         "entry": _string(table["entry"], f"{path}: entry", pattern=C_SYMBOL_RE),
         "generated_symbol": generated_symbol(app_id),
-        "lifecycle": lifecycle,
         "sources": sources,
         "private_includes": private_includes,
         "menu": menu,
@@ -444,14 +429,14 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         "limits": {
             "static_ram_bytes": PLACEHOLDER_STATIC_RAM_BYTES,
             "stack_bytes": PLACEHOLDER_STACK_BYTES,
-            "state_bytes": (
-                V2_STATE_BYTES if lifecycle == "v2" else PLACEHOLDER_STATE_BYTES
-            ),
+            "state_bytes": V2_STATE_BYTES,
             "tick_interval_us": tick_interval_us,
             "tick_budget_us": tick_budget_us,
             "render_budget_us": PLACEHOLDER_RENDER_BUDGET_US,
         },
-        "metadata": {"help": help_text, "debug": debug},
+        "metadata": {"help": help_text, "debug": debug,
+                     "debug_entry": _string(table["debug_entry"], f"{path}: debug_entry", pattern=C_SYMBOL_RE)
+                     if "debug_entry" in table else None},
     }
 
 
@@ -480,11 +465,6 @@ def canonical_model(manifests: Sequence[dict[str, Any]]) -> dict[str, Any]:
                     f"collision for {field}={value!r}: {owners[value]!r}, {app_id!r}"
                 )
             owners[value] = app_id
-    for manifest in manifests:
-        if manifest["lifecycle"] not in LIFECYCLE_KINDS:
-            raise ManifestError(
-                f"{manifest['id']}: lifecycle must be one of {sorted(LIFECYCLE_KINDS)}"
-            )
     return {
         "schema": SCHEMA_MAJOR,
         "apps": sorted(manifests, key=lambda item: item["id"]),

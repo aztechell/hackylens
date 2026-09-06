@@ -10,15 +10,14 @@ static hk_app_stop_reason_t normalized_reason(hk_app_stop_reason_t reason)
                : HK_APP_STOP_FORCED;
 }
 
-static uint8_t active_is_v2(const hk_app_switch_t *switcher)
+static uint8_t has_active(const hk_app_switch_t *switcher)
 {
-    return (uint8_t)(switcher && switcher->active &&
-                     switcher->active->lifecycle == HK_APP_LIFECYCLE_V2);
+    return (uint8_t)(switcher && switcher->active);
 }
 
-static void sync_v2_state(hk_app_switch_t *switcher)
+static void sync_runtime_state(hk_app_switch_t *switcher)
 {
-    if(active_is_v2(switcher) &&
+    if(has_active(switcher) &&
        hk_app_runtime_state(&switcher->runtime) != HK_APP_RUNTIME_RUNNING)
     {
         switcher->active = NULL;
@@ -37,19 +36,7 @@ static hk_result_t close_active(
     if(!app)
         return HK_OK;
     reason = normalized_reason(reason);
-    if(app->lifecycle == HK_APP_LIFECYCLE_V2)
-    {
-        first = hk_app_runtime_stop(&switcher->runtime, reason);
-    }
-    else
-    {
-        const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-        if(entry && entry->exit)
-            entry->exit();
-        if(switcher->ops.legacy_close)
-            first = switcher->ops.legacy_close(switcher->ops.user, app);
-    }
+    first = hk_app_runtime_stop(&switcher->runtime, reason);
     switcher->active = NULL;
     switcher->next_tick_us = 0U;
     switcher->pending_input_valid = 0U;
@@ -66,8 +53,7 @@ hk_result_t hk_app_switch_init(
 {
     hk_result_t result;
 
-    if(!switcher || !runtime_ops || !ops || !ops->legacy_open ||
-       !ops->legacy_close || !ops->now_us || !ops->render_begin ||
+    if(!switcher || !runtime_ops || !ops || !ops->now_us || !ops->render_begin ||
        !ops->render_present || !ops->render_abort)
         return HK_ERR_INVALID_ARGUMENT;
     memset(switcher, 0, sizeof(*switcher));
@@ -81,11 +67,12 @@ hk_result_t hk_app_switch_init(
 hk_result_t hk_app_switch_open(
     hk_app_switch_t *switcher,
     const hk_app_t *app,
-    const hk_input_snapshot_t *legacy_input)
+    const hk_input_snapshot_t *input)
 {
     hk_result_t result;
     uint64_t now_us = 0U;
 
+    (void)input;
     if(!switcher || !app)
         return HK_ERR_INVALID_ARGUMENT;
     if(switcher->transition_active)
@@ -105,8 +92,6 @@ hk_result_t hk_app_switch_open(
     switcher->pending_close = 0U;
     switcher->pending_input_valid = 0U;
     switcher->active = app;
-    if(app->lifecycle == HK_APP_LIFECYCLE_V2)
-    {
         result = hk_app_runtime_launch(&switcher->runtime, app);
         if(result == HK_OK)
         {
@@ -121,23 +106,9 @@ hk_result_t hk_app_switch_open(
                 (void)hk_app_runtime_stop(
                     &switcher->runtime, HK_APP_STOP_DEADLINE);
         }
-    }
-    else
-    {
-        const hk_legacy_app_entry_t *entry = hk_app_legacy_entry(app);
-
-        if(!entry || !entry->enter)
-            result = HK_ERR_INVALID_ARGUMENT;
-        else
-        {
-            result = switcher->ops.legacy_open(switcher->ops.user, app);
-            if(result == HK_OK)
-                entry->enter(legacy_input);
-        }
-    }
     switcher->opening = 0U;
     switcher->transition_active = 0U;
-    sync_v2_state(switcher);
+    sync_runtime_state(switcher);
     if(result != HK_OK)
     {
         switcher->active = NULL;
@@ -151,7 +122,7 @@ hk_result_t hk_app_switch_open(
         result = close_active(switcher, reason);
         return result == HK_OK ? HK_ERR_CANCELLED : result;
     }
-    if(switcher->pending_input_valid && active_is_v2(switcher))
+    if(switcher->pending_input_valid && has_active(switcher))
     {
         uint8_t consumed = 0U;
         hk_input_event_t pending = switcher->pending_input;
@@ -200,7 +171,7 @@ static hk_result_t dispatch_event(
     event->struct_version = HK_APP_EVENT_VERSION;
     event->sequence = ++switcher->runtime.event_sequence;
     result = hk_app_runtime_event(&switcher->runtime, event);
-    sync_v2_state(switcher);
+    sync_runtime_state(switcher);
     return result;
 }
 
@@ -213,7 +184,7 @@ hk_result_t hk_app_switch_input(
 
     if(!switcher || !input || !consumed)
         return HK_ERR_INVALID_ARGUMENT;
-    *consumed = active_is_v2(switcher);
+    *consumed = has_active(switcher);
     if(!*consumed)
         return HK_OK;
     if(switcher->opening)
@@ -239,7 +210,7 @@ hk_result_t hk_app_switch_media(
     if(!switcher || kind < HK_APP_MEDIA_INSERTED ||
        kind > HK_APP_MEDIA_ERROR)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!active_is_v2(switcher))
+    if(!has_active(switcher))
         return HK_OK;
     event.kind = HK_APP_EVENT_MEDIA;
     event.timestamp_us = timestamp_us;
@@ -302,7 +273,7 @@ static hk_result_t poll_tick(hk_app_switch_t *switcher, uint64_t now_us)
     event.data.timer.scheduled_us = switcher->next_tick_us;
     event.data.timer.now_us = started_us;
     result = dispatch_event(switcher, &event);
-    if(result != HK_OK || !active_is_v2(switcher))
+    if(result != HK_OK || !has_active(switcher))
         return result;
     result = switcher->ops.now_us(switcher->ops.user, &finished_us);
     if(result != HK_OK)
@@ -310,10 +281,10 @@ static hk_result_t poll_tick(hk_app_switch_t *switcher, uint64_t now_us)
     if(finished_us < started_us ||
        finished_us - started_us > switcher->active->limits.tick_budget_us)
         return deadline_failure(switcher, HK_ERR_DEADLINE_EXCEEDED);
-    if(finished_us > UINT64_MAX - switcher->active->limits.tick_interval_us)
+    if(started_us > UINT64_MAX - switcher->active->limits.tick_interval_us)
         return deadline_failure(switcher, HK_ERR_LIMIT);
     switcher->next_tick_us =
-        finished_us + switcher->active->limits.tick_interval_us;
+        started_us + switcher->active->limits.tick_interval_us;
     return HK_OK;
 }
 
@@ -331,7 +302,9 @@ static hk_result_t poll_render(hk_app_switch_t *switcher)
         return HK_OK;
     result = switcher->ops.render_begin(
         switcher->ops.user, &switcher->runtime, &switcher->surface);
-    if(result == HK_ERR_CAPABILITY_ABSENT || result == HK_ERR_BUSY)
+    if(result == HK_ERR_BUSY)
+        return HK_OK;
+    if(result == HK_ERR_CAPABILITY_ABSENT)
     {
         hk_app_runtime_render_committed(&switcher->runtime);
         return HK_OK;
@@ -368,8 +341,8 @@ static hk_result_t poll_render(hk_app_switch_t *switcher)
     hk_app_runtime_render_committed(&switcher->runtime);
     result = hk_app_runtime_render(
         &switcher->runtime, &switcher->surface);
-    sync_v2_state(switcher);
-    if(result != HK_OK || !active_is_v2(switcher))
+    sync_runtime_state(switcher);
+    if(result != HK_OK || !has_active(switcher))
     {
         (void)switcher->ops.render_abort(switcher->ops.user);
         hk_app_surface_private_invalidate(&switcher->surface);
@@ -406,10 +379,10 @@ hk_result_t hk_app_switch_poll(
 
     if(!switcher)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!active_is_v2(switcher))
+    if(!has_active(switcher))
         return HK_OK;
     result = poll_tick(switcher, now_us);
-    if(result != HK_OK || !active_is_v2(switcher))
+    if(result != HK_OK || !has_active(switcher))
         return result;
     return poll_render(switcher);
 }
@@ -425,7 +398,7 @@ uint32_t hk_app_switch_poll_interval_us(
 {
     uint64_t remaining;
 
-    if(!active_is_v2(switcher))
+    if(!has_active(switcher))
         return 1U;
     if(hk_app_runtime_render_pending(&switcher->runtime) ||
        switcher->next_tick_us <= now_us)

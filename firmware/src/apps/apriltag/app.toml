@@ -1,10 +1,11 @@
 id = "apriltag"
 name = "APRILTAG"
-lifecycle = "legacy"
-entry = "apriltag_legacy_entry"
+entry = "apriltag_v2_entry"
 sources = ["apriltag_app.c", "apriltag_controller.c", "apriltag_detector.c", "apriltag_settings.c", "apriltag_settings_menu.c", "apriltag_view.c"]
-requires = ["display", "time", "input", "lights", "camera"]
+requires = ["display", "time", "input", "camera"]
 menu_order = 5
 autostart_id = 5
-tick_ms = 1
+tick_ms = 20
+tick_budget_ms = 1000
 debug = "HKTAG/HKTAGINFO"
+debug_entry = "apriltag_handle_debug_command"

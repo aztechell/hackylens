@@ -1,10 +1,11 @@
 id = "face-detect"
 name = "FACE DETECT"
-lifecycle = "legacy"
-entry = "face_detect_legacy_entry"
+entry = "face_detect_v2_entry"
 sources = ["face_detect_app.c", "face_detect_controller.c", "face_detect_detector.c", "face_detect_view.c"]
-requires = ["display", "input", "lights", "camera", "sd-card"]
+requires = ["display", "input", "camera", "sd-card"]
 menu_order = 4
 autostart_id = 4
-tick_ms = 1
+tick_ms = 20
+tick_budget_ms = 1000
 debug = "HKFACEINFO"
+debug_entry = "face_detect_handle_debug_command"

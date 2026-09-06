@@ -92,7 +92,7 @@ uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
     (void)input;
     if(!app || !app->id || strcmp(app->id, "sleep") != 0)
         return 0U;
-    g_screen = SCREEN_SLEEP;
+    g_screen = SCREEN_APP;
     g_sleep_count++;
     return 1U;
 }
@@ -146,7 +146,7 @@ int main(void)
     g_now = g_last_activity + 60000000U;
     auto_sleep_controller_tick(&idle);
     failed |= check(
-        g_sleep_count == 1U && g_screen == SCREEN_SLEEP,
+        g_sleep_count == 1U && g_screen == SCREEN_APP,
         "exact inactivity deadline must enter sleep");
 
     reset_fixture();
@@ -157,7 +157,7 @@ int main(void)
         "held input must suppress auto sleep");
 
     reset_fixture();
-    g_screen = SCREEN_CAMERA;
+    g_screen = SCREEN_APP;
     g_now = g_last_activity + 60000000U;
     auto_sleep_controller_tick(&idle);
     failed |= check(

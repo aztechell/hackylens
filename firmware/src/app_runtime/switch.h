@@ -6,8 +6,6 @@
 typedef struct
 {
     void *user;
-    hk_result_t (*legacy_open)(void *user, const hk_app_t *app);
-    hk_result_t (*legacy_close)(void *user, const hk_app_t *app);
     hk_result_t (*now_us)(void *user, uint64_t *now_us);
     hk_result_t (*render_begin)(
         void *user, const hk_app_runtime_t *runtime,
@@ -41,7 +39,7 @@ hk_result_t hk_app_switch_init(
 hk_result_t hk_app_switch_open(
     hk_app_switch_t *switcher,
     const hk_app_t *app,
-    const hk_input_snapshot_t *legacy_input);
+    const hk_input_snapshot_t *input);
 hk_result_t hk_app_switch_close(
     hk_app_switch_t *switcher,
     hk_app_stop_reason_t reason);

@@ -10,6 +10,11 @@ superseded-by:
 
 # ADR-0003: Require machine-readable deprecation migration routes
 
+Historical decision: mandatory migration metadata and its checker requirements
+are retired for current work. Follow the [current versioning policy](../spec/VERSIONING.md)
+and [Simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md). The original
+decision below is retained to explain the former process.
+
 ## Context
 
 The versioning policy already required every deprecated contract to provide a

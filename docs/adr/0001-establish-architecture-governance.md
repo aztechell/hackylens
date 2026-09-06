@@ -10,6 +10,11 @@ superseded-by:
 
 # ADR-0001: Establish architecture governance and versioned public contracts
 
+Historical decision: the governance requirements below have been replaced for
+current work by the [Simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md)
+and [current change process](../spec/README.md). Original acceptance metadata
+and rationale are retained as history, not as additional implementation gates.
+
 ## Context
 
 HackyLens v0.2 demonstrates a layered K210 reference firmware and an embedded

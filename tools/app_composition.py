@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 import app_registry
 from app_manifest import (
-    LEGACY_SERVICE_PREFIX,
+    FIRMWARE_SERVICE_PREFIX,
     ManifestError,
     canonical_json_bytes,
     validate_tree,
@@ -31,19 +31,15 @@ def enable_definition(app_id: str) -> str:
     return "HK_ENABLE_APP_" + re.sub(r"[^A-Za-z0-9]", "_", app_id).upper()
 
 
-def _legacy_requirements(app: Mapping[str, Any]) -> list[str]:
+def _firmware_requirements(app: Mapping[str, Any]) -> list[str]:
     requirements: list[str] = []
     for service in app["services"]:
         service_id = service["id"]
-        if not service_id.startswith(LEGACY_SERVICE_PREFIX):
+        if not service_id.startswith(FIRMWARE_SERVICE_PREFIX):
             continue
-        if app["lifecycle"] != "legacy":
-            raise CompositionError(
-                f"{app['id']}: transitional legacy service requires lifecycle=legacy"
-            )
-        requirement = service_id[len(LEGACY_SERVICE_PREFIX):]
+        requirement = service_id[len(FIRMWARE_SERVICE_PREFIX):]
         if not requirement:
-            raise CompositionError(f"{app['id']}: empty legacy service requirement")
+            raise CompositionError(f"{app['id']}: empty firmware service requirement")
         requirements.append(requirement)
     return sorted(requirements)
 
@@ -91,7 +87,7 @@ def load_model(manifest_root: Path = MANIFEST_ROOT) -> dict[str, Any]:
                 f"{app['id']}: manifest sources must exactly cover app translation units; "
                 f"missing={sorted(present - declared)}, extra={sorted(declared - present)}"
             )
-        _legacy_requirements(app)
+        _firmware_requirements(app)
     return model
 
 
@@ -114,7 +110,7 @@ def generated_document(
             "enable_definition": enable_definition(app["id"]),
             "sources": sources,
             "private_includes": sorted(set(include_paths)),
-            "legacy_requirements": _legacy_requirements(app),
+            "firmware_requirements": _firmware_requirements(app),
             "capabilities": app["capabilities"],
             "services": app["services"],
         })

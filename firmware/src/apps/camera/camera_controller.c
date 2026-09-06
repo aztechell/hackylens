@@ -38,7 +38,7 @@ void camera_controller_tick(const hk_input_snapshot_t *input)
     camera_runtime_tick(input);
 }
 
-void camera_controller_handle_input(const hk_input_snapshot_t *input)
+uint8_t camera_controller_handle_input(const hk_input_snapshot_t *input)
 {
     camera_settings_exit_t settings_exit;
 
@@ -54,19 +54,19 @@ void camera_controller_handle_input(const hk_input_snapshot_t *input)
         }
         else if(settings_exit == CAMERA_SETTINGS_EXIT_RESUME)
         {
-            hk_screen_set(SCREEN_CAMERA);
-            camera_view_clear();
+                    camera_view_clear();
             printf("[SHELL] screen CAMERA\r\n");
         }
-        return;
+        return 0U;
     }
 
     camera_runtime_input_event_t event = camera_runtime_handle_input(input);
 
     if(event == CAMERA_RUNTIME_INPUT_EXIT)
-        shell_show_menu();
+        return 1U;
     else if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE)
         camera_photo_controller_take(camera_runtime_redraw_preview);
+    return 0U;
 }
 
 uint8_t camera_controller_settings_active(void)

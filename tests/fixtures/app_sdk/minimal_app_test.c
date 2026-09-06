@@ -85,7 +85,7 @@ int main(void)
     CHECK(HK_APP_SDK_MANIFEST_SCHEMA_MAJOR == 1U);
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
-    app.limits.tick_budget_us = app.limits.tick_interval_us + 1U;
+    app.limits.tick_budget_us = 0U;
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) ==
           HK_ERR_INVALID_ARGUMENT);

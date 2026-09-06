@@ -1,10 +1,11 @@
 id = "camera"
 name = "CAMERA"
-lifecycle = "legacy"
-entry = "camera_legacy_entry"
+entry = "camera_v2_entry"
 sources = ["camera_app.c", "camera_controller.c", "camera_photo_capture.c", "camera_photo_controller.c", "camera_photo_encode.c", "camera_photo_format.c", "camera_photo_path.c", "camera_photo_service.c", "camera_photo_writer.c", "camera_settings.c", "camera_settings_menu.c", "camera_view.c"]
-requires = ["display", "time", "input", "lights", "camera", "sd-card"]
+requires = ["display", "time", "input", "camera", "sd-card"]
 menu_order = 2
 autostart_id = 2
-tick_ms = 1
-debug = "HKCAMERA"
+tick_ms = 20
+tick_budget_ms = 1000
+debug = "HKCAMERA HKCAM"
+debug_entry = "camera_handle_debug_command"

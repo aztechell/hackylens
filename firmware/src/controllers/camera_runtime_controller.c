@@ -121,10 +121,6 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
         (face_mode ? "FACE FAIL" : (apriltag_mode ? "TAG FAIL" :
          (object_mode ? "OBJECT FAIL" : "CAMERA FAIL")));
 
-    hk_screen_set(qr_mode ? SCREEN_QR_CAMERA :
-                  (face_mode ? SCREEN_FACE_DETECT :
-                   (apriltag_mode ? SCREEN_APRILTAG :
-                    (object_mode ? SCREEN_OBJECT_DETECT : SCREEN_CAMERA))));
     camera_service_set_qvga_mode(face_mode || apriltag_mode || object_mode);
     hk_back_exit_set_armed(0);
     camera_light_repeat_reset();

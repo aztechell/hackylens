@@ -1,46 +1,24 @@
 # Architecture Decision Records
 
-Architecture Decision Records preserve the context and consequences of
-significant HackyLens decisions. They complement normative specifications: an
-ADR explains why a rule was adopted, while a specification defines the current
-rule.
+This directory preserves the context of earlier HackyLens architecture
+choices. Numbered ADRs are historical records, including those whose original
+metadata says `accepted`. That status records acceptance at the time; it does
+not override the current
+[Simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md).
 
-## When an ADR is required
+The earlier requirements to create an ADR for architectural changes, maintain
+supersedes/superseded-by chains, or supply machine-readable governance evidence
+are retired for current work. In particular, ADR-0001's governance process and
+ADR-0003's mandatory migration metadata do not add gates to simplification.
+Other ADRs explain the existing implementation, not a requirement to retain
+mechanisms scheduled for replacement by S1–S9.
 
-Create an ADR for:
+Do not rewrite an old decision to suggest it originally chose the new design.
+Record current behavior, compatibility impact, and rationale in the affected
+technical documentation and change description. A new ADR is optional when a
+specific decision benefits from a separate historical record; neither the
+numbering template nor its section list is a prerequisite for implementation.
 
-- a breaking public-contract change;
-- a new dependency direction between architectural layers;
-- resource ownership, lifecycle, cancellation, or cleanup semantics;
-- a wire, storage, package, or project-format decision;
-- a fundamental board, capability, runtime, app, or adapter decision.
-
-Routine implementation choices, local refactoring, bug fixes that preserve a
-contract, and names of private functions do not require an ADR.
-
-## Numbering and status
-
-Copy `template.md` to the next four-digit filename:
-
-```text
-NNNN-short-kebab-case-title.md
-```
-
-Allowed statuses are `proposed`, `accepted`, `rejected`, and `superseded`.
-Accepted ADRs are historical records and MUST NOT be rewritten to change their
-meaning. Replace a decision with a new ADR and connect the records with
-`supersedes` and `superseded-by` metadata.
-
-Both relationship fields contain one four-digit ADR number. A superseding ADR
-MUST be accepted, the replaced ADR MUST have status `superseded`, and both
-records MUST name each other. ADR numbers are unique even when filenames have
-different titles.
-
-Typographical corrections, repaired links, and clarifications that do not alter
-the decision are allowed.
-
-## Required content
-
-Every numbered ADR contains machine-readable front matter and the sections
-Context, Decision, Alternatives, Consequences, Compatibility and Migration,
-Evidence, and References.
+[Technical specifications](../spec/README.md) describe current interfaces.
+Documented behavior and resource safety requirements remain in force until an
+intentional, tested migration; classifying ADRs as history does not waive them.

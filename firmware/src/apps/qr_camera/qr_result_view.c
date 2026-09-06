@@ -1,6 +1,7 @@
 #include "qr_result_view.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "qr_layout.h"
 #include "qr_camera_firmware.h"
@@ -36,9 +37,11 @@ static void qr_result_view_draw_page_hint(uint16_t scroll_line, uint16_t max_scr
 void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t max_scroll)
 {
     hk_ui_display_surface_t surface;
+    size_t payload_length;
 
     if(!payload)
         payload = "";
+    payload_length = strlen(payload);
     if(scroll_line > max_scroll)
         scroll_line = max_scroll;
     if(!hk_ui_display_frame_acquire(&surface))
@@ -61,7 +64,7 @@ void qr_result_view_render(const char *payload, uint16_t scroll_line, uint16_t m
             char line[QR_RESULT_TEXT_COLS + 1U];
             uint8_t len = 0;
 
-            if(!payload[offset])
+            if(offset >= payload_length)
                 break;
 
             while(len < QR_RESULT_TEXT_COLS && payload[offset + len])

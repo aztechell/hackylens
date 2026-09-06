@@ -22,10 +22,9 @@ void sd_event_controller_handle(hk_sd_event_t event)
         return;
 
     if(s_app_hook && !s_app_hook(event) &&
-       hk_screen_get() == SCREEN_APP_SLOT_0)
+       hk_screen_get() == SCREEN_APP)
         shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
 
-    hk_app_registry_handle_sd_event(event);
     topbar_set_sd_mounted((uint8_t)(hk_sd_present() && hk_fat_mounted()));
     if(hk_screen_get() == SCREEN_MENU)
         menu_render();

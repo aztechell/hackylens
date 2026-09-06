@@ -251,9 +251,9 @@ def requirements_from_manifest_model(
                 f"app manifest {app_id}: exceeds fixed 16-grant owner capacity"
             )
         legacy = tuple(sorted(
-            str(service["id"])[len(app_composition.LEGACY_SERVICE_PREFIX):]
+            str(service["id"])[len(app_composition.FIRMWARE_SERVICE_PREFIX):]
             for service in app["services"]
-            if str(service["id"]).startswith(app_composition.LEGACY_SERVICE_PREFIX)
+            if str(service["id"]).startswith(app_composition.FIRMWARE_SERVICE_PREFIX)
         ))
         result[app_id] = Requirements(
             legacy=legacy,

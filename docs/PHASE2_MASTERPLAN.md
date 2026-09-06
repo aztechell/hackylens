@@ -7,13 +7,13 @@
 Исходная ревизия для планирования:
 `7183c7ae59008958893c1585ff6cdd96f1fb746b`.
 
-Этот документ — информативный план исполнения Phase 2. Нормативными источниками
-остаются [ROADMAP.md](ROADMAP.md),
-[ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md),
-[CURRENT_STATE.md](CURRENT_STATE.md),
-[BOARD_PORT.md](spec/BOARD_PORT.md),
-[GLOSSARY.md](spec/GLOSSARY.md) и
-[VERSIONING.md](spec/VERSIONING.md).
+Этот документ — исторический план завершённой Phase 2. Требования, порядок
+пакетов и evidence gates ниже описывают ту работу и не требуют повторять её
+governance или сохранять broker при дальнейшем рефакторинге. Текущую работу
+определяет [SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md).
+Принятые hardware observations и их ограничения сохраняются в
+[PHASE2_PHYSICAL_STATUS.md](PHASE2_PHYSICAL_STATUS.md); действующие технические
+контракты перечислены в [specs](spec/README.md).
 
 Номера `2.1`–`2.14` ниже обозначают последовательные execution-пакеты, а не
 заменяют тематические подпункты Phase 2 в roadmap. Каждый пакет рассчитан на

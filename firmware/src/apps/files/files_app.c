@@ -6,7 +6,6 @@
 #include "files_view.h"
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
-static files_state_t *s_active_state;
 
 _Static_assert(
     sizeof(files_state_t) <= sizeof(s_state_storage),
@@ -61,7 +60,6 @@ static hk_result_t files_start(const hk_app_context_t *ctx)
     state->input = input;
     state->time = time;
     files_controller_enter(state);
-    s_active_state = state;
     return HK_OK;
 }
 
@@ -86,6 +84,8 @@ static hk_result_t files_event(
         if(hk_input_get_state(state->owner, &state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         files_controller_tick(state, buttons);
+        if(!state->close_requested)
+            files_controller_poll_animation(state);
         return files_finish_work(ctx, state);
     }
     if(event->kind == HK_APP_EVENT_MEDIA)
@@ -93,14 +93,6 @@ static hk_result_t files_event(
         files_controller_handle_media(state, event->data.media.kind);
         return files_finish_work(ctx, state);
     }
-    return HK_OK;
-}
-
-static hk_result_t files_render(
-    const hk_app_context_t *ctx, hk_app_surface_t *surface)
-{
-    (void)ctx;
-    (void)surface;
     return HK_OK;
 }
 
@@ -112,7 +104,6 @@ static hk_result_t files_stop(const hk_app_context_t *ctx)
 
     if(result == HK_OK)
         files_controller_exit(state);
-    s_active_state = NULL;
     return hk_app_context_teardown_deadline(ctx, &deadline);
 }
 
@@ -121,12 +112,6 @@ const hk_app_v2_entry_t files_v2_entry = {
     .state_capacity_bytes = sizeof(s_state_storage),
     .start = files_start,
     .event = files_event,
-    .render = files_render,
+    .render = NULL,
     .stop = files_stop,
 };
-
-void files_poll_animation(void)
-{
-    if(s_active_state)
-        files_controller_poll_animation(s_active_state);
-}

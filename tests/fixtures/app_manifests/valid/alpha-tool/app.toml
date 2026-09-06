@@ -1,6 +1,5 @@
 id = "alpha-tool"
 name = "Alpha Tool"
-lifecycle = "v2"
 entry = "alpha_tool_app"
 sources = ["src/alpha_tool.c"]
 private_includes = ["include"]

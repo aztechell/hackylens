@@ -130,8 +130,7 @@ void apriltag_controller_enter(const hk_input_snapshot_t *input)
     if(g_error)
     {
         vision_result_clear(VISION_SOURCE_APRILTAG);
-        hk_screen_set(SCREEN_APRILTAG);
-        camera_status_view_draw("TAG ERROR", "NO MEMORY");
+            camera_status_view_draw("TAG ERROR", "NO MEMORY");
         return;
     }
     camera_runtime_enter(CAMERA_RUNTIME_APRILTAG, input);
@@ -196,7 +195,7 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
     vision_result_publish(VISION_SOURCE_APRILTAG, width, height, items, published_count);
 }
 
-void apriltag_controller_handle_buttons(const hk_input_snapshot_t *input)
+uint8_t apriltag_controller_handle_buttons(const hk_input_snapshot_t *input)
 {
     camera_runtime_input_event_t event;
 
@@ -212,19 +211,20 @@ void apriltag_controller_handle_buttons(const hk_input_snapshot_t *input)
             camera_service_resume_from_settings(input && (input->state & BUTTON_OK));
             camera_view_clear();
         }
-        return;
+        return 0U;
     }
     if(g_error)
     {
         if(input && (input->pressed & BUTTON_BACK))
-            shell_show_menu();
-        return;
+            return 1U;
+        return 0U;
     }
     event = camera_runtime_handle_input(input);
     if(event == CAMERA_RUNTIME_INPUT_EXIT)
-        shell_show_menu();
+        return 1U;
     else if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE && g_target_id >= 0)
         (void)apriltag_settings_toggle_selected((uint16_t)g_target_id);
+    return 0U;
 }
 
 int16_t apriltag_controller_target_id(void)

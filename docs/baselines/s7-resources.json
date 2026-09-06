@@ -1,0 +1,27 @@
+{
+  "commit": "b76ebbb37864bc7f81d808fb19c02a319f24cd52",
+  "board": "huskylens-sen0305",
+  "profile": "full",
+  "measurement": {
+    "attestation_sha256": "1deefc3faa80f26b7e5ee17be378985359bb6115b9562c01c2b0736267f9b40e",
+    "capabilities_sha256": "69d704d8d6972a887cf9a7b53b34992a77fb88565ad9fe1663ac431c03fcdff3",
+    "composition_sha256": "e7a7b2fc1310f8ff758891dd63eb056426e24fb16e13f28e1f4183d8e31e291e",
+    "elf": {
+      "bss_bytes": 2734480,
+      "data_bytes": 158872,
+      "sha256": "fd98a80e21dcee000849e5531c9a9808633fe319068c1f4a3f237e3f4b3374d2",
+      "static_ram_bytes": 2893352,
+      "text_bytes": 1407984
+    },
+    "image": {
+      "flash_occupied_bytes": 1568768,
+      "raw_bytes": 1566968,
+      "sha256": "c08c69dc40cc4f4f9b6de938cee220032906ef38baeac809d387b1dcb7472ae5"
+    }
+  },
+  "limits": {
+    "static_ram_growth_bytes": 6144,
+    "raw_image_growth_bytes": 0
+  },
+  "reason": "Five fixed 1024-byte app states plus bounded cleanup/descriptor metadata; no image growth."
+}

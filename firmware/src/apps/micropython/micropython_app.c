@@ -61,6 +61,7 @@ static uint32_t g_preview_next_line;
 static uint32_t g_preview_size;
 static uint32_t g_observed_run_id;
 static uint8_t g_screen_active;
+static uint8_t g_close_requested;
 static micropython_view_update_t g_render_update;
 static uint8_t g_render_divider;
 static uint8_t g_console_render_ticks;
@@ -827,7 +828,7 @@ void micropython_enter(const hk_input_snapshot_t *input)
     uint8_t watchdog_recovery = boot_internal_watchdog_reset_detected();
 
     (void)input;
-    hk_screen_set(HK_MICROPYTHON_SCREEN);
+    g_close_requested = 0U;
     g_screen_active = 1U;
     memset(&g_render_update, 0, sizeof(g_render_update));
     g_render_divider = 0U;
@@ -909,7 +910,7 @@ static void handle_list_buttons(uint32_t pressed,
             request_runtime_stop();
         }
         else
-            shell_show_menu();
+            g_close_requested = 1U;
         return;
     }
     if(pressed & BUTTON_LEFT)
@@ -1043,7 +1044,7 @@ void micropython_handle_buttons(const hk_input_snapshot_t *input)
     }
 }
 
-void micropython_background_tick(const hk_input_snapshot_t *input)
+void micropython_poll_output(const hk_input_snapshot_t *input)
 {
     char output[160];
     size_t count;
@@ -1157,6 +1158,7 @@ uint8_t micropython_handle_debug_command(const char *command)
     }
     if(str_eq_ci(command, "HKMPLOG"))
     {
+        micropython_poll_output(NULL);
         uint32_t count = log_effective_count();
         for(uint32_t i = 0U; i < count; i++)
         {
@@ -1200,13 +1202,40 @@ uint8_t micropython_handle_debug_command(const char *command)
     return 0U;
 }
 
-const hk_legacy_app_entry_t micropython_legacy_entry = {
-    .screen = HK_MICROPYTHON_SCREEN,
-    .enter = micropython_enter,
-    .exit = micropython_exit,
-    .tick = micropython_tick,
-    .handle_input = micropython_handle_buttons,
-    .draw_icon = micropython_draw_icon,
-    .background_tick = micropython_background_tick,
-    .handle_debug_command = micropython_handle_debug_command,
+
+static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
+static hk_result_t app_start(const hk_app_context_t *ctx)
+{
+    (void)ctx;
+    micropython_enter(NULL);
+    return HK_OK;
+}
+static hk_result_t app_event(const hk_app_context_t *ctx, const hk_app_event_t *event)
+{
+    hk_input_snapshot_t input = {0};
+    if(event->kind == HK_APP_EVENT_INPUT)
+    {
+        input.state = event->data.input.state;
+        input.changed = event->data.input.changed;
+        input.pressed = input.state & input.changed;
+        micropython_handle_buttons(&input);
+    }
+    else if(event->kind == HK_APP_EVENT_TIMER)
+    {
+        micropython_poll_output(&input);
+        micropython_tick(&input);
+    }
+    return g_close_requested ? hk_app_context_request_close(ctx) : HK_OK;
+}
+static hk_result_t app_stop(const hk_app_context_t *ctx)
+{
+    hk_deadline_t deadline;
+    hk_result_t result = hk_app_context_teardown_deadline(ctx, &deadline);
+    micropython_exit();
+    return result;
+}
+const hk_app_v2_entry_t micropython_v2_entry = {
+    .state_storage = s_state_storage,
+    .state_capacity_bytes = sizeof(s_state_storage),
+    .start = app_start, .event = app_event, .render = NULL, .stop = app_stop,
 };

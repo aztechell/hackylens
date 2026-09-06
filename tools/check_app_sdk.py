@@ -133,23 +133,26 @@ def app_source_boundary_failures(
 def production_v2_app_failures(
     apps_root: Path = ROOT / "firmware" / "src" / "apps",
 ) -> list[str]:
+    # Bundled apps use the public lifecycle plus portable firmware services.
+    # Audit every private header too: a shim must not hide a board/HAL include.
+    # Standalone SDK apps retain the strict SDK-only closure checked above.
+    import check_arch
     failures: list[str] = []
-    for manifest_path in sorted(apps_root.glob("*/app.toml")):
-        manifest = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("lifecycle") != "v2":
+    for path in sorted(apps_root.rglob("*")):
+        if not path.is_file() or path.suffix.casefold() not in SOURCE_SUFFIXES:
             continue
-        app_root = manifest_path.parent
-        sources = [app_root / value for value in manifest.get("sources", [])]
-        private_roots = [
-            app_root / value for value in manifest.get("private_includes", [])
-        ]
-        headers = [
-            path for root in private_roots for path in root.rglob("*")
-            if path.is_file() and path.suffix.casefold() in SOURCE_SUFFIXES
-        ]
-        failures.extend(app_source_boundary_failures(
-            app_root, sources + headers, private_roots
-        ))
+        relative = check_arch.relative(path)
+        text = path.read_text(encoding="utf-8")
+        for number, include in check_arch.includes(path):
+            target = check_arch.resolve_include(path, include)
+            for violation in (
+                check_arch.layer_violation(relative, include, target),
+                check_arch.feature_include_violation(relative, target),
+            ):
+                if violation:
+                    failures.append(f"{relative}:{number}: {violation}: {include}")
+        for number, token in check_arch.sdk_token_lines(text):
+            failures.append(f"{relative}:{number}: K210 SDK token in app: {token}")
     return sorted(set(failures))
 
 

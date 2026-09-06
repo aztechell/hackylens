@@ -13,7 +13,6 @@ static settings_menu_session_t g_camera_settings;
 
 void camera_settings_open(void)
 {
-    hk_screen_set(SCREEN_CAMERA_SETTINGS);
     hk_back_exit_set_armed(0U);
     (void)settings_menu_open(&g_camera_settings, camera_settings_menu_definition());
     printf("[SHELL] screen CAMERA SETTINGS\r\n");

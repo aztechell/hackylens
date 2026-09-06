@@ -243,6 +243,7 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
         }
     }
 
+    runtime->unload_deadline_us = 0U;
     runtime->state = AI_MODEL_STATE_READY;
     runtime->result = AI_MODEL_RESULT_OK;
     return runtime->result;
@@ -301,6 +302,12 @@ void ai_model_runtime_request_unload(ai_model_runtime_t *runtime)
     }
 }
 
+void ai_model_runtime_limit_unload(ai_model_runtime_t *runtime, uint64_t deadline_us)
+{
+    if(runtime && (!runtime->unload_deadline_us || deadline_us < runtime->unload_deadline_us))
+        runtime->unload_deadline_us = deadline_us;
+}
+
 void ai_model_runtime_tick(ai_model_runtime_t *runtime)
 {
     uint64_t timeout;
@@ -315,7 +322,8 @@ void ai_model_runtime_tick(ai_model_runtime_t *runtime)
     }
     timeout = runtime->descriptor && runtime->descriptor->unload_timeout_us ?
               runtime->descriptor->unload_timeout_us : AI_MODEL_DEFAULT_UNLOAD_TIMEOUT_US;
-    if(hal_time_us() - runtime->unload_requested_us < timeout)
+    if(hal_time_us() - runtime->unload_requested_us < timeout &&
+       (!runtime->unload_deadline_us || hal_time_us() < runtime->unload_deadline_us))
         return;
     stop_result = hal_kpu_stop_and_reset();
     if(stop_result == HAL_KPU_STOP_OK || stop_result == HAL_KPU_STOP_NOT_RUNNING)

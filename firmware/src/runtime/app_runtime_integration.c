@@ -182,18 +182,6 @@ static hk_result_t deadline_after_us(
         duration_us, deadline);
 }
 
-static hk_result_t legacy_open(void *user, const hk_app_t *app)
-{
-    (void)user;
-    return capability_owner_runtime_enter(app);
-}
-
-static hk_result_t legacy_close(void *user, const hk_app_t *app)
-{
-    (void)user;
-    return capability_owner_runtime_exit(app);
-}
-
 static hk_result_t surface_invalidate(
     void *user,
     const hk_display_rect_t *region)
@@ -410,8 +398,6 @@ hk_result_t app_runtime_integration_initialize(void)
 {
     static const hk_app_switch_ops_t switch_ops = {
         .user = &s_integration,
-        .legacy_open = legacy_open,
-        .legacy_close = legacy_close,
         .now_us = now_us,
         .render_begin = render_begin,
         .render_present = render_present,

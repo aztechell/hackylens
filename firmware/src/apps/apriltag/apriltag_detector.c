@@ -1,3 +1,4 @@
+#include "../../services/resource_cleanup.h"
 #include "apriltag_detector.h"
 
 #include <stdio.h>
@@ -351,10 +352,17 @@ void apriltag_detector_service_tick(void)
     }
 }
 
+static uint8_t finish_cleanup(void)
+{
+    apriltag_detector_service_tick();
+    return !g_cleanup_pending && !g_job_ticket;
+}
+
 uint8_t apriltag_detector_init(void)
 {
     hk_deadline_t deadline;
 
+    resource_cleanup_poll();
     if(apriltag_time_deadline_after_us(
            APRILTAG_START_TIMEOUT_US, &deadline) != HK_OK)
     {
@@ -397,13 +405,15 @@ uint8_t apriltag_detector_init(void)
          */
         g_cleanup_pending = g_job_ticket ? 1U : (g_detector ? 1U : 0U);
         g_worker_state = APRILTAG_WORKER_ERROR;
+        (void)resource_cleanup_schedule(RESOURCE_CLEANUP_CORE1, finish_cleanup);
         return 0U;
     }
     apriltag_detector_service_tick();
     if(g_worker_state != APRILTAG_WORKER_READY)
     {
         g_active = 0U;
-        g_cleanup_pending = g_detector ? 1U : 0U;
+        g_cleanup_pending = (g_job_ticket || g_detector) ? 1U : 0U;
+        (void)resource_cleanup_schedule(RESOURCE_CLEANUP_CORE1, finish_cleanup);
         return 0U;
     }
 
@@ -419,9 +429,11 @@ void apriltag_detector_deinit(void)
     if(g_session_epoch == 0U)
         g_session_epoch++;
     g_active = 0U;
-    g_cleanup_pending = g_detector ? 1U : 0U;
+    g_cleanup_pending = (g_job_ticket || g_detector) ? 1U : 0U;
     __sync_synchronize();
     apriltag_detector_service_tick();
+    if(!finish_cleanup())
+        (void)resource_cleanup_schedule(RESOURCE_CLEANUP_CORE1, finish_cleanup);
 }
 
 uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width, uint16_t height)

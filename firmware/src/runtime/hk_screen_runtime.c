@@ -30,29 +30,7 @@ void hk_screen_request_wake(void)
 
 const char *screen_label(screen_t screen)
 {
-    if(screen == SCREEN_CAMERA)
-        return "CAMERA";
-    if(screen == SCREEN_QR_CAMERA)
-        return "QR-CAMERA";
-    if(screen == SCREEN_FACE_DETECT)
-        return "FACE-DETECT";
-    if(screen == SCREEN_APRILTAG)
-        return "APRILTAG";
-    if(screen == SCREEN_OBJECT_DETECT)
-        return "OBJECT-DETECT";
-    if(screen == SCREEN_CAMERA_SETTINGS)
-        return "CAM-SETTINGS";
-    if(screen == SCREEN_FILES)
-        return "FILES";
-    if(screen == SCREEN_BUTTONS)
-        return "BUTTONS";
-    if(screen == SCREEN_SETTINGS)
-        return "SETTINGS";
-    if(screen == SCREEN_SLEEP)
-        return "SLEEP";
-    if(screen == SCREEN_APP_SLOT_0)
-        return "APP-V2";
-    return "MENU";
+    return screen == SCREEN_APP ? "APP" : "MENU";
 }
 
 uint64_t hk_last_activity_us(void)

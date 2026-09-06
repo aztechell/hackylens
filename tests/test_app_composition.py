@@ -61,8 +61,8 @@ class AppCompositionTests(unittest.TestCase):
         self.assertFalse((ROOT / "firmware" / "app_requirements.toml").exists())
         for app in app_composition.load_model()["apps"]:
             for service in app["services"]:
-                if service["id"].startswith(app_composition.LEGACY_SERVICE_PREFIX):
-                    self.assertEqual(app["lifecycle"], "legacy")
+                if service["id"].startswith(app_composition.FIRMWARE_SERVICE_PREFIX):
+                    self.assertNotIn("lifecycle", app)
 
     def test_committed_generated_copies_are_removed(self) -> None:
         for path in app_composition.committed_generated_copies():

@@ -6,7 +6,7 @@
 void apriltag_controller_enter(const hk_input_snapshot_t *input);
 void apriltag_controller_exit(void);
 void apriltag_controller_tick(const hk_input_snapshot_t *input);
-void apriltag_controller_handle_buttons(const hk_input_snapshot_t *input);
+uint8_t apriltag_controller_handle_buttons(const hk_input_snapshot_t *input);
 int16_t apriltag_controller_target_id(void);
 
 #endif

@@ -10,6 +10,13 @@ stability: experimental
 This policy defines independent semantic-version lines and the lifecycle of
 HackyLens public contracts.
 
+During simplification, [the active plan](../SIMPLIFICATION_MASTERPLAN.md)
+controls scope and takes precedence over the former governance process.
+Version and compatibility conventions below continue to describe interface
+changes. They do not require a new ADR, metadata validator, or phase evidence
+schema. This documentation update does not change any firmware, wire, schema,
+or API version.
+
 ## Version and stability are independent
 
 Semantic version identifies a compatibility line. Stability identifies the
@@ -85,58 +92,37 @@ Versions use `MAJOR.MINOR.PATCH`.
 
 ### Experimental
 
-An experimental contract is usable and testable but has no backward-
-compatibility promise. It still MUST have an owner, version, normative behavior,
-change evidence, and migration notes for intentional breaking changes.
+An experimental contract is usable and testable, but its interface may evolve
+through intentional versioned changes. Explain observable behavior and migration
+impact, and update affected consumers and behavioral tests. Experimental status
+does not waive the active plan's explicit compatibility requirements for
+MicroPython API v1, HMPY, stable app identities, or persistence.
 
 ### Stable
 
 A stable contract follows the compatibility rules of its semantic-version line.
-Breaking it requires a new major version and an ADR. Marking a contract stable
-requires conformance evidence and is outside Phase 0.
+Breaking it requires a new major version and a documented migration path.
+Marking a contract stable requires evidence for its compatibility promise;
+current simplification does not promote any interface to stable.
 
 ### Deprecated
 
-Deprecated is a supported migration state for a previously stable contract.
-The document MUST include:
+Deprecated identifies a supported interface scheduled for replacement. Document
+the affected interface, replacement or migration steps, and support/removal
+versions in ordinary prose. Keep compatibility tests while the interface is
+supported and respect any published stable compatibility promise. Stable
+incompatible removal follows the major-version rule above.
 
-```yaml
-deprecated-since: 1.3.2
-removal-version: 1.4.0
-migration-guide: ../MIGRATION.md#old-api
-```
-
-Every deprecated contract MUST also declare at least one machine-readable
-migration route:
-
-- `migration-guide` points to an existing repository-local Markdown document
-  and, when supplied, an existing heading anchor;
-- `replacement-contract` names another existing, non-deprecated `contract-id`.
-
-Both fields MAY be present. An external URL or prose outside this metadata does
-not satisfy the migration-route requirement.
-
-`deprecated-since` and `removal-version` MUST be release versions without
-prerelease or build metadata. The earliest permitted removal version is
-calculated as:
-
-```text
-minimum_removal =
-    (deprecated_since.major, deprecated_since.minor + 1, 0)
-
-removal_version >= minimum_removal
-```
-
-Therefore `1.3.2` permits removal no earlier than `1.4.0`, and `0.3.2` permits
-removal no earlier than `0.4.0`. Continued compatibility tests are required
-until removal.
+The former mandatory YAML migration routes and minimum-removal formula are
+historical governance, not current requirements. No new migration schema or
+validator is needed for simplification.
 
 ## Changing a contract
 
-A pull request that changes a public contract MUST:
+A change to a public interface should:
 
-1. identify the contract ID, owner, previous/new version, and stability;
+1. identify the affected interface, previous/new version, and stability;
 2. explain compatibility and migration impact;
-3. update normative documentation and contract tests;
-4. add or reference an ADR when the change is breaking or architectural;
+3. update public headers, affected consumers, documentation, and behavioral tests;
+4. explain the decision in the change description; a separate ADR is optional;
 5. record hardware, size, or protocol evidence when relevant.

@@ -368,20 +368,6 @@ static hk_result_t host_now_us(void *user, uint64_t *now_us)
     return HK_OK;
 }
 
-static hk_result_t legacy_open(void *user, const hk_app_t *app)
-{
-    (void)user;
-    (void)app;
-    return HK_ERR_INVALID_STATE;
-}
-
-static hk_result_t legacy_close(void *user, const hk_app_t *app)
-{
-    (void)user;
-    (void)app;
-    return HK_OK;
-}
-
 static hk_result_t surface_invalidate(
     void *user, const hk_display_rect_t *region)
 {
@@ -565,8 +551,6 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     };
     switch_ops = (hk_app_switch_ops_t){
         .user = host,
-        .legacy_open = legacy_open,
-        .legacy_close = legacy_close,
         .now_us = host_now_us,
         .render_begin = render_begin,
         .render_present = render_present,
@@ -701,8 +685,7 @@ void hk_app_runtime_host_fill_app(
     app->struct_size = sizeof(*app);
     app->struct_version = HK_APP_DESCRIPTOR_VERSION;
     app->id = id;
-    app->lifecycle = HK_APP_LIFECYCLE_V2;
-    app->entry.v2 = entry;
+    app->entry = entry;
     app->limits.static_ram_bytes =
         entry && entry->state_capacity_bytes > state_bytes ?
             entry->state_capacity_bytes : state_bytes;

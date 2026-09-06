@@ -33,11 +33,13 @@ void qr_camera_controller_reset(qr_camera_state_t *state)
 
 void qr_camera_controller_enter(qr_camera_state_t *state)
 {
-    (void)state;
+    hk_input_snapshot_t input = {0};
+    if(state)
+        (void)hk_input_get_state(state->owner, &state->input, &input.state);
     s_session_active = 1U;
     s_result_needs_paint = 0U;
     qr_service_enter();
-    camera_runtime_enter(CAMERA_RUNTIME_QR, NULL);
+    camera_runtime_enter(CAMERA_RUNTIME_QR, &input);
 }
 
 void qr_camera_controller_exit(qr_camera_state_t *state)
@@ -104,8 +106,7 @@ void qr_camera_controller_handle_input(
     {
         if(qr_settings_handle_input(&input))
         {
-            hk_screen_set(SCREEN_APP_SLOT_0);
-            camera_view_clear();
+                    camera_view_clear();
             printf("[SHELL] screen QR-CAMERA\r\n");
         }
         return;

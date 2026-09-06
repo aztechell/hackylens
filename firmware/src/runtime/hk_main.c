@@ -59,12 +59,12 @@ static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
         result = app_runtime_integration_input(&event, &consumed);
         if(result != HK_OK && result != HK_PENDING)
         {
-            if(hk_screen_get() == SCREEN_APP_SLOT_0)
+            if(hk_screen_get() == SCREEN_APP)
                 shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
             return HK_OK;
         }
         if(consumed && !app_runtime_integration_active() &&
-           hk_screen_get() == SCREEN_APP_SLOT_0)
+           hk_screen_get() == SCREEN_APP)
             shell_show_menu_reason(HK_APP_STOP_COMPLETED);
         if(!consumed)
             shell_handle_buttons(snapshot);
@@ -79,7 +79,7 @@ static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
         result = app_runtime_integration_input(&event, &consumed);
         if(result != HK_OK && result != HK_PENDING)
         {
-            if(hk_screen_get() == SCREEN_APP_SLOT_0)
+            if(hk_screen_get() == SCREEN_APP)
                 shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
         }
         return HK_OK;
@@ -108,8 +108,6 @@ int hk_main(void)
     }
     while(1)
     {
-        const hk_app_t *app;
-        const hk_legacy_app_entry_t *entry;
         hk_input_snapshot_t input;
         uint64_t now_us;
         uint64_t sleep_us;
@@ -149,33 +147,26 @@ int hk_main(void)
             s_hooks.debug_tick();
         if(hk_screen_get() == SCREEN_MENU)
             menu_tick(&input);
-        app = hk_app_for_screen(hk_screen_get());
-        entry = hk_app_legacy_entry(app);
-        if(entry && entry->tick)
-            entry->tick(&input);
         if(s_hooks.system_tick)
             s_hooks.system_tick(&input);
         poll_result = app_runtime_integration_poll(now_us);
         if(poll_result != HK_OK &&
-           hk_screen_get() == SCREEN_APP_SLOT_0)
+           hk_screen_get() == SCREEN_APP)
         {
             printf("[APP] poll failed result=%d\r\n", (int)poll_result);
             shell_show_menu_reason(HK_APP_STOP_CALLBACK_FAILED);
         }
-        else if(hk_screen_get() == SCREEN_APP_SLOT_0 &&
+        else if(hk_screen_get() == SCREEN_APP &&
                 !app_runtime_integration_active())
             shell_show_menu_reason(HK_APP_STOP_COMPLETED);
-        app = hk_app_for_screen(hk_screen_get());
-        entry = hk_app_legacy_entry(app);
-        if(hk_screen_get() == SCREEN_APP_SLOT_0 &&
+        if(hk_screen_get() == SCREEN_APP &&
            app_runtime_integration_active())
             tick_interval_us =
                 app_runtime_integration_poll_interval_us(now_us);
         else
-            tick_interval_us = app && entry &&
-                               entry->screen == hk_screen_get() &&
-                               app->limits.tick_interval_us ?
-                               app->limits.tick_interval_us : 20000U;
+            tick_interval_us = 20000U;
+        if(tick_interval_us > 20000U)
+            tick_interval_us = 20000U;
         next_dispatch_us = now_us + tick_interval_us;
         sleep_us = tick_interval_us;
         if(sleep_us > HK_INPUT_SAMPLE_INTERVAL_US)

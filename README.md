@@ -265,16 +265,20 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 HackyLens Code is intentionally maintained in the separate sibling
 `hackylens-code` repository.
 
-Project direction is defined by [Architecture vision](docs/ARCHITECTURE_VISION.md),
-[Current state](docs/CURRENT_STATE.md), and the
-[Platform roadmap](docs/ROADMAP.md). Implementation details are available in
+Current work follows the [Simplification masterplan](docs/SIMPLIFICATION_MASTERPLAN.md),
+which takes precedence over older architecture and governance requirements.
+[Architecture vision](docs/ARCHITECTURE_VISION.md) and the
+[Platform roadmap](docs/ROADMAP.md) describe goals and deferred work;
+[Current state](docs/CURRENT_STATE.md) records implementation status.
+Implementation details are available in
 [Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md),
 [AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and
 [RAM/flash budget](docs/RAM_BUDGET.md).
 
-Normative governance is indexed in the
-[platform specifications](docs/spec/README.md). Significant architecture
-decisions are recorded as [ADRs](docs/adr/README.md).
+Current technical contracts are indexed in the
+[platform specifications](docs/spec/README.md). [ADRs](docs/adr/README.md)
+preserve historical decisions; new ADRs and phase evidence schemas are not
+required for simplification work.
 
 ## License
 

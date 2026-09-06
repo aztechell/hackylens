@@ -125,18 +125,11 @@ def validate(root: Path = ROOT) -> list[str]:
                 for request in requirements.required
             ):
                 failures.append(f"{app}: canonical required Input capability is missing")
-        lights_apps = {
-            "camera", "face-detect", "apriltag",
-            "object-detect", "micropython",
-        }
+        # Camera/UI apps use the settings-lights service; MicroPython uses its
+        # adapter owner. These consumers declare their own grants below.
         for app, requirements in generator.load_app_requirements(apps_root).items():
             if "lights" in requirements.legacy:
                 failures.append(f"{app}: private lights requirement survived Phase 2.6")
-            if app in lights_apps and not any(
-                request.id == "hackylens.cap.lights"
-                for request in requirements.required
-            ):
-                failures.append(f"{app}: required Lights capability is missing")
     except (generator.CapabilityError, ContractError, OSError, ValueError) as exc:
         failures.append(str(exc))
 
