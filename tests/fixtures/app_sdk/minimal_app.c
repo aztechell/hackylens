@@ -39,7 +39,6 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
     uint32_t generation = 0U;
     uint8_t available = 0U;
     minimal_state_t *state = NULL;
-    hk_capability_request_t input_request = HK_INPUT_REQUEST_0_1_INIT;
     hk_result_t result;
 
     if(hk_app_context_identity(
@@ -47,7 +46,7 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
        !app_id || generation == 0U || hk_owner_is_zero(identity_owner))
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_LIGHTS, 0U, &available, &fallback) != HK_OK ||
        !available || fallback)
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(
@@ -63,9 +62,9 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
        !app_id || generation == 0U || hk_owner_is_zero(state->owner))
         return HK_ERR_INTERNAL;
     if(hk_app_context_time(ctx, &state->time) != HK_OK ||
-       hk_app_context_input(ctx, 0U, &state->input) != HK_OK ||
-       hk_input_acquire(
-           state->owner, &input_request, &state->input_second) != HK_OK ||
+       hk_app_context_input(ctx, &state->input) != HK_OK ||
+       hk_input_cursor_open(state->input, &state->input_cursor) != HK_OK ||
+       hk_input_cursor_open(state->input, &state->input_second) != HK_OK ||
        hk_app_context_display(ctx, 0U, &state->display) != HK_OK ||
        hk_app_context_service(
            ctx, "hackylens.service.fixture", &state->service) != HK_OK)
@@ -90,12 +89,9 @@ static hk_result_t minimal_event(
         hk_input_event_t queued_second;
 
         if(state->consume_input &&
-           (hk_input_next_event(
-                state->owner, &state->input, &queued) != HK_OK ||
-            hk_input_next_event(
-                state->owner, &state->input_second, &queued_second) != HK_OK ||
-           hk_input_get_state(
-               state->owner, &state->input, &input_state) != HK_OK ||
+           (hk_input_next_event(state->input, &state->input_cursor, &queued) != HK_OK ||
+            hk_input_next_event(state->input, &state->input_second, &queued_second) != HK_OK ||
+           hk_input_get_state(state->input, &input_state) != HK_OK ||
            queued.sequence != event->data.input.sequence ||
             queued_second.sequence != queued.sequence ||
             input_state != event->data.input.state))
@@ -155,10 +151,9 @@ static hk_result_t minimal_stop(const hk_app_context_t *ctx)
     if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK)
         return HK_ERR_INTERNAL;
     state->stop_deadline = deadline;
-    if(hk_display_release(state->owner, deadline, &state->display) != HK_OK ||
-       hk_input_release(
-           state->owner, deadline, &state->input_second) != HK_OK ||
-       hk_input_release(state->owner, deadline, &state->input) != HK_OK)
+    hk_input_cursor_close(&state->input_cursor);
+    hk_input_cursor_close(&state->input_second);
+    if(hk_display_release(state->owner, deadline, &state->display) != HK_OK)
         return HK_ERR_INTERNAL;
     return HK_OK;
 }
@@ -183,14 +178,14 @@ int minimal_app_check_input_overflow(uint32_t expected_dropped)
     hk_input_event_t first;
     hk_input_event_t second;
 
-    if(hk_input_next_event(state->owner, &state->input, &first) !=
+    if(hk_input_next_event(state->input, &state->input_cursor, &first) !=
            HK_ERR_OVERFLOW ||
-       hk_input_next_event(state->owner, &state->input_second, &second) !=
+       hk_input_next_event(state->input, &state->input_second, &second) !=
            HK_ERR_OVERFLOW ||
        first.dropped != expected_dropped ||
        second.dropped != expected_dropped || first.state != second.state ||
-       hk_input_next_event(state->owner, &state->input, &first) != HK_PENDING ||
-       hk_input_next_event(state->owner, &state->input_second, &second) !=
+       hk_input_next_event(state->input, &state->input_cursor, &first) != HK_PENDING ||
+       hk_input_next_event(state->input, &state->input_second, &second) !=
            HK_PENDING)
         return 0;
     return 1;
@@ -255,24 +250,16 @@ int minimal_app_check_display_contract(void)
     return 1;
 }
 
-int minimal_app_check_stale_reacquire(void)
+int minimal_app_check_cursor_reopen(void)
 {
     minimal_state_t *state = minimal_state();
-    hk_input_t stale = state->input_second;
-    hk_capability_request_t request = HK_INPUT_REQUEST_0_1_INIT;
-    hk_deadline_t deadline;
+    hk_input_event_t event;
     uint32_t input_state;
-
-    if(hk_time_deadline_after_us(
-           state->time, 1U, &deadline) != HK_OK ||
-       hk_input_release(
-           state->owner, deadline, &state->input_second) != HK_OK ||
-       hk_input_acquire(
-           state->owner, &request, &state->input_second) != HK_OK ||
-       hk_input_get_state(state->owner, &stale, &input_state) !=
-           HK_ERR_STALE_HANDLE ||
-       hk_input_get_state(
-           state->owner, &state->input_second, &input_state) != HK_OK)
+    hk_input_cursor_close(&state->input_second);
+    if(hk_input_next_event(state->input, &state->input_second, &event) != HK_ERR_INVALID_STATE ||
+       hk_input_get_state(state->input, &input_state) != HK_OK ||
+       hk_input_cursor_open(state->input, &state->input_second) != HK_OK ||
+       hk_input_next_event(state->input, &state->input_second, &event) != HK_PENDING)
         return 0;
     return 1;
 }

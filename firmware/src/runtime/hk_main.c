@@ -15,25 +15,18 @@
 
 static hk_main_hooks_t s_hooks;
 
-static hk_input_t s_runtime_input;
-static hk_owner_t s_runtime_input_owner;
+static const hk_input_t *s_runtime_input;
+static hk_input_cursor_t s_runtime_input_cursor;
 
 static hk_result_t runtime_input_prepare(void)
 {
-    static const hk_capability_request_t request = HK_INPUT_REQUEST_0_1_INIT;
-
-    s_runtime_input_owner = capability_client_consumer_owner(
-        "consumer:firmware-runtime");
-    if(hk_owner_is_zero(s_runtime_input_owner))
-        return HK_ERR_STALE_HANDLE;
-    return hk_input_acquire(
-        s_runtime_input_owner, &request, &s_runtime_input);
+    s_runtime_input = hk_input_service();
+    return hk_input_cursor_open(s_runtime_input, &s_runtime_input_cursor);
 }
 
 static hk_result_t runtime_input_sample(uint32_t *state)
 {
-    return hk_input_get_state(
-        s_runtime_input_owner, &s_runtime_input, state);
+    return hk_input_get_state(s_runtime_input, state);
 }
 
 static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
@@ -48,7 +41,7 @@ static hk_result_t runtime_input_dispatch(hk_input_snapshot_t *snapshot)
     if(result != HK_OK)
         return result;
     while((result = hk_input_next_event(
-               s_runtime_input_owner, &s_runtime_input, &event)) == HK_OK)
+               s_runtime_input, &s_runtime_input_cursor, &event)) == HK_OK)
     {
         uint8_t consumed = 0U;
 

@@ -389,12 +389,12 @@ int main(void)
     CHECK(camera->entry == &camera_v2_entry);
     CHECK(camera->limits.tick_interval_us == 20000U);
     CHECK(camera->service_count == 0U);
-    CHECK(settings->capability_count == 2U);
-    CHECK(sleep->capability_count == 2U);
-    CHECK(app_by_id("files")->capability_count == 2U);
+    CHECK(settings->capability_count == 1U);
+    CHECK(sleep->capability_count == 1U);
+    CHECK(app_by_id("files")->capability_count == 1U);
     CHECK(app_by_id("files")->service_count == 0U);
     CHECK(app_by_id("files")->limits.tick_interval_us == 20000U);
-    CHECK(app_by_id("qr-camera")->capability_count == 2U);
+    CHECK(app_by_id("qr-camera")->capability_count == 1U);
     CHECK(app_by_id("qr-camera")->service_count == 0U);
     CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 20000U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)

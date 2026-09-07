@@ -7,14 +7,9 @@
 
 static hk_input_state_t s_state;
 
-static hk_result_t fake_open(void *context, const hk_lease_t *lease)
+static hk_result_t fake_open(void *context, hk_input_cursor_t *cursor)
 {
-    return hk_input_state_open_cursor((hk_input_state_t *)context, lease);
-}
-
-static hk_result_t fake_close(void *context, const hk_lease_t *lease)
-{
-    return hk_input_state_close_cursor((hk_input_state_t *)context, lease);
+    return hk_input_state_open_cursor((hk_input_state_t *)context, cursor);
 }
 
 static hk_result_t fake_info(void *context, hk_input_info_t *info)
@@ -36,30 +31,19 @@ static hk_result_t fake_state(void *context, uint32_t *state)
 }
 
 static hk_result_t fake_event(
-    void *context, const hk_lease_t *lease, hk_input_event_t *event)
+    void *context, hk_input_cursor_t *cursor, hk_input_event_t *event)
 {
     return hk_input_state_next_event(
-        (hk_input_state_t *)context, lease, event);
+        (hk_input_state_t *)context, cursor, event);
 }
 
-static hk_input_provider_t s_input_provider = {
+const hk_input_t hk_input_binding = {
     .context = &s_state,
     .open_cursor = fake_open,
-    .close_cursor = fake_close,
     .get_info = fake_info,
     .get_state = fake_state,
     .next_event = fake_event,
 };
-
-static const hk_capability_provider_t s_provider = {
-    .context = &s_input_provider,
-    .max_leases = 16U,
-};
-
-const hk_capability_provider_t *input_normative_backend_provider(void)
-{
-    return &s_provider;
-}
 
 const char *input_normative_backend_name(void)
 {

@@ -8,8 +8,7 @@
 typedef struct
 {
     settings_menu_session_t menu;
-    hk_owner_t owner;
-    hk_input_t input;
+    const hk_input_t *input;
     uint8_t close_requested;
     uint8_t dirty;
 } settings_state_t;

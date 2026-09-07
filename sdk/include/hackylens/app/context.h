@@ -42,6 +42,7 @@ typedef struct hk_app_context
     const char *app_id;
     hk_owner_t owner;
     const hk_time_t *time;
+    const hk_input_t *input;
     uint32_t generation;
     hk_app_capability_grant_t capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
     hk_app_service_t services[HK_APP_CONTEXT_MAX_SERVICES];
@@ -65,8 +66,7 @@ hk_result_t hk_app_context_time(
     const hk_time_t **time);
 hk_result_t hk_app_context_input(
     const hk_app_context_t *ctx,
-    uint16_t instance,
-    hk_input_t *handle);
+    const hk_input_t **input);
 hk_result_t hk_app_context_display(
     const hk_app_context_t *ctx,
     uint16_t instance,

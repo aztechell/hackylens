@@ -32,7 +32,7 @@ storage internals, drivers, board/BSP headers, platform/HAL headers, the K210
 SDK, runtime-private headers, or generated-registry private headers.
 
 The SDK does not replace public capability types with parallel wrappers.
-Input, Display and other services still on the broker retain the
+Display and other services still on the broker retain the
 Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
 language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
@@ -184,8 +184,8 @@ normalized to `HK_ERR_INVALID_STATE` by production Runtime. Teardown creates
 one finite absolute monotonic deadline at teardown start and uses that same
 deadline for stop and owner-wide provider cleanup.
 
-Capability operations keep Phase 2 semantics. Every Input lease has an
-independent sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
+Capability operations keep Phase 2 semantics. Every Input event reader has an
+independent caller-owned sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
 stable state and exact dropped count before resynchronizing without replay.
 Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
 `HK_ERR_LIMIT`. Every release rejects `UINT64_MAX` as an invalid absolute

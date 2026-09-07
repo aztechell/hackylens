@@ -56,7 +56,7 @@ void object_detect_draw_icon(uint16_t x, uint16_t y,
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
 
-typedef struct { hk_owner_t owner; hk_input_t input; } object_detect_state_t;
+typedef struct { const hk_input_t *input; } object_detect_state_t;
 
 static object_detect_state_t *app_state(const hk_app_context_t *ctx)
 {
@@ -72,10 +72,11 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
     object_detect_state_t *state = app_state(ctx);
     const char *id;
     uint32_t generation;
+    hk_owner_t owner = HK_OWNER_NONE;
     hk_input_snapshot_t input = {0};
-    if(!state || hk_app_context_identity(ctx, &id, &generation, &state->owner) != HK_OK ||
-       hk_app_context_input(ctx, 0U, &state->input) != HK_OK ||
-       hk_input_get_state(state->owner, &state->input, &input.state) != HK_OK)
+    if(!state || hk_app_context_identity(ctx, &id, &generation, &owner) != HK_OK ||
+       hk_app_context_input(ctx, &state->input) != HK_OK ||
+       hk_input_get_state(state->input, &input.state) != HK_OK)
         return HK_ERR_INTERNAL;
     object_detect_controller_enter(&input);
     return HK_OK;
@@ -97,7 +98,7 @@ static hk_result_t app_event(const hk_app_context_t *ctx, const hk_app_event_t *
     }
     else if(event->kind == HK_APP_EVENT_TIMER)
     {
-        if(hk_input_get_state(state->owner, &state->input, &input.state) != HK_OK)
+        if(hk_input_get_state(state->input, &input.state) != HK_OK)
             return HK_ERR_INTERNAL;
         object_detect_controller_tick(&input);
     }

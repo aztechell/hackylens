@@ -1,7 +1,7 @@
 #ifndef HACKYLENS_CAPABILITY_INPUT_H
 #define HACKYLENS_CAPABILITY_INPUT_H
 
-#include "owner.h"
+#include "common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,13 +29,6 @@ extern "C" {
 #define HK_INPUT_EVENT_CAPACITY UINT16_C(8)
 #define HK_INPUT_INFO_VERSION 1U
 
-#define HK_INPUT_REQUEST_0_1_INIT                                  \
-    {                                                              \
-        sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, \
-        HK_CAPABILITY_ID_INPUT, {0U, 1U, 0U, 0U},                  \
-        {0U, 2U, 0U, 0U}, HK_INPUT_FEATURES_0_1, 0U, 0U           \
-    }
-
 typedef struct
 {
     uint16_t struct_size;
@@ -58,28 +51,20 @@ typedef struct
     uint32_t dropped;
 } hk_input_event_t;
 
-HK_DECLARE_CAPABILITY_HANDLE(hk_input_t);
+typedef struct hk_input hk_input_t;
+typedef struct
+{
+    uint64_t next_sequence;
+    uint8_t active;
+} hk_input_cursor_t;
 
-hk_result_t hk_input_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_input_t *handle);
-hk_result_t hk_input_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_input_t *handle);
-hk_result_t hk_input_get_info(
-    hk_owner_t owner,
-    const hk_input_t *handle,
-    hk_input_info_t *info);
-hk_result_t hk_input_get_state(
-    hk_owner_t owner,
-    const hk_input_t *handle,
-    uint32_t *state);
+const hk_input_t *hk_input_service(void);
+hk_result_t hk_input_cursor_open(const hk_input_t *input, hk_input_cursor_t *cursor);
+void hk_input_cursor_close(hk_input_cursor_t *cursor);
+hk_result_t hk_input_get_info(const hk_input_t *input, hk_input_info_t *info);
+hk_result_t hk_input_get_state(const hk_input_t *input, uint32_t *state);
 hk_result_t hk_input_next_event(
-    hk_owner_t owner,
-    const hk_input_t *handle,
-    hk_input_event_t *event);
+    const hk_input_t *input, hk_input_cursor_t *cursor, hk_input_event_t *event);
 
 #ifdef __cplusplus
 }

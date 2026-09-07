@@ -324,19 +324,16 @@ static uint8_t pong_simulate_step(pong_state_t *state, uint32_t buttons)
 
 void pong_controller_reset(pong_state_t *state, uint64_t now_us)
 {
-    hk_owner_t owner;
     const hk_time_t *time;
-    hk_input_t input;
+    const hk_input_t *input;
     uint32_t buttons;
 
     if(!state)
         return;
-    owner = state->owner;
     time = state->time;
     input = state->input;
     buttons = state->buttons;
     memset(state, 0, sizeof(*state));
-    state->owner = owner;
     state->time = time;
     state->input = input;
     state->buttons = buttons;

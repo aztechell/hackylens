@@ -459,6 +459,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->context.struct_version = HK_APP_CONTEXT_VERSION;
     runtime->context.app_id = descriptor->id;
     runtime->context.time = runtime->ops.time;
+    runtime->context.input = runtime->ops.input;
     runtime->owner = HK_OWNER_NONE;
     runtime->context.owner = HK_OWNER_NONE;
     runtime->context.generation = runtime->context_generation;
@@ -721,8 +722,20 @@ hk_result_t hk_app_context_time(
     *time = ctx->time;
     return *time ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
 }
-HK_APP_CONTEXT_TYPED_ACCESSOR(
-    hk_app_context_input, hk_input_t, HK_CAPABILITY_ID_INPUT)
+hk_result_t hk_app_context_input(
+    const hk_app_context_t *ctx, const hk_input_t **input)
+{
+    hk_result_t result;
+
+    if(!input)
+        return HK_ERR_INVALID_ARGUMENT;
+    *input = NULL;
+    result = validate_callback_context(ctx, NULL);
+    if(result != HK_OK)
+        return result;
+    *input = ctx->input;
+    return *input ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
+}
 HK_APP_CONTEXT_TYPED_ACCESSOR(
     hk_app_context_display, hk_display_t, HK_CAPABILITY_ID_DISPLAY)
 HK_APP_CONTEXT_TYPED_ACCESSOR(

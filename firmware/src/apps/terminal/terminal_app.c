@@ -52,17 +52,16 @@ static hk_result_t terminal_start(const hk_app_context_t *ctx)
     const char *app_id = NULL;
     uint32_t generation = 0U;
     hk_owner_t owner = HK_OWNER_NONE;
-    hk_input_t input = {0};
+    const hk_input_t *input = NULL;
     hk_result_t result = terminal_state_from(ctx, &state);
 
     if(result != HK_OK)
         return result;
     if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_input(ctx, 0U, &input) != HK_OK)
+       hk_app_context_input(ctx, &input) != HK_OK)
         return HK_ERR_INTERNAL;
     terminal_controller_reset(state);
-    state->owner = owner;
     state->input = input;
     printf("[SHELL] screen TERMINAL\r\n");
     return HK_OK;
@@ -86,7 +85,7 @@ static hk_result_t terminal_event(
     }
     if(event->kind == HK_APP_EVENT_TIMER)
     {
-        if(hk_input_get_state(state->owner, &state->input, &buttons) != HK_OK)
+        if(hk_input_get_state(state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         terminal_controller_tick(state, buttons);
         return terminal_finish_work(ctx, state);

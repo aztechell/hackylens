@@ -3,18 +3,6 @@
 #include <limits.h>
 #include <string.h>
 
-static hk_result_t validate_lease_slot(
-    const hk_lease_t *lease, hk_input_cursor_t **cursor,
-    hk_input_state_t *state)
-{
-    if(!lease || !state || lease->slot >= HK_INPUT_CURSOR_CAPACITY ||
-       lease->generation == 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(cursor)
-        *cursor = &state->cursors[lease->slot];
-    return HK_OK;
-}
-
 void hk_input_state_reset(hk_input_state_t *state)
 {
     if(state)
@@ -74,31 +62,14 @@ hk_result_t hk_input_state_sample(
 }
 
 hk_result_t hk_input_state_open_cursor(
-    hk_input_state_t *state, const hk_lease_t *lease)
+    hk_input_state_t *state, hk_input_cursor_t *cursor)
 {
-    hk_input_cursor_t *cursor;
-    hk_result_t result = validate_lease_slot(lease, &cursor, state);
-
-    if(result != HK_OK)
-        return result;
+    if(!state || !cursor)
+        return HK_ERR_INVALID_ARGUMENT;
     if(state->sequence == UINT64_MAX)
         return HK_ERR_LIMIT;
-    cursor->generation = lease->generation;
     cursor->next_sequence = state->sequence + 1U;
     cursor->active = 1U;
-    return HK_OK;
-}
-
-hk_result_t hk_input_state_close_cursor(
-    hk_input_state_t *state, const hk_lease_t *lease)
-{
-    hk_input_cursor_t *cursor;
-    hk_result_t result = validate_lease_slot(lease, &cursor, state);
-
-    if(result != HK_OK)
-        return result;
-    if(cursor->active && cursor->generation == lease->generation)
-        memset(cursor, 0, sizeof(*cursor));
     return HK_OK;
 }
 
@@ -114,18 +85,16 @@ hk_result_t hk_input_state_get(const hk_input_state_t *state, uint32_t *value)
 
 hk_result_t hk_input_state_next_event(
     hk_input_state_t *state,
-    const hk_lease_t *lease,
+    hk_input_cursor_t *cursor,
     hk_input_event_t *event)
 {
-    hk_input_cursor_t *cursor;
     uint64_t oldest;
-    hk_result_t result = validate_lease_slot(lease, &cursor, state);
 
-    if(result != HK_OK || !event)
-        return result != HK_OK ? result : HK_ERR_INVALID_ARGUMENT;
+    if(!state || !cursor || !event)
+        return HK_ERR_INVALID_ARGUMENT;
     memset(event, 0, sizeof(*event));
-    if(!cursor->active || cursor->generation != lease->generation)
-        return HK_ERR_STALE_HANDLE;
+    if(!cursor->active || cursor->next_sequence == 0U)
+        return HK_ERR_INVALID_STATE;
     if(cursor->next_sequence > state->sequence)
         return HK_PENDING;
 

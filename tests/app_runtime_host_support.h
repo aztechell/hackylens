@@ -20,7 +20,7 @@ typedef struct hk_app_runtime_host
     hk_capability_core_t core;
     hk_app_switch_t switcher;
     hk_capability_info_t inventory[1];
-    hk_capability_provider_t input_provider;
+    hk_capability_provider_t lights_provider;
     const hk_capability_provider_t *providers[1];
     hk_capability_grant_t grants[1];
     hk_lease_t display_lease;
@@ -63,7 +63,7 @@ uint32_t hk_app_runtime_host_owner_cleanup_calls(
     const hk_app_runtime_host_t *host);
 hk_deadline_t hk_app_runtime_host_owner_deadline(
     const hk_app_runtime_host_t *host);
-uint8_t hk_app_runtime_host_input_quarantined(
+uint8_t hk_app_runtime_host_lights_quarantined(
     const hk_app_runtime_host_t *host);
 void hk_app_runtime_host_fill_app(
     hk_app_t *app,

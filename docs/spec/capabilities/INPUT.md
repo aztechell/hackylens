@@ -5,7 +5,7 @@ version: 0.1.0
 stability: experimental
 ---
 
-# Input Capability
+# Typed Input service
 
 ## Identity and features
 
@@ -20,7 +20,8 @@ Feature bits:
 | `1 << 1` | `HK_INPUT_FEATURE_EVENTS` | Sequenced edge events |
 | `1 << 2` | `HK_INPUT_FEATURE_DEBOUNCED_BUTTONS` | Time-based logical buttons |
 
-Version `0.1.0` requires all three features for the HackyLens button profile.
+These identifiers remain build metadata during S8; the direct binding does not
+negotiate versions or features at runtime.
 
 ## Logical state and events
 
@@ -57,17 +58,21 @@ raw bounce.
 
 ## Public operations
 
-- `hk_input_acquire(owner, request, handle)` obtains a shared read lease.
-- `hk_input_get_info(owner, handle, info)` returns supported logical bits,
-  sample/debounce intervals, and event capacity.
-- `hk_input_get_state(owner, handle, state)` returns the current stable state
-  without consuming events.
-- `hk_input_next_event(owner, handle, event)` returns the next event or
-  `HK_PENDING` without blocking.
+`hk_input_service()` returns the immutable board binding or NULL when absent.
+Apps receive the same pointer through `hk_app_context_input(ctx, &input)`;
+callback-context validation remains in the runtime. No generic lease is created.
 
-Every event-capable lease has an independent sequence cursor. No operation
-waits for a future event; higher layers poll through their existing bounded
-runtime loop.
+- `hk_input_get_info(input, info)` reports supported bits and sample/debounce limits.
+- `hk_input_get_state(input, state)` samples and returns stable state without
+  consuming events. FILES also uses this between GIF rows to preserve short taps.
+- `hk_input_cursor_open(input, cursor)` starts a caller-owned reader after the
+  current sequence. `hk_input_cursor_close(cursor)` invalidates that reader only.
+- `hk_input_next_event(input, cursor, event)` samples and returns the next event
+  or `HK_PENDING`, without waiting for a future edge.
+
+Each reader has its own sequence cursor. The native dispatcher holds one
+persistent cursor; apps and MicroPython normally read state only. There is no
+provider cursor-slot table or per-reader generation allocation.
 
 ## Bounded storage and overflow
 
@@ -76,23 +81,23 @@ is reported by `hk_input_get_info`; the ring is fixed provider storage accounted
 for by the Phase 2 static-RAM evidence, not an inventory limit. It is not a
 hidden task or queue.
 
-When a lease falls behind overwritten events, `hk_input_next_event` returns
-`HK_ERR_OVERFLOW`. The output reports latest stable state and exact dropped
-count, and the cursor advances to the current sequence. Stale edges MUST NOT be
+When a reader falls behind overwritten events, `hk_input_next_event` returns
+`HK_ERR_OVERFLOW`. The output reports latest stable state and dropped
+count (saturated at `UINT32_MAX`), and the cursor advances to the current sequence. Stale edges MUST NOT be
 replayed after resynchronization.
 
-## Ownership, affinity, and cleanup
+## Lifetime, affinity, and cleanup
 
-Input leases are shared and read-only. Sampling is owned by the platform input
+The binding is shared and read-only. Sampling is owned by the platform input
 provider and runs in the existing superloop; no background task is created.
 The initial K210 provider is `CORE0` affine.
 
-Release discards only that lease's cursor. It does not reset the global stable
-state or consume events for another owner.
+Closing a cursor does not reset the global sampler, debounce state or event ring,
+and does not consume events for another reader. Calls are serialized on core 0.
 
 ## Required resources and consumers
 
-Inventory presence requires descriptor-backed logical button resources and a
+Build availability requires descriptor-backed logical button resources and a
 supported raw sampler. A board with unbound physical pins MUST NOT advertise
 input by guessing from its identity.
 
@@ -104,8 +109,7 @@ the same provider.
 
 The fake accepts timestamped raw samples and exposes deterministic advancement.
 Tests cover bounce, press/release, simultaneous changes, hold behavior,
-independent cursors, overflow/resync, no-event polling, owner cleanup, and
-affinity.
+independent cursors, overflow/resync, no-event polling, cursor close/reopen, and the absent build binding.
 
 SEN0305 acceptance physically exercises every logical button and records
 debounce/event latency. Cube remains conformance-only until separately

@@ -9,8 +9,7 @@
 
 typedef struct
 {
-    hk_owner_t owner;
-    hk_input_t input;
+    const hk_input_t *input;
     terminal_font_size_t font_size;
     uint32_t repeat_button;
     uint16_t repeat_ticks;

@@ -6,8 +6,7 @@
 
 typedef struct
 {
-    hk_owner_t owner;
-    hk_input_t input;
+    const hk_input_t *input;
     uint8_t close_requested;
 } qr_camera_state_t;
 

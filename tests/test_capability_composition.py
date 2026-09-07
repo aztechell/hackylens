@@ -135,8 +135,8 @@ max_leases = 16
                               generator.capabilities_document(composition)["entries"]])
             for requests in (*composition.grants.values(),
                              *composition.declarations.values()):
-                self.assertNotIn(generator.TIME_SERVICE_ID,
-                                 [item.id for item in requests])
+                self.assertFalse(set(generator.DIRECT_SERVICE_TYPES) &
+                                 {item.id for item in requests})
             generated = generator.generated_c(composition)
             self.assertNotIn("hk_k210_time_provider", generated)
             self.assertNotIn("0x00010001U", generated)
@@ -149,7 +149,7 @@ max_leases = 16
             root, catalog, _, _ = fixture
             catalog.write_text(catalog.read_text(encoding="utf-8").replace(
                 "hackylens.cap.test-clock", generator.TIME_SERVICE_ID), encoding="utf-8")
-            with self.assertRaisesRegex(generator.CapabilityError, "static Time service"):
+            with self.assertRaisesRegex(generator.CapabilityError, "static hackylens.cap.time"):
                 self.compose_fixture(fixture)
             (root / "platforms/k210/capabilities/time_adapter.c").write_text(
                 "const hk_time_t hk_test_time_provider = {0};\n",

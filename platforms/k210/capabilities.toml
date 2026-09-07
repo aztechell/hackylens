@@ -28,7 +28,7 @@ affinity = 0
 resources = ["buttons"]
 routes = ["button-left", "button-ok", "button-right", "button-back"]
 provider_source = "platforms/k210/capabilities/input_adapter.c"
-provider_symbol = "hk_k210_input_provider"
+provider_symbol = "hk_input_binding"
 max_leases = 16
 
 [[capabilities]]

@@ -255,7 +255,7 @@ void files_controller_reset(files_state_t *state)
 
 void files_controller_enter(files_state_t *state)
 {
-    files_presenter_bind_input(state->owner, &state->input);
+    files_presenter_bind_input(state->input);
     printf("[SHELL] screen FILES\r\n");
     files_controller_reset_input();
     files_backend_enter();
@@ -265,7 +265,7 @@ void files_controller_exit(files_state_t *state)
 {
     (void)state;
     files_presenter_close_image();
-    files_presenter_bind_input(HK_OWNER_NONE, NULL);
+    files_presenter_bind_input(NULL);
     files_controller_reset_input();
 }
 

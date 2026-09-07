@@ -76,13 +76,13 @@ def validate(root: Path = ROOT) -> list[str]:
             if any(item["code"] not in generator.ABSENCE_CODES for item in first.absences):
                 failures.append(f"{board_id}: unknown absence reason")
             capability_doc = generator.capabilities_document(first)
-            if any(item["id"] == generator.TIME_SERVICE_ID
+            if any(item["id"] in generator.DIRECT_SERVICE_TYPES
                    for item in capability_doc["entries"]):
-                failures.append(f"{board_id}: static Time service leaked into runtime inventory")
-            if any(request.id == generator.TIME_SERVICE_ID
+                failures.append(f"{board_id}: static service leaked into runtime inventory")
+            if any(request.id in generator.DIRECT_SERVICE_TYPES
                    for requests in (*first.grants.values(), *first.declarations.values())
                    for request in requests):
-                failures.append(f"{board_id}: static Time service has runtime grants or requests")
+                failures.append(f"{board_id}: static service has runtime grants or requests")
             if board.support == "conformance" and capability_doc["runtime_supported"]:
                 failures.append(f"{board_id}: conformance inventory claims runtime qualification")
         time = next(item for item in catalog if item.id == "hackylens.cap.time")

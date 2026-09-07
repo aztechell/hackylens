@@ -91,13 +91,6 @@ static hk_result_t acquire_capability(
     if(!request || !lease)
         return HK_ERR_INVALID_ARGUMENT;
     *lease = HK_LEASE_NONE;
-    if(request->id == HK_CAPABILITY_ID_INPUT)
-    {
-        hk_input_t handle = {0};
-        result = hk_input_acquire(owner, request, &handle);
-        *lease = handle.lease;
-        return result;
-    }
     if(request->id == HK_CAPABILITY_ID_DISPLAY)
     {
         hk_display_t handle = {0};
@@ -410,6 +403,7 @@ hk_result_t app_runtime_integration_initialize(void)
     runtime_ops = (hk_app_runtime_ops_t){
         .user = &s_integration,
         .time = s_integration.time,
+        .input = hk_input_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

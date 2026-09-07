@@ -43,7 +43,7 @@ static hk_result_t files_start(const hk_app_context_t *ctx)
     const char *app_id = NULL;
     uint32_t generation = 0U;
     hk_owner_t owner = HK_OWNER_NONE;
-    hk_input_t input = {0};
+    const hk_input_t *input = NULL;
     const hk_time_t *time = NULL;
     hk_result_t result = files_state_from(ctx, &state);
 
@@ -51,12 +51,11 @@ static hk_result_t files_start(const hk_app_context_t *ctx)
         return result;
     if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_input(ctx, 0U, &input) != HK_OK ||
+       hk_app_context_input(ctx, &input) != HK_OK ||
        hk_app_context_time(ctx, &time) != HK_OK)
         return HK_ERR_INTERNAL;
     files_view_init();
     files_controller_reset(state);
-    state->owner = owner;
     state->input = input;
     state->time = time;
     files_controller_enter(state);
@@ -81,7 +80,7 @@ static hk_result_t files_event(
     }
     if(event->kind == HK_APP_EVENT_TIMER)
     {
-        if(hk_input_get_state(state->owner, &state->input, &buttons) != HK_OK)
+        if(hk_input_get_state(state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         files_controller_tick(state, buttons);
         if(!state->close_requested)

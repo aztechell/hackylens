@@ -24,6 +24,8 @@ import app_composition
 
 # Time is a statically bound service. Its catalog entry remains a build dependency.
 TIME_SERVICE_ID = "hackylens.cap.time"
+INPUT_SERVICE_ID = "hackylens.cap.input"
+DIRECT_SERVICE_TYPES = {TIME_SERVICE_ID: "hk_time_t", INPUT_SERVICE_ID: "hk_input_t"}
 
 CATALOG_PATH = ROOT / "platforms" / "k210" / "capabilities.toml"
 APP_MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
@@ -460,10 +462,10 @@ def capability_availability(
             absences.append(_absence(capability, "provider-excluded", [capability.provider_source]))
         else:
             source_text = source.read_text(encoding="utf-8")
-            if capability.id == TIME_SERVICE_ID:
-                if not re.search(rf"\bconst\s+hk_time_t\s+{re.escape(capability.provider_symbol)}\s*=\s*\{{", source_text):
+            if capability.id in DIRECT_SERVICE_TYPES:
+                if not re.search(rf"\bconst\s+{DIRECT_SERVICE_TYPES[capability.id]}\s+{re.escape(capability.provider_symbol)}\s*=\s*\{{", source_text):
                     raise CapabilityError(
-                        f"{capability.provider_source}: static Time service binding has no const object definition"
+                        f"{capability.provider_source}: static {capability.id} binding has no const object definition"
                     )
                 available.append(capability)
                 continue
@@ -645,10 +647,10 @@ def compose(
             })
             return
         if name not in composed_disabled:
-            grants[name] = tuple(item for item in matched if item.id != TIME_SERVICE_ID)
+            grants[name] = tuple(item for item in matched if item.id not in DIRECT_SERVICE_TYPES)
             declarations[name] = tuple(
                 item for item in requirements.required + requirements.optional
-                if item.id != TIME_SERVICE_ID
+                if item.id not in DIRECT_SERVICE_TYPES
             )
 
     for app in sorted(app_ids):
@@ -689,7 +691,7 @@ def _request_document(request: CapabilityRequest) -> dict[str, object]:
 
 
 def runtime_capabilities(composition: Composition) -> tuple[Capability, ...]:
-    return tuple(item for item in composition.capabilities if item.id != TIME_SERVICE_ID)
+    return tuple(item for item in composition.capabilities if item.id not in DIRECT_SERVICE_TYPES)
 
 
 def capabilities_document(composition: Composition) -> dict[str, object]:
@@ -811,6 +813,12 @@ def generated_c(composition: Composition) -> str:
         "#include <string.h>",
         "",
     ]
+    if not any(item.id == INPUT_SERVICE_ID for item in composition.capabilities):
+        lines.extend([
+            '#include "input_provider.h"',
+            'const hk_input_t hk_input_binding = {0};',
+            '',
+        ])
     if capabilities:
         for item in capabilities:
             lines.append(f"extern const hk_capability_provider_t {item.provider_symbol};")
@@ -900,7 +908,7 @@ def generated_c(composition: Composition) -> str:
         "        return 0U;",
     ])
     for item in composition.catalog:
-        if item.id == TIME_SERVICE_ID:
+        if item.id in DIRECT_SERVICE_TYPES:
             continue
         lines.extend([
             f"    if(strcmp(name, \"{item.id}\") == 0)",

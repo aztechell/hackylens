@@ -509,6 +509,16 @@ QR preview работает: около 18.7 fps, decode без найденно
 Пользователь подтвердил QR decode, тяжёлый GIF и Sleep: всё работает.
 Time принят; S8 остаётся в работе, следующий service — Input.
 
+### Промежуточная проверка Input (2026-09-07)
+
+Input переведён на immutable binding; runtime владеет отдельным event cursor.
+Удалены Input leases, provider cursor slots/generations и неиспользуемые owner
+поля app state. Ring из 8 событий, sampling 10 ms, debounce 20 ms и опрос кнопок
+между GIF rows сохранены. Fake/K210 behavioral suites, standalone absent binding,
+234 host tests, full/MP-disabled builds, architecture/provider hash и resource
+checks прошли. Full image: 1,558,392 байта (−8,000 к S7), static RAM:
+2,897,248 байт (−1,224 к S7). Аппаратная приёмка Input ещё не выполнена.
+
 ### Цель
 
 Сохранить board-independent typed hardware access, но удалить dynamic machinery,

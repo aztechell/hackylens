@@ -5,8 +5,7 @@
 
 typedef struct
 {
-    hk_owner_t owner;
-    hk_input_t input;
+    const hk_input_t *input;
     const hk_time_t *time;
     uint8_t close_requested;
 } files_state_t;

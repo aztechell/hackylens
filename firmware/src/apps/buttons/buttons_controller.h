@@ -20,8 +20,7 @@ typedef struct
 typedef struct
 {
     buttons_view_state_t view;
-    hk_owner_t owner;
-    hk_input_t input;
+    const hk_input_t *input;
     uint32_t ignore_until_released;
     uint8_t hold_ticks[4];
     uint8_t exit_ticks;

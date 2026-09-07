@@ -13,10 +13,10 @@
 
 static hk_app_runtime_host_t *s_host;
 
-static const char *const s_input_features[] = {
-    "state",
-    "events",
-    "debounced-buttons",
+static const char *const s_lights_features[] = {
+    "backlight",
+    "illumination",
+    "rgb",
 };
 static const char *const s_display_features[] = {
     "base-plane",
@@ -26,8 +26,8 @@ static const char *const s_display_features[] = {
 };
 static const hk_app_capability_request_t s_capabilities[] = {
     {
-        "hackylens.cap.input", 0U, "0.1.0", "0.2.0",
-        s_input_features, 3U, NULL, 0U,
+        "hackylens.cap.lights", 0U, "0.1.0", "0.2.0",
+        s_lights_features, 3U, NULL, 0U,
     },
     {
         "hackylens.cap.display", 0U, "0.1.0", "0.2.0",
@@ -121,8 +121,8 @@ static hk_capability_id_t capability_id(const char *id)
 {
     if(id && strcmp(id, "hackylens.cap.time") == 0)
         return HK_CAPABILITY_ID_TIME;
-    if(id && strcmp(id, "hackylens.cap.input") == 0)
-        return HK_CAPABILITY_ID_INPUT;
+    if(id && strcmp(id, "hackylens.cap.lights") == 0)
+        return HK_CAPABILITY_ID_LIGHTS;
     if(id && strcmp(id, "hackylens.cap.display") == 0)
         return HK_CAPABILITY_ID_DISPLAY;
     return 0U;
@@ -145,15 +145,15 @@ static hk_result_t feature_mask(
         else if(id == HK_CAPABILITY_ID_TIME &&
                 strcmp(feature, "sleep-until") == 0)
             *mask |= HK_TIME_FEATURE_SLEEP_UNTIL;
-        else if(id == HK_CAPABILITY_ID_INPUT &&
-                strcmp(feature, "state") == 0)
-            *mask |= HK_INPUT_FEATURE_STATE;
-        else if(id == HK_CAPABILITY_ID_INPUT &&
-                strcmp(feature, "events") == 0)
-            *mask |= HK_INPUT_FEATURE_EVENTS;
-        else if(id == HK_CAPABILITY_ID_INPUT &&
-                strcmp(feature, "debounced-buttons") == 0)
-            *mask |= HK_INPUT_FEATURE_DEBOUNCED_BUTTONS;
+        else if(id == HK_CAPABILITY_ID_LIGHTS &&
+                strcmp(feature, "backlight") == 0)
+            *mask |= HK_LIGHTS_FEATURE_BACKLIGHT;
+        else if(id == HK_CAPABILITY_ID_LIGHTS &&
+                strcmp(feature, "illumination") == 0)
+            *mask |= HK_LIGHTS_FEATURE_ILLUMINATION;
+        else if(id == HK_CAPABILITY_ID_LIGHTS &&
+                strcmp(feature, "rgb") == 0)
+            *mask |= HK_LIGHTS_FEATURE_RGB;
         else if(id == HK_CAPABILITY_ID_DISPLAY &&
                 strcmp(feature, "base-plane") == 0)
             *mask |= HK_DISPLAY_FEATURE_BASE_PLANE;
@@ -250,15 +250,9 @@ static hk_result_t acquire_capability(
     if(host->fail_acquire_id == request->id &&
        host->fail_acquire_result != HK_OK)
         return host->fail_acquire_result;
-    if(request->id == HK_CAPABILITY_ID_INPUT)
-    {
-        hk_input_t handle;
-
-        result = hk_input_acquire(owner, request, &handle);
-        if(result == HK_OK)
-            *lease = handle.lease;
-        return result;
-    }
+    if(request->id == HK_CAPABILITY_ID_LIGHTS)
+        return hk_capability_core_acquire(&host->core, owner, request,
+            HK_CAPABILITY_ID_LIGHTS, 0U, lease);
     if(request->id == HK_CAPABILITY_ID_DISPLAY)
     {
         hk_display_t handle;
@@ -329,7 +323,13 @@ static hk_result_t deadline_after_us(
     return HK_OK;
 }
 
-static hk_result_t input_provider_cleanup(
+static hk_result_t lights_provider_acquire(void *context, hk_owner_t owner)
+{
+    (void)context; (void)owner;
+    return HK_OK;
+}
+
+static hk_result_t lights_provider_cleanup(
     void *context,
     hk_owner_t owner,
     hk_deadline_t deadline)
@@ -498,14 +498,14 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     host->last_input_us = now_us;
     host->inventory[0] = (hk_capability_info_t){
         sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
-        HK_CAPABILITY_ID_INPUT, {0U, 1U, 0U, 0U}, HK_INPUT_FEATURES_0_1,
+        HK_CAPABILITY_ID_LIGHTS, {0U, 1U, 0U, 0U}, HK_LIGHTS_FEATURES_0_1,
         HK_CAPABILITY_FLAG_SHARED, 0U, HK_CAPABILITY_CORE_ANY,
         NULL, 0U, 0U,
     };
-    host->input_provider = *input_normative_backend_provider();
-    host->input_provider.cleanup = input_provider_cleanup;
-    host->providers[0] = &host->input_provider;
-    host->grants[0].request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
+    host->lights_provider = (hk_capability_provider_t){.acquire = lights_provider_acquire, .max_leases = 16U};
+    host->lights_provider.cleanup = lights_provider_cleanup;
+    host->providers[0] = &host->lights_provider;
+    host->grants[0].request = (hk_capability_request_t)HK_LIGHTS_REQUEST_0_1_INIT;
     result = hk_capability_core_init(
         &host->core, host->inventory, host->providers, 1U);
     if(result != HK_OK)
@@ -513,6 +513,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     runtime_ops = (hk_app_runtime_ops_t){
         .user = host,
         .time = hk_time_service(),
+        .input = hk_input_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,
@@ -639,7 +640,7 @@ hk_deadline_t hk_app_runtime_host_owner_deadline(
     return host ? host->owner_deadline : (hk_deadline_t){0U};
 }
 
-uint8_t hk_app_runtime_host_input_quarantined(
+uint8_t hk_app_runtime_host_lights_quarantined(
     const hk_app_runtime_host_t *host)
 {
     return (uint8_t)(host && host->core.provider_state[0].quarantined);

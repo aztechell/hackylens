@@ -58,13 +58,8 @@ static fixture_t s_fixture;
 static jmp_buf s_main_exit;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[64];
 
-static const char *const s_input_features[] = {"events"};
 static const char *const s_display_features[] = {"base-plane"};
 static const hk_app_capability_request_t s_capabilities[] = {
-    {
-        "hackylens.cap.input", 0U, ">=0.1.0", "<0.2.0",
-        s_input_features, 1U, NULL, 0U,
-    },
     {
         "hackylens.cap.display", 0U, ">=0.1.0", "<0.2.0",
         s_display_features, 1U, NULL, 0U,
@@ -74,11 +69,11 @@ static const hk_app_capability_request_t s_capabilities[] = {
 static hk_result_t app_start(const hk_app_context_t *ctx)
 {
     hk_display_t display;
-    hk_input_t input;
+    const hk_input_t *input;
     const hk_time_t *time;
 
     if(hk_app_context_display(ctx, 0U, &display) != HK_OK ||
-       hk_app_context_input(ctx, 0U, &input) != HK_OK ||
+       hk_app_context_input(ctx, &input) != HK_OK ||
        hk_app_context_time(ctx, &time) != HK_OK)
         return HK_ERR_INTERNAL;
     return HK_OK;
@@ -189,9 +184,7 @@ hk_result_t hk_generated_capability_request_for(
     if(!consumer_id || strcmp(consumer_id, s_v2_app.id) != 0 ||
        !capability_id || instance != 0U || !request)
         return HK_ERR_NOT_DECLARED;
-    if(strcmp(capability_id, "hackylens.cap.input") == 0)
-        *request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
-    else if(strcmp(capability_id, "hackylens.cap.display") == 0)
+    if(strcmp(capability_id, "hackylens.cap.display") == 0)
         *request = (hk_capability_request_t)HK_DISPLAY_REQUEST_0_1_INIT;
     else
         return HK_ERR_NOT_DECLARED;
@@ -264,26 +257,23 @@ hk_result_t hk_time_deadline_after_us(const hk_time_t *handle,
     return HK_OK;
 }
 
-hk_result_t hk_input_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_input_t *handle)
+struct hk_input { uint8_t binding; };
+static const hk_input_t s_input = {1U};
+const hk_input_t *hk_input_service(void) { return &s_input; }
+hk_result_t hk_input_cursor_open(const hk_input_t *input, hk_input_cursor_t *cursor)
 {
-    if(hk_owner_is_zero(owner) || !request || !handle ||
-       request->id != HK_CAPABILITY_ID_INPUT)
-        return HK_ERR_INVALID_ARGUMENT;
+    if(input != &s_input || !cursor) return HK_ERR_INVALID_ARGUMENT;
     s_fixture.input_acquire_count++;
-    handle->lease = lease_for(owner, HK_CAPABILITY_ID_INPUT);
+    cursor->active = 1U;
     return HK_OK;
 }
+void hk_input_cursor_close(hk_input_cursor_t *cursor) { cursor->active = 0U; }
 
 hk_result_t hk_input_get_state(
-    hk_owner_t owner,
     const hk_input_t *handle,
     uint32_t *state)
 {
-    if(hk_owner_is_zero(owner) || !handle || !state ||
-       handle->lease.capability_id != HK_CAPABILITY_ID_INPUT)
+    if(handle != &s_input || !state)
         return HK_ERR_INVALID_ARGUMENT;
     s_fixture.input_state_count++;
     *state = s_fixture.input_sent ? HK_INPUT_BUTTON_OK : 0U;
@@ -291,12 +281,10 @@ hk_result_t hk_input_get_state(
 }
 
 hk_result_t hk_input_next_event(
-    hk_owner_t owner,
-    const hk_input_t *handle,
+    const hk_input_t *handle, hk_input_cursor_t *cursor,
     hk_input_event_t *event)
 {
-    if(hk_owner_is_zero(owner) || !handle || !event ||
-       handle->lease.capability_id != HK_CAPABILITY_ID_INPUT)
+    if(handle != &s_input || !cursor || !cursor->active || !event)
         return HK_ERR_INVALID_ARGUMENT;
     if(s_fixture.input_sent)
         return HK_PENDING;
@@ -597,7 +585,7 @@ int main(void)
     CHECK(app_runtime_integration_active() == &s_v2_app);
     CHECK(s_fixture.owner_initialize_count == 1U);
     CHECK(s_fixture.owner_enter_count == 1U);
-    CHECK(s_fixture.input_acquire_count == 2U);
+    CHECK(s_fixture.input_acquire_count == 1U);
     CHECK(s_fixture.input_state_count >= 2U);
     CHECK(s_fixture.input_event_count == 1U);
     CHECK(s_fixture.activity_count == 1U);

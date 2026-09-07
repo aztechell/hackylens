@@ -49,6 +49,8 @@ typedef struct
 /* Time is a board-lifetime immutable pointer, outside broker grants. */
 struct hk_time { uint8_t binding; };
 static const hk_time_t s_time = {1U};
+struct hk_input { uint8_t binding; };
+static const hk_input_t s_input = {1U};
 static grants_fixture_t *s_fixture;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[32];
 
@@ -60,7 +62,7 @@ static hk_result_t fake_direct_acquire(
        owner.slot != s_fixture->live_owner.slot ||
        owner.generation != s_fixture->live_owner.generation)
         return HK_ERR_STALE_HANDLE;
-    if(id != HK_CAPABILITY_ID_LIGHTS && id != HK_CAPABILITY_ID_INPUT)
+    if(id != HK_CAPABILITY_ID_LIGHTS && id != HK_CAPABILITY_ID_DISPLAY)
         return HK_ERR_NOT_DECLARED;
     return HK_OK;
 }
@@ -69,8 +71,8 @@ static const char *const s_lights_features[] = {
     "backlight",
     "illumination",
 };
-static const char *const s_input_features[] = {
-    "state",
+static const char *const s_display_features[] = {
+    "base-plane",
 };
 static const hk_app_capability_request_t s_capabilities[] = {
     {
@@ -78,8 +80,8 @@ static const hk_app_capability_request_t s_capabilities[] = {
         s_lights_features, 2U, NULL, 0U,
     },
     {
-        "hackylens.cap.input", 0U, "0.1.0", "0.2.0",
-        s_input_features, 1U, "headless", 1U,
+        "hackylens.cap.display", 0U, "0.1.0", "0.2.0",
+        s_display_features, 1U, "headless", 1U,
     },
 };
 static const hk_app_service_request_t s_services[] = {
@@ -92,7 +94,8 @@ static hk_result_t start(const hk_app_context_t *ctx)
     const char *fallback = NULL;
     hk_owner_t owner = HK_OWNER_NONE;
     const hk_time_t *time = NULL;
-    hk_input_t input = {0};
+    const hk_input_t *direct_input = &s_input;
+    hk_display_t input = {0};
     hk_external_link_t link = {0};
     hk_app_service_t service = {0};
     uint32_t generation = 0U;
@@ -120,7 +123,7 @@ static hk_result_t start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
 
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_DISPLAY, 0U, &available, &fallback) != HK_OK ||
        strcmp(fallback, "headless") != 0)
         return HK_ERR_INTERNAL;
     if((s_fixture->mode == MODE_OPTIONAL_ABSENT && available) ||
@@ -128,11 +131,17 @@ static hk_result_t start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
     if(s_fixture->mode == MODE_OPTIONAL_ABSENT)
     {
-        if(hk_app_context_input(ctx, 0U, &input) != HK_ERR_CAPABILITY_ABSENT)
+        if(hk_app_context_display(ctx, 0U, &input) != HK_ERR_CAPABILITY_ABSENT)
             return HK_ERR_INTERNAL;
     }
-    else if(hk_app_context_input(ctx, 0U, &input) != HK_OK)
+    else if(hk_app_context_display(ctx, 0U, &input) != HK_OK)
     {
+        return HK_ERR_INTERNAL;
+    }
+    if(s_fixture->mode == MODE_OPTIONAL_ABSENT) {
+        if(hk_app_context_input(ctx, &direct_input) != HK_ERR_CAPABILITY_ABSENT || direct_input)
+            return HK_ERR_INTERNAL;
+    } else if(hk_app_context_input(ctx, &direct_input) != HK_OK || direct_input != &s_input) {
         return HK_ERR_INTERNAL;
     }
     s_fixture->copied_context = *ctx;
@@ -252,8 +261,8 @@ static hk_capability_id_t capability_id(const char *id)
 {
     if(strcmp(id, "hackylens.cap.lights") == 0)
         return HK_CAPABILITY_ID_LIGHTS;
-    if(strcmp(id, "hackylens.cap.input") == 0)
-        return HK_CAPABILITY_ID_INPUT;
+    if(strcmp(id, "hackylens.cap.display") == 0)
+        return HK_CAPABILITY_ID_DISPLAY;
     return 0U;
 }
 
@@ -272,9 +281,9 @@ static hk_result_t feature_mask(
         else if(id == HK_CAPABILITY_ID_LIGHTS &&
                 strcmp(features[index], "illumination") == 0)
             *mask |= HK_LIGHTS_FEATURE_ILLUMINATION;
-        else if(id == HK_CAPABILITY_ID_INPUT &&
-                strcmp(features[index], "state") == 0)
-            *mask |= HK_INPUT_FEATURE_STATE;
+        else if(id == HK_CAPABILITY_ID_DISPLAY &&
+                strcmp(features[index], "base-plane") == 0)
+            *mask |= HK_DISPLAY_FEATURE_BASE_PLANE;
         else
             return HK_ERR_FEATURE_UNAVAILABLE;
     }
@@ -318,7 +327,7 @@ static hk_result_t resolve_capability(
 
     provider_features = id == HK_CAPABILITY_ID_LIGHTS
                             ? HK_LIGHTS_FEATURES_0_1
-                            : HK_INPUT_FEATURES_0_1;
+                            : HK_DISPLAY_FEATURES_0_1;
     if(id == HK_CAPABILITY_ID_LIGHTS)
     {
         if(fixture->mode == MODE_REQUIRED_ABSENT)
@@ -385,7 +394,7 @@ static hk_result_t acquire_capability(
     if(!fixture->owner_live || owner.generation != fixture->live_owner.generation)
         return HK_ERR_WRONG_OWNER;
     if(fixture->mode == MODE_OPTIONAL_ACQUIRE_BUSY &&
-       request->id == HK_CAPABILITY_ID_INPUT)
+       request->id == HK_CAPABILITY_ID_DISPLAY)
         return HK_ERR_BUSY;
     *lease = (hk_lease_t){
         fixture->acquire_calls,
@@ -443,6 +452,7 @@ static int init_fixture(grants_fixture_t *fixture, hk_app_runtime_t *runtime)
     hk_app_runtime_ops_t ops = {
         .user = fixture,
         .time = &s_time,
+        .input = &s_input,
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,
@@ -507,9 +517,11 @@ static int check_grants_and_retirement(void)
     hk_lights_t first_lights;
     hk_app_context_t first_context;
     const hk_time_t *retired_time = &s_time;
+    const hk_input_t *retired_input = &s_input;
 
     CHECK(init_fixture(&fixture, &runtime) == 0);
     fixture.mode = MODE_OPTIONAL_ABSENT;
+    runtime.ops.input = NULL;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
     CHECK(fixture.resolve_calls == 2U && fixture.start_calls == 1U);
     CHECK(fixture.owner_open_calls == 1U && fixture.acquire_calls == 1U);
@@ -522,10 +534,13 @@ static int check_grants_and_retirement(void)
     CHECK(!fake_handle_is_live(&fixture, &first_lights));
     CHECK(hk_app_context_time(&first_context, &retired_time) == HK_ERR_STALE_HANDLE);
     CHECK(retired_time == NULL);
+    CHECK(hk_app_context_input(&first_context, &retired_input) == HK_ERR_STALE_HANDLE);
+    CHECK(retired_input == NULL);
     CHECK(hk_app_context_lights(
         &first_context, 0U, &fixture.copied_lights) == HK_ERR_STALE_HANDLE);
 
     fixture.mode = MODE_AVAILABLE;
+    runtime.ops.input = &s_input;
     CHECK(hk_app_runtime_launch(&runtime, &app) == HK_OK);
     CHECK(fixture.live_owner.generation != first_lights.lease.owner.generation);
     CHECK(!fake_handle_is_live(&fixture, &first_lights));

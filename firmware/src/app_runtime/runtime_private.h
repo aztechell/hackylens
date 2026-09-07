@@ -76,6 +76,7 @@ typedef struct
 {
     void *user;
     const hk_time_t *time;
+    const hk_input_t *input;
     hk_app_runtime_resolve_capability_fn resolve_capability;
     hk_app_runtime_resolve_service_fn resolve_service;
     hk_app_runtime_owner_open_fn owner_open;

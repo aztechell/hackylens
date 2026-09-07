@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "../firmware/src/capabilities/input_provider.h"
 #include "../firmware/src/capabilities/input_state.h"
 #include "../firmware/src/apps/files/files_presenter.c"
 
@@ -7,9 +8,8 @@ static uint64_t now_us;
 static uint32_t raw_buttons;
 static unsigned samples;
 
-hk_result_t hk_input_get_state(hk_owner_t owner, const hk_input_t *input, uint32_t *state)
+hk_result_t hk_input_get_state(const hk_input_t *input, uint32_t *state)
 {
-    (void)owner;
     (void)input;
     samples++;
     (void)hk_input_state_sample(&input_state, now_us, raw_buttons);
@@ -20,15 +20,13 @@ hk_result_t hk_input_get_state(hk_owner_t owner, const hk_input_t *input, uint32
 
 int main(void)
 {
-    hk_owner_t owner = {1U, 1U};
     hk_input_t input = {0};
     hk_input_event_t event = {0};
-    input.lease.slot = 1U;
-    input.lease.generation = 1U;
+    hk_input_cursor_t cursor = {0};
     hk_input_state_reset(&input_state);
     (void)hk_input_state_sample(&input_state, 0U, 0U);
-    CHECK(hk_input_state_open_cursor(&input_state, &input.lease) == HK_OK);
-    files_presenter_bind_input(owner, &input);
+    CHECK(hk_input_state_open_cursor(&input_state, &cursor) == HK_OK);
+    files_presenter_bind_input(&input);
 
     /* One slow frame. A full press/release occurs before main dispatch resumes. */
     for(unsigned row = 1U; row <= 40U; row++) {
@@ -37,12 +35,12 @@ int main(void)
         files_presenter_animation_render_indexed_row(NULL, NULL, 0U, NULL, NULL, 0U);
     }
     CHECK(samples == 40U);
-    CHECK(hk_input_state_next_event(&input_state, &input.lease, &event) == HK_OK);
+    CHECK(hk_input_state_next_event(&input_state, &cursor, &event) == HK_OK);
     CHECK(event.pressed == HK_INPUT_BUTTON_BACK);
-    CHECK(hk_input_state_next_event(&input_state, &input.lease, &event) == HK_OK);
+    CHECK(hk_input_state_next_event(&input_state, &cursor, &event) == HK_OK);
     CHECK(event.changed == HK_INPUT_BUTTON_BACK && event.state == 0U);
-    CHECK(hk_input_state_next_event(&input_state, &input.lease, &event) == HK_PENDING);
-    files_presenter_bind_input(HK_OWNER_NONE, NULL);
+    CHECK(hk_input_state_next_event(&input_state, &cursor, &event) == HK_PENDING);
+    files_presenter_bind_input(NULL);
     files_presenter_animation_render_indexed_row(NULL, NULL, 0U, NULL, NULL, 0U);
     CHECK(samples == 40U);
     puts("GIF_INPUT_OK");

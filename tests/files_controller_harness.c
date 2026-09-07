@@ -83,8 +83,6 @@ int main(void)
     g_mode = FILES_MODE_LIST;
     g_now_us = 1000U;
     memset(&state, 0, sizeof(state));
-    state.owner.slot = 1U;
-    state.owner.generation = 1U;
     state.time = &s_time;
     files_controller_enter(&state);
     tap_ok(&state);

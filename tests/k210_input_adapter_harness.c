@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 
-#include "../firmware/src/capabilities/capability_provider.h"
 #include "../firmware/src/capabilities/input_provider.h"
 
 #define CHECK(condition)                                                     \
@@ -15,7 +14,6 @@
         }                                                                    \
     } while(0)
 
-extern const hk_capability_provider_t hk_k210_input_provider;
 
 static uint64_t s_now;
 static uint32_t s_raw;
@@ -34,17 +32,14 @@ uint32_t buttons_read_pressed_mask(void)
 
 int main(void)
 {
-    hk_input_provider_t *provider =
-        (hk_input_provider_t *)hk_k210_input_provider.context;
-    hk_lease_t lease = {
-        0U, 1U, {1U, 1U}, HK_CAPABILITY_ID_INPUT,
-    };
+    const hk_input_t *provider = &hk_input_binding;
+    hk_input_cursor_t cursor = {0};
     hk_input_event_t event;
     uint32_t state;
 
     CHECK(provider && provider->open_cursor && provider->get_state &&
           provider->next_event);
-    CHECK(provider->open_cursor(provider->context, &lease) == HK_OK);
+    CHECK(provider->open_cursor(provider->context, &cursor) == HK_OK);
     CHECK(s_reads == 1U);
 
     s_raw = HK_INPUT_BUTTON_LEFT;
@@ -61,7 +56,7 @@ int main(void)
     CHECK(provider->get_state(provider->context, &state) == HK_OK);
     CHECK(s_reads == 4U && state == HK_INPUT_BUTTON_LEFT);
     CHECK(provider->next_event(
-        provider->context, &lease, &event) == HK_OK);
+        provider->context, &cursor, &event) == HK_OK);
     CHECK(s_reads == 4U && event.timestamp_us == 30000U &&
           event.pressed == HK_INPUT_BUTTON_LEFT);
 

@@ -97,7 +97,7 @@ int main(void)
           HK_APP_RUNTIME_RUNNING);
     CHECK(minimal_app_check_time_contract());
     CHECK(minimal_app_check_display_contract());
-    CHECK(minimal_app_check_stale_reacquire());
+    CHECK(minimal_app_check_cursor_reopen());
     CHECK(hk_app_runtime_host_push_input(&host, HK_INPUT_BUTTON_OK) == HK_OK);
     input.sequence = 1U;
     input.timestamp_us = hk_app_runtime_host_now_us(&host);
@@ -158,7 +158,7 @@ int main(void)
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
     hk_app_runtime_host_fail_acquire(
-        &host, HK_CAPABILITY_ID_INPUT, HK_ERR_IO);
+        &host, HK_CAPABILITY_ID_LIGHTS, HK_ERR_IO);
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) == HK_ERR_IO);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);

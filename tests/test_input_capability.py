@@ -44,8 +44,6 @@ class InputCapabilityTests(unittest.TestCase):
                 ROOT / "tests" / f"input_normative_{backend}_backend.c",
                 ROOT / "firmware" / "src" / "capabilities" / "input.c",
                 ROOT / "firmware" / "src" / "capabilities" / "input_state.c",
-                ROOT / "firmware" / "src" / "capabilities" /
-                "capability_core.c",
             ]
             if backend == "k210":
                 sources.append(
@@ -140,6 +138,29 @@ class InputCapabilityTests(unittest.TestCase):
             [item.id for item in conformance.capabilities],
             ["hackylens.cap.time"],
         )
+        # Link the actual generated absent binding with the portable API.
+        with tempfile.TemporaryDirectory(prefix="hackylens-input-absent-") as temp:
+            directory = Path(temp)
+            generated = directory / "inventory.c"
+            generated.write_text(generator.generated_c(conformance), encoding="utf-8")
+            main = directory / "main.c"
+            main.write_text(
+                '#include <hackylens/capability/input.h>\n'
+                'int main(void) { uint32_t state; hk_input_cursor_t cursor = {0}; '
+                'return hk_input_service() != 0 || '
+                'hk_input_get_state(hk_input_service(), &state) != HK_ERR_CAPABILITY_ABSENT || '
+                'hk_input_cursor_open(hk_input_service(), &cursor) != HK_ERR_CAPABILITY_ABSENT || '
+                'cursor.active; }\n', encoding="utf-8")
+            executable = directory / "absent.exe"
+            subprocess.run([
+                self.compiler(), "-std=c11", "-Wall", "-Wextra", "-Werror",
+                f"-I{ROOT / 'firmware/include'}",
+                f"-I{ROOT / 'firmware/src/capabilities'}",
+                str(generated), str(main),
+                str(ROOT / "firmware/src/capabilities/input.c"),
+                "-o", str(executable),
+            ], check=True, cwd=ROOT)
+            subprocess.run([str(executable)], check=True, cwd=ROOT)
         disabled = generator.compose(
             runtime_board, apps, set(), set(), {"hackylens.cap.input"},
         )

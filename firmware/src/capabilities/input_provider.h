@@ -1,26 +1,13 @@
 #ifndef HK_INPUT_PROVIDER_H
 #define HK_INPUT_PROVIDER_H
-
 #include <hackylens/capability/input.h>
-
-typedef hk_result_t (*hk_input_provider_cursor_fn)(
-    void *context, const hk_lease_t *lease);
-typedef hk_result_t (*hk_input_provider_info_fn)(
-    void *context, hk_input_info_t *info);
-typedef hk_result_t (*hk_input_provider_state_fn)(
-    void *context, uint32_t *state);
-typedef hk_result_t (*hk_input_provider_event_fn)(
-    void *context, const hk_lease_t *lease, hk_input_event_t *event);
-
-typedef struct
+struct hk_input
 {
     void *context;
-    hk_input_provider_cursor_fn open_cursor;
-    hk_input_provider_cursor_fn close_cursor;
-    hk_input_provider_info_fn get_info;
-    hk_input_provider_state_fn get_state;
-    hk_input_provider_event_fn next_event;
-    uint32_t reserved;
-} hk_input_provider_t;
-
+    hk_result_t (*open_cursor)(void *, hk_input_cursor_t *);
+    hk_result_t (*get_info)(void *, hk_input_info_t *);
+    hk_result_t (*get_state)(void *, uint32_t *);
+    hk_result_t (*next_event)(void *, hk_input_cursor_t *, hk_input_event_t *);
+};
+extern const hk_input_t hk_input_binding;
 #endif

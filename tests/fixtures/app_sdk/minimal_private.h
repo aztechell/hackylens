@@ -7,8 +7,9 @@ typedef struct
 {
     hk_owner_t owner;
     const hk_time_t *time;
-    hk_input_t input;
-    hk_input_t input_second;
+    const hk_input_t *input;
+    hk_input_cursor_t input_cursor;
+    hk_input_cursor_t input_second;
     hk_display_t display;
     hk_app_service_t service;
     hk_deadline_t stop_deadline;
@@ -25,6 +26,6 @@ void minimal_app_set_consume_input(uint8_t consume);
 int minimal_app_check_input_overflow(uint32_t expected_dropped);
 int minimal_app_check_time_contract(void);
 int minimal_app_check_display_contract(void);
-int minimal_app_check_stale_reacquire(void);
+int minimal_app_check_cursor_reopen(void);
 
 #endif

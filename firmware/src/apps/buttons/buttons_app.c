@@ -53,19 +53,18 @@ static hk_result_t buttons_start(const hk_app_context_t *ctx)
     uint32_t generation = 0U;
     uint32_t buttons = 0U;
     hk_owner_t owner = HK_OWNER_NONE;
-    hk_input_t input = {0};
+    const hk_input_t *input = NULL;
     hk_result_t result = buttons_state_from(ctx, &state);
 
     if(result != HK_OK)
         return result;
     if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_input(ctx, 0U, &input) != HK_OK)
+       hk_app_context_input(ctx, &input) != HK_OK)
         return HK_ERR_INTERNAL;
-    if(hk_input_get_state(owner, &input, &buttons) != HK_OK)
+    if(hk_input_get_state(input, &buttons) != HK_OK)
         return HK_ERR_INTERNAL;
     buttons_controller_reset(state, buttons);
-    state->owner = owner;
     state->input = input;
     printf("[SHELL] screen BUTTONS\r\n");
     return HK_OK;
@@ -89,7 +88,7 @@ static hk_result_t buttons_event(
     }
     if(event->kind == HK_APP_EVENT_TIMER)
     {
-        if(hk_input_get_state(state->owner, &state->input, &buttons) != HK_OK)
+        if(hk_input_get_state(state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         buttons_controller_tick(state, buttons);
         return buttons_finish_work(ctx, state);

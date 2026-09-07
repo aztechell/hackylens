@@ -1,4 +1,3 @@
-#include "../../../firmware/src/capabilities/capability_provider.h"
 #include "../../../firmware/src/capabilities/input_provider.h"
 #include "../../../firmware/src/capabilities/input_state.h"
 #include "../../../firmware/src/drivers/hk_input.h"
@@ -30,24 +29,14 @@ static hk_result_t k210_input_service(k210_input_state_t *input)
 }
 
 static hk_result_t k210_input_open_cursor(
-    void *context, const hk_lease_t *lease)
+    void *context, hk_input_cursor_t *cursor)
 {
     k210_input_state_t *input = (k210_input_state_t *)context;
     hk_result_t result = k210_input_service(input);
 
     if(result != HK_OK)
         return result;
-    return hk_input_state_open_cursor(&input->state, lease);
-}
-
-static hk_result_t k210_input_close_cursor(
-    void *context, const hk_lease_t *lease)
-{
-    k210_input_state_t *input = (k210_input_state_t *)context;
-
-    if(!input)
-        return HK_ERR_INVALID_ARGUMENT;
-    return hk_input_state_close_cursor(&input->state, lease);
+    return hk_input_state_open_cursor(&input->state, cursor);
 }
 
 static hk_result_t k210_input_get_info(
@@ -75,26 +64,20 @@ static hk_result_t k210_input_get_state(void *context, uint32_t *state)
 }
 
 static hk_result_t k210_input_next_event(
-    void *context, const hk_lease_t *lease, hk_input_event_t *event)
+    void *context, hk_input_cursor_t *cursor, hk_input_event_t *event)
 {
     k210_input_state_t *input = (k210_input_state_t *)context;
     hk_result_t result = k210_input_service(input);
 
     if(result != HK_OK)
         return result;
-    return hk_input_state_next_event(&input->state, lease, event);
+    return hk_input_state_next_event(&input->state, cursor, event);
 }
 
-static hk_input_provider_t s_input_provider = {
+const hk_input_t hk_input_binding = {
     .context = &s_input,
     .open_cursor = k210_input_open_cursor,
-    .close_cursor = k210_input_close_cursor,
     .get_info = k210_input_get_info,
     .get_state = k210_input_get_state,
     .next_event = k210_input_next_event,
-};
-
-const hk_capability_provider_t hk_k210_input_provider = {
-    .context = &s_input_provider,
-    .max_leases = 16U,
 };

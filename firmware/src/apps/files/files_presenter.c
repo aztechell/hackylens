@@ -10,13 +10,11 @@
 #include "../../storage/fat32_volume.h"
 
 static const files_view_ops_t *g_files_view_ops;
-static hk_owner_t g_input_owner;
-static hk_input_t g_input;
+static const hk_input_t *g_input;
 
-void files_presenter_bind_input(hk_owner_t owner, const hk_input_t *input)
+void files_presenter_bind_input(const hk_input_t *input)
 {
-    g_input_owner = owner;
-    g_input = input ? *input : (hk_input_t){0};
+    g_input = input;
 }
 
 static void files_presenter_sample_input(void)
@@ -24,8 +22,8 @@ static void files_presenter_sample_input(void)
     uint32_t state;
     /* Sample into the existing debounced event ring while a frame is decoded.
        Never consume events or dispatch UI while the frame transaction is open. */
-    if(!hk_owner_is_zero(g_input_owner))
-        (void)hk_input_get_state(g_input_owner, &g_input, &state);
+    if(g_input)
+        (void)hk_input_get_state(g_input, &state);
 }
 
 

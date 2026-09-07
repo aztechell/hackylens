@@ -35,7 +35,7 @@ void qr_camera_controller_enter(qr_camera_state_t *state)
 {
     hk_input_snapshot_t input = {0};
     if(state)
-        (void)hk_input_get_state(state->owner, &state->input, &input.state);
+        (void)hk_input_get_state(state->input, &input.state);
     s_session_active = 1U;
     s_result_needs_paint = 0U;
     qr_service_enter();

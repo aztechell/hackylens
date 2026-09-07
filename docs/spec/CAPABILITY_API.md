@@ -16,8 +16,8 @@ semantics remain valid until deliberately migrated and tested. See the
 
 ## S8 migration scope
 
-Time now uses a direct immutable typed binding; its current source interface is
-specified in [Time](capabilities/TIME.md). The generic owner, lease, negotiation
+Time and Input use direct immutable typed bindings; their current interfaces are
+specified in [Time](capabilities/TIME.md) and [Input](capabilities/INPUT.md). The generic owner, lease, negotiation
 and inventory rules below apply to services still on the broker. They must not
 be used to restore that machinery for migrated synchronous services. Build-time
 availability remains enforced; native and MicroPython consumers share the same

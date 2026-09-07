@@ -28,29 +28,9 @@
 #define MICROPYTHON_BINDING_UART_MIN_BAUD 1200ULL
 
 #if !defined(MICROPYTHON_BINDING_TESTING)
-static hk_input_t s_binding_input;
-static hk_owner_t s_binding_input_owner;
-
 static hk_result_t binding_input_state(uint32_t *state)
 {
-    static const hk_capability_request_t request = HK_INPUT_REQUEST_0_1_INIT;
-    hk_owner_t owner = capability_client_consumer_owner(
-        "consumer:micropython-adapter");
-    hk_result_t result;
-
-    if(hk_owner_is_zero(owner))
-        return HK_ERR_STALE_HANDLE;
-    if(owner.slot != s_binding_input_owner.slot ||
-       owner.generation != s_binding_input_owner.generation ||
-       hk_lease_is_zero(&s_binding_input.lease))
-    {
-        s_binding_input.lease = HK_LEASE_NONE;
-        s_binding_input_owner = owner;
-        result = hk_input_acquire(owner, &request, &s_binding_input);
-        if(result != HK_OK)
-            return result;
-    }
-    return hk_input_get_state(owner, &s_binding_input, state);
+    return hk_input_get_state(hk_input_service(), state);
 }
 #endif
 
