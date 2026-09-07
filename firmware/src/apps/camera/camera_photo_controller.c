@@ -17,38 +17,17 @@
 #include "camera_photo_format.h"
 #include "camera_photo_capture.h"
 
-static hk_time_t s_camera_time;
-static hk_owner_t s_camera_time_owner;
 
-static hk_result_t camera_time_prepare(hk_owner_t *owner)
-{
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-
-    *owner = capability_client_current_owner();
-    if(hk_owner_is_zero(*owner))
-        return HK_ERR_STALE_HANDLE;
-    if(owner->slot != s_camera_time_owner.slot ||
-       owner->generation != s_camera_time_owner.generation ||
-       hk_lease_is_zero(&s_camera_time.lease))
-    {
-        s_camera_time.lease = HK_LEASE_NONE;
-        s_camera_time_owner = *owner;
-        return hk_time_acquire(*owner, &request, &s_camera_time);
-    }
-    return HK_OK;
-}
 
 static void camera_time_sleep_ms(uint32_t duration_ms)
 {
-    hk_owner_t owner;
     hk_deadline_t wake;
 
-    if(camera_time_prepare(&owner) != HK_OK ||
-       hk_time_deadline_after_us(
-           owner, &s_camera_time, (uint64_t)duration_ms * 1000U,
+    if(hk_time_deadline_after_us(
+           hk_time_service(), (uint64_t)duration_ms * 1000U,
            &wake) != HK_OK)
         return;
-    (void)hk_time_sleep_until(owner, &s_camera_time, wake, wake, NULL);
+    (void)hk_time_sleep_until(hk_time_service(), wake, wake, NULL);
 }
 
 void camera_photo_controller_take(camera_photo_preview_redraw_t redraw_preview)

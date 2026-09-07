@@ -374,6 +374,12 @@ int main(void)
 #endif
     );
 
+    for(uint8_t app_index = 0U; app_index < g_hk_generated_app_count; app_index++)
+    {
+        const hk_app_t *app = g_hk_generated_apps[app_index];
+        for(uint16_t cap_index = 0U; cap_index < app->capability_count; cap_index++)
+            CHECK(strcmp(app->capabilities[cap_index].id, "hackylens.cap.time") != 0);
+    }
     camera = app_by_id("camera");
     settings = app_by_id("settings");
     sleep = app_by_id("sleep");
@@ -384,11 +390,11 @@ int main(void)
     CHECK(camera->limits.tick_interval_us == 20000U);
     CHECK(camera->service_count == 0U);
     CHECK(settings->capability_count == 2U);
-    CHECK(sleep->capability_count == 3U);
-    CHECK(app_by_id("files")->capability_count == 3U);
+    CHECK(sleep->capability_count == 2U);
+    CHECK(app_by_id("files")->capability_count == 2U);
     CHECK(app_by_id("files")->service_count == 0U);
     CHECK(app_by_id("files")->limits.tick_interval_us == 20000U);
-    CHECK(app_by_id("qr-camera")->capability_count == 3U);
+    CHECK(app_by_id("qr-camera")->capability_count == 2U);
     CHECK(app_by_id("qr-camera")->service_count == 0U);
     CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 20000U);
     for(uint16_t index = 0U; index < settings->capability_count; index++)

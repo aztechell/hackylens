@@ -2,7 +2,6 @@
 
 #include "../firmware/src/capabilities/time_provider.h"
 
-extern const hk_capability_provider_t hk_k210_time_provider;
 
 unsigned int g_test_lock_depth;
 unsigned int g_test_lock_calls;
@@ -26,11 +25,6 @@ void usleep(uint64_t duration_us)
     s_slept_us += duration_us;
     if(!s_freeze)
         s_now_us += duration_us;
-}
-
-const hk_capability_provider_t *time_normative_backend_provider(void)
-{
-    return &hk_k210_time_provider;
 }
 
 const char *time_normative_backend_name(void)

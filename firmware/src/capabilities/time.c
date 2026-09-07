@@ -4,51 +4,25 @@
 #include <stddef.h>
 
 #include "time_provider.h"
-#include "capability_core_binding.h"
 
-static hk_result_t time_provider_for(
-    hk_owner_t owner,
-    const hk_time_t *handle,
-    hk_time_provider_t **provider)
+const hk_time_t *hk_time_service(void)
 {
-    void *context = NULL;
-    hk_result_t result;
-
-    if(!handle || !provider)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = capability_owner_runtime_validate(
-        owner, &handle->lease, HK_CAPABILITY_ID_TIME, &context);
-    if(result != HK_OK)
-        return result;
-    *provider = (hk_time_provider_t *)context;
-    if(!*provider || !(*provider)->now_us || !(*provider)->sleep_us ||
-       (*provider)->max_sleep_us == 0U ||
-       (*provider)->max_sleep_us > HK_TIME_MAX_SLEEP_US ||
-       (*provider)->max_slice_us == 0U ||
-       (*provider)->max_slice_us > HK_TIME_CANCEL_PROBE_MAX_US ||
-       (*provider)->reserved != 0U)
-    {
-        (void)capability_owner_runtime_quarantine(
-            owner, &handle->lease, HK_CAPABILITY_ID_TIME);
-        return HK_ERR_INTERNAL;
-    }
-    return HK_OK;
+    return &hk_time_binding;
 }
 
-static hk_result_t time_now(
-    hk_owner_t owner,
-    const hk_time_t *handle,
-    hk_time_provider_t **provider,
-    uint64_t *value)
+static hk_result_t time_now(const hk_time_t *time, uint64_t *value)
 {
-    hk_result_t result = time_provider_for(owner, handle, provider);
+    hk_result_t result;
 
-    if(result != HK_OK)
-        return result;
-    result = (*provider)->now_us((*provider)->context, value);
+    if(!time)
+        return HK_ERR_CAPABILITY_ABSENT;
+    if(!time->now_us || !time->sleep_us || !time->fault ||
+       time->max_sleep_us == 0U || time->max_sleep_us > HK_TIME_MAX_SLEEP_US ||
+       time->max_slice_us == 0U || time->max_slice_us > HK_TIME_CANCEL_PROBE_MAX_US)
+        return HK_ERR_INTERNAL;
+    result = time->now_us(time->context, value);
     if(result == HK_ERR_INTERNAL)
-        (void)capability_owner_runtime_quarantine(
-            owner, &handle->lease, HK_CAPABILITY_ID_TIME);
+        time->fault(time->context);
     return result;
 }
 
@@ -58,58 +32,31 @@ static uint8_t cancelled(const hk_cancel_t *cancel)
                      cancel->probe(cancel->context));
 }
 
-hk_result_t hk_time_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_time_t *handle)
-{
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = HK_LEASE_NONE;
-    return capability_owner_runtime_acquire(
-        owner, request, HK_CAPABILITY_ID_TIME, &handle->lease);
-}
-
-hk_result_t hk_time_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_time_t *handle)
-{
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    return capability_owner_runtime_release(
-        owner, HK_CAPABILITY_ID_TIME, deadline, &handle->lease);
-}
-
 hk_result_t hk_time_now_us(
-    hk_owner_t owner,
     const hk_time_t *handle,
     uint64_t *value)
 {
-    hk_time_provider_t *provider;
 
     if(!value)
         return HK_ERR_INVALID_ARGUMENT;
-    return time_now(owner, handle, &provider, value);
+    return time_now(handle, value);
 }
 
 hk_result_t hk_time_deadline_after_us(
-    hk_owner_t owner,
     const hk_time_t *handle,
     uint64_t duration_us,
     hk_deadline_t *deadline)
 {
-    hk_time_provider_t *provider;
     uint64_t now;
     hk_result_t result;
 
     if(!deadline)
         return HK_ERR_INVALID_ARGUMENT;
     deadline->at_us = 0U;
-    result = time_now(owner, handle, &provider, &now);
+    result = time_now(handle, &now);
     if(result != HK_OK)
         return result;
-    if(duration_us > provider->max_sleep_us ||
+    if(duration_us > handle->max_sleep_us ||
        duration_us >= UINT64_MAX - now)
         return HK_ERR_LIMIT;
     deadline->at_us = now + duration_us;
@@ -117,20 +64,18 @@ hk_result_t hk_time_deadline_after_us(
 }
 
 hk_result_t hk_time_sleep_until(
-    hk_owner_t owner,
     const hk_time_t *handle,
     hk_deadline_t wake_target,
     hk_deadline_t operation_deadline,
     const hk_cancel_t *cancel)
 {
-    hk_time_provider_t *provider;
     uint64_t now;
     hk_result_t result;
 
     if(wake_target.at_us == UINT64_MAX ||
        operation_deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
-    result = time_now(owner, handle, &provider, &now);
+    result = time_now(handle, &now);
     if(result != HK_OK)
         return result;
     if(now >= wake_target.at_us)
@@ -139,8 +84,8 @@ hk_result_t hk_time_sleep_until(
         return HK_ERR_CANCELLED;
     if(operation_deadline.at_us == 0U || now >= operation_deadline.at_us)
         return HK_ERR_DEADLINE_EXCEEDED;
-    if(wake_target.at_us - now > provider->max_sleep_us ||
-       operation_deadline.at_us - now > provider->max_sleep_us)
+    if(wake_target.at_us - now > handle->max_sleep_us ||
+       operation_deadline.at_us - now > handle->max_sleep_us)
         return HK_ERR_LIMIT;
 
     while(1)
@@ -150,23 +95,21 @@ hk_result_t hk_time_sleep_until(
         uint64_t slice_us = stop_at - now;
         uint64_t previous = now;
 
-        if(slice_us > provider->max_slice_us)
-            slice_us = provider->max_slice_us;
-        result = provider->sleep_us(provider->context, slice_us);
+        if(slice_us > handle->max_slice_us)
+            slice_us = handle->max_slice_us;
+        result = handle->sleep_us(handle->context, slice_us);
         if(result != HK_OK)
         {
             if(result == HK_ERR_INTERNAL)
-                (void)capability_owner_runtime_quarantine(
-                    owner, &handle->lease, HK_CAPABILITY_ID_TIME);
+                handle->fault(handle->context);
             return result;
         }
-        result = time_now(owner, handle, &provider, &now);
+        result = time_now(handle, &now);
         if(result != HK_OK)
             return result;
         if(now <= previous)
         {
-            (void)capability_owner_runtime_quarantine(
-                owner, &handle->lease, HK_CAPABILITY_ID_TIME);
+            handle->fault(handle->context);
             return HK_ERR_INTERNAL;
         }
         if(now >= wake_target.at_us)

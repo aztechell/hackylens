@@ -80,7 +80,7 @@ static hk_result_t pong_start(const hk_app_context_t *ctx)
     const char *app_id = NULL;
     uint32_t generation = 0U;
     hk_owner_t owner = HK_OWNER_NONE;
-    hk_time_t time = {0};
+    const hk_time_t *time = NULL;
     hk_input_t input = {0};
     uint64_t now_us = 0U;
     hk_result_t result = pong_state_from(ctx, &state);
@@ -89,9 +89,9 @@ static hk_result_t pong_start(const hk_app_context_t *ctx)
         return result;
     if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_time(ctx, 0U, &time) != HK_OK ||
+       hk_app_context_time(ctx, &time) != HK_OK ||
        hk_app_context_input(ctx, 0U, &input) != HK_OK ||
-       hk_time_now_us(owner, &time, &now_us) != HK_OK)
+       hk_time_now_us(time, &now_us) != HK_OK)
         return HK_ERR_INTERNAL;
     state->owner = owner;
     state->time = time;

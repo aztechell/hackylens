@@ -70,35 +70,13 @@ static volatile uint32_t g_last_result_us;
 static volatile uint32_t g_last_reconcile_us;
 static volatile uint32_t g_last_cleanup_us;
 static volatile uint8_t g_refine_edges_requested = APRILTAG_REFINE_EDGES;
-static hk_time_t s_apriltag_time;
-static hk_owner_t s_apriltag_time_owner;
 
-static hk_result_t apriltag_time_prepare(hk_owner_t *owner)
-{
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-
-    *owner = capability_client_consumer_owner(
-        "consumer:apriltag-detector");
-    if(hk_owner_is_zero(*owner))
-        return HK_ERR_STALE_HANDLE;
-    if(owner->slot != s_apriltag_time_owner.slot ||
-       owner->generation != s_apriltag_time_owner.generation ||
-       hk_lease_is_zero(&s_apriltag_time.lease))
-    {
-        s_apriltag_time.lease = HK_LEASE_NONE;
-        s_apriltag_time_owner = *owner;
-        return hk_time_acquire(*owner, &request, &s_apriltag_time);
-    }
-    return HK_OK;
-}
 
 static uint64_t apriltag_time_now_us(void)
 {
-    hk_owner_t owner;
     uint64_t value = 0U;
 
-    if(apriltag_time_prepare(&owner) != HK_OK ||
-       hk_time_now_us(owner, &s_apriltag_time, &value) != HK_OK)
+    if(hk_time_now_us(hk_time_service(), &value) != HK_OK)
         return 0U;
     return value;
 }
@@ -106,25 +84,20 @@ static uint64_t apriltag_time_now_us(void)
 static hk_result_t apriltag_time_deadline_after_us(
     uint64_t duration_us, hk_deadline_t *deadline)
 {
-    hk_owner_t owner;
 
-    if(apriltag_time_prepare(&owner) != HK_OK)
-        return HK_ERR_STALE_HANDLE;
     return hk_time_deadline_after_us(
-        owner, &s_apriltag_time, duration_us, deadline);
+        hk_time_service(), duration_us, deadline);
 }
 
 static void apriltag_time_sleep_us(uint64_t duration_us)
 {
-    hk_owner_t owner;
     hk_deadline_t wake;
 
-    if(apriltag_time_prepare(&owner) != HK_OK ||
-       hk_time_deadline_after_us(
-           owner, &s_apriltag_time, duration_us, &wake) != HK_OK)
+    if(hk_time_deadline_after_us(
+           hk_time_service(), duration_us, &wake) != HK_OK)
         return;
     (void)hk_time_sleep_until(
-        owner, &s_apriltag_time, wake, wake, NULL);
+        hk_time_service(), wake, wake, NULL);
 }
 
 static void *shared_uncached(void *pointer)

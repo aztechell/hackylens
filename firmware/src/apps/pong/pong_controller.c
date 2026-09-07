@@ -325,7 +325,7 @@ static uint8_t pong_simulate_step(pong_state_t *state, uint32_t buttons)
 void pong_controller_reset(pong_state_t *state, uint64_t now_us)
 {
     hk_owner_t owner;
-    hk_time_t time;
+    const hk_time_t *time;
     hk_input_t input;
     uint32_t buttons;
 

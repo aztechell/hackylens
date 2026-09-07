@@ -5,91 +5,66 @@ version: 0.1.0
 stability: experimental
 ---
 
-# Time Capability
+# Typed Time service
 
-## Identity and features
+S8 replaces the experimental lease-based Time source interface with a direct
+immutable binding. Native apps and MicroPython still use the same production
+clock and bounded-sleep implementation. Other services retain their broker
+until their own migration. The old Time acquire/release/owner interface is
+removed rather than retained as a compatibility layer.
 
-- Numeric ID: `0x00010001`.
-- Canonical name: `hackylens.cap.time`.
+## Binding and operations
 
-Feature bits:
+`hk_time_service()` returns the statically selected `const hk_time_t *`.
+The firmware runtime requires Time; composition rejects an absent binding.
+App code receives it through
+`hk_app_context_time(ctx, &time)`. The opaque handle contains no generic lease,
+owner generation or runtime version/feature negotiation. Build composition
+checks required service availability before compilation.
 
-| Bit | Name | Meaning |
-|---:|---|---|
-| `1 << 0` | `HK_TIME_FEATURE_MONOTONIC_US` | Monotonic microsecond clock |
-| `1 << 1` | `HK_TIME_FEATURE_SLEEP_UNTIL` | Bounded cooperative sleep |
+- `hk_time_now_us(time, value)` reads monotonic microseconds.
+- `hk_time_deadline_after_us(time, duration_us, deadline)` creates an absolute
+  deadline, rejecting overflow and durations above `HK_TIME_MAX_SLEEP_US`.
+- `hk_time_sleep_until(time, wake_target, operation_deadline, cancel)` waits in
+  bounded slices with cancellation and an unchanged absolute operation deadline.
 
-Version `0.1.0` requires both features.
+The monotonic domain is shared across cores during one boot. It is not wall
+clock time and has no calendar, timezone or persistence semantics. Reading the
+K210 clock and protecting its monotonic state remain under the same spinlock.
+The binding has firmware lifetime and needs no release or owner cleanup.
 
-Public limits:
+## Timing and failure semantics
 
-| Key | Name | Meaning |
-|---:|---|---|
-| `1` | `HK_TIME_LIMIT_MAX_SLEEP_US` | Maximum relative deadline or sleep interval, in microseconds |
+The maximum interval is 300 seconds. Sleep checks cancellation and deadline at
+least every 5 ms. Wake target and operation deadline are distinct; the latter
+may precede the former. Neither is extended between slices.
 
-## Public operations
+An already reached wake target succeeds. During sleep, reaching the target
+wins over cancellation; otherwise cancellation is checked before an expired
+operation deadline. Cancellation returns `HK_ERR_CANCELLED`, expired operation
+deadline returns `HK_ERR_DEADLINE_EXCEEDED`, and overflowing or excessive
+intervals return `HK_ERR_LIMIT`.
 
-- `hk_time_acquire(owner, request, handle)` obtains a shared lease.
-- `hk_time_now_us(owner, handle, value)` returns the current monotonic value.
-- `hk_time_deadline_after_us(owner, handle, duration_us, deadline)` creates an
-  absolute deadline and rejects overflow or a duration above the published
-  maximum.
-- `hk_time_sleep_until(owner, handle, wake_target, operation_deadline, cancel)`
-  sleeps cooperatively until the wake target, cancellation, or the operation
-  deadline.
+A successful nonzero sleep must advance the observed clock. Frozen or backward
+clock observations fail instead of causing an unbounded loop. Fault state is
+local to the Time provider, with cross-core synchronization; it does not depend
+on a generic owner table. This preserves failed-clock behavior without a lease
+quarantine mechanism.
 
-The monotonic value MUST NOT move backwards during one boot. It is not wall
-clock time and has no calendar, timezone, or persistence semantics.
+## Consumers and checks
 
-## Ownership, affinity, and timing
+Runtime, Files, Pong, camera photo timing, QR, detectors, auto-sleep and
+MicroPython share this service. MicroPython `ticks_ms()` and `sleep_ms()` keep
+API v1 behavior and use the same Time implementation as native apps.
 
-Time leases are shared. A provider may advertise `ANY_CORE` only when the same
-monotonic domain and atomic read semantics are valid on every supported core.
-
-`wake_target` and `operation_deadline` are distinct absolute monotonic values.
-The wake target describes requested sleep completion; the operation deadline
-is the common contract's unchanged bound for the entire call. The operation
-deadline MAY precede the wake target to bound a longer requested sleep. The
-provider MUST check cancellation and the operation deadline at least every
-5 ms. It returns `HK_OK` when the wake target is reached,
-`HK_ERR_CANCELLED` when cancellation is observed first, and
-`HK_ERR_DEADLINE_EXCEEDED` when the operation deadline expires first. The
-common terminal precedence applies when events coincide. There is no infinite
-sleep, and neither absolute value is extended between sleep slices.
-
-## Errors and cleanup
-
-In addition to common errors:
-
-- duration addition overflow returns `HK_ERR_LIMIT`;
-- a deadline outside the provider's maximum sleep interval returns
-  `HK_ERR_LIMIT`;
-- a non-monotonic platform observation is `HK_ERR_INTERNAL` and quarantines the
-  provider.
-
-Release has no hardware side effect beyond invalidating the shared lease.
-
-## Required resources and consumers
-
-The platform mapping MUST provide one monotonic clock source. The source is a
-platform property, not a board-ID inference.
-
-Initial native consumers are Pong, camera photo timing, files, QR, Apriltag,
-object detection, and Sleep. MicroPython `ticks_ms()` and `sleep_ms()` use the
-same provider without changing MicroPython API v1.
-
-## Fake and acceptance
-
-The fake supports explicit clock advancement and deterministic cancellation at
-chosen timestamps. Contract tests cover monotonicity, addition overflow,
-already-expired wake targets and operation deadlines, invalid target/deadline
-combinations, cancellation/deadline/wake races, maximum duration, unchanged
-deadlines across slices, and shared leases.
-
-SEN0305 acceptance records read overhead and sleep/cancel latency. A Cube build
-may prove compile conformance but does not claim clock runtime qualification.
+Fake and K210-backed host suites cover monotonicity, overflow, maximum interval,
+expired targets/deadlines, cancellation races, bounded slices, progress/fault
+handling and clock locking. Time must link without the generic capability core
+and must not allocate memory or create a task, queue or core. Hardware checks
+record actual device behavior; host tests do not imply board qualification.
 
 ## References
 
-- [Capability API](../CAPABILITY_API.md)
+- [Capability API during migration](../CAPABILITY_API.md)
+- [App Runtime](../APP_RUNTIME.md)
 - [MicroPython API](../../MICROPYTHON_API.md)

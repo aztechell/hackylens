@@ -6,7 +6,7 @@
 typedef struct
 {
     hk_owner_t owner;
-    hk_time_t time;
+    const hk_time_t *time;
     hk_input_t input;
     hk_input_t input_second;
     hk_display_t display;

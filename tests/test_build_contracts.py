@@ -132,15 +132,18 @@ class BuildContractsTest(unittest.TestCase):
         self.assertIn("#define UI_DISPLAY_PRESENT_TIMEOUT_US 500000ULL", ui)
         self.assertIn("[APP] poll failed result=%d", main)
 
-    def test_firmware_runtime_time_acquire_matches_granted_features(self):
+    def test_firmware_runtime_injects_direct_time_binding(self):
         integration = (
             ROOT / "firmware" / "src" / "runtime" /
             "app_runtime_integration.c"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            "time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US",
+            ".time = s_integration.time",
             integration,
         )
+
+        self.assertIn("s_integration.time = hk_time_service();", integration)
+        self.assertNotIn("hk_time_acquire", integration)
 
     def test_wdt_fault_injection_is_explicit_and_test_build_only(self):
         expected = (ROOT / "VERSION").read_text(encoding="utf-8").strip()

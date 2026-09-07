@@ -23,7 +23,7 @@ def request(*, optional: bool = False, minimum: str = "0.1.0",
     fallback = ', fallback = "legacy-path"' if optional else ""
     encoded_features = ", ".join(f'"{item}"' for item in features)
     return (
-        "{ id = \"hackylens.cap.time\", instance = 0, "
+        "{ id = \"hackylens.cap.test-clock\", instance = 0, "
         f"minimum = \"{minimum}\", maximum_exclusive = \"{maximum}\", "
         f"features = [{encoded_features}]{fallback} }}"
     )
@@ -52,7 +52,7 @@ class CapabilityCompositionTests(unittest.TestCase):
         catalog_text = """schema = 1
 platform = "kendryte-k210"
 [[capabilities]]
-id = "hackylens.cap.time"
+id = "hackylens.cap.test-clock"
 numeric_id = 65537
 instance = 0
 version = "0.1.0"
@@ -124,6 +124,38 @@ max_leases = 16
                 hashlib.sha256(first_caps.read_bytes()).hexdigest(),
             )
 
+    def test_time_is_build_dependency_without_runtime_negotiation(self) -> None:
+        apps = set(generator.load_app_requirements())
+        for board in (self.runtime, self.cube):
+            composition = generator.compose(board, apps, set(), set(), set())
+            self.assertIn(generator.TIME_SERVICE_ID,
+                          [item.id for item in composition.capabilities])
+            self.assertNotIn(generator.TIME_SERVICE_ID,
+                             [item["id"] for item in
+                              generator.capabilities_document(composition)["entries"]])
+            for requests in (*composition.grants.values(),
+                             *composition.declarations.values()):
+                self.assertNotIn(generator.TIME_SERVICE_ID,
+                                 [item.id for item in requests])
+            generated = generator.generated_c(composition)
+            self.assertNotIn("hk_k210_time_provider", generated)
+            self.assertNotIn("0x00010001U", generated)
+            self.assertNotIn('"hackylens.cap.time"', generated)
+        self.assertEqual(generator.capabilities_document(composition)["entries"], [])
+
+    def test_time_build_dependency_requires_static_binding_definition(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = self.fixture(directory)
+            root, catalog, _, _ = fixture
+            catalog.write_text(catalog.read_text(encoding="utf-8").replace(
+                "hackylens.cap.test-clock", generator.TIME_SERVICE_ID), encoding="utf-8")
+            with self.assertRaisesRegex(generator.CapabilityError, "static Time service"):
+                self.compose_fixture(fixture)
+            (root / "platforms/k210/capabilities/time_adapter.c").write_text(
+                "const hk_time_t hk_test_time_provider = {0};\n",
+                encoding="utf-8")
+            self.assertEqual(len(self.compose_fixture(fixture).capabilities), 1)
+
     def test_duplicate_unknown_id_and_provider_symbol_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.fixture(
@@ -149,7 +181,7 @@ max_leases = 1
                 generator.load_catalog(fixture[1], root=fixture[0])
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.fixture(directory, required=request().replace(
-                "hackylens.cap.time", "hackylens.cap.unknown"
+                "hackylens.cap.test-clock", "hackylens.cap.unknown"
             ))
             with self.assertRaisesRegex(generator.CapabilityError, "unknown capability"):
                 self.compose_fixture(fixture)
@@ -206,14 +238,14 @@ int main(void)\n
 {\n
     hk_capability_request_t request_value;\n
     hk_result_t result = hk_generated_capability_request_for(\n
-        \"test\", \"hackylens.cap.time\", 0U, &request_value);\n
+        \"test\", \"hackylens.cap.test-clock\", 0U, &request_value);\n
     if(result != HK_ERR_CAPABILITY_ABSENT)\n
         return 1;\n
     if(request_value.id != UINT32_C(0x00010001) ||\n
        request_value.required_features != UINT64_MAX)\n
         return 2;\n
     if(hk_generated_capability_request_for(\n
-           \"test\", \"hackylens.cap.time\", 1U, &request_value) !=\n
+           \"test\", \"hackylens.cap.test-clock\", 1U, &request_value) !=\n
        HK_ERR_NOT_DECLARED)\n
         return 3;\n
     return 0;\n
@@ -246,7 +278,7 @@ int main(void)\n
         with tempfile.TemporaryDirectory() as directory:
             fixture = self.fixture(directory, required=request())
             disabled = self.compose_fixture(
-                fixture, disabled_capabilities={"hackylens.cap.time"}
+                fixture, disabled_capabilities={"hackylens.cap.test-clock"}
             )
             self.assertEqual(disabled.absences[0]["code"], "provider-excluded")
             self.assertIn("test", disabled.disabled_apps)
@@ -258,7 +290,7 @@ int main(void)\n
                 target="full",
                 disabled_apps=set(),
                 exclusions=[],
-                disabled_capabilities={"hackylens.cap.time"},
+                disabled_capabilities={"hackylens.cap.test-clock"},
                 capabilities_sha256="a" * 64,
             )
             self.assertEqual(
@@ -273,16 +305,12 @@ int main(void)\n
             generator.compose(
                 self.runtime, apps, set(), set(), {"hackylens.cap.time"}
             )
-        diagnostic = generator.compose(
-            self.runtime, apps, set(), set(), {"hackylens.cap.time"},
-            allow_required_consumer_exclusion=True,
-        )
-        self.assertEqual(
-            [item["consumer"] for item in diagnostic.required_consumer_exclusions],
-            ["consumer:external-link-service", "consumer:firmware-runtime"],
-        )
-        self.assertNotIn("consumer:external-link-service", diagnostic.grants)
-        self.assertNotIn("consumer:firmware-runtime", diagnostic.grants)
+        with self.assertRaisesRegex(generator.CapabilityError,
+                                    "required capability consumer.*hackylens.cap.time"):
+            generator.compose(
+                self.runtime, apps, set(), set(), {"hackylens.cap.time"},
+                allow_required_consumer_exclusion=True,
+            )
         runtime = generator.compose(self.runtime, apps, set(), set(), set())
         cube = generator.compose(self.cube, apps, set(), set(), set())
         self.assertEqual(

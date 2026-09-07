@@ -34,7 +34,7 @@ static hk_result_t start_returns_pending(const hk_app_context_t *ctx)
 
 static hk_result_t consume_callback_budget(const hk_app_context_t *ctx)
 {
-    hk_time_t time;
+    const hk_time_t *time;
     hk_owner_t owner = HK_OWNER_NONE;
     hk_deadline_t wake;
     const char *app_id = NULL;
@@ -43,10 +43,10 @@ static hk_result_t consume_callback_budget(const hk_app_context_t *ctx)
     if(hk_app_context_identity(
            ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_time(ctx, 0U, &time) != HK_OK ||
-       hk_time_deadline_after_us(owner, &time, 101U, &wake) != HK_OK)
+       hk_app_context_time(ctx, &time) != HK_OK ||
+       hk_time_deadline_after_us(time, 101U, &wake) != HK_OK)
         return HK_ERR_INTERNAL;
-    return hk_time_sleep_until(owner, &time, wake, wake, NULL);
+    return hk_time_sleep_until(time, wake, wake, NULL);
 }
 
 static hk_result_t slow_timer_event(
@@ -158,7 +158,7 @@ int main(void)
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
     hk_app_runtime_host_fail_acquire(
-        &host, HK_CAPABILITY_ID_TIME, HK_ERR_IO);
+        &host, HK_CAPABILITY_ID_INPUT, HK_ERR_IO);
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) == HK_ERR_IO);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);

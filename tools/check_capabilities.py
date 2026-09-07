@@ -76,6 +76,13 @@ def validate(root: Path = ROOT) -> list[str]:
             if any(item["code"] not in generator.ABSENCE_CODES for item in first.absences):
                 failures.append(f"{board_id}: unknown absence reason")
             capability_doc = generator.capabilities_document(first)
+            if any(item["id"] == generator.TIME_SERVICE_ID
+                   for item in capability_doc["entries"]):
+                failures.append(f"{board_id}: static Time service leaked into runtime inventory")
+            if any(request.id == generator.TIME_SERVICE_ID
+                   for requests in (*first.grants.values(), *first.declarations.values())
+                   for request in requests):
+                failures.append(f"{board_id}: static Time service has runtime grants or requests")
             if board.support == "conformance" and capability_doc["runtime_supported"]:
                 failures.append(f"{board_id}: conformance inventory claims runtime qualification")
         time = next(item for item in catalog if item.id == "hackylens.cap.time")
@@ -103,12 +110,12 @@ def validate(root: Path = ROOT) -> list[str]:
             "hackylens.cap.lights"
         ]:
             failures.append(
-                "SEN0305 inventory must contain exactly the five initial capabilities"
+                "SEN0305 build composition must retain all five initial services"
             )
         if [item.id for item in composed_by_board["sipeed-maix-cube"].capabilities] != [
             "hackylens.cap.time"
         ]:
-            failures.append("Cube conformance inventory must keep Input absent")
+            failures.append("Cube build composition must keep only static Time available")
         for app, requirements in generator.load_app_requirements(apps_root).items():
             if "display" in requirements.legacy:
                 failures.append(f"{app}: private display requirement survived Phase 2.8")

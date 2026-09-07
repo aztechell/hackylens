@@ -14,8 +14,7 @@
 typedef struct
 {
     hk_app_switch_t switcher;
-    hk_owner_t runtime_owner;
-    hk_time_t time;
+    const hk_time_t *time;
     hk_display_t display;
     hk_display_info_t display_info;
     hk_display_surface_t locked_surface;
@@ -92,13 +91,6 @@ static hk_result_t acquire_capability(
     if(!request || !lease)
         return HK_ERR_INVALID_ARGUMENT;
     *lease = HK_LEASE_NONE;
-    if(request->id == HK_CAPABILITY_ID_TIME)
-    {
-        hk_time_t handle = {0};
-        result = hk_time_acquire(owner, request, &handle);
-        *lease = handle.lease;
-        return result;
-    }
     if(request->id == HK_CAPABILITY_ID_INPUT)
     {
         hk_input_t handle = {0};
@@ -167,7 +159,7 @@ static hk_result_t now_us(void *user, uint64_t *value)
     app_runtime_integration_t *integration = user;
 
     return hk_time_now_us(
-        integration->runtime_owner, &integration->time, value);
+        integration->time, value);
 }
 
 static hk_result_t deadline_after_us(
@@ -178,7 +170,7 @@ static hk_result_t deadline_after_us(
     app_runtime_integration_t *integration = user;
 
     return hk_time_deadline_after_us(
-        integration->runtime_owner, &integration->time,
+        integration->time,
         duration_us, deadline);
 }
 
@@ -405,7 +397,6 @@ hk_result_t app_runtime_integration_initialize(void)
     };
     hk_app_runtime_ops_t runtime_ops;
     hk_result_t result;
-    hk_capability_request_t time_request = HK_TIME_REQUEST_0_1_INIT;
 
     if(s_integration.initialized)
         return HK_OK;
@@ -413,18 +404,12 @@ hk_result_t app_runtime_integration_initialize(void)
     result = capability_owner_runtime_initialize();
     if(result != HK_OK)
         return result;
-    s_integration.runtime_owner = capability_client_consumer_owner(
-        "consumer:firmware-runtime");
-    if(hk_owner_is_zero(s_integration.runtime_owner))
-        return HK_ERR_STALE_HANDLE;
-    /* firmware-runtime is granted monotonic-us only, not sleep-until. */
-    time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
-    result = hk_time_acquire(
-        s_integration.runtime_owner, &time_request, &s_integration.time);
-    if(result != HK_OK)
-        return result;
+    s_integration.time = hk_time_service();
+    if(!s_integration.time)
+        return HK_ERR_CAPABILITY_ABSENT;
     runtime_ops = (hk_app_runtime_ops_t){
         .user = &s_integration,
+        .time = s_integration.time,
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

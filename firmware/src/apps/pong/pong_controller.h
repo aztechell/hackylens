@@ -9,7 +9,7 @@ typedef struct
 {
     pong_view_state_t previous;
     hk_owner_t owner;
-    hk_time_t time;
+    const hk_time_t *time;
     hk_input_t input;
     int16_t player_x;
     int16_t ai_x;

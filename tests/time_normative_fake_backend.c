@@ -14,6 +14,7 @@ typedef struct
     uint32_t sleep_calls;
     uint8_t observed;
     uint8_t freeze;
+    uint8_t faulted;
 } fake_time_t;
 
 static fake_time_t s_fake;
@@ -25,6 +26,8 @@ static hk_result_t fake_now(void *context, uint64_t *value)
 
     if(!fake || !value)
         return HK_ERR_INVALID_ARGUMENT;
+    if(fake->faulted)
+        return HK_ERR_INVALID_STATE;
     if(fake->observed && fake->now_us < fake->last_us)
         return HK_ERR_INTERNAL;
     fake->last_us = fake->now_us;
@@ -47,23 +50,20 @@ static hk_result_t fake_sleep(void *context, uint64_t duration_us)
     return HK_OK;
 }
 
-static hk_time_provider_t s_time_provider = {
+static void fake_fault(void *context)
+{
+    ((fake_time_t *)context)->faulted = 1U;
+}
+
+const hk_time_t hk_time_binding = {
     .context = &s_fake,
+    .fault = fake_fault,
     .now_us = fake_now,
     .sleep_us = fake_sleep,
     .max_sleep_us = HK_TIME_MAX_SLEEP_US,
     .max_slice_us = (uint32_t)HK_TIME_CANCEL_PROBE_MAX_US,
 };
 
-static const hk_capability_provider_t s_provider = {
-    .context = &s_time_provider,
-    .max_leases = 16U,
-};
-
-const hk_capability_provider_t *time_normative_backend_provider(void)
-{
-    return &s_provider;
-}
 
 const char *time_normative_backend_name(void)
 {

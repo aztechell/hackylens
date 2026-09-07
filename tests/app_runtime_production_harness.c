@@ -58,14 +58,9 @@ static fixture_t s_fixture;
 static jmp_buf s_main_exit;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[64];
 
-static const char *const s_time_features[] = {"monotonic-us"};
 static const char *const s_input_features[] = {"events"};
 static const char *const s_display_features[] = {"base-plane"};
 static const hk_app_capability_request_t s_capabilities[] = {
-    {
-        "hackylens.cap.time", 0U, ">=0.1.0", "<0.2.0",
-        s_time_features, 1U, NULL, 0U,
-    },
     {
         "hackylens.cap.input", 0U, ">=0.1.0", "<0.2.0",
         s_input_features, 1U, NULL, 0U,
@@ -80,11 +75,11 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
 {
     hk_display_t display;
     hk_input_t input;
-    hk_time_t time;
+    const hk_time_t *time;
 
     if(hk_app_context_display(ctx, 0U, &display) != HK_OK ||
        hk_app_context_input(ctx, 0U, &input) != HK_OK ||
-       hk_app_context_time(ctx, 0U, &time) != HK_OK)
+       hk_app_context_time(ctx, &time) != HK_OK)
         return HK_ERR_INTERNAL;
     return HK_OK;
 }
@@ -194,9 +189,7 @@ hk_result_t hk_generated_capability_request_for(
     if(!consumer_id || strcmp(consumer_id, s_v2_app.id) != 0 ||
        !capability_id || instance != 0U || !request)
         return HK_ERR_NOT_DECLARED;
-    if(strcmp(capability_id, "hackylens.cap.time") == 0)
-        *request = (hk_capability_request_t)HK_TIME_REQUEST_0_1_INIT;
-    else if(strcmp(capability_id, "hackylens.cap.input") == 0)
+    if(strcmp(capability_id, "hackylens.cap.input") == 0)
         *request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
     else if(strcmp(capability_id, "hackylens.cap.display") == 0)
         *request = (hk_capability_request_t)HK_DISPLAY_REQUEST_0_1_INIT;
@@ -253,40 +246,20 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
     return HK_OWNER_NONE;
 }
 
-hk_result_t hk_time_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_time_t *handle)
+struct hk_time { uint8_t binding; };
+static const hk_time_t s_time = {1U};
+const hk_time_t *hk_time_service(void) { return &s_time; }
+hk_result_t hk_time_now_us(const hk_time_t *handle, uint64_t *value)
 {
-    if(hk_owner_is_zero(owner) || !request || !handle ||
-       request->id != HK_CAPABILITY_ID_TIME)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = lease_for(owner, HK_CAPABILITY_ID_TIME);
-    return HK_OK;
-}
-
-hk_result_t hk_time_now_us(
-    hk_owner_t owner,
-    const hk_time_t *handle,
-    uint64_t *value)
-{
-    if(hk_owner_is_zero(owner) || !handle || !value ||
-       handle->lease.capability_id != HK_CAPABILITY_ID_TIME)
-        return HK_ERR_INVALID_ARGUMENT;
+    if(handle != &s_time || !value) return HK_ERR_INVALID_ARGUMENT;
     *value = s_fixture.now_us;
     return HK_OK;
 }
-
-hk_result_t hk_time_deadline_after_us(
-    hk_owner_t owner,
-    const hk_time_t *handle,
-    uint64_t duration_us,
-    hk_deadline_t *deadline)
+hk_result_t hk_time_deadline_after_us(const hk_time_t *handle,
+    uint64_t duration_us, hk_deadline_t *deadline)
 {
-    if(hk_owner_is_zero(owner) || !handle || !deadline || duration_us == 0U ||
-       handle->lease.capability_id != HK_CAPABILITY_ID_TIME ||
-       s_fixture.now_us > UINT64_MAX - duration_us)
-        return HK_ERR_INVALID_ARGUMENT;
+    if(handle != &s_time || !deadline || duration_us == 0U ||
+       s_fixture.now_us > UINT64_MAX - duration_us) return HK_ERR_INVALID_ARGUMENT;
     deadline->at_us = s_fixture.now_us + duration_us;
     return HK_OK;
 }

@@ -6,6 +6,8 @@
 #include "../firmware/src/apps/files/file_browser_mode.h"
 #include "../firmware/src/core/hk_events.h"
 
+struct hk_time { uint8_t binding; };
+static const hk_time_t s_time = {1U};
 static file_browser_mode_t g_mode;
 static uint64_t g_now_us;
 static uint8_t g_time_fails;
@@ -25,9 +27,8 @@ static void check(int condition, const char *message)
 }
 
 hk_result_t hk_time_now_us(
-    hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
+    const hk_time_t *handle, uint64_t *value)
 {
-    (void)owner;
     (void)handle;
     g_now_calls++;
     if(g_time_fails)
@@ -84,8 +85,7 @@ int main(void)
     memset(&state, 0, sizeof(state));
     state.owner.slot = 1U;
     state.owner.generation = 1U;
-    state.time.lease.slot = 1U;
-    state.time.lease.generation = 1U;
+    state.time = &s_time;
     files_controller_enter(&state);
     tap_ok(&state);
     check(g_open_selected == 1U, "short OK must open selected entry");

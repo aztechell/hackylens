@@ -895,29 +895,22 @@ hk_result_t hk_external_link_cancel(
     return HK_ERR_CANCELLED;
 }
 
-hk_result_t hk_time_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    hk_time_t *handle)
-{
-    (void)request;
-    handle->lease = (hk_lease_t){5U, 1U, owner, HK_CAPABILITY_ID_TIME};
-    return HK_OK;
-}
+struct hk_time { uint8_t binding; };
+static const hk_time_t s_time = {1U};
+const hk_time_t *hk_time_service(void) { return &s_time; }
 
 hk_result_t hk_time_now_us(
-    hk_owner_t owner, const hk_time_t *handle, uint64_t *value)
+    const hk_time_t *handle, uint64_t *value)
 {
-    (void)owner;
     (void)handle;
     *value = g_now_us;
     return HK_OK;
 }
 
 hk_result_t hk_time_deadline_after_us(
-    hk_owner_t owner, const hk_time_t *handle,
+    const hk_time_t *handle,
     uint64_t duration_us, hk_deadline_t *deadline)
 {
-    (void)owner;
     (void)handle;
     deadline->at_us = g_now_us + duration_us;
     return HK_OK;
@@ -959,13 +952,12 @@ static void test_sleep_ms(uint32_t duration_ms)
 }
 
 hk_result_t hk_time_sleep_until(
-    hk_owner_t owner, const hk_time_t *handle,
+    const hk_time_t *handle,
     hk_deadline_t wake_target, hk_deadline_t operation_deadline,
     const hk_cancel_t *cancel)
 {
     uint64_t remaining;
 
-    (void)owner;
     (void)handle;
     (void)operation_deadline;
     if(cancel && cancel->probe && cancel->probe(cancel->context))

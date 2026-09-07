@@ -11,10 +11,9 @@
 static screen_t g_screen;
 static uint64_t g_last_activity;
 static uint64_t g_now;
-static hk_result_t g_acquire_result;
+static hk_result_t g_binding_result;
 static hk_result_t g_now_result;
-static uint64_t g_requested_features;
-static uint32_t g_acquire_count;
+static uint32_t g_binding_count;
 static uint32_t g_sleep_count;
 
 static const hk_app_t s_sleep_app = {
@@ -37,10 +36,9 @@ static void reset_fixture(void)
     g_screen = SCREEN_MENU;
     g_last_activity = 1000000U;
     g_now = g_last_activity;
-    g_acquire_result = HK_OK;
+    g_binding_result = HK_OK;
     g_now_result = HK_OK;
-    g_requested_features = 0U;
-    g_acquire_count = 0U;
+    g_binding_count = 0U;
     g_sleep_count = 0U;
     sleep_session_set_active(0U);
 }
@@ -51,27 +49,19 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
     return (hk_owner_t){1U, 1U};
 }
 
-hk_result_t hk_time_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_time_t *handle)
+struct hk_time { uint8_t binding; };
+static const hk_time_t s_time = {1U};
+const hk_time_t *hk_time_service(void)
 {
-    g_acquire_count++;
-    g_requested_features = request ? request->required_features : 0U;
-    if(g_acquire_result == HK_OK)
-    {
-        handle->lease = (hk_lease_t){1U, 1U, owner, HK_CAPABILITY_ID_TIME};
-    }
-    return g_acquire_result;
+    g_binding_count++;
+    return g_binding_result == HK_OK ? &s_time : NULL;
 }
 
 hk_result_t hk_time_now_us(
-    hk_owner_t owner,
     const hk_time_t *handle,
     uint64_t *value)
 {
-    (void)owner;
-    (void)handle;
+    if(!handle) return HK_ERR_CAPABILITY_ABSENT;
     if(g_now_result == HK_OK)
         *value = g_now;
     return g_now_result;
@@ -114,15 +104,12 @@ int main(void)
     int failed = 0;
 
     reset_fixture();
-    g_acquire_result = HK_ERR_FEATURE_UNAVAILABLE;
+    g_binding_result = HK_ERR_FEATURE_UNAVAILABLE;
     auto_sleep_controller_tick(&idle);
-    failed |= check(g_acquire_count == 1U, "TIME must be acquired once");
-    failed |= check(
-        g_requested_features == HK_TIME_FEATURE_MONOTONIC_US,
-        "sleep controller must request monotonic-us only");
+    failed |= check(g_binding_count == 1U, "Time binding must be queried once");
     failed |= check(
         g_sleep_count == 0U,
-        "TIME acquire failure must not force sleep");
+        "Absent Time binding must not force sleep");
 
     reset_fixture();
     g_now_result = HK_ERR_INTERNAL;

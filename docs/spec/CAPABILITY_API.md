@@ -14,6 +14,15 @@ machinery for new typed services. Existing consumers and resource-safety
 semantics remain valid until deliberately migrated and tested. See the
 [specification authority and change process](README.md).
 
+## S8 migration scope
+
+Time now uses a direct immutable typed binding; its current source interface is
+specified in [Time](capabilities/TIME.md). The generic owner, lease, negotiation
+and inventory rules below apply to services still on the broker. They must not
+be used to restore that machinery for migrated synchronous services. Build-time
+availability remains enforced; native and MicroPython consumers share the same
+production implementation.
+
 ## Purpose and scope
 
 This contract defines the common native ABI and lifecycle for portable

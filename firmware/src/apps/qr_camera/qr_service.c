@@ -11,28 +11,11 @@
 static uint64_t g_qr_last_decode_us;
 static uint64_t g_qr_last_status_log_us;
 static int g_qr_last_code_count = -1;
-static hk_time_t s_qr_time;
-static hk_owner_t s_qr_time_owner;
-
 static uint64_t qr_time_now_us(void)
 {
-    hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-    request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
-    hk_owner_t owner = capability_client_current_owner();
     uint64_t value = 0U;
 
-    if(hk_owner_is_zero(owner))
-        return 0U;
-    if(owner.slot != s_qr_time_owner.slot ||
-       owner.generation != s_qr_time_owner.generation ||
-       hk_lease_is_zero(&s_qr_time.lease))
-    {
-        s_qr_time.lease = HK_LEASE_NONE;
-        s_qr_time_owner = owner;
-        if(hk_time_acquire(owner, &request, &s_qr_time) != HK_OK)
-            return 0U;
-    }
-    if(hk_time_now_us(owner, &s_qr_time, &value) != HK_OK)
+    if(hk_time_now_us(hk_time_service(), &value) != HK_OK)
         return 0U;
     return value;
 }

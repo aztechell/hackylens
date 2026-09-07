@@ -7,8 +7,8 @@
 #include "../firmware/src/core/hk_app.h"
 #include "../firmware/src/runtime/capability_owner_runtime.h"
 
-#define CAP_TIME 0x00010001U
-#define CAP_INPUT 0x00010002U
+#define CAP_SHARED_TEST 0x70000001U
+#define CAP_INPUT (CAP_SHARED_TEST + 1U)
 #define FEATURE_A (1ULL << 0)
 #define FEATURE_B (1ULL << 1)
 
@@ -78,7 +78,7 @@ static void setup_core_with_affinity(
         capability_fake_provider_reset(&s_fake[index]);
         s_inventory[index].struct_size = sizeof(s_inventory[index]);
         s_inventory[index].struct_version = HK_CAPABILITY_INFO_VERSION;
-        s_inventory[index].id = CAP_TIME + index;
+        s_inventory[index].id = CAP_SHARED_TEST + index;
         s_inventory[index].version = version(0U, 1U, 0U);
         s_inventory[index].features = FEATURE_A | FEATURE_B;
         s_inventory[index].flags = index == 0U
@@ -91,7 +91,7 @@ static void setup_core_with_affinity(
         s_providers[index].recover = capability_fake_recover;
         s_providers[index].max_leases = UINT16_MAX;
         s_provider_refs[index] = &s_providers[index];
-        s_grants[index].request = request(CAP_TIME + index,
+        s_grants[index].request = request(CAP_SHARED_TEST + index,
                                           FEATURE_A | FEATURE_B);
     }
     CHECK(hk_capability_core_init(
@@ -111,12 +111,12 @@ static hk_owner_t open_owner(hk_capability_core_t *core)
     return owner;
 }
 
-static hk_lease_t acquire_time(hk_capability_core_t *core, hk_owner_t owner)
+static hk_lease_t acquire_shared(hk_capability_core_t *core, hk_owner_t owner)
 {
-    hk_capability_request_t wanted = request(CAP_TIME, FEATURE_A);
+    hk_capability_request_t wanted = request(CAP_SHARED_TEST, FEATURE_A);
     hk_lease_t lease;
     CHECK(hk_capability_core_acquire(
-        core, owner, &wanted, CAP_TIME, 0U, &lease) == HK_OK);
+        core, owner, &wanted, CAP_SHARED_TEST, 0U, &lease) == HK_OK);
     return lease;
 }
 
@@ -129,19 +129,19 @@ static void test_acquire_release_and_stale_copy(void)
 
     setup_core(&core);
     owner = open_owner(&core);
-    lease = acquire_time(&core, owner);
+    lease = acquire_shared(&core, owner);
     copy = lease;
     CHECK(s_fake[0].acquire_calls == 1U);
     CHECK(hk_capability_core_release(
-        &core, owner, CAP_TIME, 0U, (hk_deadline_t){123U}, &lease) == HK_OK);
+        &core, owner, CAP_SHARED_TEST, 0U, (hk_deadline_t){123U}, &lease) == HK_OK);
     CHECK(hk_lease_is_zero(&lease));
     CHECK(s_fake[0].cleanup_calls == 1U);
     CHECK(s_fake[0].last_deadline.at_us == 123U);
     CHECK(hk_capability_core_release(
-        &core, owner, CAP_TIME, 0U, HK_DEADLINE_IMMEDIATE, &lease) == HK_OK);
+        &core, owner, CAP_SHARED_TEST, 0U, HK_DEADLINE_IMMEDIATE, &lease) == HK_OK);
     CHECK(s_fake[0].cleanup_calls == 1U);
     CHECK(hk_capability_core_release(
-        &core, owner, CAP_TIME, 0U, HK_DEADLINE_IMMEDIATE, &copy) ==
+        &core, owner, CAP_SHARED_TEST, 0U, HK_DEADLINE_IMMEDIATE, &copy) ==
           HK_ERR_STALE_HANDLE);
     CHECK(hk_capability_core_owner_close(
         &core, owner, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
@@ -158,9 +158,9 @@ static void test_wrong_owner_type_context_and_inactive_owner(void)
     setup_core(&core);
     first = open_owner(&core);
     second = open_owner(&core);
-    lease = acquire_time(&core, first);
+    lease = acquire_shared(&core, first);
     CHECK(hk_capability_core_validate_lease(
-        &core, second, &lease, CAP_TIME, 0U, NULL) == HK_ERR_WRONG_OWNER);
+        &core, second, &lease, CAP_SHARED_TEST, 0U, NULL) == HK_ERR_WRONG_OWNER);
     CHECK(hk_capability_core_validate_lease(
         &core, first, &lease, CAP_INPUT, 0U, NULL) == HK_ERR_INVALID_ARGUMENT);
     CHECK(hk_capability_core_acquire(
@@ -169,7 +169,7 @@ static void test_wrong_owner_type_context_and_inactive_owner(void)
     CHECK(hk_capability_core_owner_close(
         &core, first, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
     CHECK(hk_capability_core_validate_lease(
-        &core, first, &lease, CAP_TIME, 0U, NULL) == HK_ERR_STALE_HANDLE);
+        &core, first, &lease, CAP_SHARED_TEST, 0U, NULL) == HK_ERR_STALE_HANDLE);
     CHECK(hk_capability_core_owner_close(
         &core, second, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
 }
@@ -178,14 +178,14 @@ static void test_mixed_affinity_owner_close(void)
 {
     hk_capability_core_t core;
     hk_owner_t owner;
-    hk_lease_t time_lease;
+    hk_lease_t shared_lease;
     hk_lease_t input_lease;
     hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
     hk_deadline_t deadline = {800U};
 
     setup_core_with_affinity(&core, 0U, 1U);
     owner = open_owner(&core);
-    time_lease = acquire_time(&core, owner);
+    shared_lease = acquire_shared(&core, owner);
     CHECK(hk_capability_core_acquire(
         &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
     CHECK(hk_capability_core_owner_close(
@@ -199,10 +199,10 @@ static void test_mixed_affinity_owner_close(void)
     CHECK(s_fake[1].last_deadline.at_us == deadline.at_us);
     CHECK(core.provider_state[0].quarantined == 0U);
     CHECK(core.provider_state[1].quarantined == 0U);
-    CHECK(core.leases[time_lease.slot].active == 0U);
+    CHECK(core.leases[shared_lease.slot].active == 0U);
     CHECK(core.leases[input_lease.slot].active == 0U);
     CHECK(hk_capability_core_validate_lease(
-        &core, owner, &time_lease, CAP_TIME, 0U, NULL) == HK_ERR_STALE_HANDLE);
+        &core, owner, &shared_lease, CAP_SHARED_TEST, 0U, NULL) == HK_ERR_STALE_HANDLE);
     CHECK(hk_capability_core_validate_lease(
         &core, owner, &input_lease, CAP_INPUT, 1U, NULL) ==
           HK_ERR_STALE_HANDLE);
@@ -214,13 +214,13 @@ static void test_mixed_affinity_owner_close_partial_failure(void)
 {
     hk_capability_core_t core;
     hk_owner_t owner;
-    hk_lease_t time_lease;
+    hk_lease_t shared_lease;
     hk_lease_t input_lease;
     hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
 
     setup_core_with_affinity(&core, 0U, 1U);
     owner = open_owner(&core);
-    time_lease = acquire_time(&core, owner);
+    shared_lease = acquire_shared(&core, owner);
     CHECK(hk_capability_core_acquire(
         &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
     s_fake[0].cleanup_result = HK_ERR_IO;
@@ -231,7 +231,7 @@ static void test_mixed_affinity_owner_close_partial_failure(void)
     CHECK(s_fake[1].cleanup_dispatch_calls == 1U);
     CHECK(core.provider_state[0].quarantined == 1U);
     CHECK(core.provider_state[1].quarantined == 0U);
-    CHECK(core.leases[time_lease.slot].active == 0U);
+    CHECK(core.leases[shared_lease.slot].active == 0U);
     CHECK(core.leases[input_lease.slot].active == 0U);
     CHECK(hk_capability_core_owner_close(
         &core, owner, 0U, HK_DEADLINE_IMMEDIATE) == HK_ERR_STALE_HANDLE);
@@ -273,13 +273,13 @@ static void test_owner_close_cleanup_failure_and_recovery(void)
     hk_capability_core_t core;
     hk_owner_t owner;
     hk_owner_t next;
-    hk_lease_t time_lease;
+    hk_lease_t shared_lease;
     hk_lease_t input_lease;
     hk_capability_request_t input = request(CAP_INPUT, FEATURE_A);
 
     setup_core(&core);
     owner = open_owner(&core);
-    time_lease = acquire_time(&core, owner);
+    shared_lease = acquire_shared(&core, owner);
     CHECK(hk_capability_core_acquire(
         &core, owner, &input, CAP_INPUT, 1U, &input_lease) == HK_OK);
     s_fake[1].cleanup_result = HK_ERR_IO;
@@ -288,7 +288,7 @@ static void test_owner_close_cleanup_failure_and_recovery(void)
     CHECK(s_fake[0].cleanup_calls == 1U);
     CHECK(s_fake[1].cleanup_calls == 1U);
     CHECK(hk_capability_core_validate_lease(
-        &core, owner, &time_lease, CAP_TIME, 0U, NULL) == HK_ERR_STALE_HANDLE);
+        &core, owner, &shared_lease, CAP_SHARED_TEST, 0U, NULL) == HK_ERR_STALE_HANDLE);
     next = open_owner(&core);
     CHECK(hk_capability_core_acquire(
         &core, next, &input, CAP_INPUT, 1U, &input_lease) == HK_ERR_INVALID_STATE);
@@ -319,21 +319,21 @@ static void test_quarantine_still_allows_remaining_release(void)
 
     setup_core(&core);
     owner = open_owner(&core);
-    first = acquire_time(&core, owner);
-    second = acquire_time(&core, owner);
+    first = acquire_shared(&core, owner);
+    second = acquire_shared(&core, owner);
     s_fake[0].cleanup_result = HK_ERR_IO;
     CHECK(hk_capability_core_release(
-        &core, owner, CAP_TIME, 0U, HK_DEADLINE_IMMEDIATE, &first) ==
+        &core, owner, CAP_SHARED_TEST, 0U, HK_DEADLINE_IMMEDIATE, &first) ==
           HK_ERR_INTERNAL);
     CHECK(hk_capability_core_validate_lease(
-        &core, owner, &second, CAP_TIME, 0U, NULL) == HK_ERR_INVALID_STATE);
+        &core, owner, &second, CAP_SHARED_TEST, 0U, NULL) == HK_ERR_INVALID_STATE);
     CHECK(hk_capability_core_recover(
-        &core, CAP_TIME, 0U, 0U, (hk_deadline_t){10U}) == HK_ERR_BUSY);
+        &core, CAP_SHARED_TEST, 0U, 0U, (hk_deadline_t){10U}) == HK_ERR_BUSY);
     s_fake[0].cleanup_result = HK_OK;
     CHECK(hk_capability_core_release(
-        &core, owner, CAP_TIME, 0U, HK_DEADLINE_IMMEDIATE, &second) == HK_OK);
+        &core, owner, CAP_SHARED_TEST, 0U, HK_DEADLINE_IMMEDIATE, &second) == HK_OK);
     CHECK(hk_capability_core_recover(
-        &core, CAP_TIME, 0U, 0U, (hk_deadline_t){20U}) == HK_OK);
+        &core, CAP_SHARED_TEST, 0U, 0U, (hk_deadline_t){20U}) == HK_OK);
     CHECK(hk_capability_core_owner_close(
         &core, owner, 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
 }
@@ -345,7 +345,7 @@ static void test_fixed_capacity_and_generation_exhaustion(void)
     hk_lease_t leases[HK_CAPABILITY_MAX_LEASES];
     hk_owner_t extra_owner;
     hk_lease_t extra_lease;
-    hk_capability_request_t wanted = request(CAP_TIME, FEATURE_A);
+    hk_capability_request_t wanted = request(CAP_SHARED_TEST, FEATURE_A);
     uint32_t index;
 
     guarded.before = 0x13579BDFU;
@@ -358,11 +358,11 @@ static void test_fixed_capacity_and_generation_exhaustion(void)
     for(index = 0U; index < HK_CAPABILITY_MAX_LEASES; index++)
     {
         CHECK(hk_capability_core_acquire(
-            &guarded.core, owners[0], &wanted, CAP_TIME, 0U,
+            &guarded.core, owners[0], &wanted, CAP_SHARED_TEST, 0U,
             &leases[index]) == HK_OK);
     }
     CHECK(hk_capability_core_acquire(
-        &guarded.core, owners[0], &wanted, CAP_TIME, 0U,
+        &guarded.core, owners[0], &wanted, CAP_SHARED_TEST, 0U,
         &extra_lease) == HK_ERR_LIMIT);
     CHECK(guarded.before == 0x13579BDFU);
     CHECK(guarded.after == 0x2468ACE0U);
@@ -380,13 +380,13 @@ static void test_fixed_capacity_and_generation_exhaustion(void)
     CHECK(owners[1].slot == 1U);
 
     guarded.core.leases[0].generation = UINT32_MAX;
-    leases[0] = acquire_time(&guarded.core, owners[1]);
+    leases[0] = acquire_shared(&guarded.core, owners[1]);
     CHECK(leases[0].slot == 0U);
     CHECK(hk_capability_core_release(
-        &guarded.core, owners[1], CAP_TIME, 0U,
+        &guarded.core, owners[1], CAP_SHARED_TEST, 0U,
         HK_DEADLINE_IMMEDIATE, &leases[0]) == HK_OK);
     CHECK(guarded.core.leases[0].retired == 1U);
-    leases[1] = acquire_time(&guarded.core, owners[1]);
+    leases[1] = acquire_shared(&guarded.core, owners[1]);
     CHECK(leases[1].slot == 1U);
     CHECK(hk_capability_core_owner_close(
         &guarded.core, owners[1], 0U, HK_DEADLINE_IMMEDIATE) == HK_OK);
@@ -405,17 +405,17 @@ static void test_negotiation_grants_and_inventory_validation(void)
     CHECK(hk_capability_core_inventory(&core, &count) == s_inventory);
     CHECK(count == 2U);
     CHECK(hk_capability_core_owner_open(&core, NULL, 0U, &owner) == HK_OK);
-    wanted = request(CAP_TIME, FEATURE_A);
+    wanted = request(CAP_SHARED_TEST, FEATURE_A);
     CHECK(hk_capability_core_acquire(
-        &core, owner, &wanted, CAP_TIME, 0U, &lease) == HK_ERR_NOT_DECLARED);
+        &core, owner, &wanted, CAP_SHARED_TEST, 0U, &lease) == HK_ERR_NOT_DECLARED);
     wanted.minimum = version(0U, 2U, 0U);
     wanted.maximum_exclusive = version(0U, 3U, 0U);
     CHECK(hk_capability_core_acquire(
-        &core, owner, &wanted, CAP_TIME, 0U, &lease) ==
+        &core, owner, &wanted, CAP_SHARED_TEST, 0U, &lease) ==
           HK_ERR_VERSION_INCOMPATIBLE);
-    wanted = request(CAP_TIME, 1ULL << 8);
+    wanted = request(CAP_SHARED_TEST, 1ULL << 8);
     CHECK(hk_capability_core_acquire(
-        &core, owner, &wanted, CAP_TIME, 0U, &lease) ==
+        &core, owner, &wanted, CAP_SHARED_TEST, 0U, &lease) ==
           HK_ERR_FEATURE_UNAVAILABLE);
     wanted = request(0x0001FFFFU, 0U);
     CHECK(hk_capability_core_acquire(

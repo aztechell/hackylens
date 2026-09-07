@@ -15,8 +15,6 @@ typedef struct
 
 static capability_consumer_owner_t s_consumer_owners[] = {
     {"consumer:firmware-runtime", HK_OWNER_NONE},
-    {"consumer:apriltag-detector", HK_OWNER_NONE},
-    {"consumer:object-detect-detector", HK_OWNER_NONE},
     {"consumer:hmpy-service", HK_OWNER_NONE},
     {"consumer:external-link-service", HK_OWNER_NONE},
     {"consumer:micropython-adapter", HK_OWNER_NONE},

@@ -486,7 +486,23 @@ callbacks.
 
 Риск: **очень высокий**. Это последняя и наиболее опасная structural change.
 
-Статус: `[ ]`.
+Статус: `[~]`. Начат последовательный перенос: Time → Input → Lights →
+Display → External Link. Каждый service переключается отдельным commit;
+общие broker tables удаляются только после последнего consumer.
+
+Исходная firmware S8: `0405a09` (S7), документальное закрытие `28675c4`.
+Full image: 1,566,392 байта; static RAM: 2,898,472 байта. Измерения каждого
+service switch сравниваются с этой сборкой; новая evidence schema не вводится.
+
+### Промежуточная проверка Time (2026-09-07)
+
+Time переведён на immutable binding без generic lease/grants; native и
+MicroPython используют один provider. Остальные services пока используют broker.
+234 host tests, full и MicroPython-disabled builds, architecture/object checks
+(одинаковые provider hashes) и resource guard прошли. Full image: 1,562,168 байт
+(−4,224 к S7), static RAM: 2,898,112 байт (−360). Independent review не выявил
+регрессий. Hardware/latency acceptance ещё не выполнена: USB COM-порт недоступен.
+Time и S8 целиком пока не закрыты; следующий service — Input.
 
 ### Цель
 

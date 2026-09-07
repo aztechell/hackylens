@@ -3,9 +3,8 @@
 
 #include <stdint.h>
 
-#include "../firmware/src/capabilities/capability_provider.h"
+#include <hackylens/capability/time.h>
 
-const hk_capability_provider_t *time_normative_backend_provider(void);
 const char *time_normative_backend_name(void);
 uint64_t time_normative_backend_reset(void);
 uint64_t time_normative_backend_now_us(void);

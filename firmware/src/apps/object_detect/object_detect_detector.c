@@ -49,28 +49,11 @@ static uint8_t g_nms = OBJECT_DETECT_DEFAULT_NMS;
 static object_detect_load_result_t g_result = OBJECT_DETECT_LOAD_FORMAT;
 static object_detect_result_bank_t g_result_banks[2] __attribute__((aligned(64)));
 static object_detect_postprocess_workspace_t g_workspace __attribute__((aligned(64)));
-static hk_time_t s_object_time;
-static hk_owner_t s_object_time_owner;
-
 static uint64_t object_time_now_us(void)
 {
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-    hk_owner_t owner = capability_client_consumer_owner(
-        "consumer:object-detect-detector");
     uint64_t value = 0U;
 
-    if(hk_owner_is_zero(owner))
-        return 0U;
-    if(owner.slot != s_object_time_owner.slot ||
-       owner.generation != s_object_time_owner.generation ||
-       hk_lease_is_zero(&s_object_time.lease))
-    {
-        s_object_time.lease = HK_LEASE_NONE;
-        s_object_time_owner = owner;
-        if(hk_time_acquire(owner, &request, &s_object_time) != HK_OK)
-            return 0U;
-    }
-    if(hk_time_now_us(owner, &s_object_time, &value) != HK_OK)
+    if(hk_time_now_us(hk_time_service(), &value) != HK_OK)
         return 0U;
     return value;
 }

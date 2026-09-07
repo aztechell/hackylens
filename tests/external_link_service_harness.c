@@ -50,22 +50,13 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
         SERVICE_OWNER : HK_OWNER_NONE;
 }
 
-hk_result_t hk_time_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    hk_time_t *handle)
-{
-    if(!handle || !request || request->id != HK_CAPABILITY_ID_TIME)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = (hk_lease_t){
-        8U, 1U, owner, HK_CAPABILITY_ID_TIME,
-    };
-    return HK_OK;
-}
+struct hk_time { uint8_t binding; };
+static const hk_time_t s_time = {1U};
+const hk_time_t *hk_time_service(void) { return &s_time; }
 
 hk_result_t hk_time_now_us(
-    hk_owner_t owner, const hk_time_t *handle, uint64_t *now_us)
+    const hk_time_t *handle, uint64_t *now_us)
 {
-    (void)owner;
     if(!handle || !now_us)
         return HK_ERR_INVALID_ARGUMENT;
     *now_us = s_now_us;
@@ -73,10 +64,9 @@ hk_result_t hk_time_now_us(
 }
 
 hk_result_t hk_time_deadline_after_us(
-    hk_owner_t owner, const hk_time_t *handle, uint64_t duration_us,
+    const hk_time_t *handle, uint64_t duration_us,
     hk_deadline_t *deadline)
 {
-    (void)owner;
     (void)handle;
     if(!deadline || UINT64_MAX - s_now_us < duration_us)
         return HK_ERR_LIMIT;

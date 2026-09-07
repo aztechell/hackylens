@@ -28,7 +28,6 @@ typedef union
 static external_link_uart_storage_t g_uart_storage;
 static hk_owner_t g_owner;
 static hk_external_link_t g_link;
-static hk_time_t g_time;
 static hk_external_link_op_t g_uart_operation;
 static uint16_t g_uart_response_length;
 static uint64_t g_uart_response_not_before;
@@ -133,8 +132,7 @@ static void handle_uart_message(const hk_link_message_t *message)
         message, g_uart_storage.response, sizeof(g_uart_storage.response));
     if(g_uart_response_length == 0U)
         return;
-    if(!hk_lease_is_zero(&g_time.lease))
-        (void)hk_time_now_us(g_owner, &g_time, &now);
+    (void)hk_time_now_us(hk_time_service(), &now);
     /* Preserve the existing half-duplex turnaround without blocking core 0. */
     g_uart_response_not_before = now +
         EXTERNAL_LINK_SERVICE_UART_TURNAROUND_US;
@@ -202,11 +200,8 @@ static void service_cancel_uart(void)
 
 void external_link_service_init(external_link_transport_t transport)
 {
-    hk_capability_request_t time_request = HK_TIME_REQUEST_0_1_INIT;
-
     memset(&g_uart_storage, 0, sizeof(g_uart_storage));
     g_link.lease = HK_LEASE_NONE;
-    g_time.lease = HK_LEASE_NONE;
     g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
     g_uart_response_length = 0U;
     g_uart_response_not_before = 0U;
@@ -214,9 +209,6 @@ void external_link_service_init(external_link_transport_t transport)
     g_suspended = 0U;
     g_owner = capability_client_consumer_owner(
         "consumer:external-link-service");
-    time_request.required_features = HK_TIME_FEATURE_MONOTONIC_US;
-    if(!hk_owner_is_zero(g_owner))
-        (void)hk_time_acquire(g_owner, &time_request, &g_time);
     hk_link_stream_reset(&g_uart_storage.parser);
     external_link_service_set_transport(transport);
 }
@@ -328,11 +320,11 @@ void external_link_service_tick(void)
                 HK_BUFFER_ACCESS_READABLE,
             };
 
-            if(hk_time_now_us(g_owner, &g_time, &now) != HK_OK ||
+            if(hk_time_now_us(hk_time_service(), &now) != HK_OK ||
                now < g_uart_response_not_before)
                 return;
             if(hk_time_deadline_after_us(
-                   g_owner, &g_time,
+                   hk_time_service(),
                    EXTERNAL_LINK_SERVICE_UART_RESPONSE_TIMEOUT_US,
                    &deadline) != HK_OK)
             {

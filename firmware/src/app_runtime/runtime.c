@@ -458,6 +458,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->context.struct_size = sizeof(runtime->context);
     runtime->context.struct_version = HK_APP_CONTEXT_VERSION;
     runtime->context.app_id = descriptor->id;
+    runtime->context.time = runtime->ops.time;
     runtime->owner = HK_OWNER_NONE;
     runtime->context.owner = HK_OWNER_NONE;
     runtime->context.generation = runtime->context_generation;
@@ -706,8 +707,20 @@ static hk_result_t context_capability(
             ctx, capability_id, instance, &handle->lease);                    \
     }
 
-HK_APP_CONTEXT_TYPED_ACCESSOR(
-    hk_app_context_time, hk_time_t, HK_CAPABILITY_ID_TIME)
+hk_result_t hk_app_context_time(
+    const hk_app_context_t *ctx, const hk_time_t **time)
+{
+    hk_result_t result;
+
+    if(!time)
+        return HK_ERR_INVALID_ARGUMENT;
+    *time = NULL;
+    result = validate_callback_context(ctx, NULL);
+    if(result != HK_OK)
+        return result;
+    *time = ctx->time;
+    return *time ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
+}
 HK_APP_CONTEXT_TYPED_ACCESSOR(
     hk_app_context_input, hk_input_t, HK_CAPABILITY_ID_INPUT)
 HK_APP_CONTEXT_TYPED_ACCESSOR(

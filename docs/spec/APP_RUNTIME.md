@@ -289,10 +289,10 @@ still valid.
 
 When teardown is accepted and before entering `STOPPING`, the runtime creates
 exactly one finite absolute monotonic teardown deadline. It obtains monotonic
-time through the same composed public Time Capability provider used by the
+time through the same statically bound Time service used by the
 firmware; App Runtime MUST NOT read a raw platform clock or introduce another
-time implementation. Using its private runtime owner and the one composed Time
-handle, it calls public `hk_time_deadline_after_us` exactly once with the finite
+time implementation. Using the immutable Time binding, it calls public
+`hk_time_deadline_after_us` exactly once with the finite
 positive `teardown_budget_us` policy value and stores the resulting
 `hk_deadline_t` in the instance context. This runtime handle is not an app grant
 and does not depend on whether the app declared Time. The policy is

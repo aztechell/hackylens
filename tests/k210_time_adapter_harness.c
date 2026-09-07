@@ -1,10 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "../firmware/src/capabilities/capability_provider.h"
 #include "../firmware/src/capabilities/time_provider.h"
 
-extern const hk_capability_provider_t hk_k210_time_provider;
 
 unsigned int g_test_lock_depth;
 unsigned int g_test_lock_calls;
@@ -43,8 +41,7 @@ void usleep(uint64_t duration_us)
 
 int main(void)
 {
-    hk_time_provider_t *time =
-        (hk_time_provider_t *)hk_k210_time_provider.context;
+    const hk_time_t *time = hk_time_service();
     uint64_t first = 0U;
     uint64_t second = 0U;
 
@@ -61,6 +58,13 @@ int main(void)
     CHECK(g_test_lock_violations == 0U);
     CHECK(time->sleep_us(time->context, 5000U) == HK_OK);
     CHECK(g_last_sleep_us == 5000U);
+
+    time->fault(time->context);
+    CHECK(g_test_lock_calls == 3U && g_test_unlock_calls == 3U);
+    CHECK(time->now_us(time->context, &second) == HK_ERR_INVALID_STATE);
+    CHECK(g_clock_reads == 2U);
+    CHECK(g_test_lock_calls == 4U && g_test_unlock_calls == 4U);
+    CHECK(g_test_lock_depth == 0U && g_test_lock_violations == 0U);
 
     printf("K210_TIME_ANY_CORE_ORDER_OK reads=%u locks=%u\n",
            g_clock_reads, g_test_lock_calls);

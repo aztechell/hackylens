@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class TimeCapabilityTests(unittest.TestCase):
     @staticmethod
     def compiler() -> str:
-        compiler = shutil.which("gcc") or shutil.which("cc")
+        compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         if not compiler:
             raise unittest.SkipTest("host C compiler not installed")
         return compiler
@@ -37,8 +37,6 @@ class TimeCapabilityTests(unittest.TestCase):
                 ROOT / "tests" / "time_capability_harness.c",
                 ROOT / "tests" / f"time_normative_{backend}_backend.c",
                 ROOT / "firmware" / "src" / "capabilities" / "time.c",
-                ROOT / "firmware" / "src" / "capabilities" /
-                "capability_core.c",
             ]
             if backend == "k210":
                 common.append(f"-I{ROOT / 'tests' / 'k210_time_adapter_stubs'}")
@@ -54,7 +52,18 @@ class TimeCapabilityTests(unittest.TestCase):
                 [str(executable)], check=True, cwd=ROOT,
                 text=True, capture_output=True, timeout=30,
             )
-        return result.stdout
+            output = result.stdout
+            for scenario in ("freeze", "regress"):
+                fault = subprocess.run(
+                    [str(executable), scenario], check=True, cwd=ROOT,
+                    text=True, capture_output=True, timeout=30,
+                )
+                self.assertIn(
+                    f"TIME_FAULT_OK backend={backend} scenario={scenario}",
+                    fault.stdout,
+                )
+                output += fault.stdout
+        return output
 
     def test_fake_passes_time_normative_contract_and_bounded_object(self) -> None:
         result = self.run_normative_backend("fake")
@@ -102,6 +111,7 @@ class TimeCapabilityTests(unittest.TestCase):
                 f"-I{ROOT / 'tests' / 'k210_time_adapter_stubs'}",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 str(ROOT / "tests" / "k210_time_adapter_harness.c"),
+                str(ROOT / "firmware/src/capabilities/time.c"),
                 str(ROOT / "platforms" / "k210" / "capabilities" / "time_adapter.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
@@ -111,7 +121,7 @@ class TimeCapabilityTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "K210_TIME_ANY_CORE_ORDER_OK reads=2 locks=2", result.stdout,
+            "K210_TIME_ANY_CORE_ORDER_OK reads=2 locks=4", result.stdout,
         )
 
     def test_micropython_ticks_ms_use_uint_conversion(self) -> None:

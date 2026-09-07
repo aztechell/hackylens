@@ -116,8 +116,6 @@ static hk_owner_t g_rgb_owner;
 static binding_external_mode_t g_external_mode;
 static uint32_t g_uart_baud = 115200U;
 static binding_external_operation_t g_external_operation;
-static hk_time_t g_bridge_time;
-static hk_owner_t g_bridge_time_owner;
 static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
 static hk_owner_t g_display_owner;
@@ -151,38 +149,19 @@ static uint8_t binding_display_cancelled(const void *context)
         cancel_context->run_id);
 }
 
-static hk_result_t binding_time_prepare(void)
-{
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-
-    if(!hk_lease_is_zero(&g_bridge_time.lease))
-        return HK_OK;
-    g_bridge_time_owner = capability_client_consumer_owner(
-        "consumer:micropython-adapter");
-    if(hk_owner_is_zero(g_bridge_time_owner))
-        return HK_ERR_STALE_HANDLE;
-    return hk_time_acquire(
-        g_bridge_time_owner, &request, &g_bridge_time);
-}
-
 static uint64_t binding_now_us(void)
 {
     uint64_t now = 0U;
 
-    if(binding_time_prepare() == HK_OK)
-        (void)hk_time_now_us(g_bridge_time_owner, &g_bridge_time, &now);
+    (void)hk_time_now_us(hk_time_service(), &now);
     return now;
 }
 
 static hk_result_t binding_deadline_after(
     uint64_t duration_us, hk_deadline_t *deadline)
 {
-    hk_result_t result = binding_time_prepare();
-
-    if(result != HK_OK)
-        return result;
     return hk_time_deadline_after_us(
-        g_bridge_time_owner, &g_bridge_time, duration_us, deadline);
+        hk_time_service(), duration_us, deadline);
 }
 
 static void binding_sleep_ms(uint32_t duration_ms)
@@ -191,7 +170,7 @@ static void binding_sleep_ms(uint32_t duration_ms)
 
     if(binding_deadline_after((uint64_t)duration_ms * 1000U, &wake) == HK_OK)
         (void)hk_time_sleep_until(
-            g_bridge_time_owner, &g_bridge_time, wake, wake, NULL);
+            hk_time_service(), wake, wake, NULL);
 }
 
 static hk_deadline_t binding_display_deadline(void)
@@ -839,7 +818,6 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
     g_external_mode = BINDING_EXTERNAL_NONE;
     g_uart_baud = 115200U;
     binding_external_operation_reset();
-    (void)binding_time_prepare();
     binding_display_stage_reset(run_id);
     g_display.lease = HK_LEASE_NONE;
     g_display_owner = capability_client_consumer_owner(

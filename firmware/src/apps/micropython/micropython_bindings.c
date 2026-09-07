@@ -10,28 +10,6 @@
 #include "../../adapters/micropython/micropython_capability_bridge.h"
 #include "../../services/micropython_runtime.h"
 
-static hk_time_t s_binding_time;
-static hk_owner_t s_binding_time_owner;
-
-static hk_result_t binding_time_prepare(hk_owner_t *owner)
-{
-    static const hk_capability_request_t request = HK_TIME_REQUEST_0_1_INIT;
-
-    *owner = capability_client_consumer_owner(
-        "consumer:micropython-adapter");
-    if(hk_owner_is_zero(*owner))
-        return HK_ERR_STALE_HANDLE;
-    if(owner->slot != s_binding_time_owner.slot ||
-       owner->generation != s_binding_time_owner.generation ||
-       hk_lease_is_zero(&s_binding_time.lease))
-    {
-        s_binding_time.lease = HK_LEASE_NONE;
-        s_binding_time_owner = *owner;
-        return hk_time_acquire(*owner, &request, &s_binding_time);
-    }
-    return HK_OK;
-}
-
 static void binding_time_raise(hk_result_t result)
 {
     if(result == HK_ERR_LIMIT || result == HK_ERR_INVALID_ARGUMENT)
@@ -110,12 +88,8 @@ static MP_DEFINE_CONST_FUN_OBJ_1(binding_button_obj, binding_button);
 
 static mp_obj_t binding_ticks_ms(void)
 {
-    hk_owner_t owner;
     uint64_t now = 0U;
-    hk_result_t result = binding_time_prepare(&owner);
-
-    if(result == HK_OK)
-        result = hk_time_now_us(owner, &s_binding_time, &now);
+    hk_result_t result = hk_time_now_us(hk_time_service(), &now);
     if(result != HK_OK)
         binding_time_raise(result);
     return mp_obj_new_int_from_uint((mp_uint_t)(now / 1000ULL));
@@ -126,18 +100,14 @@ static mp_obj_t binding_sleep_ms(mp_obj_t duration_object)
 {
     uint32_t duration = binding_uint(
         duration_object, MICROPYTHON_RUNTIME_MAX_LIMIT_MS);
-    hk_owner_t owner;
     hk_deadline_t wake;
     const hk_cancel_t cancel = {binding_time_cancel, NULL};
-    hk_result_t result = binding_time_prepare(&owner);
-
-    if(result == HK_OK)
-        result = hk_time_deadline_after_us(
-            owner, &s_binding_time, (uint64_t)duration * 1000ULL,
+    hk_result_t result = hk_time_deadline_after_us(
+            hk_time_service(), (uint64_t)duration * 1000ULL,
             &wake);
     if(result == HK_OK)
         result = hk_time_sleep_until(
-            owner, &s_binding_time, wake, wake, &cancel);
+            hk_time_service(), wake, wake, &cancel);
     if(result == HK_ERR_CANCELLED)
         micropython_runtime_vm_hook();
     if(result != HK_OK)

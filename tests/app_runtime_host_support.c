@@ -13,10 +13,6 @@
 
 static hk_app_runtime_host_t *s_host;
 
-static const char *const s_time_features[] = {
-    "monotonic-us",
-    "sleep-until",
-};
 static const char *const s_input_features[] = {
     "state",
     "events",
@@ -29,10 +25,6 @@ static const char *const s_display_features[] = {
     "rgb565",
 };
 static const hk_app_capability_request_t s_capabilities[] = {
-    {
-        "hackylens.cap.time", 0U, "0.1.0", "0.2.0",
-        s_time_features, 2U, NULL, 0U,
-    },
     {
         "hackylens.cap.input", 0U, "0.1.0", "0.2.0",
         s_input_features, 3U, NULL, 0U,
@@ -242,7 +234,7 @@ static hk_result_t owner_open(
     (void)app;
     host->owner_open_calls++;
     return hk_capability_core_owner_open(
-        &host->core, host->grants, 2U, owner);
+        &host->core, host->grants, 1U, owner);
 }
 
 static hk_result_t acquire_capability(
@@ -258,15 +250,6 @@ static hk_result_t acquire_capability(
     if(host->fail_acquire_id == request->id &&
        host->fail_acquire_result != HK_OK)
         return host->fail_acquire_result;
-    if(request->id == HK_CAPABILITY_ID_TIME)
-    {
-        hk_time_t handle;
-
-        result = hk_time_acquire(owner, request, &handle);
-        if(result == HK_OK)
-            *lease = handle.lease;
-        return result;
-    }
     if(request->id == HK_CAPABILITY_ID_INPUT)
     {
         hk_input_t handle;
@@ -346,7 +329,7 @@ static hk_result_t deadline_after_us(
     return HK_OK;
 }
 
-static hk_result_t time_provider_cleanup(
+static hk_result_t input_provider_cleanup(
     void *context,
     hk_owner_t owner,
     hk_deadline_t deadline)
@@ -513,34 +496,23 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     if(result != HK_OK && result != HK_PENDING)
         return result;
     host->last_input_us = now_us;
-    host->time_limits[0] = (hk_capability_limit_t){
-        sizeof(hk_capability_limit_t), HK_CAPABILITY_LIMIT_VERSION,
-        HK_TIME_LIMIT_MAX_SLEEP_US, HK_TIME_MAX_SLEEP_US,
-    };
     host->inventory[0] = (hk_capability_info_t){
-        sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
-        HK_CAPABILITY_ID_TIME, {0U, 1U, 0U, 0U}, HK_TIME_FEATURES_0_1,
-        HK_CAPABILITY_FLAG_SHARED, 0U, HK_CAPABILITY_CORE_ANY,
-        host->time_limits, 1U, 0U,
-    };
-    host->inventory[1] = (hk_capability_info_t){
         sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
         HK_CAPABILITY_ID_INPUT, {0U, 1U, 0U, 0U}, HK_INPUT_FEATURES_0_1,
         HK_CAPABILITY_FLAG_SHARED, 0U, HK_CAPABILITY_CORE_ANY,
         NULL, 0U, 0U,
     };
-    host->time_provider = *time_normative_backend_provider();
-    host->time_provider.cleanup = time_provider_cleanup;
-    host->providers[0] = &host->time_provider;
-    host->providers[1] = input_normative_backend_provider();
-    host->grants[0].request = (hk_capability_request_t)HK_TIME_REQUEST_0_1_INIT;
-    host->grants[1].request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
+    host->input_provider = *input_normative_backend_provider();
+    host->input_provider.cleanup = input_provider_cleanup;
+    host->providers[0] = &host->input_provider;
+    host->grants[0].request = (hk_capability_request_t)HK_INPUT_REQUEST_0_1_INIT;
     result = hk_capability_core_init(
-        &host->core, host->inventory, host->providers, 2U);
+        &host->core, host->inventory, host->providers, 1U);
     if(result != HK_OK)
         return result;
     runtime_ops = (hk_app_runtime_ops_t){
         .user = host,
+        .time = hk_time_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,
@@ -667,7 +639,7 @@ hk_deadline_t hk_app_runtime_host_owner_deadline(
     return host ? host->owner_deadline : (hk_deadline_t){0U};
 }
 
-uint8_t hk_app_runtime_host_time_quarantined(
+uint8_t hk_app_runtime_host_input_quarantined(
     const hk_app_runtime_host_t *host)
 {
     return (uint8_t)(host && host->core.provider_state[0].quarantined);

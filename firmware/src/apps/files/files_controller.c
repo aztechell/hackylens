@@ -18,10 +18,9 @@ static uint64_t files_time_now_us(files_state_t *state)
 {
     uint64_t value = 0U;
 
-    if(!state || hk_owner_is_zero(state->owner) ||
-       hk_lease_is_zero(&state->time.lease))
+    if(!state || !state->time)
         return 0U;
-    if(hk_time_now_us(state->owner, &state->time, &value) != HK_OK)
+    if(hk_time_now_us(state->time, &value) != HK_OK)
         return 0U;
     return value;
 }

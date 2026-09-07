@@ -22,7 +22,6 @@
 typedef enum
 {
     FAIL_NONE = 0,
-    FAIL_GRANT_TIME,
     FAIL_GRANT_INPUT,
     FAIL_GRANT_DISPLAY,
     FAIL_GRANT_SERVICE,
@@ -36,7 +35,7 @@ typedef enum
     FAIL_START_PENDING,
     FAIL_SLOW_TICK,
     FAIL_SLOW_RENDER,
-    FAIL_HOLD_TIME,
+    FAIL_HOLD_INPUT,
 } fail_point_t;
 
 typedef struct
@@ -56,7 +55,7 @@ static _Alignas(HK_APP_STATE_ALIGNMENT)
 
 static hk_result_t consume_budget(const hk_app_context_t *ctx)
 {
-    hk_time_t time;
+    const hk_time_t *time;
     hk_owner_t owner = HK_OWNER_NONE;
     hk_deadline_t wake;
     const char *app_id = NULL;
@@ -65,10 +64,10 @@ static hk_result_t consume_budget(const hk_app_context_t *ctx)
     if(hk_app_context_identity(
            ctx, &app_id, &generation, &owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(owner) ||
-       hk_app_context_time(ctx, 0U, &time) != HK_OK ||
-       hk_time_deadline_after_us(owner, &time, 101U, &wake) != HK_OK)
+       hk_app_context_time(ctx, &time) != HK_OK ||
+       hk_time_deadline_after_us(time, 101U, &wake) != HK_OK)
         return HK_ERR_INTERNAL;
-    return hk_time_sleep_until(owner, &time, wake, wake, NULL);
+    return hk_time_sleep_until(time, wake, wake, NULL);
 }
 
 static hk_result_t simple_start(const hk_app_context_t *ctx)
@@ -78,7 +77,7 @@ static hk_result_t simple_start(const hk_app_context_t *ctx)
 
     s_simple.copied = *ctx;
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_TIME, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
        !available)
         return HK_ERR_INTERNAL;
     if(s_simple.fail == FAIL_START_RENDER)
@@ -119,7 +118,7 @@ static hk_result_t simple_stop(const hk_app_context_t *ctx)
     s_simple.stop_calls++;
     if(hk_app_context_teardown_deadline(ctx, &s_simple.stop_deadline) != HK_OK)
         return HK_ERR_INTERNAL;
-    if(s_simple.fail == FAIL_HOLD_TIME)
+    if(s_simple.fail == FAIL_HOLD_INPUT)
         return HK_OK;
     return s_simple.fail == FAIL_STOP ? HK_ERR_IO : HK_OK;
 }
@@ -172,10 +171,7 @@ static int check_failure_point(fail_point_t point)
 
     CHECK(reset_simple(&host, &app) == 0);
     s_simple.fail = point;
-    if(point == FAIL_GRANT_TIME)
-        hk_app_runtime_host_fail_acquire(
-            &host, HK_CAPABILITY_ID_TIME, HK_ERR_IO);
-    else if(point == FAIL_GRANT_INPUT)
+    if(point == FAIL_GRANT_INPUT)
         hk_app_runtime_host_fail_acquire(
             &host, HK_CAPABILITY_ID_INPUT, HK_ERR_IO);
     else if(point == FAIL_GRANT_DISPLAY)
@@ -186,7 +182,7 @@ static int check_failure_point(fail_point_t point)
     else if(point == FAIL_OWNER_CLEANUP)
         hk_app_runtime_host_fail_owner_cleanup(&host, HK_ERR_IO);
     launch_fails = (uint8_t)(
-        point == FAIL_START || point == FAIL_GRANT_TIME ||
+        point == FAIL_START ||
         point == FAIL_GRANT_INPUT || point == FAIL_GRANT_DISPLAY ||
         point == FAIL_GRANT_SERVICE);
     if(launch_fails)
@@ -218,7 +214,7 @@ static int check_failure_point(fail_point_t point)
     CHECK(check_inactive(&host, expected) == 0);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == owner_calls);
     if(point == FAIL_START ||
-       (!launch_fails && point != FAIL_GRANT_TIME))
+       !launch_fails)
         CHECK(s_simple.stop_calls == 1U);
     else if(launch_fails && point != FAIL_START)
         CHECK(s_simple.stop_calls == 0U);
@@ -382,14 +378,14 @@ static int check_provider_quarantine(void)
     hk_app_t app;
 
     CHECK(reset_simple(&host, &app) == 0);
-    s_simple.fail = FAIL_HOLD_TIME;
+    s_simple.fail = FAIL_HOLD_INPUT;
     hk_app_runtime_host_fail_provider_cleanup(&host, HK_ERR_IO);
     CHECK(open_app(&host, &app, HK_OK) == 0);
     CHECK(hk_app_switch_close(
               hk_app_runtime_host_switch(&host),
               HK_APP_STOP_COMPLETED) == HK_ERR_INTERNAL);
     CHECK(check_inactive(&host, HK_ERR_INTERNAL) == 0);
-    CHECK(hk_app_runtime_host_time_quarantined(&host));
+    CHECK(hk_app_runtime_host_input_quarantined(&host));
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
     CHECK(open_app(&host, &app, HK_ERR_INVALID_STATE) == 0);
     CHECK(hk_app_runtime_state(hk_app_runtime_host_runtime(&host)) ==
@@ -432,8 +428,7 @@ static int check_minimal_storage_isolation(void)
 int main(void)
 {
     static const fail_point_t points[] = {
-        FAIL_GRANT_TIME,
-        FAIL_GRANT_INPUT,
+            FAIL_GRANT_INPUT,
         FAIL_GRANT_DISPLAY,
         FAIL_GRANT_SERVICE,
         FAIL_START,

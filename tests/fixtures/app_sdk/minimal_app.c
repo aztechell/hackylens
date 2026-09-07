@@ -47,10 +47,6 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
        !app_id || generation == 0U || hk_owner_is_zero(identity_owner))
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_TIME, 0U, &available, &fallback) != HK_OK ||
-       !available || fallback)
-        return HK_ERR_INTERNAL;
-    if(hk_app_context_capability_status(
            ctx, HK_CAPABILITY_ID_INPUT, 0U, &available, &fallback) != HK_OK ||
        !available || fallback)
         return HK_ERR_INTERNAL;
@@ -66,7 +62,7 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
            ctx, &app_id, &generation, &state->owner) != HK_OK ||
        !app_id || generation == 0U || hk_owner_is_zero(state->owner))
         return HK_ERR_INTERNAL;
-    if(hk_app_context_time(ctx, 0U, &state->time) != HK_OK ||
+    if(hk_app_context_time(ctx, &state->time) != HK_OK ||
        hk_app_context_input(ctx, 0U, &state->input) != HK_OK ||
        hk_input_acquire(
            state->owner, &input_request, &state->input_second) != HK_OK ||
@@ -114,7 +110,7 @@ static hk_result_t minimal_event(
     {
         uint64_t observed_us = 0U;
 
-        if(hk_time_now_us(state->owner, &state->time, &observed_us) != HK_OK ||
+        if(hk_time_now_us(state->time, &observed_us) != HK_OK ||
            observed_us != event->data.timer.now_us)
             return HK_ERR_INTERNAL;
         state->ticks++;
@@ -162,8 +158,7 @@ static hk_result_t minimal_stop(const hk_app_context_t *ctx)
     if(hk_display_release(state->owner, deadline, &state->display) != HK_OK ||
        hk_input_release(
            state->owner, deadline, &state->input_second) != HK_OK ||
-       hk_input_release(state->owner, deadline, &state->input) != HK_OK ||
-       hk_time_release(state->owner, deadline, &state->time) != HK_OK)
+       hk_input_release(state->owner, deadline, &state->input) != HK_OK)
         return HK_ERR_INTERNAL;
     return HK_OK;
 }
@@ -204,17 +199,15 @@ int minimal_app_check_input_overflow(uint32_t expected_dropped)
 int minimal_app_check_time_contract(void)
 {
     minimal_state_t *state = minimal_state();
-    hk_time_t copied = state->time;
+    const hk_time_t *copied = state->time;
     hk_deadline_t deadline;
     uint64_t now;
 
     if(hk_time_deadline_after_us(
-           state->owner, &state->time, HK_TIME_MAX_SLEEP_US + 1U,
+           state->time, HK_TIME_MAX_SLEEP_US + 1U,
            &deadline) != HK_ERR_LIMIT ||
-       hk_time_release(
-           state->owner, (hk_deadline_t){UINT64_MAX}, &copied) !=
-           HK_ERR_INVALID_ARGUMENT ||
-       hk_time_now_us(state->owner, &state->time, &now) != HK_OK)
+       hk_time_now_us(copied, NULL) != HK_ERR_INVALID_ARGUMENT ||
+       hk_time_now_us(state->time, &now) != HK_OK)
         return 0;
     return 1;
 }
@@ -271,7 +264,7 @@ int minimal_app_check_stale_reacquire(void)
     uint32_t input_state;
 
     if(hk_time_deadline_after_us(
-           state->owner, &state->time, 1U, &deadline) != HK_OK ||
+           state->time, 1U, &deadline) != HK_OK ||
        hk_input_release(
            state->owner, deadline, &state->input_second) != HK_OK ||
        hk_input_acquire(

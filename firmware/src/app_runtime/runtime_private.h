@@ -75,6 +75,7 @@ typedef hk_result_t (*hk_app_runtime_deadline_after_fn)(
 typedef struct
 {
     void *user;
+    const hk_time_t *time;
     hk_app_runtime_resolve_capability_fn resolve_capability;
     hk_app_runtime_resolve_service_fn resolve_service;
     hk_app_runtime_owner_open_fn owner_open;

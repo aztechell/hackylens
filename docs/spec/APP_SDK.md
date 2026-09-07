@@ -32,7 +32,7 @@ storage internals, drivers, board/BSP headers, platform/HAL headers, the K210
 SDK, runtime-private headers, or generated-registry private headers.
 
 The SDK does not replace public capability types with parallel wrappers.
-Types such as Time, Input, Display, and their owner-scoped handles retain the
+Input, Display and other services still on the broker retain the
 Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
 language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
@@ -139,8 +139,8 @@ deadline.
 Stop code passes this value unchanged to deadline-aware capability and service
 release operations. It does not call a raw clock, choose a hardware timer, or
 acquire a second Time implementation. App Runtime creates the value exactly once
-through public `hk_time_deadline_after_us`, its private runtime owner, the one
-composed Time Capability provider, and a runtime-controlled finite policy
+through public `hk_time_deadline_after_us`, the immutable Time service binding,
+and a runtime-controlled finite policy
 budget; the manifest and app cannot configure or extend it. An already-expired
 value remains the required value for later owner-wide cleanup.
 

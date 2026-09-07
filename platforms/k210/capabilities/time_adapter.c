@@ -1,4 +1,3 @@
-#include "../../../firmware/src/capabilities/capability_provider.h"
 #include "../../../firmware/src/capabilities/time_provider.h"
 #include <hackylens/capability/time.h>
 
@@ -12,6 +11,7 @@ typedef struct
     spinlock_t lock;
     uint64_t last_us;
     uint8_t observed;
+    uint8_t faulted;
 } k210_time_state_t;
 
 static k210_time_state_t s_time_state = {
@@ -26,9 +26,15 @@ static hk_result_t k210_time_now(void *context, uint64_t *value)
     if(!state || !value)
         return HK_ERR_INVALID_ARGUMENT;
     spinlock_lock(&state->lock);
+    if(state->faulted)
+    {
+        spinlock_unlock(&state->lock);
+        return HK_ERR_INVALID_STATE;
+    }
     now = hal_time_us();
     if(state->observed && now < state->last_us)
     {
+        state->faulted = 1U;
         spinlock_unlock(&state->lock);
         return HK_ERR_INTERNAL;
     }
@@ -48,15 +54,20 @@ static hk_result_t k210_time_sleep(void *context, uint64_t duration_us)
     return HK_OK;
 }
 
-static hk_time_provider_t s_time_provider = {
+static void k210_time_fault(void *context)
+{
+    k210_time_state_t *state = context;
+
+    spinlock_lock(&state->lock);
+    state->faulted = 1U;
+    spinlock_unlock(&state->lock);
+}
+
+const hk_time_t hk_time_binding = {
     .context = &s_time_state,
     .now_us = k210_time_now,
     .sleep_us = k210_time_sleep,
     .max_sleep_us = HK_TIME_MAX_SLEEP_US,
     .max_slice_us = (uint32_t)HK_TIME_CANCEL_PROBE_MAX_US,
-};
-
-const hk_capability_provider_t hk_k210_time_provider = {
-    .context = &s_time_provider,
-    .max_leases = 16U,
+    .fault = k210_time_fault,
 };
