@@ -501,8 +501,13 @@ MicroPython используют один provider. Остальные services 
 234 host tests, full и MicroPython-disabled builds, architecture/object checks
 (одинаковые provider hashes) и resource guard прошли. Full image: 1,562,168 байт
 (−4,224 к S7), static RAM: 2,898,112 байт (−360). Independent review не выявил
-регрессий. Hardware/latency acceptance ещё не выполнена: USB COM-порт недоступен.
-Time и S8 целиком пока не закрыты; следующий service — Input.
+регрессий. Реализация: `64e12d2`; normal-push CI `34145407579` прошёл.
+Сборка прошита на SEN0305/COM10: 10 native/app launches с возвратом в меню и
+UART ping прошли; MicroPython HKMPTEST/STOP завершился ожидаемым KeyboardInterrupt.
+QR preview работает: около 18.7 fps, decode без найденного QR 28.9–29.7 ms.
+Логи: `build/s8-time-flash.log`, `build/s8-time-hardware.log`.
+Пользователь подтвердил QR decode, тяжёлый GIF и Sleep: всё работает.
+Time принят; S8 остаётся в работе, следующий service — Input.
 
 ### Цель
 
