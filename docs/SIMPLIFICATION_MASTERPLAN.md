@@ -517,7 +517,12 @@ Input переведён на immutable binding; runtime владеет отде
 между GIF rows сохранены. Fake/K210 behavioral suites, standalone absent binding,
 234 host tests, full/MP-disabled builds, architecture/provider hash и resource
 checks прошли. Full image: 1,558,392 байта (−8,000 к S7), static RAM:
-2,897,248 байт (−1,224 к S7). Аппаратная приёмка Input ещё не выполнена.
+2,897,248 байт (−1,224 к S7). Реализация: `b8f3078`, normal-push CI
+`34148121847` прошёл. SEN0305/COM10 прошит; после flash UART не отвечал,
+обычный normal-boot reset восстановил загрузку. Boot, SD mount, 10 app launches,
+возвраты в меню, ping, MicroPython test/stop и QR preview затем прошли.
+Логи: `build/s8-input-boot.log`, `build/s8-input-hardware.log`.
+Ожидается ручная проверка всех кнопок, FILES/GIF и Sleep; Input ещё не принят.
 
 ### Цель
 
