@@ -550,7 +550,16 @@ External Link пока сохраняет immediate cleanup до своего э
 broker handles сохраняются для retry и не затираются следующим запуском VM.
 234 host tests, обе firmware builds, architecture/provider hashes и resource
 checks прошли. Full image: 1,557,112 байт (−9,280 к S7), static RAM:
-2,896,680 байт (−1,792 к S7). Аппаратная приёмка Lights ещё не выполнена.
+2,896,680 байт (−1,792 к S7).
+
+Коммит `3660ef0` прошёл CI run `34222711031` и установлен на COM10.
+UART smoke загрузки и переходов приложений прошёл. HMPY-проверка LED/RGB
+на устройстве прошла четыре terminal paths: normal completion, exception,
+requested stop и timeout. Каждый следующий запуск успешно получал каналы;
+временный скрипт удалён, исходный список файлов сохранён. Лог:
+`build/s8-lights-hmpy.log`. Визуальная проверка яркости, RGB, подсветки камеры
+и восстановления настроек ожидает подтверждения пользователя; Lights пока
+не отмечен принятым. Display и External Link ещё не перенесены, S8 продолжается.
 
 ### Цель
 
