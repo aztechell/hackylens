@@ -1,3 +1,4 @@
+#include <hackylens/capability/external_link.h>
 #include "app_runtime_host_support.h"
 
 #include <string.h>
@@ -10,13 +11,14 @@
 #include "capability_fake_display.h"
 #include "input_normative_backend.h"
 #include "time_normative_backend.h"
+#include "lights_normative_backend.h"
 
 static hk_app_runtime_host_t *s_host;
 
 static const char *const s_lights_features[] = {
-    "backlight",
-    "illumination",
-    "rgb",
+    "uart",
+    "i2c-controller",
+    "i2c-target",
 };
 static const char *const s_display_features[] = {
     "base-plane",
@@ -26,7 +28,7 @@ static const char *const s_display_features[] = {
 };
 static const hk_app_capability_request_t s_capabilities[] = {
     {
-        "hackylens.cap.lights", 0U, "0.1.0", "0.2.0",
+        "hackylens.cap.external-link", 0U, "0.1.0", "0.2.0",
         s_lights_features, 3U, NULL, 0U,
     },
     {
@@ -121,8 +123,8 @@ static hk_capability_id_t capability_id(const char *id)
 {
     if(id && strcmp(id, "hackylens.cap.time") == 0)
         return HK_CAPABILITY_ID_TIME;
-    if(id && strcmp(id, "hackylens.cap.lights") == 0)
-        return HK_CAPABILITY_ID_LIGHTS;
+    if(id && strcmp(id, "hackylens.cap.external-link") == 0)
+        return HK_CAPABILITY_ID_EXTERNAL_LINK;
     if(id && strcmp(id, "hackylens.cap.display") == 0)
         return HK_CAPABILITY_ID_DISPLAY;
     return 0U;
@@ -145,15 +147,15 @@ static hk_result_t feature_mask(
         else if(id == HK_CAPABILITY_ID_TIME &&
                 strcmp(feature, "sleep-until") == 0)
             *mask |= HK_TIME_FEATURE_SLEEP_UNTIL;
-        else if(id == HK_CAPABILITY_ID_LIGHTS &&
-                strcmp(feature, "backlight") == 0)
-            *mask |= HK_LIGHTS_FEATURE_BACKLIGHT;
-        else if(id == HK_CAPABILITY_ID_LIGHTS &&
-                strcmp(feature, "illumination") == 0)
-            *mask |= HK_LIGHTS_FEATURE_ILLUMINATION;
-        else if(id == HK_CAPABILITY_ID_LIGHTS &&
-                strcmp(feature, "rgb") == 0)
-            *mask |= HK_LIGHTS_FEATURE_RGB;
+        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
+                strcmp(feature, "uart") == 0)
+            *mask |= HK_EXTERNAL_LINK_FEATURE_UART;
+        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
+                strcmp(feature, "i2c-controller") == 0)
+            *mask |= HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
+        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
+                strcmp(feature, "i2c-target") == 0)
+            *mask |= HK_EXTERNAL_LINK_FEATURE_I2C_TARGET;
         else if(id == HK_CAPABILITY_ID_DISPLAY &&
                 strcmp(feature, "base-plane") == 0)
             *mask |= HK_DISPLAY_FEATURE_BASE_PLANE;
@@ -250,9 +252,9 @@ static hk_result_t acquire_capability(
     if(host->fail_acquire_id == request->id &&
        host->fail_acquire_result != HK_OK)
         return host->fail_acquire_result;
-    if(request->id == HK_CAPABILITY_ID_LIGHTS)
+    if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
         return hk_capability_core_acquire(&host->core, owner, request,
-            HK_CAPABILITY_ID_LIGHTS, 0U, lease);
+            HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, lease);
     if(request->id == HK_CAPABILITY_ID_DISPLAY)
     {
         hk_display_t handle;
@@ -491,6 +493,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     now_us = time_normative_backend_reset();
     input_normative_backend_reset();
     hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
+    lights_normative_backend_reset(now_us);
     hk_fake_display_set_now_us(now_us);
     result = input_normative_backend_sample(now_us, 0U);
     if(result != HK_OK && result != HK_PENDING)
@@ -498,14 +501,15 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     host->last_input_us = now_us;
     host->inventory[0] = (hk_capability_info_t){
         sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
-        HK_CAPABILITY_ID_LIGHTS, {0U, 1U, 0U, 0U}, HK_LIGHTS_FEATURES_0_1,
+        HK_CAPABILITY_ID_EXTERNAL_LINK, {0U, 1U, 0U, 0U}, HK_EXTERNAL_LINK_FEATURES_0_1,
         HK_CAPABILITY_FLAG_SHARED, 0U, HK_CAPABILITY_CORE_ANY,
         NULL, 0U, 0U,
     };
     host->lights_provider = (hk_capability_provider_t){.acquire = lights_provider_acquire, .max_leases = 16U};
     host->lights_provider.cleanup = lights_provider_cleanup;
     host->providers[0] = &host->lights_provider;
-    host->grants[0].request = (hk_capability_request_t)HK_LIGHTS_REQUEST_0_1_INIT;
+    host->grants[0].request = (hk_capability_request_t)HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    host->grants[0].request.required_features = HK_EXTERNAL_LINK_FEATURES_0_1;
     result = hk_capability_core_init(
         &host->core, host->inventory, host->providers, 1U);
     if(result != HK_OK)
@@ -514,6 +518,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
         .user = host,
         .time = hk_time_service(),
         .input = hk_input_service(),
+        .lights = hk_lights_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

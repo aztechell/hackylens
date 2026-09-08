@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <hackylens/capability/common.h>
 
 #include "../core/camera_types.h"
 
@@ -28,6 +29,7 @@ const char *camera_light_mode_label(camera_light_mode_t mode);
 void camera_light_outputs_off(void);
 void camera_light_apply(void);
 void camera_light_restore_global(void);
+hk_result_t camera_light_retire(hk_deadline_t deadline);
 void camera_light_adjust(int8_t delta);
 
 #endif

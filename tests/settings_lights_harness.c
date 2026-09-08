@@ -54,38 +54,32 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
     return owner;
 }
 
-hk_result_t hk_lights_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    uint32_t channels, hk_lights_t *handle)
+struct hk_lights_service { uint8_t unused; };
+static const hk_lights_service_t s_lights_binding = {0};
+const hk_lights_service_t *hk_lights_service(void) { return &s_lights_binding; }
+hk_result_t hk_lights_open(const hk_lights_service_t *service, uint32_t channels, hk_lights_t *handle)
 {
-    (void)request;
-    if(!handle || channels == 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = (hk_lease_t){
-        channels, s_acquire_count + 1U, owner, HK_CAPABILITY_ID_LIGHTS,
-    };
+    if(!handle || !service || channels == 0U) return HK_ERR_INVALID_ARGUMENT;
+    *handle = (hk_lights_t){service, channels};
     s_acquired_mask |= channels;
     s_acquire_count++;
     return HK_OK;
 }
-
-hk_result_t hk_lights_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_lights_t *handle)
+hk_result_t hk_lights_close(hk_lights_t *handle, hk_deadline_t deadline)
 {
-    (void)owner;
     (void)deadline;
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    s_released_mask |= handle->lease.slot;
-    handle->lease = HK_LEASE_NONE;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    s_released_mask |= handle->channels;
+    *handle = (hk_lights_t){0};
     return HK_OK;
 }
+hk_result_t hk_lights_retire(hk_lights_t *handle, hk_deadline_t deadline)
+{ return hk_lights_close(handle, deadline); }
 
 hk_result_t hk_lights_set_level(
-    hk_owner_t owner, const hk_lights_t *handle, uint32_t channel,
+    const hk_lights_t *handle, uint32_t channel,
     uint16_t level, hk_deadline_t deadline, const hk_cancel_t *cancel)
 {
-    (void)owner;
     (void)handle;
     (void)deadline;
     (void)cancel;
@@ -96,11 +90,10 @@ hk_result_t hk_lights_set_level(
 }
 
 hk_result_t hk_lights_set_rgb(
-    hk_owner_t owner, const hk_lights_t *handle, uint16_t red,
+    const hk_lights_t *handle, uint16_t red,
     uint16_t green, uint16_t blue, hk_deadline_t deadline,
     const hk_cancel_t *cancel)
 {
-    (void)owner;
     (void)handle;
     (void)deadline;
     (void)cancel;

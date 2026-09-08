@@ -158,7 +158,7 @@ int main(void)
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
     hk_app_runtime_host_fail_acquire(
-        &host, HK_CAPABILITY_ID_LIGHTS, HK_ERR_IO);
+        &host, HK_CAPABILITY_ID_EXTERNAL_LINK, HK_ERR_IO);
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) == HK_ERR_IO);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);

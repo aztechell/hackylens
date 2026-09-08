@@ -538,6 +538,20 @@ MP sessions относятся к persistent adapter, а не native app owner: 
 со своим единым deadline; native runtime fallback их не закрывает.
 Settings сохраняет persistent sessions и восстановление значений после safe-off.
 
+### Промежуточная проверка Lights (2026-09-08)
+
+Lights использует immutable binding и стабильные channel sessions вместо generic
+leases. Runtime хранит до трёх app sessions и выполняет retirement при failed
+stop; camera fallback не зависит от UI-флага. Settings persistent sessions и MP
+worker sessions разделены; MP cleanup вызывается только после terminal handoff.
+Обычный close остаётся retryable; retirement инвалидирует sessions и quarantines
+каналы при failed safe-off. Lights/Display в MP получают один cleanup deadline;
+External Link пока сохраняет immediate cleanup до своего этапа. Неудачно закрытые
+broker handles сохраняются для retry и не затираются следующим запуском VM.
+234 host tests, обе firmware builds, architecture/provider hashes и resource
+checks прошли. Full image: 1,557,112 байт (−9,280 к S7), static RAM:
+2,896,680 байт (−1,792 к S7). Аппаратная приёмка Lights ещё не выполнена.
+
 ### Цель
 
 Сохранить board-independent typed hardware access, но удалить dynamic machinery,

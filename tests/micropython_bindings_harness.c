@@ -60,6 +60,12 @@ static test_display_command_t
     g_overlay_commands[LCD_OVERLAY_COMMAND_MAX];
 static uint8_t g_overlay_text[LCD_OVERLAY_TEXT_MAX];
 static hk_result_t g_overlay_present_result;
+static hk_result_t g_overlay_release_result;
+static uint8_t g_fail_light_retire;
+static uint32_t g_retired_light_mask;
+static uint64_t g_light_cleanup_deadline;
+static uint64_t g_display_cleanup_deadline;
+static uint8_t g_deadline_mismatch;
 static uint8_t g_cleanup_events[8];
 static size_t g_cleanup_event_count;
 static size_t g_uart_budget;
@@ -92,6 +98,12 @@ static void reset_run(void)
 {
     micropython_capability_bridge_cleanup();
     g_now_us = 0U;
+    g_overlay_release_result = HK_OK;
+    g_fail_light_retire = 0U;
+    g_retired_light_mask = 0U;
+    g_light_cleanup_deadline = 0U;
+    g_display_cleanup_deadline = 0U;
+    g_deadline_mismatch = 0U;
     g_sleep_calls = 0U;
     g_interrupt_poll = 0U;
     g_interrupt_on_poll = 0U;
@@ -453,6 +465,38 @@ static void test_display_limit_clear_recovery_and_cleanup(void)
                  "display lease must be released exactly once for its run");
 }
 
+static void test_cleanup_failure_attempts_remaining_channels(void)
+{
+    uint32_t led[6] = {50U};
+    uint32_t rgb[6] = {50U, 10U, 20U};
+    reset_run();
+    require_true(call_binding(MICROPYTHON_BINDING_OP_LED, led, NULL, 0U) == MICROPYTHON_BINDING_OK,
+        "LED session opens");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_RGB, rgb, NULL, 0U) == MICROPYTHON_BINDING_OK,
+        "RGB session opens");
+    g_fail_light_retire = 1U;
+    require_true(micropython_capability_bridge_cleanup() == HK_ERR_IO,
+        "first cleanup error is returned");
+    require_true(g_retired_light_mask == (HK_LIGHTS_CHANNEL_ILLUMINATION | HK_LIGHTS_CHANNEL_RGB) &&
+        g_overlay_release_calls == 1U, "failure cannot skip remaining cleanup");
+    require_true(!g_deadline_mismatch && g_light_cleanup_deadline != 0U &&
+        g_light_cleanup_deadline == g_display_cleanup_deadline,
+        "lights and display share the original cleanup deadline");
+    g_fail_light_retire = 0U;
+}
+static void test_failed_broker_release_is_not_overwritten(void)
+{
+    reset_run();
+    g_overlay_release_result = HK_ERR_DEADLINE_EXCEEDED;
+    require_true(micropython_capability_bridge_cleanup() == HK_ERR_DEADLINE_EXCEEDED,
+        "failed display close reported");
+    micropython_capability_bridge_prepare(g_run_id + 1U);
+    require_true(g_overlay_acquire_calls == 1U, "new run cannot overwrite live failed-release handle");
+    g_overlay_release_result = HK_OK;
+    require_true(micropython_capability_bridge_cleanup() == HK_OK && g_overlay_release_calls == 1U,
+        "old handle remains available for bounded retry");
+}
+
 int main(void)
 {
     test_timeout_cancels_before_dispatch();
@@ -465,7 +509,9 @@ int main(void)
     test_display_cancel_preserves_stage_for_retry();
     test_display_limit_clear_recovery_and_cleanup();
     micropython_capability_bridge_cleanup();
-    puts("MICROPYTHON_BINDINGS_OK cases=9");
+    test_cleanup_failure_attempts_remaining_channels();
+    test_failed_broker_release_is_not_overwritten();
+    puts("MICROPYTHON_BINDINGS_OK cases=11");
     return 0;
 }
 
@@ -522,6 +568,8 @@ hk_result_t hk_display_release(
 {
     (void)owner;
     (void)deadline;
+    g_display_cleanup_deadline = deadline.at_us;
+    if(g_overlay_release_result != HK_OK) return g_overlay_release_result;
     g_overlay_release_calls++;
     g_overlay_released_run_id = g_run_id;
     g_cleanup_events[g_cleanup_event_count++] = 4U;
@@ -652,37 +700,39 @@ hk_result_t hk_display_stage_keep_last_clear(
     return HK_OK;
 }
 
-hk_result_t hk_lights_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    uint32_t channels, hk_lights_t *handle)
+struct hk_lights_service { uint8_t unused; };
+static const hk_lights_service_t s_lights_binding = {0};
+const hk_lights_service_t *hk_lights_service(void) { return &s_lights_binding; }
+hk_result_t hk_lights_open(const hk_lights_service_t *service, uint32_t channels, hk_lights_t *handle)
 {
-    static uint32_t generation = 1U;
-
-    (void)request;
-    if(!handle || channels == 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = (hk_lease_t){
-        channels, generation++, owner, HK_CAPABILITY_ID_LIGHTS,
-    };
+    if(!handle || !service || channels == 0U) return HK_ERR_INVALID_ARGUMENT;
+    *handle = (hk_lights_t){service, channels};
     return HK_OK;
 }
-
-hk_result_t hk_lights_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_lights_t *handle)
+hk_result_t hk_lights_close(hk_lights_t *handle, hk_deadline_t deadline)
 {
-    (void)owner;
     (void)deadline;
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = HK_LEASE_NONE;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    *handle = (hk_lights_t){0};
     return HK_OK;
+}
+hk_result_t hk_lights_retire(hk_lights_t *handle, hk_deadline_t deadline)
+{
+    uint32_t channels = handle->channels;
+    if(channels) {
+        if(g_light_cleanup_deadline && g_light_cleanup_deadline != deadline.at_us)
+            g_deadline_mismatch = 1U;
+        g_light_cleanup_deadline = deadline.at_us;
+        g_retired_light_mask |= channels;
+    }
+    hk_result_t result = hk_lights_close(handle, deadline);
+    return channels == HK_LIGHTS_CHANNEL_ILLUMINATION && g_fail_light_retire ? HK_ERR_IO : result;
 }
 
 hk_result_t hk_lights_set_level(
-    hk_owner_t owner, const hk_lights_t *handle, uint32_t channel,
+    const hk_lights_t *handle, uint32_t channel,
     uint16_t level, hk_deadline_t deadline, const hk_cancel_t *cancel)
 {
-    (void)owner;
     (void)handle;
     (void)channel;
     (void)level;
@@ -694,11 +744,10 @@ hk_result_t hk_lights_set_level(
 }
 
 hk_result_t hk_lights_set_rgb(
-    hk_owner_t owner, const hk_lights_t *handle, uint16_t red,
+    const hk_lights_t *handle, uint16_t red,
     uint16_t green, uint16_t blue, hk_deadline_t deadline,
     const hk_cancel_t *cancel)
 {
-    (void)owner;
     (void)handle;
     (void)red;
     (void)green;

@@ -25,7 +25,9 @@ import app_composition
 # Time is a statically bound service. Its catalog entry remains a build dependency.
 TIME_SERVICE_ID = "hackylens.cap.time"
 INPUT_SERVICE_ID = "hackylens.cap.input"
-DIRECT_SERVICE_TYPES = {TIME_SERVICE_ID: "hk_time_t", INPUT_SERVICE_ID: "hk_input_t"}
+LIGHTS_SERVICE_ID = "hackylens.cap.lights"
+DIRECT_SERVICE_TYPES = {TIME_SERVICE_ID: "hk_time_t", INPUT_SERVICE_ID: "hk_input_t",
+                        LIGHTS_SERVICE_ID: "hk_lights_service_t"}
 
 CATALOG_PATH = ROOT / "platforms" / "k210" / "capabilities.toml"
 APP_MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
@@ -817,6 +819,12 @@ def generated_c(composition: Composition) -> str:
         lines.extend([
             '#include "input_provider.h"',
             'const hk_input_t hk_input_binding = {0};',
+            '',
+        ])
+    if not any(item.id == LIGHTS_SERVICE_ID for item in composition.capabilities):
+        lines.extend([
+            '#include "lights_provider.h"',
+            'const hk_lights_service_t hk_lights_binding = {0};',
             '',
         ])
     if capabilities:

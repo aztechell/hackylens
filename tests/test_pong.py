@@ -78,6 +78,8 @@ class PongHostTests(unittest.TestCase):
                     f"-I{ROOT / 'tests'}",
                     str(ROOT / "tests" / "pong_runtime_harness.c"),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
+                    str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
+                    str(ROOT / "tests" / "lights_normative_fake_backend.c"),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "surface.c"),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "switch.c"),
                     str(ROOT / "firmware" / "src" / "capabilities" / "capability_core.c"),

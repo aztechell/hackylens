@@ -354,6 +354,12 @@ static hk_result_t teardown(
         }
     }
 
+    for(unsigned i = 0U; i < 3U; ++i)
+    {
+        result = hk_lights_retire(&runtime->lights[i], runtime->teardown_deadline);
+        retain_error(runtime, result);
+    }
+
     if(!hk_owner_is_zero(runtime->owner))
     {
         runtime->state = HK_APP_RUNTIME_STOPPING;
@@ -742,8 +748,37 @@ HK_APP_CONTEXT_TYPED_ACCESSOR(
     hk_app_context_external_link,
     hk_external_link_t,
     HK_CAPABILITY_ID_EXTERNAL_LINK)
-HK_APP_CONTEXT_TYPED_ACCESSOR(
-    hk_app_context_lights, hk_lights_t, HK_CAPABILITY_ID_LIGHTS)
+hk_result_t hk_app_context_lights(
+    const hk_app_context_t *ctx, uint32_t channels, hk_lights_t **session)
+{
+    hk_app_runtime_t *runtime = NULL;
+    hk_result_t result;
+    if(!session)
+        return HK_ERR_INVALID_ARGUMENT;
+    *session = NULL;
+    result = validate_callback_context(ctx, &runtime);
+    if(result != HK_OK)
+        return result;
+    if(!channels || (channels & ~HK_LIGHTS_CHANNEL_ALL))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!runtime->ops.lights)
+        return HK_ERR_CAPABILITY_ABSENT;
+    for(unsigned i = 0U; i < 3U; ++i)
+        if(runtime->lights[i].service && runtime->lights[i].channels == channels) {
+            *session = &runtime->lights[i];
+            return HK_OK;
+        }
+    if(runtime->teardown_started)
+        return HK_ERR_INVALID_STATE;
+    for(unsigned i = 0U; i < 3U; ++i)
+        if(!runtime->lights[i].service) {
+            result = hk_lights_open(runtime->ops.lights, channels, &runtime->lights[i]);
+            if(result == HK_OK)
+                *session = &runtime->lights[i];
+            return result;
+        }
+    return HK_ERR_BUSY;
+}
 
 #undef HK_APP_CONTEXT_TYPED_ACCESSOR
 

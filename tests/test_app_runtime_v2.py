@@ -65,6 +65,8 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     *(f"-I{path}" for path in extra_includes),
                     str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
+                    str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
+                    str(ROOT / "tests" / "lights_normative_fake_backend.c"),
                     *(str(ROOT / source) for source in extra_sources),
                     "-o",
                     str(executable),

@@ -73,5 +73,5 @@ affinity = 0
 resources = ["lights"]
 routes = ["lcd-backlight", "illumination", "rgb-red", "rgb-green", "rgb-blue"]
 provider_source = "platforms/k210/capabilities/lights_adapter.c"
-provider_symbol = "hk_k210_lights_provider"
+provider_symbol = "hk_lights_binding"
 max_leases = 16

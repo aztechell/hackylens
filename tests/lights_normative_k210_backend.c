@@ -2,7 +2,7 @@
 
 #include <hackylens/capability/lights.h>
 
-extern const hk_capability_provider_t hk_k210_lights_provider;
+
 
 static uint64_t s_now_us;
 static uint32_t s_effect_count;
@@ -61,11 +61,6 @@ void lights_rgb_set(
         s_active_mask &= ~HK_LIGHTS_CHANNEL_RGB;
         s_safe_off_mask |= HK_LIGHTS_CHANNEL_RGB;
     }
-}
-
-const hk_capability_provider_t *lights_normative_backend_provider(void)
-{
-    return &hk_k210_lights_provider;
 }
 
 const char *lights_normative_backend_name(void)

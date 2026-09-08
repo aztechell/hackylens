@@ -46,7 +46,7 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
        !app_id || generation == 0U || hk_owner_is_zero(identity_owner))
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_LIGHTS, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
        !available || fallback)
         return HK_ERR_INTERNAL;
     if(hk_app_context_capability_status(

@@ -90,9 +90,7 @@ static hk_external_link_t g_external;
 static hk_owner_t g_external_owner;
 static uint32_t g_lights_owned;
 static hk_lights_t g_illumination_lights;
-static hk_owner_t g_illumination_owner;
 static hk_lights_t g_rgb_lights;
-static hk_owner_t g_rgb_owner;
 static binding_external_mode_t g_external_mode;
 static uint32_t g_uart_baud = 115200U;
 static binding_external_operation_t g_external_operation;
@@ -172,32 +170,18 @@ static uint8_t binding_lights_cancelled(const void *context)
         cancel_context->run_id);
 }
 
-static hk_result_t binding_claim_light(
-    const char *consumer_id, uint32_t channel, uint64_t feature,
-    hk_lights_t *handle, hk_owner_t *owner)
+static hk_result_t binding_claim_light(uint32_t channel, hk_lights_t *handle)
 {
-    hk_capability_request_t request = HK_LIGHTS_REQUEST_0_1_INIT;
-    hk_owner_t candidate;
     hk_result_t result;
-
-    if(!handle || !owner)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(!hk_lease_is_zero(&handle->lease))
+    if(handle->service)
         return HK_OK;
-    candidate = capability_client_consumer_owner(consumer_id);
-    if(hk_owner_is_zero(candidate))
-        return HK_ERR_STALE_HANDLE;
-    request.required_features = feature;
     settings_lights_suspend(channel);
-    result = hk_lights_acquire(candidate, &request, channel, handle);
+    result = hk_lights_open(hk_lights_service(), channel, handle);
     if(result != HK_OK)
-    {
         settings_lights_restore(channel);
-        return result;
-    }
-    *owner = candidate;
-    g_lights_owned |= channel;
-    return HK_OK;
+    else
+        g_lights_owned |= channel;
+    return result;
 }
 
 static micropython_binding_result_t binding_lights_result(hk_result_t result)
@@ -565,21 +549,16 @@ static micropython_binding_result_t binding_execute(
         if(a[0] > 100U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
         result = binding_claim_light(
-            "consumer:micropython-adapter",
-            HK_LIGHTS_CHANNEL_ILLUMINATION,
-            HK_LIGHTS_FEATURE_ILLUMINATION,
-            &g_illumination_lights, &g_illumination_owner);
+            HK_LIGHTS_CHANNEL_ILLUMINATION, &g_illumination_lights);
         if(result == HK_OK)
             result = hk_lights_set_level(
-                g_illumination_owner, &g_illumination_lights,
+                &g_illumination_lights,
                 HK_LIGHTS_CHANNEL_ILLUMINATION, (uint16_t)a[0] * 10U,
                 HK_DEADLINE_IMMEDIATE, &cancel);
         if(result != HK_OK && !already_owned &&
-           !hk_lease_is_zero(&g_illumination_lights.lease))
+           g_illumination_lights.service)
         {
-            (void)hk_lights_release(
-                g_illumination_owner, HK_DEADLINE_IMMEDIATE,
-                &g_illumination_lights);
+            (void)hk_lights_retire(&g_illumination_lights, HK_DEADLINE_IMMEDIATE);
             g_lights_owned &= ~HK_LIGHTS_CHANNEL_ILLUMINATION;
             settings_lights_restore(HK_LIGHTS_CHANNEL_ILLUMINATION);
         }
@@ -600,18 +579,16 @@ static micropython_binding_result_t binding_execute(
         if(a[0] > 255U || a[1] > 255U || a[2] > 255U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
         result = binding_claim_light(
-            "consumer:micropython-adapter", HK_LIGHTS_CHANNEL_RGB,
-            HK_LIGHTS_FEATURE_RGB, &g_rgb_lights, &g_rgb_owner);
+            HK_LIGHTS_CHANNEL_RGB, &g_rgb_lights);
         if(result == HK_OK)
             result = hk_lights_set_rgb(
-                g_rgb_owner, &g_rgb_lights,
+                &g_rgb_lights,
                 binding_rgb_level(a[0]), binding_rgb_level(a[1]),
                 binding_rgb_level(a[2]), HK_DEADLINE_IMMEDIATE, &cancel);
         if(result != HK_OK && !already_owned &&
-           !hk_lease_is_zero(&g_rgb_lights.lease))
+           g_rgb_lights.service)
         {
-            (void)hk_lights_release(
-                g_rgb_owner, HK_DEADLINE_IMMEDIATE, &g_rgb_lights);
+            (void)hk_lights_retire(&g_rgb_lights, HK_DEADLINE_IMMEDIATE);
             g_lights_owned &= ~HK_LIGHTS_CHANNEL_RGB;
             settings_lights_restore(HK_LIGHTS_CHANNEL_RGB);
         }
@@ -780,6 +757,12 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
     hk_capability_request_t display_request = HK_DISPLAY_REQUEST_0_1_INIT;
     hk_result_t display_result = HK_ERR_STALE_HANDLE;
 
+    /* A failed ordinary broker release stays retryable until its S8 migration.
+       Never overwrite the only live handle when starting the next VM run. */
+    if((g_external_owned || g_display_owned) &&
+       micropython_capability_bridge_cleanup() != HK_OK)
+        return;
+
     control->run_active = 0U;
     control->run_id = run_id;
     control->request_ticket = 0U;
@@ -879,10 +862,15 @@ void micropython_capability_bridge_tick(void)
     binding_complete_request(control, ticket, result, cancelled);
 }
 
-void micropython_capability_bridge_cleanup(void)
+hk_result_t micropython_capability_bridge_cleanup(void)
 {
     micropython_binding_control_t *control = binding_control();
 
+    hk_deadline_t deadline = {UINT64_MAX};
+    hk_result_t first = binding_deadline_after(MICROPYTHON_BINDING_RPC_TIMEOUT_US, &deadline);
+    hk_result_t result;
+    if(first != HK_OK)
+        deadline.at_us = UINT64_MAX;
     control->run_active = 0U;
     __sync_synchronize();
     if(control->request_ticket != control->complete_ticket)
@@ -897,31 +885,32 @@ void micropython_capability_bridge_cleanup(void)
         binding_external_operation_cancel();
     if(g_external_owned)
     {
-        (void)hk_external_link_release(
+        result = hk_external_link_release(
             g_external_owner, HK_DEADLINE_IMMEDIATE, &g_external);
-        external_link_service_resume();
+        if(first == HK_OK) first = result;
+        if(result == HK_OK) {
+            g_external_owned = 0U;
+            external_link_service_resume();
+        }
     }
-    if(g_lights_owned & HK_LIGHTS_CHANNEL_ILLUMINATION)
-        (void)hk_lights_release(
-            g_illumination_owner, HK_DEADLINE_IMMEDIATE,
-            &g_illumination_lights);
-    if(g_lights_owned & HK_LIGHTS_CHANNEL_RGB)
-        (void)hk_lights_release(
-            g_rgb_owner, HK_DEADLINE_IMMEDIATE, &g_rgb_lights);
+    result = hk_lights_retire(&g_illumination_lights, deadline);
+    if(first == HK_OK) first = result;
+    result = hk_lights_retire(&g_rgb_lights, deadline);
+    if(first == HK_OK) first = result;
     settings_lights_restore(g_lights_owned);
     if(g_display_owned)
     {
-        hk_deadline_t deadline = binding_display_deadline();
-        (void)hk_display_release(
+        result = hk_display_release(
             g_display_owner, deadline, &g_display);
+        if(first == HK_OK) first = result;
+        if(result == HK_OK) g_display_owned = 0U;
     }
-    g_external_owned = 0U;
-    g_external_owner = HK_OWNER_NONE;
+    if(!g_external_owned) g_external_owner = HK_OWNER_NONE;
     g_lights_owned = 0U;
-    g_display_owned = 0U;
-    g_display_owner = HK_OWNER_NONE;
-    g_external_mode = BINDING_EXTERNAL_NONE;
+    if(!g_display_owned) g_display_owner = HK_OWNER_NONE;
+    if(!g_external_owned) g_external_mode = BINDING_EXTERNAL_NONE;
     binding_display_stage_reset(0U);
+    return first;
 }
 
 micropython_binding_result_t micropython_binding_call(

@@ -43,8 +43,6 @@ class LightsCapabilityTests(unittest.TestCase):
                 ROOT / "tests" / "lights_capability_harness.c",
                 ROOT / "tests" / f"lights_normative_{backend}_backend.c",
                 ROOT / "firmware" / "src" / "capabilities" / "lights.c",
-                ROOT / "firmware" / "src" / "capabilities" /
-                "capability_core.c",
             ]
             if backend == "k210":
                 sources.append(
@@ -84,16 +82,14 @@ class LightsCapabilityTests(unittest.TestCase):
                     self.assertNotIn(forbidden, symbols)
 
         self.assertIn(
-            "LIGHTS_NORMATIVE_OK backend=fake cases=16 effects=10 "
-            "safe_off_mask=0x7 level_max=1000",
+            "LIGHTS_NORMATIVE_OK backend=fake conflict copy retry retire quarantine level_max=1000",
             result,
         )
 
     def test_k210_passes_same_lights_normative_contract(self) -> None:
         result = self.run_normative_backend("k210")
         self.assertIn(
-            "LIGHTS_NORMATIVE_OK backend=k210 cases=16 effects=10 "
-            "safe_off_mask=0x7 level_max=1000",
+            "LIGHTS_NORMATIVE_OK backend=k210 conflict copy retry retire quarantine level_max=1000",
             result,
         )
 
@@ -111,6 +107,7 @@ class LightsCapabilityTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'src' / 'drivers'}",
                 f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 str(ROOT / "tests" / "k210_lights_adapter_harness.c"),
+                str(ROOT / "firmware" / "src" / "capabilities" / "lights.c"),
                 str(ROOT / "platforms" / "k210" / "capabilities" / "lights_adapter.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)

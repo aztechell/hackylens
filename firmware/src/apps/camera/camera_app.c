@@ -1,3 +1,4 @@
+#include "../../services/camera_light.h"
 #include "camera_app.h"
 
 #include "../../core/hk_menu.h"
@@ -78,6 +79,12 @@ static hk_result_t app_stop(const hk_app_context_t *ctx)
 {
     hk_deadline_t deadline;
     hk_result_t result = hk_app_context_teardown_deadline(ctx, &deadline);
+    {
+        hk_result_t light_result = camera_light_retire(
+            result == HK_OK ? deadline : (hk_deadline_t){UINT64_MAX});
+        if(result == HK_OK)
+            result = light_result;
+    }
     camera_controller_exit();
     return result;
 }

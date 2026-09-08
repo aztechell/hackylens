@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <hackylens/capability/common.h>
 
 #define MICROPYTHON_BINDING_DATA_MAX 256U
 
@@ -36,7 +37,7 @@ typedef enum
 /* Core-0 lifecycle and dispatcher. */
 void micropython_capability_bridge_prepare(uint32_t run_id);
 void micropython_capability_bridge_tick(void);
-void micropython_capability_bridge_cleanup(void);
+hk_result_t micropython_capability_bridge_cleanup(void);
 
 /* Core-1 synchronous RPC. VM stop/deadline hooks remain live while waiting. */
 micropython_binding_result_t micropython_binding_call(

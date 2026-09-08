@@ -1,7 +1,7 @@
 #ifndef HACKYLENS_CAPABILITY_LIGHTS_H
 #define HACKYLENS_CAPABILITY_LIGHTS_H
 
-#include "owner.h"
+#include "common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,13 +26,6 @@ extern "C" {
 #define HK_LIGHTS_LEVEL_MAX UINT16_C(1000)
 #define HK_LIGHTS_INFO_VERSION 1U
 
-#define HK_LIGHTS_REQUEST_0_1_INIT                                \
-    {                                                              \
-        sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, \
-        HK_CAPABILITY_ID_LIGHTS, {0U, 1U, 0U, 0U},                 \
-        {0U, 2U, 0U, 0U}, HK_LIGHTS_FEATURES_0_1, 0U, 0U          \
-    }
-
 typedef struct
 {
     uint16_t struct_size;
@@ -42,36 +35,27 @@ typedef struct
     uint16_t reserved;
 } hk_lights_info_t;
 
-HK_DECLARE_CAPABILITY_HANDLE(hk_lights_t);
+/* Sessions must remain at their opening address until closed or retired. */
+typedef struct hk_lights_service hk_lights_service_t;
+typedef struct
+{
+    const hk_lights_service_t *service;
+    uint32_t channels;
+} hk_lights_t;
 
-hk_result_t hk_lights_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint32_t channels,
-    hk_lights_t *handle);
-hk_result_t hk_lights_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_lights_t *handle);
-hk_result_t hk_lights_get_info(
-    hk_owner_t owner,
-    const hk_lights_t *handle,
+const hk_lights_service_t *hk_lights_service(void);
+hk_result_t hk_lights_open(const hk_lights_service_t *service,
+    uint32_t channels, hk_lights_t *session);
+hk_result_t hk_lights_close(hk_lights_t *session, hk_deadline_t deadline);
+hk_result_t hk_lights_retire(hk_lights_t *session, hk_deadline_t deadline);
+hk_result_t hk_lights_get_info(const hk_lights_service_t *service,
     hk_lights_info_t *info);
-hk_result_t hk_lights_set_level(
-    hk_owner_t owner,
-    const hk_lights_t *handle,
-    uint32_t channel,
-    uint16_t level,
-    hk_deadline_t deadline,
+hk_result_t hk_lights_set_level(const hk_lights_t *session,
+    uint32_t channel, uint16_t level, hk_deadline_t deadline,
     const hk_cancel_t *cancel);
-hk_result_t hk_lights_set_rgb(
-    hk_owner_t owner,
-    const hk_lights_t *handle,
-    uint16_t red,
-    uint16_t green,
-    uint16_t blue,
-    hk_deadline_t deadline,
-    const hk_cancel_t *cancel);
+hk_result_t hk_lights_set_rgb(const hk_lights_t *session,
+    uint16_t red, uint16_t green, uint16_t blue,
+    hk_deadline_t deadline, const hk_cancel_t *cancel);
 
 #ifdef __cplusplus
 }

@@ -70,7 +70,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 timeout=30,
             )
 
-        self.assertIn("MICROPYTHON_BINDINGS_OK cases=9", result.stdout)
+        self.assertIn("MICROPYTHON_BINDINGS_OK cases=11", result.stdout)
 
     def test_uart_fifo_capacity_boundaries(self) -> None:
         compiler = self.compiler()

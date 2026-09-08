@@ -77,8 +77,8 @@ hk_result_t hk_app_context_external_link(
     hk_external_link_t *handle);
 hk_result_t hk_app_context_lights(
     const hk_app_context_t *ctx,
-    uint16_t instance,
-    hk_lights_t *handle);
+    uint32_t channels,
+    hk_lights_t **session);
 hk_result_t hk_app_context_service(
     const hk_app_context_t *ctx,
     const char *id,

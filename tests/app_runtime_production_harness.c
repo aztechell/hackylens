@@ -476,18 +476,8 @@ hk_result_t hk_display_surface_acquire(
     return HK_OK;
 }
 
-hk_result_t hk_lights_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint32_t channels,
-    hk_lights_t *handle)
-{
-    (void)owner;
-    (void)request;
-    (void)channels;
-    (void)handle;
-    return HK_ERR_NOT_DECLARED;
-}
+
+
 
 hk_result_t hk_external_link_acquire(
     hk_owner_t owner,
@@ -624,3 +614,6 @@ int main(void)
     printf("APP_RUNTIME_PRODUCTION_OK\n");
     return 0;
 }
+
+hk_result_t camera_light_retire(hk_deadline_t deadline)
+{ (void)deadline; return HK_OK; }

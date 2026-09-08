@@ -1,3 +1,4 @@
+#include "../../services/camera_light.h"
 #include "qr_camera_app.h"
 
 #include <stddef.h>
@@ -150,9 +151,14 @@ static hk_result_t qr_camera_stop(const hk_app_context_t *ctx)
     hk_deadline_t deadline;
     hk_result_t result = qr_camera_state_from(ctx, &state);
 
+    hk_result_t deadline_result = hk_app_context_teardown_deadline(ctx, &deadline);
+    hk_result_t light_result = camera_light_retire(
+        deadline_result == HK_OK ? deadline : (hk_deadline_t){UINT64_MAX});
     if(result == HK_OK)
         qr_camera_controller_exit(state);
-    return hk_app_context_teardown_deadline(ctx, &deadline);
+    if(result != HK_OK)
+        return result;
+    return deadline_result != HK_OK ? deadline_result : light_result;
 }
 
 const hk_app_v2_entry_t qr_camera_v2_entry = {

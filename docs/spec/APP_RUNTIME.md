@@ -16,6 +16,20 @@ may replace the broker/context machinery described below while preserving its
 required lifecycle and resource-safety behavior. Update this contract with the
 corresponding implementation change; see the [change process](README.md).
 
+## S8 typed-service cleanup
+
+Time and Input bindings have board lifetime. Lights channel sessions obtained
+through the app context reside in private runtime storage and are retired with
+the original teardown deadline, even if stop or earlier cleanup fails. Camera
+session retirement is an explicit production fallback. Neither path retires
+persistent settings or MicroPython worker sessions. Those MP sessions are
+retired only at the worker's terminal handoff.
+
+The owner/lease rules below continue to apply to Display and External Link
+while they remain on the broker. Lights retirement must complete its logical
+invalidation before app storage is reused; a failed safe-off quarantines the
+affected channel. It does not bypass the remaining broker cleanup.
+
 ## Purpose and scope
 
 This contract defines the lifecycle, ownership, failure unwind, and stale-work

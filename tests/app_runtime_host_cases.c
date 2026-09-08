@@ -1,3 +1,4 @@
+#include "lights_normative_backend.h"
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -77,7 +78,7 @@ static hk_result_t simple_start(const hk_app_context_t *ctx)
 
     s_simple.copied = *ctx;
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_LIGHTS, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
        !available)
         return HK_ERR_INTERNAL;
     if(s_simple.fail == FAIL_START_RENDER)
@@ -147,6 +148,7 @@ static int open_app(
     hk_result_t result = hk_app_switch_open(
         hk_app_runtime_host_switch(host), app, NULL);
 
+    if(result != expected) printf("OPEN actual=%d expected=%d point=%d\n", result, expected, s_simple.fail);
     CHECK(result == expected);
     return 0;
 }
@@ -173,7 +175,7 @@ static int check_failure_point(fail_point_t point)
     s_simple.fail = point;
     if(point == FAIL_GRANT_LIGHTS)
         hk_app_runtime_host_fail_acquire(
-            &host, HK_CAPABILITY_ID_LIGHTS, HK_ERR_IO);
+            &host, HK_CAPABILITY_ID_EXTERNAL_LINK, HK_ERR_IO);
     else if(point == FAIL_GRANT_DISPLAY)
         hk_app_runtime_host_fail_acquire(
             &host, HK_CAPABILITY_ID_DISPLAY, HK_ERR_IO);
@@ -425,6 +427,61 @@ static int check_minimal_storage_isolation(void)
     return 0;
 }
 
+static hk_lights_t *s_scope_lights[2];
+static uint8_t s_expire_lights;
+static hk_result_t scope_lights_start(const hk_app_context_t *ctx)
+{
+    hk_result_t result = hk_app_context_lights(ctx, HK_LIGHTS_CHANNEL_ILLUMINATION,
+        &s_scope_lights[0]);
+    if(result != HK_OK) return result;
+    result = hk_app_context_lights(ctx, HK_LIGHTS_CHANNEL_RGB, &s_scope_lights[1]);
+    if(result != HK_OK) return result;
+    result = hk_lights_set_level(s_scope_lights[0], HK_LIGHTS_CHANNEL_ILLUMINATION,
+        100U, HK_DEADLINE_IMMEDIATE, NULL);
+    if(result != HK_OK) return result;
+    return hk_lights_set_rgb(s_scope_lights[1], 100U, 0U, 0U,
+        HK_DEADLINE_IMMEDIATE, NULL);
+}
+static hk_result_t scope_lights_stop(const hk_app_context_t *ctx)
+{
+    hk_deadline_t deadline;
+    if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK)
+        return HK_ERR_INTERNAL;
+    if(s_expire_lights)
+        lights_normative_backend_set_now(deadline.at_us);
+    /* Deliberately omit releases and fail; runtime must still retire both. */
+    return HK_ERR_IO;
+}
+static int check_lights_scope_retirement(void)
+{
+    for(unsigned expire = 0U; expire < 2U; ++expire) {
+        hk_app_runtime_host_t host;
+        hk_app_t app;
+        hk_app_v2_entry_t entry = s_simple_entry;
+        hk_lights_t replacement = {0};
+        CHECK(reset_simple(&host, &app) == 0);
+        s_expire_lights = (uint8_t)expire;
+        entry.start = scope_lights_start;
+        entry.stop = scope_lights_stop;
+        app.entry = &entry;
+        CHECK(open_app(&host, &app, HK_OK) == 0);
+        CHECK(lights_normative_backend_active_mask() ==
+            (HK_LIGHTS_CHANNEL_ILLUMINATION | HK_LIGHTS_CHANNEL_RGB));
+        CHECK(hk_app_switch_close(hk_app_runtime_host_switch(&host),
+            HK_APP_STOP_COMPLETED) == HK_ERR_IO);
+        CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+        CHECK(s_scope_lights[0]->service == NULL && s_scope_lights[1]->service == NULL);
+        for(unsigned i = 0U; i < 2U; ++i) {
+            uint32_t channel = i ? HK_LIGHTS_CHANNEL_RGB : HK_LIGHTS_CHANNEL_ILLUMINATION;
+            CHECK(hk_lights_open(hk_lights_service(), channel, &replacement) ==
+                (expire ? HK_ERR_INVALID_STATE : HK_OK));
+            if(!expire) CHECK(hk_lights_close(&replacement, HK_DEADLINE_IMMEDIATE) == HK_OK);
+        }
+        if(!expire) CHECK(lights_normative_backend_active_mask() == 0U);
+    }
+    return 0;
+}
+
 int main(void)
 {
     static const fail_point_t points[] = {
@@ -453,6 +510,7 @@ int main(void)
     CHECK(check_provider_quarantine() == 0);
     CHECK(check_invalid_tick_budget() == 0);
     CHECK(check_minimal_storage_isolation() == 0);
+    CHECK(check_lights_scope_retirement() == 0);
     printf("APP_RUNTIME_HOST_OK\n");
     return 0;
 }

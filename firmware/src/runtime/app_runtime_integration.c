@@ -9,6 +9,7 @@
 #include "../capabilities/capability_inventory_binding.h"
 #include "../core/hk_capability_client.h"
 #include "../ui/display_binding.h"
+#include "../services/camera_light.h"
 #include "capability_owner_runtime.h"
 
 typedef struct
@@ -66,19 +67,6 @@ static hk_result_t owner_open(
     return result;
 }
 
-static uint32_t lights_channels(uint64_t features)
-{
-    uint32_t channels = 0U;
-
-    if(features & HK_LIGHTS_FEATURE_BACKLIGHT)
-        channels |= HK_LIGHTS_CHANNEL_BACKLIGHT;
-    if(features & HK_LIGHTS_FEATURE_ILLUMINATION)
-        channels |= HK_LIGHTS_CHANNEL_ILLUMINATION;
-    if(features & HK_LIGHTS_FEATURE_RGB)
-        channels |= HK_LIGHTS_CHANNEL_RGB;
-    return channels;
-}
-
 static hk_result_t acquire_capability(
     void *user,
     hk_owner_t owner,
@@ -99,17 +87,6 @@ static hk_result_t acquire_capability(
         *lease = handle.lease;
         if(result == HK_OK)
             result = hk_ui_display_bind(owner, &handle);
-        return result;
-    }
-    if(request->id == HK_CAPABILITY_ID_LIGHTS)
-    {
-        hk_lights_t handle = {0};
-        uint32_t channels = lights_channels(request->required_features);
-
-        if(channels == 0U)
-            return HK_ERR_INVALID_ARGUMENT;
-        result = hk_lights_acquire(owner, request, channels, &handle);
-        *lease = handle.lease;
         return result;
     }
     if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
@@ -144,7 +121,9 @@ static hk_result_t owner_cleanup(
     hk_deadline_t deadline)
 {
     (void)user;
-    return capability_owner_runtime_close(owner, deadline);
+    hk_result_t light_result = camera_light_retire(deadline);
+    hk_result_t owner_result = capability_owner_runtime_close(owner, deadline);
+    return light_result != HK_OK ? light_result : owner_result;
 }
 
 static hk_result_t now_us(void *user, uint64_t *value)
@@ -404,6 +383,7 @@ hk_result_t app_runtime_integration_initialize(void)
         .user = &s_integration,
         .time = s_integration.time,
         .input = hk_input_service(),
+        .lights = hk_lights_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

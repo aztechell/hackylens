@@ -166,8 +166,7 @@ uint8_t camera_service_consume_frame_timeout(void)
 void camera_stop(void)
 {
     s_blocks_sd_poll = 0U;
-    if(camera_service_light_active())
-        camera_light_restore_global();
+    camera_light_restore_global();
 
     if(camera_session_initialized())
     {

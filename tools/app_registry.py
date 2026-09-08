@@ -22,9 +22,10 @@ def _count_expression(name: str, c_type: str) -> str:
 def _request_rows(app: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], bool]]:
     rows = [(request, False) for request in app["capabilities"]["required"]]
     rows.extend((request, True) for request in app["capabilities"]["optional"])
-    # Static Time/Input binding is resolved at build time, never negotiated per app.
+    # Static Time/Input/Lights binding is resolved at build time, never negotiated per app.
     return [(request, optional) for request, optional in rows
-            if request["id"] not in {"hackylens.cap.time", "hackylens.cap.input"}]
+            if request["id"] not in {"hackylens.cap.time", "hackylens.cap.input",
+                                     "hackylens.cap.lights"}]
 
 
 def generated_header(model: Mapping[str, Any]) -> str:
