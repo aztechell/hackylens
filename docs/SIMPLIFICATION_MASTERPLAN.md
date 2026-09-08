@@ -522,7 +522,21 @@ checks прошли. Full image: 1,558,392 байта (−8,000 к S7), static R
 обычный normal-boot reset восстановил загрузку. Boot, SD mount, 10 app launches,
 возвраты в меню, ping, MicroPython test/stop и QR preview затем прошли.
 Логи: `build/s8-input-boot.log`, `build/s8-input-hardware.log`.
-Ожидается ручная проверка всех кнопок, FILES/GIF и Sleep; Input ещё не принят.
+Пользователь подтвердил ручную проверку: всё работает. Input принят.
+
+### Подготовка Lights (2026-09-08)
+
+Input принят пользователем. Начат перенос Lights: immutable
+binding отделяется от caller-owned channel session; реальные конфликты трёх
+каналов сохраняются. Удаление broker cleanup требует явного fallback в runtime:
+закрыть camera/app sessions, попытаться выполнить оставшийся owner cleanup и
+сохранить первую ошибку с одним исходным deadline. Camera cleanup не должен
+зависеть только от UI-флага light_active. MP channels можно освобождать только
+после завершения worker и последнего доступа к bridge, а не при request_stop.
+MP sessions относятся к persistent adapter, а не native app owner: их retirement
+остаётся в terminal-state handoff `micropython_runtime_poll` и submit-failure,
+со своим единым deadline; native runtime fallback их не закрывает.
+Settings сохраняет persistent sessions и восстановление значений после safe-off.
 
 ### Цель
 
