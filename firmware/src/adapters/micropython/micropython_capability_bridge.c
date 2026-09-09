@@ -96,7 +96,6 @@ static uint32_t g_uart_baud = 115200U;
 static binding_external_operation_t g_external_operation;
 static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
-static hk_owner_t g_display_owner;
 static uint32_t g_display_run_id;
 static uint8_t g_display_owned;
 
@@ -215,7 +214,7 @@ static void binding_display_transaction_begin(uint32_t ticket,
     g_display_transaction.run_id = run_id;
     g_display_transaction.active =
         hk_display_stage_checkpoint(
-            g_display_owner, &g_display,
+            &g_display,
             &g_display_transaction.command_count,
             &g_display_transaction.text_length) == HK_OK;
 }
@@ -230,7 +229,7 @@ static void binding_display_transaction_finish(uint32_t ticket,
         return;
     if(rollback)
         (void)hk_display_stage_restore(
-            g_display_owner, &g_display,
+            &g_display,
             g_display_transaction.command_count,
             g_display_transaction.text_length);
     g_display_transaction.active = 0U;
@@ -450,10 +449,10 @@ static micropython_binding_result_t binding_execute(
         /* clear() starts a fresh staged frame.  The currently presented
          * overlay remains visible until an explicit successful present(). */
         result = hk_display_stage_restore(
-            g_display_owner, &g_display, 0U, 0U);
+            &g_display, 0U, 0U);
         if(result == HK_OK)
             result = hk_display_clear(
-                g_display_owner, &g_display, (uint16_t)a[0]);
+                &g_display, (uint16_t)a[0]);
         return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_TEXT:
@@ -478,10 +477,10 @@ static micropython_binding_result_t binding_execute(
             HACKYLENS_FONT_H,
         };
         result = hk_display_fill_rect(
-            g_display_owner, &g_display, &bounds, (uint16_t)a[3]);
+            &g_display, &bounds, (uint16_t)a[3]);
         if(result == HK_OK)
             result = hk_display_text(
-                g_display_owner, &g_display, &bounds,
+                &g_display, &bounds,
                 (const char *)control->data, input_length,
                 (uint16_t)a[2]);
         return binding_display_result(result);
@@ -502,9 +501,9 @@ static micropython_binding_result_t binding_execute(
         };
         result = a[5] ?
             hk_display_fill_rect(
-                g_display_owner, &g_display, &rect, (uint16_t)a[4]) :
+                &g_display, &rect, (uint16_t)a[4]) :
             hk_display_stroke_rect(
-                g_display_owner, &g_display, &rect, (uint16_t)a[4]);
+                &g_display, &rect, (uint16_t)a[4]);
         return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_PRESENT:
@@ -523,15 +522,15 @@ static micropython_binding_result_t binding_execute(
         if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
         result = hk_display_stage_checkpoint(
-            g_display_owner, &g_display, &commands, &text_bytes);
+            &g_display, &commands, &text_bytes);
         if(result == HK_OK)
             result = hk_display_present(
-                g_display_owner, &g_display, deadline, &cancel);
+                &g_display, deadline, &cancel);
         if(result == HK_OK)
-            result = hk_display_begin_batch(g_display_owner, &g_display);
+            result = hk_display_begin_batch(&g_display);
         if(result == HK_OK)
             result = hk_display_stage_restore(
-                g_display_owner, &g_display, commands, text_bytes);
+                &g_display, commands, text_bytes);
         return binding_display_result(result);
     }
     case MICROPYTHON_BINDING_OP_LED:
@@ -754,12 +753,11 @@ static void binding_external_operation_cancel(void)
 void micropython_capability_bridge_prepare(uint32_t run_id)
 {
     micropython_binding_control_t *control = binding_control();
-    hk_capability_request_t display_request = HK_DISPLAY_REQUEST_0_1_INIT;
     hk_result_t display_result = HK_ERR_STALE_HANDLE;
 
     /* A failed ordinary broker release stays retryable until its S8 migration.
        Never overwrite the only live handle when starting the next VM run. */
-    if((g_external_owned || g_display_owned) &&
+    if(g_external_owned &&
        micropython_capability_bridge_cleanup() != HK_OK)
         return;
 
@@ -782,24 +780,13 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
     g_uart_baud = 115200U;
     binding_external_operation_reset();
     binding_display_stage_reset(run_id);
-    g_display.lease = HK_LEASE_NONE;
-    g_display_owner = capability_client_consumer_owner(
-        "consumer:micropython-adapter");
-    display_request.required_features =
-        HK_DISPLAY_FEATURE_OVERLAY_PLANE |
-        HK_DISPLAY_FEATURE_BATCH |
-        HK_DISPLAY_FEATURE_DIRTY_REGIONS |
-        HK_DISPLAY_FEATURE_TEXT;
-    if(!hk_owner_is_zero(g_display_owner))
-        display_result = hk_display_acquire(
-            g_display_owner, &display_request,
-            HK_DISPLAY_PLANE_OVERLAY, &g_display);
+    display_result = hk_display_open(
+        hk_display_service(), HK_DISPLAY_PLANE_OVERLAY, &g_display);
     if(display_result == HK_OK)
         display_result = hk_display_begin_batch(
-            g_display_owner, &g_display);
-    if(display_result != HK_OK && !hk_lease_is_zero(&g_display.lease))
-        (void)hk_display_release(
-            g_display_owner, HK_DEADLINE_IMMEDIATE, &g_display);
+            &g_display);
+    if(display_result != HK_OK && g_display.service)
+        (void)hk_display_retire(&g_display, HK_DEADLINE_IMMEDIATE);
     g_display_owned = display_result == HK_OK;
     __sync_synchronize();
     control->run_active = 1U;
@@ -900,14 +887,12 @@ hk_result_t micropython_capability_bridge_cleanup(void)
     settings_lights_restore(g_lights_owned);
     if(g_display_owned)
     {
-        result = hk_display_release(
-            g_display_owner, deadline, &g_display);
+        result = hk_display_retire(&g_display, deadline);
         if(first == HK_OK) first = result;
-        if(result == HK_OK) g_display_owned = 0U;
+        g_display_owned = 0U;
     }
     if(!g_external_owned) g_external_owner = HK_OWNER_NONE;
     g_lights_owned = 0U;
-    if(!g_display_owned) g_display_owner = HK_OWNER_NONE;
     if(!g_external_owned) g_external_mode = BINDING_EXTERNAL_NONE;
     binding_display_stage_reset(0U);
     return first;

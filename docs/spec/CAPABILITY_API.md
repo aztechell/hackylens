@@ -16,9 +16,11 @@ semantics remain valid until deliberately migrated and tested. See the
 
 ## S8 migration scope
 
-Time, Input and Lights use direct typed bindings; their current interfaces are
-specified in [Time](capabilities/TIME.md), [Input](capabilities/INPUT.md) and
-[Lights](capabilities/LIGHTS.md). Lights retains real channel sessions. The generic owner, lease, negotiation
+Time, Input, Lights and Display use direct typed bindings; their current interfaces are
+specified in [Time](capabilities/TIME.md), [Input](capabilities/INPUT.md),
+[Lights](capabilities/LIGHTS.md) and [Display](capabilities/DISPLAY.md).
+Lights retains channel sessions; Display retains plane sessions and transactions.
+The generic owner, lease, negotiation
 and inventory rules below apply to services still on the broker. They must not
 be used to restore that machinery for migrated synchronous services. Build-time
 availability remains enforced; native and MicroPython consumers share the same

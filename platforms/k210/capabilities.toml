@@ -43,7 +43,7 @@ affinity = 0
 resources = ["display"]
 routes = ["lcd-backlight", "lcd-dc", "lcd-chip-select", "lcd-clock", "lcd-reset", "lcd-mosi"]
 provider_source = "platforms/k210/capabilities/display_adapter.c"
-provider_symbol = "hk_k210_display_provider"
+provider_symbol = "hk_display_binding"
 max_leases = 2
 
 [[capabilities]]

@@ -108,6 +108,7 @@ class TerminalAppTests(unittest.TestCase):
                     str(ROOT / "tests" / "time_normative_fake_backend.c"),
                     str(ROOT / "tests" / "input_normative_fake_backend.c"),
                     str(ROOT / "tests" / "capability_fake_display.c"),
+                    str(ROOT / "firmware" / "src" / "capabilities" / "display.c"),
                     str(ROOT / "tests" / "app_runtime_host_support.c"),
                     str(ROOT / "firmware" / "src" / "apps" / "terminal" / "terminal_app.c"),
                     str(

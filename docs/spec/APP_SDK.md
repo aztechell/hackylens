@@ -35,8 +35,10 @@ The SDK does not replace public capability types with parallel wrappers.
 Lights uses runtime-owned channel sessions, obtained with
 `hk_app_context_lights(ctx, channels, &session)` and retired by runtime teardown.
 The binding is immutable; a channel session must not be copied or moved.
-Display and other services still on the broker retain the
-Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
+Display similarly uses `hk_app_context_display(ctx, plane, &session)`, returning
+a stable runtime-owned plane session. Draw calls take that pointer without an
+owner argument. Runtime retires both planes on teardown, including failure.
+External Link retains the broker Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
 language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 

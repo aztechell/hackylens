@@ -37,6 +37,7 @@ class DisplayContractTests(unittest.TestCase):
                 str(ROOT / "tests" / "display_contract_harness.c"),
                 str(ROOT / "tests" / "display_normative_suite.c"),
                 str(ROOT / "tests" / "capability_fake_display.c"),
+                str(ROOT / "firmware" / "src" / "capabilities" / "display.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(
@@ -44,7 +45,7 @@ class DisplayContractTests(unittest.TestCase):
                 text=True, capture_output=True, timeout=30,
             )
         self.assertIn(
-            "DISPLAY_CONTRACT_OK cases=15 normative=7 full_bytes=384 slice_bytes=8",
+            "DISPLAY_CONTRACT_OK cases=16 normative=8 full_bytes=384 slice_bytes=8",
             result.stdout,
         )
 
@@ -53,15 +54,15 @@ class DisplayContractTests(unittest.TestCase):
         source = """
             #include <hackylens/capability/display.h>
             #include <stddef.h>
-            _Static_assert(sizeof(hk_display_t) == sizeof(hk_lease_t),
-                           "display handle must remain one lease token");
+            _Static_assert(sizeof(hk_display_t) <= 2 * sizeof(void *),
+                           "display session must remain compact");
             _Static_assert(HK_CAPABILITY_ID_DISPLAY == 0x00010003U,
                            "display capability ID changed");
             _Static_assert(HK_DISPLAY_FORMAT_RGB565_BE == 1U,
                            "RGB565 byte format changed");
             int main(void) {
-                hk_capability_request_t request = HK_DISPLAY_REQUEST_0_1_INIT;
-                return request.id == HK_CAPABILITY_ID_DISPLAY ? 0 : 1;
+                hk_display_t session = {0};
+                return session.service == NULL ? 0 : 1;
             }
         """
         with tempfile.TemporaryDirectory(prefix="hackylens-display-abi-") as temp:

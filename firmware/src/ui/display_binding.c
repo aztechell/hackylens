@@ -8,14 +8,13 @@
 #include "hackylens_boot_logo_1bpp.h"
 #include "hackylens_font_1bpp.h"
 #include "hk_font.h"
-#include "../core/hk_capability_client.h"
 #include "../config/display_config.h"
 #include "hal_time.h"
 
 #define UI_DISPLAY_PRESENT_TIMEOUT_US 500000ULL
 
-static hk_display_t s_display;
-static hk_owner_t s_owner;
+static hk_display_t s_boot_display;
+static const hk_display_t *s_display;
 static uint8_t s_ready;
 static uint8_t s_bound;
 static uint8_t s_frame_active;
@@ -37,31 +36,24 @@ static hk_deadline_t present_deadline(void)
 
 hk_result_t hk_ui_display_prepare(void)
 {
-    hk_capability_request_t request = HK_DISPLAY_REQUEST_0_1_INIT;
     hk_display_info_t info;
     hk_result_t result;
 
     if(s_ready)
         return HK_OK;
-    s_owner = capability_client_consumer_owner("consumer:firmware-runtime");
-    if(hk_owner_is_zero(s_owner))
-        return HK_ERR_STALE_HANDLE;
-    request.required_features =
-        HK_DISPLAY_FEATURE_BASE_PLANE |
-        HK_DISPLAY_FEATURE_DIRTY_REGIONS |
-        HK_DISPLAY_FEATURE_RGB565 |
-        HK_DISPLAY_FEATURE_BORROWED_SURFACE;
-    result = hk_display_acquire(
-        s_owner, &request, HK_DISPLAY_PLANE_BASE, &s_display);
+    result = hk_display_open(
+        hk_display_service(), HK_DISPLAY_PLANE_BASE, &s_boot_display);
+    s_display = &s_boot_display;
     if(result != HK_OK)
         return result;
-    result = hk_display_get_info(s_owner, &s_display, &info);
+    result = hk_display_get_info(s_display, &info);
     if(result != HK_OK || info.width < HK_UI_DISPLAY_WIDTH ||
        info.height < HK_UI_DISPLAY_HEIGHT ||
        (info.pixel_formats & HK_DISPLAY_FORMAT_RGB565_BE) == 0U ||
        info.maximum_dirty_rects < HK_UI_DISPLAY_FRAME_MAX_DIRTY_RECTS)
     {
-        (void)hk_display_release(s_owner, HK_DEADLINE_IMMEDIATE, &s_display);
+        (void)hk_display_retire(&s_boot_display, HK_DEADLINE_IMMEDIATE);
+        s_display = NULL;
         return result == HK_OK ? HK_ERR_FEATURE_UNAVAILABLE : result;
     }
     s_ready = 1U;
@@ -78,25 +70,23 @@ hk_result_t hk_ui_display_release(void)
         hk_ui_display_frame_cancel(s_frame_lease_id);
     if(!s_ready)
         return HK_OK;
-    result = hk_display_release(s_owner, HK_DEADLINE_IMMEDIATE, &s_display);
+    result = hk_display_close(&s_boot_display, HK_DEADLINE_IMMEDIATE);
     if(result != HK_OK)
         return result;
-    s_display = (hk_display_t){0};
-    s_owner = HK_OWNER_NONE;
+    s_display = NULL;
     s_ready = 0U;
     return HK_OK;
 }
 
-hk_result_t hk_ui_display_bind(hk_owner_t owner, const hk_display_t *display)
+hk_result_t hk_ui_display_bind(const hk_display_t *display)
 {
-    if(!display || hk_owner_is_zero(owner) || hk_lease_is_zero(&display->lease))
+    if(!display || !display->service)
         return HK_ERR_INVALID_ARGUMENT;
     if(s_ready && !s_bound)
         return HK_ERR_BUSY;
     if(s_frame_active)
         hk_ui_display_frame_cancel(s_frame_lease_id);
-    s_owner = owner;
-    s_display = *display;
+    s_display = display;
     s_ready = 1U;
     s_bound = 1U;
     return HK_OK;
@@ -108,8 +98,7 @@ void hk_ui_display_unbind(void)
         return;
     if(s_frame_active)
         hk_ui_display_frame_cancel(s_frame_lease_id);
-    s_display = (hk_display_t){0};
-    s_owner = HK_OWNER_NONE;
+    s_display = NULL;
     s_ready = 0U;
     s_bound = 0U;
 }
@@ -137,18 +126,18 @@ static hk_result_t surface_acquire(hk_display_surface_t *surface)
         if(result != HK_OK)
             return result;
     }
-    return hk_display_surface_acquire(s_owner, &s_display, surface);
+    return hk_display_surface_acquire(s_display, surface);
 }
 
 static hk_result_t surface_present_now(const hk_display_rect_t *dirty)
 {
-    hk_result_t result = hk_display_mark_dirty(s_owner, &s_display, dirty);
+    hk_result_t result = hk_display_mark_dirty(s_display, dirty);
 
     if(result == HK_OK)
         result = hk_display_present(
-            s_owner, &s_display, present_deadline(), NULL);
+            s_display, present_deadline(), NULL);
     if(result != HK_OK)
-        (void)hk_display_abort(s_owner, &s_display);
+        (void)hk_display_abort(s_display);
     return result;
 }
 
@@ -333,7 +322,7 @@ void hk_ui_display_draw_text_at(
     }
     dirty = clipped_rect(start, y, (uint16_t)(x - start), HACKYLENS_FONT_H);
     if(dirty.width == 0U)
-        (void)hk_display_abort(s_owner, &s_display);
+        (void)hk_display_abort(s_display);
     else
         (void)surface_present(&dirty);
 }
@@ -416,7 +405,7 @@ uint16_t hk_ui_display_shadow_pixel(uint16_t x, uint16_t y)
     pixel = (uint8_t *)surface.pixels.data +
         (uint32_t)y * surface.pixels.stride_bytes + (uint32_t)x * 2U;
     result = (uint16_t)((uint16_t)pixel[0] << 8) | pixel[1];
-    (void)hk_display_abort(s_owner, &s_display);
+    (void)hk_display_abort(s_display);
     return result;
 }
 
@@ -480,15 +469,15 @@ uint8_t hk_ui_display_frame_present_regions(
 
         if(dirty.width == 0U || dirty.height == 0U)
             continue;
-        result = hk_display_mark_dirty(s_owner, &s_display, &dirty);
+        result = hk_display_mark_dirty(s_display, &dirty);
         if(result != HK_OK)
             break;
     }
     if(result == HK_OK)
         result = hk_display_present(
-            s_owner, &s_display, present_deadline(), NULL);
+            s_display, present_deadline(), NULL);
     if(result != HK_OK)
-        (void)hk_display_abort(s_owner, &s_display);
+        (void)hk_display_abort(s_display);
     s_frame_active = 0U;
     s_frame_lease_id = 0U;
     s_frame_pixels = NULL;
@@ -500,7 +489,7 @@ void hk_ui_display_frame_cancel(uint32_t lease_id)
 {
     if(!s_frame_active || lease_id == 0U || lease_id != s_frame_lease_id)
         return;
-    (void)hk_display_abort(s_owner, &s_display);
+    (void)hk_display_abort(s_display);
     s_frame_active = 0U;
     s_frame_lease_id = 0U;
     s_frame_pixels = NULL;

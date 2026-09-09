@@ -1,4 +1,3 @@
-#include "../../../firmware/src/capabilities/capability_provider.h"
 #include "../../../firmware/src/capabilities/display_provider.h"
 #include "../../../firmware/src/drivers/lcd_st7789_transport.h"
 #include "../../../firmware/src/services/frame_workspace.h"
@@ -58,7 +57,7 @@ typedef struct
 
 typedef struct
 {
-    hk_lease_t lease;
+    const hk_display_t *session;
     hk_display_rect_t *repair;
     uint32_t committed_generation;
     uint16_t repair_count;
@@ -68,7 +67,7 @@ typedef struct
 
 typedef struct
 {
-    hk_lease_t lease;
+    const hk_display_t *session;
     hk_display_rect_t clip;
     hk_display_rect_t *dirty;
     display_command_t *commands;
@@ -105,7 +104,7 @@ typedef struct
 
 typedef struct
 {
-    hk_lease_t lease;
+    const hk_display_t *session;
     hk_display_rect_t dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
     uint16_t dirty_count;
     uint8_t active;
@@ -123,6 +122,7 @@ typedef struct
 } k210_display_state_t;
 
 static k210_display_state_t s_display;
+static hk_display_state_t s_claims;
 
 #if defined(K210_DISPLAY_ADAPTER_TESTING)
 void hk_k210_display_test_reset(void)
@@ -130,21 +130,13 @@ void hk_k210_display_test_reset(void)
     if(s_display.workspace_borrow.generation != 0U)
         (void)frame_workspace_release(&s_display.workspace_borrow);
     memset(&s_display, 0, sizeof(s_display));
+    memset(&s_claims, 0, sizeof(s_claims));
 }
 #endif
 
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
+static uint8_t session_equal(const hk_display_t *left, const hk_display_t *right)
 {
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static uint8_t lease_equal(const hk_lease_t *left, const hk_lease_t *right)
-{
-    return (uint8_t)(left && right && left->slot == right->slot &&
-                     left->generation == right->generation &&
-                     left->capability_id == right->capability_id &&
-                     owner_equal(left->owner, right->owner));
+    return (uint8_t)(left && left == right);
 }
 
 static hk_display_rect_t screen_rect(void)
@@ -252,14 +244,14 @@ static hk_result_t dirty_preview(
 }
 
 static display_plane_t *find_plane(
-    k210_display_state_t *state, const hk_lease_t *lease)
+    k210_display_state_t *state, const hk_display_t *session)
 {
-    if(!state || !lease)
+    if(!state || !session)
         return NULL;
     for(uint16_t index = 0U; index < 2U; index++)
     {
         if(state->planes[index].active &&
-           lease_equal(&state->planes[index].lease, lease))
+           session_equal(state->planes[index].session, session))
             return &state->planes[index];
     }
     return NULL;
@@ -312,7 +304,7 @@ static void overlay_reset(display_overlay_t *overlay)
 
 static void stage_reset(display_stage_t *stage)
 {
-    stage->lease = HK_LEASE_NONE;
+    stage->session = NULL;
     stage->clip = screen_rect();
     stage->command_count = 0U;
     stage->text_bytes = 0U;
@@ -323,15 +315,15 @@ static void stage_reset(display_stage_t *stage)
 }
 
 static hk_result_t stage_for(
-    k210_display_state_t *state, const hk_lease_t *lease,
+    k210_display_state_t *state, const hk_display_t *session,
     uint8_t kind, display_plane_t **plane, display_stage_t **stage)
 {
-    display_plane_t *found = find_plane(state, lease);
+    display_plane_t *found = find_plane(state, session);
 
     if(!found)
         return HK_ERR_INTERNAL;
     if(state->stage.kind != kind ||
-       !lease_equal(&state->stage.lease, lease))
+       !session_equal(state->stage.session, session))
         return HK_ERR_INVALID_STATE;
     if(plane)
         *plane = found;
@@ -341,18 +333,18 @@ static hk_result_t stage_for(
 }
 
 static hk_result_t k210_display_open(
-    void *context, const hk_lease_t *lease, uint32_t plane)
+    void *context, const hk_display_t *session, uint32_t plane)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     uint16_t index = plane == HK_DISPLAY_PLANE_BASE ? 0U : 1U;
 
-    if(!state || !lease ||
+    if(!state || !session ||
        (plane != HK_DISPLAY_PLANE_BASE &&
         plane != HK_DISPLAY_PLANE_OVERLAY))
         return HK_ERR_INVALID_ARGUMENT;
     if(state->planes[index].active)
         return HK_ERR_BUSY;
-    state->planes[index].lease = *lease;
+    state->planes[index].session = session;
     state->planes[index].plane = plane;
     state->planes[index].repair = index == 0U ? state->base_repair :
         (state->workspace ? state->workspace->overlay_repair : NULL);
@@ -666,34 +658,34 @@ static hk_result_t k210_display_info(void *context, hk_display_info_t *info)
 }
 
 static hk_result_t k210_display_begin(
-    void *context, const hk_lease_t *lease)
+    void *context, const hk_display_t *session)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
 
-    if(!find_plane(state, lease))
+    if(!find_plane(state, session))
         return HK_ERR_INTERNAL;
     if(state->surface.active &&
-       lease_equal(&state->surface.lease, lease))
+       session_equal(state->surface.session, session))
         return HK_ERR_INVALID_STATE;
     if(state->stage.kind != DISPLAY_STAGE_NONE)
         return HK_ERR_BUSY;
     if(!workspace_acquire(state))
         return HK_ERR_BUSY;
     stage_reset(&state->stage);
-    state->stage.lease = *lease;
+    state->stage.session = session;
     state->stage.kind = DISPLAY_STAGE_BATCH;
     return HK_OK;
 }
 
 static hk_result_t k210_display_clip(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *clip)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     display_stage_t *stage;
     hk_display_rect_t screen = screen_rect();
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -710,7 +702,7 @@ static hk_result_t k210_display_clip(
 }
 
 static hk_result_t append_command(
-    k210_display_state_t *state, const hk_lease_t *lease,
+    k210_display_state_t *state, const hk_display_t *session,
     display_command_t command, const char *text, uint16_t text_bytes,
     const display_borrow_t *borrow)
 {
@@ -718,7 +710,7 @@ static hk_result_t append_command(
     hk_display_rect_t dirty[K210_DISPLAY_MAX_DIRTY_RECTS];
     uint16_t dirty_count;
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -747,13 +739,13 @@ static hk_result_t append_command(
 }
 
 static hk_result_t clipped_command(
-    k210_display_state_t *state, const hk_lease_t *lease,
+    k210_display_state_t *state, const hk_display_t *session,
     const hk_display_rect_t *rect, uint8_t type, uint16_t color)
 {
     display_stage_t *stage;
     display_command_t command = {0};
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -763,46 +755,46 @@ static hk_result_t clipped_command(
     command.type = type;
     command.color = color;
     command.rect = rect_intersection(rect, &stage->clip);
-    return append_command(state, lease, command, NULL, 0U, NULL);
+    return append_command(state, session, command, NULL, 0U, NULL);
 }
 
 static hk_result_t k210_display_clear(
-    void *context, const hk_lease_t *lease, uint16_t color)
+    void *context, const hk_display_t *session, uint16_t color)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     display_stage_t *stage;
     display_command_t command = {0};
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
     command.type = DISPLAY_COMMAND_CLEAR;
     command.color = color;
     command.rect = stage->clip;
-    return append_command(state, lease, command, NULL, 0U, NULL);
+    return append_command(state, session, command, NULL, 0U, NULL);
 }
 
 static hk_result_t k210_display_fill(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *rect, uint16_t color)
 {
     return clipped_command(
-        (k210_display_state_t *)context, lease, rect,
+        (k210_display_state_t *)context, session, rect,
         DISPLAY_COMMAND_FILL, color);
 }
 
 static hk_result_t k210_display_stroke(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *rect, uint16_t color)
 {
     return clipped_command(
-        (k210_display_state_t *)context, lease, rect,
+        (k210_display_state_t *)context, session, rect,
         DISPLAY_COMMAND_STROKE, color);
 }
 
 static hk_result_t k210_display_text(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *bounds, const char *utf8,
     uint32_t size_bytes, uint16_t color)
 {
@@ -813,7 +805,7 @@ static hk_result_t k210_display_text(
 
     if((size_bytes && !utf8) || size_bytes > UINT16_MAX)
         return HK_ERR_INVALID_ARGUMENT;
-    result = stage_for(state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+    result = stage_for(state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
     if(result != HK_OK)
         return result;
     result = rect_validate(bounds);
@@ -822,12 +814,12 @@ static hk_result_t k210_display_text(
     command.type = DISPLAY_COMMAND_TEXT;
     command.color = color;
     command.rect = rect_intersection(bounds, &stage->clip);
-    return append_command(state, lease, command, utf8,
+    return append_command(state, session, command, utf8,
                           (uint16_t)size_bytes, NULL);
 }
 
 static hk_result_t k210_display_blit(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *destination,
     const hk_buffer_view_t *pixels, uint32_t pixel_format)
 {
@@ -851,7 +843,7 @@ static hk_result_t k210_display_blit(
        (pixels->stride_bytes & 1U) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
     result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, &plane, &stage);
+        state, session, DISPLAY_STAGE_BATCH, &plane, &stage);
     if(result != HK_OK)
         return result;
     if(plane->plane == HK_DISPLAY_PLANE_OVERLAY)
@@ -869,11 +861,11 @@ static hk_result_t k210_display_blit(
     borrow.source_x = (uint32_t)(command.rect.x - destination->x);
     borrow.source_y = (uint32_t)(command.rect.y - destination->y);
     borrow.active = 1U;
-    return append_command(state, lease, command, NULL, 0U, &borrow);
+    return append_command(state, session, command, NULL, 0U, &borrow);
 }
 
 static hk_result_t k210_display_mark(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     const hk_display_rect_t *rect)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
@@ -885,13 +877,13 @@ static hk_result_t k210_display_mark(
     uint16_t count;
     hk_result_t result;
 
-    if(!find_plane(state, lease))
+    if(!find_plane(state, session))
         return HK_ERR_INTERNAL;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
-       lease_equal(&state->stage.lease, lease))
+       session_equal(state->stage.session, session))
         stage = &state->stage;
     else if(state->surface.active &&
-            lease_equal(&state->surface.lease, lease))
+            session_equal(state->surface.session, session))
         surface = &state->surface;
     else
         return HK_ERR_INVALID_STATE;
@@ -924,10 +916,10 @@ static hk_result_t k210_display_mark(
 }
 
 static hk_result_t k210_display_surface(
-    void *context, const hk_lease_t *lease, hk_display_surface_t *surface)
+    void *context, const hk_display_t *session, hk_display_surface_t *surface)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
-    display_plane_t *plane = find_plane(state, lease);
+    display_plane_t *plane = find_plane(state, session);
 
     if(!surface)
         return HK_ERR_INVALID_ARGUMENT;
@@ -938,9 +930,9 @@ static hk_result_t k210_display_surface(
     if(state->surface.active)
         return HK_ERR_BUSY;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
-       lease_equal(&state->stage.lease, lease))
+       session_equal(state->stage.session, session))
         return HK_ERR_INVALID_STATE;
-    state->surface.lease = *lease;
+    state->surface.session = session;
     state->surface.dirty_count = 0U;
     state->surface.active = 1U;
     *surface = (hk_display_surface_t){
@@ -974,7 +966,7 @@ static hk_result_t repair_regions(
 }
 
 static hk_result_t k210_display_present(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     hk_deadline_t deadline, const hk_cancel_t *cancel)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
@@ -989,17 +981,17 @@ static hk_result_t k210_display_present(
 
     if(deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
-    if(!find_plane(state, lease))
+    if(!find_plane(state, session))
         return HK_ERR_INTERNAL;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
-       lease_equal(&state->stage.lease, lease))
+       session_equal(state->stage.session, session))
         stage = &state->stage;
     else if(state->surface.active &&
-            lease_equal(&state->surface.lease, lease))
+            session_equal(state->surface.session, session))
         surface = &state->surface;
     else
         return HK_ERR_INVALID_STATE;
-    plane = find_plane(state, lease);
+    plane = find_plane(state, session);
     result = terminal_result(deadline, cancel);
     if(result != HK_OK)
         return result;
@@ -1066,7 +1058,7 @@ static hk_result_t k210_display_present(
     }
     else
     {
-        state->surface.lease = HK_LEASE_NONE;
+        state->surface.session = NULL;
         state->surface.dirty_count = 0U;
         state->surface.active = 0U;
     }
@@ -1074,22 +1066,22 @@ static hk_result_t k210_display_present(
 }
 
 static hk_result_t k210_display_abort(
-    void *context, const hk_lease_t *lease)
+    void *context, const hk_display_t *session)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
 
-    if(!find_plane(state, lease))
+    if(!find_plane(state, session))
         return HK_ERR_INTERNAL;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
-       lease_equal(&state->stage.lease, lease))
+       session_equal(state->stage.session, session))
     {
         stage_reset(&state->stage);
         workspace_release_if_idle(state);
     }
     else if(state->surface.active &&
-            lease_equal(&state->surface.lease, lease))
+            session_equal(state->surface.session, session))
     {
-        state->surface.lease = HK_LEASE_NONE;
+        state->surface.session = NULL;
         state->surface.dirty_count = 0U;
         state->surface.active = 0U;
     }
@@ -1099,13 +1091,13 @@ static hk_result_t k210_display_abort(
 }
 
 static hk_result_t k210_display_checkpoint(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     uint16_t *commands, uint16_t *text_bytes)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     display_stage_t *stage;
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -1124,13 +1116,13 @@ static void dirty_rebuild(display_stage_t *stage)
 }
 
 static hk_result_t k210_display_restore(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_display_t *session,
     uint16_t commands, uint16_t text_bytes)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     display_stage_t *stage;
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -1153,13 +1145,13 @@ static hk_result_t k210_display_restore(
 }
 
 static hk_result_t k210_display_keep_last_clear(
-    void *context, const hk_lease_t *lease)
+    void *context, const hk_display_t *session)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
     display_stage_t *stage;
     display_command_t command;
     hk_result_t result = stage_for(
-        state, lease, DISPLAY_STAGE_BATCH, NULL, &stage);
+        state, session, DISPLAY_STAGE_BATCH, NULL, &stage);
 
     if(result != HK_OK)
         return result;
@@ -1181,10 +1173,10 @@ static hk_result_t k210_display_keep_last_clear(
 }
 
 static hk_result_t k210_display_close(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
+    void *context, const hk_display_t *session, hk_deadline_t deadline)
 {
     k210_display_state_t *state = (k210_display_state_t *)context;
-    display_plane_t *plane = find_plane(state, lease);
+    display_plane_t *plane = find_plane(state, session);
     hk_display_rect_t cleanup[K210_DISPLAY_MAX_DIRTY_RECTS];
     uint16_t cleanup_count = 0U;
     uint8_t progress = 0U;
@@ -1196,15 +1188,15 @@ static hk_result_t k210_display_close(
     if(result != HK_OK)
         return result;
     if(state->stage.kind != DISPLAY_STAGE_NONE &&
-       lease_equal(&state->stage.lease, lease))
+       session_equal(state->stage.session, session))
     {
         stage_reset(&state->stage);
         workspace_release_if_idle(state);
     }
     if(state->surface.active &&
-       lease_equal(&state->surface.lease, lease))
+       session_equal(state->surface.session, session))
     {
-        state->surface.lease = HK_LEASE_NONE;
+        state->surface.session = NULL;
         state->surface.dirty_count = 0U;
         state->surface.active = 0U;
     }
@@ -1222,17 +1214,43 @@ static hk_result_t k210_display_close(
         return progress ? HK_ERR_INTERNAL : result;
     if(plane->plane == HK_DISPLAY_PLANE_OVERLAY)
         overlay_reset(&state->overlay);
-    plane->lease = HK_LEASE_NONE;
+    plane->session = NULL;
     plane->repair_count = 0U;
     plane->active = 0U;
     workspace_release_if_idle(state);
     return HK_OK;
 }
 
-static hk_display_provider_t s_display_provider = {
+static void k210_display_retire(void *context, const hk_display_t *session)
+{
+    k210_display_state_t *state = (k210_display_state_t *)context;
+    display_plane_t *plane = find_plane(state, session);
+    if(state->stage.kind != DISPLAY_STAGE_NONE &&
+       session_equal(state->stage.session, session))
+        stage_reset(&state->stage);
+    if(state->surface.active && session_equal(state->surface.session, session))
+    {
+        state->surface.session = NULL;
+        state->surface.active = 0U;
+        state->surface.dirty_count = 0U;
+    }
+    if(plane)
+    {
+        if(plane->plane == HK_DISPLAY_PLANE_OVERLAY)
+            overlay_reset(&state->overlay);
+        plane->session = NULL;
+        plane->repair_count = 0U;
+        plane->active = 0U;
+    }
+    workspace_release_if_idle(state);
+}
+
+const hk_display_service_t hk_display_binding = {
+    .state = &s_claims,
     .context = &s_display,
     .open_plane = k210_display_open,
     .close_plane = k210_display_close,
+    .retire_plane = k210_display_retire,
     .get_info = k210_display_info,
     .begin_batch = k210_display_begin,
     .set_clip = k210_display_clip,
@@ -1248,56 +1266,4 @@ static hk_display_provider_t s_display_provider = {
     .stage_checkpoint = k210_display_checkpoint,
     .stage_restore = k210_display_restore,
     .stage_keep_last_clear = k210_display_keep_last_clear,
-};
-
-static hk_result_t k210_display_cleanup_lease(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
-{
-    hk_display_provider_t *provider = (hk_display_provider_t *)context;
-
-    if(!provider || !provider->context)
-        return HK_ERR_INTERNAL;
-    if(!find_plane((k210_display_state_t *)provider->context, lease))
-        return HK_OK;
-    return k210_display_close(provider->context, lease, deadline);
-}
-
-static hk_result_t k210_display_cleanup(
-    void *context, hk_owner_t owner, hk_deadline_t deadline)
-{
-    hk_display_provider_t *provider = (hk_display_provider_t *)context;
-    k210_display_state_t *state;
-
-    if(!provider || !provider->context)
-        return HK_ERR_INTERNAL;
-    state = (k210_display_state_t *)provider->context;
-    for(uint16_t index = 0U; index < 2U; index++)
-    {
-        if(state->planes[index].active &&
-           owner_equal(state->planes[index].lease.owner, owner))
-        {
-            hk_result_t result = k210_display_close(
-                state, &state->planes[index].lease, deadline);
-            if(result != HK_OK)
-                return result;
-        }
-    }
-    return HK_OK;
-}
-
-static hk_result_t k210_display_cleanup_dispatch(
-    void *context, hk_owner_t owner, uint16_t target_core,
-    hk_deadline_t deadline)
-{
-    if(target_core != 0U)
-        return HK_ERR_WRONG_CONTEXT;
-    return k210_display_cleanup(context, owner, deadline);
-}
-
-const hk_capability_provider_t hk_k210_display_provider = {
-    .context = &s_display_provider,
-    .cleanup_lease = k210_display_cleanup_lease,
-    .cleanup = k210_display_cleanup,
-    .cleanup_dispatch = k210_display_cleanup_dispatch,
-    .max_leases = 2U,
 };

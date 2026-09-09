@@ -360,6 +360,12 @@ static hk_result_t teardown(
         retain_error(runtime, result);
     }
 
+    for(unsigned i = 0U; i < 2U; ++i)
+    {
+        result = hk_display_retire(&runtime->display[i], runtime->teardown_deadline);
+        retain_error(runtime, result);
+    }
+
     if(!hk_owner_is_zero(runtime->owner))
     {
         runtime->state = HK_APP_RUNTIME_STOPPING;
@@ -743,11 +749,41 @@ hk_result_t hk_app_context_input(
     return *input ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
 }
 HK_APP_CONTEXT_TYPED_ACCESSOR(
-    hk_app_context_display, hk_display_t, HK_CAPABILITY_ID_DISPLAY)
-HK_APP_CONTEXT_TYPED_ACCESSOR(
     hk_app_context_external_link,
     hk_external_link_t,
     HK_CAPABILITY_ID_EXTERNAL_LINK)
+hk_result_t hk_app_context_display(
+    const hk_app_context_t *ctx, uint32_t plane, hk_display_t **session)
+{
+    hk_app_runtime_t *runtime = NULL;
+    hk_result_t result;
+    if(!session)
+        return HK_ERR_INVALID_ARGUMENT;
+    *session = NULL;
+    result = validate_callback_context(ctx, &runtime);
+    if(result != HK_OK)
+        return result;
+    if(plane != HK_DISPLAY_PLANE_BASE && plane != HK_DISPLAY_PLANE_OVERLAY)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!runtime->ops.display)
+        return HK_ERR_CAPABILITY_ABSENT;
+    for(unsigned i = 0U; i < 2U; ++i)
+        if(runtime->display[i].service && runtime->display[i].plane == plane) {
+            *session = &runtime->display[i];
+            return HK_OK;
+        }
+    if(runtime->teardown_started)
+        return HK_ERR_INVALID_STATE;
+    for(unsigned i = 0U; i < 2U; ++i)
+        if(!runtime->display[i].service) {
+            result = hk_display_open(runtime->ops.display, plane, &runtime->display[i]);
+            if(result == HK_OK)
+                *session = &runtime->display[i];
+            return result;
+        }
+    return HK_ERR_BUSY;
+}
+
 hk_result_t hk_app_context_lights(
     const hk_app_context_t *ctx, uint32_t channels, hk_lights_t **session)
 {

@@ -68,8 +68,14 @@ limits allow build composition to reject an undersized provider.
 `row_alignment_bytes` applies to every stride. `transfer_slice_bytes` bounds
 one cancellation/deadline-free hardware transfer interval.
 
-`BASE` and `OVERLAY` are separate exclusive resource planes. At most one owner
-leases each plane. Base and overlay MAY be leased concurrently when the overlay
+`hk_display_service()` returns an immutable board binding. `hk_display_open`
+claims a plane into caller-owned `hk_display_t` storage. The session MUST stay
+at its opening address until close or retirement; copying its fields does not
+transfer ownership. Operations take the session pointer without a broker owner.
+No version negotiation or generic lease table is used at runtime.
+
+`BASE` and `OVERLAY` are separate exclusive resource planes. At most one session
+claims each plane. Base and overlay MAY be open concurrently when the overlay
 feature is present. Version `0.1.0` does not define arbitrary layers, z-order,
 alpha blending, or a general compositor.
 
@@ -77,14 +83,14 @@ alpha blending, or a general compositor.
 
 The public batch lifecycle is:
 
-1. acquire a display plane;
+1. open a display plane session;
 2. `begin_batch`;
 3. add bounded clear, fill-rectangle, rectangle, text, or pixel-blit commands;
 4. optionally set a clip or mark additional dirty rectangles;
 5. `present` with one absolute deadline and cancellation token;
 6. retry the same staged batch after a terminal transfer error/cancel, or
    `abort` it;
-7. release the plane.
+7. close the plane session, or retire it during teardown.
 
 Primitive parameters and bounded text are copied into declared static batch
 storage. Large pixel views are borrowed until successful present, abort, or release.
@@ -92,9 +98,9 @@ A cancelled, deadline-exceeded, or failed present retains the borrow because
 the same staged batch remains retryable. The caller MUST keep that storage
 unchanged and valid across the retry interval.
 
-`begin_batch` is valid only in the idle lease state. Batch and borrowed-surface
+`begin_batch` is valid only in the idle session state. Batch and borrowed-surface
 staging are mutually exclusive. For a retained command batch, a successful
-present returns the lease to idle and advances committed generation; `abort`
+present returns the session to idle and advances committed generation; `abort`
 returns it to idle without changing logical committed state. Calling
 batch/surface creation while already staged, or present/abort while idle,
 returns `HK_ERR_INVALID_STATE`.
@@ -174,9 +180,12 @@ Overlay release discards its staged/committed overlay and restores the current
 base content. Base release repairs any outstanding physical damage before
 dropping ownership. Cleanup uses the caller's original release deadline and is
 not cancellable. An already-expired cleanup deadline causes no hardware effect
-and preserves an ordinary lease for bounded retry. Cleanup failure after
-physical progress follows the common lease invalidation and provider quarantine
-rules.
+and preserves an ordinary session for bounded retry. Cleanup failure after
+physical progress quarantines the affected plane. `hk_display_retire` always
+discards that session's staged commands, borrowed pixel/surface references and
+workspace borrow, then invalidates the claim even when cleanup fails. Failed
+retirement quarantines the plane. Other sessions must still be retired with the
+same original deadline; cleanup errors must not skip logical invalidation.
 
 ## Required resources and consumers
 

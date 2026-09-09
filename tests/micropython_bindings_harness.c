@@ -484,17 +484,18 @@ static void test_cleanup_failure_attempts_remaining_channels(void)
         "lights and display share the original cleanup deadline");
     g_fail_light_retire = 0U;
 }
-static void test_failed_broker_release_is_not_overwritten(void)
+static void test_failed_display_retire_invalidates_once(void)
 {
     reset_run();
     g_overlay_release_result = HK_ERR_DEADLINE_EXCEEDED;
     require_true(micropython_capability_bridge_cleanup() == HK_ERR_DEADLINE_EXCEEDED,
         "failed display close reported");
-    micropython_capability_bridge_prepare(g_run_id + 1U);
-    require_true(g_overlay_acquire_calls == 1U, "new run cannot overwrite live failed-release handle");
+    require_true(g_overlay_release_calls == 1U, "retirement attempted once");
     g_overlay_release_result = HK_OK;
     require_true(micropython_capability_bridge_cleanup() == HK_OK && g_overlay_release_calls == 1U,
-        "old handle remains available for bounded retry");
+        "retired display is not released again");
+    micropython_capability_bridge_prepare(g_run_id + 1U);
+    require_true(g_overlay_acquire_calls == 2U, "next run opens a fresh session");
 }
 
 int main(void)
@@ -510,7 +511,7 @@ int main(void)
     test_display_limit_clear_recovery_and_cleanup();
     micropython_capability_bridge_cleanup();
     test_cleanup_failure_attempts_remaining_channels();
-    test_failed_broker_release_is_not_overwritten();
+    test_failed_display_retire_invalidates_once();
     puts("MICROPYTHON_BINDINGS_OK cases=11");
     return 0;
 }
@@ -548,40 +549,32 @@ hk_owner_t capability_client_consumer_owner(const char *consumer_id)
 }
 uint32_t hk_input_state(void) { return 0x0aU; }
 
-hk_result_t hk_display_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
+struct hk_display_service { uint8_t unused; };
+static const hk_display_service_t s_display_binding = {0};
+const hk_display_service_t *hk_display_service(void) { return &s_display_binding; }
+hk_result_t hk_display_open(const hk_display_service_t *service,
     uint32_t plane, hk_display_t *handle)
 {
-    (void)request;
-    if(!handle || plane != HK_DISPLAY_PLANE_OVERLAY)
+    if(!service || !handle || plane != HK_DISPLAY_PLANE_OVERLAY)
         return HK_ERR_INVALID_ARGUMENT;
     g_overlay_acquire_calls++;
     g_overlay_acquired_run_id = g_run_id;
-    handle->lease = (hk_lease_t){
-        7U, 1U, owner, HK_CAPABILITY_ID_DISPLAY,
-    };
+    *handle = (hk_display_t){service, plane};
     return HK_OK;
 }
-
-hk_result_t hk_display_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_display_t *handle)
+hk_result_t hk_display_retire(hk_display_t *handle, hk_deadline_t deadline)
 {
-    (void)owner;
-    (void)deadline;
     g_display_cleanup_deadline = deadline.at_us;
-    if(g_overlay_release_result != HK_OK) return g_overlay_release_result;
     g_overlay_release_calls++;
     g_overlay_released_run_id = g_run_id;
     g_cleanup_events[g_cleanup_event_count++] = 4U;
-    if(handle)
-        handle->lease = HK_LEASE_NONE;
-    return HK_OK;
+    if(handle) *handle = (hk_display_t){0};
+    return g_overlay_release_result;
 }
 
 hk_result_t hk_display_begin_batch(
-    hk_owner_t owner, const hk_display_t *handle)
+    const hk_display_t *handle)
 {
-    (void)owner;
     (void)handle;
     g_overlay_command_count = 0U;
     g_overlay_text_length = 0U;
@@ -614,40 +607,36 @@ static hk_result_t display_append(
 }
 
 hk_result_t hk_display_clear(
-    hk_owner_t owner, const hk_display_t *handle, uint16_t color)
+    const hk_display_t *handle, uint16_t color)
 {
-    (void)owner;
     (void)handle;
     return display_append(
         LCD_OVERLAY_COMMAND_CLEAR, NULL, color, NULL, 0U, 1U);
 }
 
 hk_result_t hk_display_fill_rect(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     const hk_display_rect_t *rect, uint16_t color)
 {
-    (void)owner;
     (void)handle;
     return display_append(
         LCD_OVERLAY_COMMAND_FILL, rect, color, NULL, 0U, 1U);
 }
 
 hk_result_t hk_display_stroke_rect(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     const hk_display_rect_t *rect, uint16_t color)
 {
-    (void)owner;
     (void)handle;
     return display_append(
         LCD_OVERLAY_COMMAND_RECT, rect, color, NULL, 0U, 0U);
 }
 
 hk_result_t hk_display_text(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     const hk_display_rect_t *bounds, const char *utf8,
     uint32_t size_bytes, uint16_t color)
 {
-    (void)owner;
     (void)handle;
     return display_append(
         LCD_OVERLAY_COMMAND_TEXT, bounds, color,
@@ -655,10 +644,9 @@ hk_result_t hk_display_text(
 }
 
 hk_result_t hk_display_present(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     hk_deadline_t deadline, const hk_cancel_t *cancel)
 {
-    (void)owner;
     (void)handle;
     (void)deadline;
     if(cancel && cancel->probe && cancel->probe(cancel->context))
@@ -668,10 +656,9 @@ hk_result_t hk_display_present(
 }
 
 hk_result_t hk_display_stage_checkpoint(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     uint16_t *commands, uint16_t *text_bytes)
 {
-    (void)owner;
     (void)handle;
     *commands = (uint16_t)g_overlay_command_count;
     *text_bytes = (uint16_t)g_overlay_text_length;
@@ -679,10 +666,9 @@ hk_result_t hk_display_stage_checkpoint(
 }
 
 hk_result_t hk_display_stage_restore(
-    hk_owner_t owner, const hk_display_t *handle,
+    const hk_display_t *handle,
     uint16_t commands, uint16_t text_bytes)
 {
-    (void)owner;
     (void)handle;
     if(commands > LCD_OVERLAY_COMMAND_MAX ||
        text_bytes > LCD_OVERLAY_TEXT_MAX)
@@ -693,9 +679,8 @@ hk_result_t hk_display_stage_restore(
 }
 
 hk_result_t hk_display_stage_keep_last_clear(
-    hk_owner_t owner, const hk_display_t *handle)
+    const hk_display_t *handle)
 {
-    (void)owner;
     (void)handle;
     return HK_OK;
 }

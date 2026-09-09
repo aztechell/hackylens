@@ -69,8 +69,8 @@ hk_result_t hk_app_context_input(
     const hk_input_t **input);
 hk_result_t hk_app_context_display(
     const hk_app_context_t *ctx,
-    uint16_t instance,
-    hk_display_t *handle);
+    uint32_t plane,
+    hk_display_t **session);
 hk_result_t hk_app_context_external_link(
     const hk_app_context_t *ctx,
     uint16_t instance,

@@ -10,7 +10,7 @@ typedef struct
     const hk_input_t *input;
     hk_input_cursor_t input_cursor;
     hk_input_cursor_t input_second;
-    hk_display_t display;
+    hk_display_t *display;
     hk_app_service_t service;
     hk_deadline_t stop_deadline;
     uint32_t input_events;

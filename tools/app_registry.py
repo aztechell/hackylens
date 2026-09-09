@@ -25,7 +25,7 @@ def _request_rows(app: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], bool]
     # Static Time/Input/Lights binding is resolved at build time, never negotiated per app.
     return [(request, optional) for request, optional in rows
             if request["id"] not in {"hackylens.cap.time", "hackylens.cap.input",
-                                     "hackylens.cap.lights"}]
+                                     "hackylens.cap.lights", "hackylens.cap.display"}]
 
 
 def generated_header(model: Mapping[str, Any]) -> str:

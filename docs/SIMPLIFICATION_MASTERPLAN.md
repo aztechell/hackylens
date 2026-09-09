@@ -559,8 +559,30 @@ requested stop и timeout. Каждый следующий запуск успе
 временный скрипт удалён, исходный список файлов сохранён. Лог:
 `build/s8-lights-hmpy.log`. 2026-09-09 пользователь подтвердил визуальную
 проверку яркости, RGB, подсветки камеры и восстановления настроек: «работает».
-Lights принят. Следующий этап — Display; Display и External Link ещё не
-перенесены, S8 продолжается.
+Lights принят. Следующий этап — Display; S8 продолжается.
+
+### Перенос Display (2026-09-09)
+
+Display переведён на immutable binding и стабильные plane sessions без generic
+broker leases. Runtime хранит сессии BASE/OVERLAY, UI заимствует указатель на
+BASE вместо копирования handle при каждом render. MP OVERLAY живёт до terminal
+handoff worker. Сохранены транзакции, dirty regions, rollback MP staging,
+заимствованные surfaces и реальные поколения frame/workspace.
+
+Обычный close допускает повтор после ошибки; retire всегда удаляет ссылки на
+заимствованные буферы и освобождает логическую сессию, даже при истёкшем deadline.
+Ошибка retirement карантинирует плоскость. Runtime пытается retire обеих
+плоскостей с исходным teardown deadline и сохраняет первую ошибку.
+
+234 host tests прошли, включая общий fake/K210 набор из восьми сценариев,
+проверки failed-stop/expired-deadline retirement обеих плоскостей и стабильного
+указателя UI между render callbacks. Обе сборки, architecture/provider hashes
+и resource guard прошли. Full image: 1,552,824 байта (−4,288 к Lights;
+−13,568 к принятому S7), static RAM: 2,896,456 байт (−224 к Lights;
+−2,016 к S7). Логи: `build/s8-display-*.log`.
+
+Аппаратная приёмка Display и CI пока ожидаются. External Link и финальное
+удаление оставшейся broker/catalog/owner machinery ещё не выполнены.
 
 ### Цель
 

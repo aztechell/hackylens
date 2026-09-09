@@ -23,7 +23,6 @@ typedef struct hk_app_runtime_host
     hk_capability_provider_t lights_provider;
     const hk_capability_provider_t *providers[1];
     hk_capability_grant_t grants[1];
-    hk_lease_t display_lease;
     uint64_t last_input_us;
     uint32_t owner_open_calls;
     uint32_t owner_cleanup_calls;
@@ -35,7 +34,6 @@ typedef struct hk_app_runtime_host
     hk_result_t fail_service_result;
     hk_result_t fail_owner_cleanup_result;
     hk_result_t fail_provider_cleanup_result;
-    uint8_t display_held;
     uint8_t batch_active;
 } hk_app_runtime_host_t;
 

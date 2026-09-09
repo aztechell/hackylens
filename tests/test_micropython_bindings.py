@@ -202,7 +202,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "K210_DISPLAY_ADAPTER_OK cases=9 normative=7 public_api=1 "
+            "K210_DISPLAY_ADAPTER_OK cases=10 normative=8 public_api=1 "
             "slice=128 framebuffer=153600 stream=one-per-region",
             result.stdout,
         )

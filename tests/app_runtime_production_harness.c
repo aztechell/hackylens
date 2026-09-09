@@ -58,21 +58,13 @@ static fixture_t s_fixture;
 static jmp_buf s_main_exit;
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state[64];
 
-static const char *const s_display_features[] = {"base-plane"};
-static const hk_app_capability_request_t s_capabilities[] = {
-    {
-        "hackylens.cap.display", 0U, ">=0.1.0", "<0.2.0",
-        s_display_features, 1U, NULL, 0U,
-    },
-};
-
 static hk_result_t app_start(const hk_app_context_t *ctx)
 {
-    hk_display_t display;
+    hk_display_t *display;
     const hk_input_t *input;
     const hk_time_t *time;
 
-    if(hk_app_context_display(ctx, 0U, &display) != HK_OK ||
+    if(hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &display) != HK_OK ||
        hk_app_context_input(ctx, &input) != HK_OK ||
        hk_app_context_time(ctx, &time) != HK_OK)
         return HK_ERR_INTERNAL;
@@ -136,9 +128,6 @@ static const hk_app_t s_v2_app = {
         sizeof(s_state), 256U, sizeof(s_state), HK_APP_STATE_ALIGNMENT,
         100U, 50U, 50U,
     },
-    .capabilities = s_capabilities,
-    .capability_count =
-        (uint16_t)(sizeof(s_capabilities) / sizeof(s_capabilities[0])),
 };
 
 static hk_result_t secondary_start(const hk_app_context_t *input)
@@ -170,25 +159,12 @@ static const hk_app_t s_secondary_app = {
     .limits = {1024U, 256U, 64U, HK_APP_STATE_ALIGNMENT, 100U, 100U, 100U},
 };
 
-static hk_lease_t lease_for(hk_owner_t owner, hk_capability_id_t id)
-{
-    return (hk_lease_t){id, 1U, owner, id};
-}
-
 hk_result_t hk_generated_capability_request_for(
-    const char *consumer_id,
-    const char *capability_id,
-    uint16_t instance,
+    const char *consumer_id, const char *capability_id, uint16_t instance,
     hk_capability_request_t *request)
 {
-    if(!consumer_id || strcmp(consumer_id, s_v2_app.id) != 0 ||
-       !capability_id || instance != 0U || !request)
-        return HK_ERR_NOT_DECLARED;
-    if(strcmp(capability_id, "hackylens.cap.display") == 0)
-        *request = (hk_capability_request_t)HK_DISPLAY_REQUEST_0_1_INIT;
-    else
-        return HK_ERR_NOT_DECLARED;
-    return HK_OK;
+    (void)consumer_id; (void)capability_id; (void)instance; (void)request;
+    return HK_ERR_NOT_DECLARED;
 }
 
 hk_result_t capability_owner_runtime_initialize(void)
@@ -297,33 +273,49 @@ hk_result_t hk_input_next_event(
     return HK_OK;
 }
 
-hk_result_t hk_display_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint32_t plane,
-    hk_display_t *handle)
+struct hk_display_service { uint8_t unused; };
+static const hk_display_service_t s_display_binding = {0};
+static const hk_display_t *s_display_claim;
+static const hk_display_t *s_bound_display;
+const hk_display_service_t *hk_display_service(void) { return &s_display_binding; }
+hk_result_t hk_display_open(const hk_display_service_t *service,
+    uint32_t plane, hk_display_t *handle)
 {
-    if(hk_owner_is_zero(owner) || !request || !handle ||
-       request->id != HK_CAPABILITY_ID_DISPLAY ||
-       plane != HK_DISPLAY_PLANE_BASE)
+    if(!service || !handle || plane != HK_DISPLAY_PLANE_BASE)
         return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = lease_for(owner, HK_CAPABILITY_ID_DISPLAY);
+    if(s_display_claim) return HK_ERR_BUSY;
+    s_display_claim = handle;
+    *handle = (hk_display_t){service, plane};
     return HK_OK;
 }
-
-hk_result_t hk_ui_display_bind(hk_owner_t owner, const hk_display_t *display)
+hk_result_t hk_display_close(hk_display_t *handle, hk_deadline_t deadline)
 {
-    if(hk_owner_is_zero(owner) || !display)
+    (void)deadline;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    if(s_display_claim == handle) s_display_claim = NULL;
+    *handle = (hk_display_t){0};
+    return HK_OK;
+}
+hk_result_t hk_display_retire(hk_display_t *handle, hk_deadline_t deadline)
+{
+    return hk_display_close(handle, deadline);
+}
+
+void hk_ui_display_unbind(void) { s_bound_display = NULL; }
+
+hk_result_t hk_ui_display_bind(const hk_display_t *display)
+{
+    if(!display || display != s_display_claim)
         return HK_ERR_INVALID_ARGUMENT;
+    s_bound_display = display;
     return HK_OK;
 }
 
 hk_result_t hk_display_get_info(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_display_info_t *info)
 {
-    if(hk_owner_is_zero(owner) || !handle || !info)
+    if(!handle || handle != s_display_claim || handle != s_bound_display || !info)
         return HK_ERR_INVALID_ARGUMENT;
     *info = (hk_display_info_t){
         sizeof(*info), HK_DISPLAY_INFO_VERSION, 320U, 240U,
@@ -334,10 +326,9 @@ hk_result_t hk_display_get_info(
 }
 
 hk_result_t hk_display_begin_batch(
-    hk_owner_t owner,
     const hk_display_t *handle)
 {
-    if(hk_owner_is_zero(owner) || !handle || s_fixture.batch_active)
+    if(!handle || handle != s_display_claim || handle != s_bound_display || s_fixture.batch_active)
         return HK_ERR_INVALID_STATE;
     s_fixture.batch_active = 1U;
     s_fixture.display_begin_count++;
@@ -345,11 +336,10 @@ hk_result_t hk_display_begin_batch(
 }
 
 hk_result_t hk_display_mark_dirty(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect)
 {
-    if(hk_owner_is_zero(owner) || !handle || !rect ||
+    if(!handle || !rect ||
        !s_fixture.batch_active)
         return HK_ERR_INVALID_STATE;
     s_fixture.display_dirty_count++;
@@ -357,24 +347,21 @@ hk_result_t hk_display_mark_dirty(
 }
 
 hk_result_t hk_display_clear(
-    hk_owner_t owner,
     const hk_display_t *handle,
     uint16_t rgb565)
 {
     (void)rgb565;
-    if(hk_owner_is_zero(owner) || !handle || !s_fixture.batch_active)
+    if(!handle || !s_fixture.batch_active)
         return HK_ERR_INVALID_STATE;
     s_fixture.display_clear_count++;
     return HK_OK;
 }
 
 hk_result_t hk_display_fill_rect(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565)
 {
-    (void)owner;
     (void)handle;
     (void)rect;
     (void)rgb565;
@@ -382,23 +369,20 @@ hk_result_t hk_display_fill_rect(
 }
 
 hk_result_t hk_display_stroke_rect(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565)
 {
-    return hk_display_fill_rect(owner, handle, rect, rgb565);
+    return hk_display_fill_rect(handle, rect, rgb565);
 }
 
 hk_result_t hk_display_text(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *bounds,
     const char *utf8,
     uint32_t size_bytes,
     uint16_t rgb565)
 {
-    (void)owner;
     (void)handle;
     (void)bounds;
     (void)utf8;
@@ -408,13 +392,11 @@ hk_result_t hk_display_text(
 }
 
 hk_result_t hk_display_blit(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *destination,
     const hk_buffer_view_t *pixels,
     uint32_t pixel_format)
 {
-    (void)owner;
     (void)handle;
     (void)destination;
     (void)pixels;
@@ -423,13 +405,12 @@ hk_result_t hk_display_blit(
 }
 
 hk_result_t hk_display_present(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel)
 {
     (void)cancel;
-    if(hk_owner_is_zero(owner) || !handle || !s_fixture.batch_active ||
+    if(!handle || !s_fixture.batch_active ||
        deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_STATE;
     s_fixture.batch_active = 0U;
@@ -438,10 +419,9 @@ hk_result_t hk_display_present(
 }
 
 hk_result_t hk_display_abort(
-    hk_owner_t owner,
     const hk_display_t *handle)
 {
-    if(hk_owner_is_zero(owner) || !handle)
+    if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
     if(s_fixture.batch_active)
     {
@@ -452,13 +432,12 @@ hk_result_t hk_display_abort(
 }
 
 hk_result_t hk_display_surface_acquire(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_display_surface_t *surface)
 {
     static uint8_t pixels[8];
 
-    if(hk_owner_is_zero(owner) || !handle || !surface)
+    if(!handle || !surface)
         return HK_ERR_INVALID_ARGUMENT;
     if(s_fixture.batch_active)
     {

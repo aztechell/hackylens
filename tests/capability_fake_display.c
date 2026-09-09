@@ -1,4 +1,5 @@
 #include "capability_fake_display.h"
+#include "../firmware/src/capabilities/display_provider.h"
 
 #include <limits.h>
 #include <stddef.h>
@@ -20,14 +21,12 @@ enum
 typedef struct
 {
     uint8_t active;
-    uint8_t retired;
     uint8_t stage;
     uint8_t has_committed;
     uint8_t reserved[4];
     uint32_t plane;
-    uint32_t generation;
     uint32_t committed_generation;
-    hk_owner_t owner;
+    const hk_display_t *session;
     hk_display_rect_t clip;
     hk_display_rect_t repair[HK_FAKE_DISPLAY_MAX_DIRTY_RECTS];
     hk_fake_display_command_t commands[HK_FAKE_DISPLAY_MAX_COMMANDS];
@@ -43,7 +42,6 @@ typedef struct
 typedef struct
 {
     uint8_t initialized;
-    uint8_t quarantined;
     uint16_t reserved;
     hk_display_info_t info;
     fake_plane_t planes[FAKE_PLANE_COUNT];
@@ -59,25 +57,9 @@ typedef struct
 } fake_display_t;
 
 static fake_display_t s_display;
+static hk_display_state_t s_claims;
 
 static uint32_t plane_index(uint32_t plane);
-
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static int version_compare(hk_version_t left, hk_version_t right)
-{
-    if(left.major != right.major)
-        return left.major < right.major ? -1 : 1;
-    if(left.minor != right.minor)
-        return left.minor < right.minor ? -1 : 1;
-    if(left.patch != right.patch)
-        return left.patch < right.patch ? -1 : 1;
-    return 0;
-}
 
 static hk_display_rect_t screen_rect(void)
 {
@@ -119,12 +101,13 @@ static void refresh_metrics(void)
     s_display.metrics.committed_overlay_generation =
         s_display.planes[1].committed_generation;
     s_display.metrics.needs_repair_planes = repair;
-    s_display.metrics.quarantined = s_display.quarantined;
+    s_display.metrics.quarantined = s_claims.quarantined;
 }
 
 void hk_fake_display_reset(uint32_t supported_planes)
 {
     memset(&s_display, 0, sizeof(s_display));
+    memset(&s_claims, 0, sizeof(s_claims));
     s_display.info = (hk_display_info_t){
         sizeof(hk_display_info_t), HK_DISPLAY_INFO_VERSION,
         HK_FAKE_DISPLAY_WIDTH, HK_FAKE_DISPLAY_HEIGHT,
@@ -141,8 +124,6 @@ void hk_fake_display_reset(uint32_t supported_planes)
     };
     s_display.planes[0].plane = HK_DISPLAY_PLANE_BASE;
     s_display.planes[1].plane = HK_DISPLAY_PLANE_OVERLAY;
-    s_display.planes[0].generation = 1U;
-    s_display.planes[1].generation = 1U;
     s_display.slice_duration_us = 1000U;
     s_display.initialized = 1U;
     refresh_metrics();
@@ -206,109 +187,31 @@ uint16_t hk_fake_display_panel_pixel(
     return (uint16_t)((uint16_t)pixels[offset] << 8) | pixels[offset + 1U];
 }
 
-static hk_result_t request_validate(
-    const hk_capability_request_t *request, uint32_t plane)
-{
-    hk_version_t provider_version = {0U, 1U, 0U, 0U};
-    uint64_t required;
-
-    if(!request || request->struct_size < sizeof(*request) ||
-       request->struct_version != HK_CAPABILITY_REQUEST_VERSION ||
-       request->id != HK_CAPABILITY_ID_DISPLAY || request->reserved != 0U ||
-       request->minimum.reserved != 0U ||
-       request->maximum_exclusive.reserved != 0U ||
-       version_compare(request->minimum, request->maximum_exclusive) >= 0)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(plane != HK_DISPLAY_PLANE_BASE &&
-       plane != HK_DISPLAY_PLANE_OVERLAY)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(version_compare(provider_version, request->minimum) < 0 ||
-       version_compare(provider_version, request->maximum_exclusive) >= 0)
-        return HK_ERR_VERSION_INCOMPATIBLE;
-    required = request->required_features |
-        (plane == HK_DISPLAY_PLANE_BASE ?
-             HK_DISPLAY_FEATURE_BASE_PLANE :
-             HK_DISPLAY_FEATURE_OVERLAY_PLANE);
-    if((required & ~HK_DISPLAY_FEATURES_0_1) != 0U ||
-       (required & ~(
-           HK_DISPLAY_FEATURES_0_1 &
-           (s_display.info.planes & HK_DISPLAY_PLANE_OVERLAY ?
-                UINT64_MAX : ~HK_DISPLAY_FEATURE_OVERLAY_PLANE))) != 0U)
-        return HK_ERR_FEATURE_UNAVAILABLE;
-    if((s_display.info.planes & plane) == 0U)
-        return HK_ERR_FEATURE_UNAVAILABLE;
-    return HK_OK;
-}
-
 static uint32_t plane_index(uint32_t plane)
 {
     return plane == HK_DISPLAY_PLANE_BASE ? 0U : 1U;
 }
 
 static hk_result_t validate_handle(
-    hk_owner_t owner,
-    const hk_display_t *handle,
-    uint8_t allow_quarantined,
-    fake_plane_t **result)
+    const hk_display_t *handle, fake_plane_t **result)
 {
-    fake_plane_t *plane;
-
-    ensure_initialized();
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(handle->lease.capability_id != HK_CAPABILITY_ID_DISPLAY &&
-       handle->lease.capability_id != 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(hk_lease_is_zero(&handle->lease) ||
-       handle->lease.slot >= FAKE_PLANE_COUNT ||
-       handle->lease.generation == 0U)
-        return HK_ERR_STALE_HANDLE;
-    if(!owner_equal(handle->lease.owner, owner))
-        return HK_ERR_WRONG_OWNER;
-    plane = &s_display.planes[handle->lease.slot];
-    if(!plane->active || plane->generation != handle->lease.generation ||
-       !owner_equal(plane->owner, owner))
-        return HK_ERR_STALE_HANDLE;
-    if(s_display.quarantined && !allow_quarantined)
-        return HK_ERR_INVALID_STATE;
-    if(result)
-        *result = plane;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    fake_plane_t *plane = &s_display.planes[plane_index(handle->plane)];
+    if(!plane->active || plane->session != handle) return HK_ERR_STALE_HANDLE;
+    if(result) *result = plane;
     return HK_OK;
 }
 
-hk_result_t hk_display_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint32_t plane,
-    hk_display_t *handle)
+static hk_result_t fake_open(void *context, const hk_display_t *handle, uint32_t plane)
 {
-    fake_plane_t *slot;
-    hk_result_t result;
-    uint32_t index;
-
+    (void)context;
     ensure_initialized();
-    if(!handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = HK_LEASE_NONE;
-    if(hk_owner_is_zero(owner))
-        return HK_ERR_STALE_HANDLE;
-    result = request_validate(request, plane);
-    if(result != HK_OK)
-        return result;
-    if(s_display.quarantined)
-        return HK_ERR_INVALID_STATE;
-    index = plane_index(plane);
-    slot = &s_display.planes[index];
-    if(slot->retired)
-        return HK_ERR_LIMIT;
-    if(slot->active)
-        return HK_ERR_BUSY;
+    if(!(s_display.info.planes & plane)) return HK_ERR_FEATURE_UNAVAILABLE;
+    fake_plane_t *slot = &s_display.planes[plane_index(plane)];
+    if(slot->active) return HK_ERR_BUSY;
     slot->active = 1U;
-    slot->owner = owner;
+    slot->session = handle;
     slot->clip = screen_rect();
-    handle->lease = (hk_lease_t){
-        index, slot->generation, owner, HK_CAPABILITY_ID_DISPLAY,
-    };
     refresh_metrics();
     return HK_OK;
 }
@@ -457,27 +360,20 @@ static void clear_staged(fake_plane_t *plane)
     plane->clip = screen_rect();
 }
 
-hk_result_t hk_display_get_info(
-    hk_owner_t owner,
-    const hk_display_t *handle,
-    hk_display_info_t *info)
+static hk_result_t fake_get_info(void *context, hk_display_info_t *info)
 {
-    hk_result_t result;
-
-    if(!info)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = validate_handle(owner, handle, 0U, NULL);
-    if(result != HK_OK)
-        return result;
+    (void)context;
+    ensure_initialized();
     *info = s_display.info;
     return HK_OK;
 }
 
-hk_result_t hk_display_begin_batch(
-    hk_owner_t owner, const hk_display_t *handle)
+static hk_result_t fake_begin_batch(
+    void *context, const hk_display_t *handle)
 {
+    (void)context;
     fake_plane_t *plane;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -491,14 +387,15 @@ hk_result_t hk_display_begin_batch(
     return HK_OK;
 }
 
-hk_result_t hk_display_set_clip(
-    hk_owner_t owner,
+static hk_result_t fake_set_clip(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *clip)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t screen;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -517,12 +414,13 @@ hk_result_t hk_display_set_clip(
     return HK_OK;
 }
 
-hk_result_t hk_display_clear(
-    hk_owner_t owner, const hk_display_t *handle, uint16_t rgb565)
+static hk_result_t fake_clear(
+    void *context, const hk_display_t *handle, uint16_t rgb565)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_fake_display_command_t command;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -536,16 +434,17 @@ hk_result_t hk_display_clear(
 }
 
 static hk_result_t rect_command(
-    hk_owner_t owner,
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t color,
     uint32_t type)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t clipped;
     hk_fake_display_command_t command;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -561,38 +460,41 @@ static hk_result_t rect_command(
     return append_command(plane, &command);
 }
 
-hk_result_t hk_display_fill_rect(
-    hk_owner_t owner,
+static hk_result_t fake_fill_rect(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565)
 {
+    (void)context;
     return rect_command(
-        owner, handle, rect, rgb565, HK_FAKE_DISPLAY_COMMAND_FILL_RECT);
+        context, handle, rect, rgb565, HK_FAKE_DISPLAY_COMMAND_FILL_RECT);
 }
 
-hk_result_t hk_display_stroke_rect(
-    hk_owner_t owner,
+static hk_result_t fake_stroke_rect(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565)
 {
+    (void)context;
     return rect_command(
-        owner, handle, rect, rgb565, HK_FAKE_DISPLAY_COMMAND_STROKE_RECT);
+        context, handle, rect, rgb565, HK_FAKE_DISPLAY_COMMAND_STROKE_RECT);
 }
 
-hk_result_t hk_display_text(
-    hk_owner_t owner,
+static hk_result_t fake_text(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *bounds,
     const char *utf8,
     uint32_t size_bytes,
     uint16_t rgb565)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t clipped;
     hk_fake_display_command_t command;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -647,20 +549,21 @@ static hk_result_t pixel_view_validate(
     return HK_OK;
 }
 
-hk_result_t hk_display_blit(
-    hk_owner_t owner,
+static hk_result_t fake_blit(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *destination,
     const hk_buffer_view_t *pixels,
     uint32_t pixel_format)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t clipped;
     hk_fake_display_command_t command;
     uint32_t source_x;
     uint32_t source_y;
     uint64_t source_offset;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -697,16 +600,17 @@ hk_result_t hk_display_blit(
     return HK_OK;
 }
 
-hk_result_t hk_display_mark_dirty(
-    hk_owner_t owner,
+static hk_result_t fake_mark_dirty(
+    void *context,
     const hk_display_t *handle,
     const hk_display_rect_t *rect)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t clipped;
     hk_display_rect_t dirty[HK_FAKE_DISPLAY_MAX_DIRTY_RECTS];
     uint16_t dirty_count;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -729,18 +633,19 @@ hk_result_t hk_display_mark_dirty(
     return HK_OK;
 }
 
-hk_result_t hk_display_surface_acquire(
-    hk_owner_t owner,
+static hk_result_t fake_surface_acquire(
+    void *context,
     const hk_display_t *handle,
     hk_display_surface_t *surface)
 {
+    (void)context;
     fake_plane_t *plane;
     uint32_t index;
     hk_result_t result;
 
     if(!surface)
         return HK_ERR_INVALID_ARGUMENT;
-    result = validate_handle(owner, handle, 0U, &plane);
+    result = validate_handle(handle, &plane);
     if(result != HK_OK)
         return result;
     if((HK_DISPLAY_FEATURES_0_1 &
@@ -928,12 +833,13 @@ static uint8_t present_exceeds_limit(const fake_plane_t *plane)
                      s_display.info.maximum_present_duration_us);
 }
 
-hk_result_t hk_display_present(
-    hk_owner_t owner,
+static hk_result_t fake_present(
+    void *context,
     const hk_display_t *handle,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel)
 {
+    (void)context;
     fake_plane_t *plane;
     uint64_t staged_start_bytes;
     uint32_t invocation_slices = 0U;
@@ -941,7 +847,7 @@ hk_result_t hk_display_present(
 
     if(deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
-    result = validate_handle(owner, handle, 0U, &plane);
+    result = validate_handle(handle, &plane);
     if(result != HK_OK)
         return result;
     if(plane->stage == FAKE_STAGE_NONE)
@@ -1002,11 +908,12 @@ hk_result_t hk_display_present(
     return HK_OK;
 }
 
-hk_result_t hk_display_abort(
-    hk_owner_t owner, const hk_display_t *handle)
+static hk_result_t fake_abort(
+    void *context, const hk_display_t *handle)
 {
+    (void)context;
     fake_plane_t *plane;
-    hk_result_t result = validate_handle(owner, handle, 0U, &plane);
+    hk_result_t result = validate_handle(handle, &plane);
 
     if(result != HK_OK)
         return result;
@@ -1017,23 +924,20 @@ hk_result_t hk_display_abort(
     return HK_OK;
 }
 
-static void retire_plane(fake_plane_t *plane, hk_display_t *handle)
+static void retire_plane(fake_plane_t *plane)
 {
     plane->active = 0U;
-    plane->owner = HK_OWNER_NONE;
+    plane->session = NULL;
     clear_staged(plane);
     plane->repair_count = 0U;
     plane->has_committed = 0U;
-    if(plane->generation == UINT32_MAX)
-        plane->retired = 1U;
-    else
-        plane->generation++;
-    handle->lease = HK_LEASE_NONE;
+
 }
 
-hk_result_t hk_display_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_display_t *handle)
+static hk_result_t fake_close(
+    void *context, const hk_display_t *handle, hk_deadline_t deadline)
 {
+    (void)context;
     fake_plane_t *plane;
     hk_display_rect_t overlay_cleanup;
     const hk_display_rect_t *cleanup_rects;
@@ -1045,11 +949,16 @@ hk_result_t hk_display_release(
     ensure_initialized();
     if(!handle || deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
-    if(hk_lease_is_zero(&handle->lease))
-        return HK_OK;
-    result = validate_handle(owner, handle, 1U, &plane);
+    result = validate_handle(handle, &plane);
     if(result != HK_OK)
         return result;
+    result = terminal_before_effect(deadline, NULL);
+    if(result != HK_OK)
+    {
+        s_display.metrics.last_deadline = deadline;
+        s_display.metrics.last_result = result;
+        return result;
+    }
     cleanup_rects = plane->repair;
     cleanup_count = plane->repair_count;
     if(plane->plane == HK_DISPLAY_PLANE_OVERLAY &&
@@ -1082,15 +991,69 @@ hk_result_t hk_display_release(
                 s_display.metrics.last_result = result;
                 return result;
             }
-            s_display.quarantined = 1U;
-            retire_plane(plane, handle);
+
             s_display.metrics.last_result = HK_ERR_INTERNAL;
             refresh_metrics();
             return HK_ERR_INTERNAL;
         }
     }
-    retire_plane(plane, handle);
+    retire_plane(plane);
     s_display.metrics.last_result = HK_OK;
     refresh_metrics();
     return HK_OK;
 }
+
+static void fake_retire(void *context, const hk_display_t *handle)
+{
+    (void)context;
+    fake_plane_t *plane = &s_display.planes[plane_index(handle->plane)];
+    if(plane->session == handle) retire_plane(plane);
+}
+static hk_result_t fake_checkpoint(void *context, const hk_display_t *handle,
+                                 uint16_t *commands, uint16_t *text_bytes)
+{
+    (void)context;
+    fake_plane_t *plane;
+    hk_result_t result = validate_handle(handle, &plane);
+    if(result != HK_OK) return result;
+    if(plane->stage != FAKE_STAGE_BATCH) return HK_ERR_INVALID_STATE;
+    *commands = plane->command_count; *text_bytes = plane->text_bytes;
+    return HK_OK;
+}
+static hk_result_t fake_restore(void *context, const hk_display_t *handle,
+                              uint16_t commands, uint16_t text_bytes)
+{
+    (void)context;
+    fake_plane_t *plane;
+    hk_result_t result = validate_handle(handle, &plane);
+    if(result != HK_OK) return result;
+    if(plane->stage != FAKE_STAGE_BATCH) return HK_ERR_INVALID_STATE;
+    if(commands > plane->command_count || text_bytes > plane->text_bytes)
+        return HK_ERR_INVALID_ARGUMENT;
+    plane->command_count = commands; plane->text_bytes = text_bytes;
+    plane->dirty_count = 0U; plane->borrowed_views = 0U;
+    for(uint16_t i=0; i<commands; ++i) {
+        hk_display_rect_t next[HK_FAKE_DISPLAY_MAX_DIRTY_RECTS];
+        uint16_t count;
+        result = dirty_preview(plane, &plane->commands[i].rect, next, &count);
+        if(result != HK_OK) return result;
+        memcpy(plane->dirty, next, sizeof(next)); plane->dirty_count = count;
+        if(plane->commands[i].borrowed_data) plane->borrowed_views++;
+    }
+    return HK_OK;
+}
+static hk_result_t fake_keep_last_clear(void *context, const hk_display_t *handle)
+{
+    (void)context; (void)handle;
+    return HK_ERR_INVALID_STATE;
+}
+const hk_display_service_t hk_display_binding = {
+    .state=&s_claims, .context=&s_display,
+    .open_plane=fake_open, .close_plane=fake_close, .retire_plane=fake_retire,
+    .get_info=fake_get_info, .begin_batch=fake_begin_batch, .set_clip=fake_set_clip,
+    .clear=fake_clear, .fill_rect=fake_fill_rect, .stroke_rect=fake_stroke_rect,
+    .text=fake_text, .blit=fake_blit, .mark_dirty=fake_mark_dirty,
+    .surface_acquire=fake_surface_acquire, .present=fake_present, .abort=fake_abort,
+    .stage_checkpoint=fake_checkpoint, .stage_restore=fake_restore,
+    .stage_keep_last_clear=fake_keep_last_clear,
+};

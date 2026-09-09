@@ -49,10 +49,6 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
            ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
        !available || fallback)
         return HK_ERR_INTERNAL;
-    if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_DISPLAY, 0U, &available, &fallback) != HK_OK ||
-       !available || fallback)
-        return HK_ERR_INTERNAL;
 
     result = state_from(ctx, &state);
     if(result != HK_OK)
@@ -65,7 +61,7 @@ static hk_result_t minimal_start(const hk_app_context_t *ctx)
        hk_app_context_input(ctx, &state->input) != HK_OK ||
        hk_input_cursor_open(state->input, &state->input_cursor) != HK_OK ||
        hk_input_cursor_open(state->input, &state->input_second) != HK_OK ||
-       hk_app_context_display(ctx, 0U, &state->display) != HK_OK ||
+       hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &state->display) != HK_OK ||
        hk_app_context_service(
            ctx, "hackylens.service.fixture", &state->service) != HK_OK)
         return HK_ERR_INTERNAL;
@@ -153,7 +149,7 @@ static hk_result_t minimal_stop(const hk_app_context_t *ctx)
     state->stop_deadline = deadline;
     hk_input_cursor_close(&state->input_cursor);
     hk_input_cursor_close(&state->input_second);
-    if(hk_display_release(state->owner, deadline, &state->display) != HK_OK)
+    if(hk_display_close(state->display, deadline) != HK_OK)
         return HK_ERR_INTERNAL;
     return HK_OK;
 }
@@ -210,41 +206,41 @@ int minimal_app_check_time_contract(void)
 int minimal_app_check_display_contract(void)
 {
     minimal_state_t *state = minimal_state();
-    hk_display_t copied = state->display;
+    hk_display_t copied = *state->display;
     hk_display_rect_t empty = {INT32_MAX, INT32_MAX, 0U, 0U};
     hk_display_rect_t overflow = {INT32_MAX, 0, 1U, 1U};
     hk_display_rect_t visible = {0, 0, 1U, 1U};
     hk_display_rect_t outside_clip = {2, 2, 1U, 1U};
 
-    if(hk_display_release(
-           state->owner, (hk_deadline_t){UINT64_MAX}, &copied) !=
+    if(hk_display_close(
+           &copied, (hk_deadline_t){UINT64_MAX}) !=
            HK_ERR_INVALID_ARGUMENT ||
-       hk_display_abort(state->owner, &state->display) !=
+       hk_display_abort(state->display) !=
            HK_ERR_INVALID_STATE ||
        hk_display_fill_rect(
-           state->owner, &state->display, &visible, 0U) !=
+           state->display, &visible, 0U) !=
            HK_ERR_INVALID_STATE ||
-       hk_display_begin_batch(state->owner, &state->display) != HK_OK ||
-       hk_display_set_clip(state->owner, &state->display, NULL) != HK_OK ||
+       hk_display_begin_batch(state->display) != HK_OK ||
+       hk_display_set_clip(state->display, NULL) != HK_OK ||
        hk_display_set_clip(
-           state->owner, &state->display, &visible) != HK_OK ||
+           state->display, &visible) != HK_OK ||
        hk_display_set_clip(
-           state->owner, &state->display, &overflow) !=
+           state->display, &overflow) !=
            HK_ERR_INVALID_ARGUMENT ||
        hk_display_fill_rect(
-           state->owner, &state->display, &outside_clip, 0U) != HK_OK ||
+           state->display, &outside_clip, 0U) != HK_OK ||
        hk_display_fill_rect(
-           state->owner, &state->display, &empty, 0U) != HK_OK ||
+           state->display, &empty, 0U) != HK_OK ||
        hk_display_fill_rect(
-           state->owner, &state->display, &overflow, 0U) !=
+           state->display, &overflow, 0U) !=
            HK_ERR_INVALID_ARGUMENT ||
        hk_display_fill_rect(
-           state->owner, &state->display, &visible, 0U) != HK_OK ||
+           state->display, &visible, 0U) != HK_OK ||
        hk_display_present(
-           state->owner, &state->display,
+           state->display,
            (hk_deadline_t){UINT64_MAX}, NULL) != HK_ERR_INVALID_ARGUMENT ||
-       hk_display_abort(state->owner, &state->display) != HK_OK ||
-       hk_display_abort(state->owner, &state->display) !=
+       hk_display_abort(state->display) != HK_OK ||
+       hk_display_abort(state->display) !=
            HK_ERR_INVALID_STATE)
         return 0;
     return 1;

@@ -62,7 +62,7 @@ static hk_result_t fake_direct_acquire(
        owner.slot != s_fixture->live_owner.slot ||
        owner.generation != s_fixture->live_owner.generation)
         return HK_ERR_STALE_HANDLE;
-    if(id != HK_CAPABILITY_ID_EXTERNAL_LINK && id != HK_CAPABILITY_ID_DISPLAY)
+    if(id != HK_CAPABILITY_ID_EXTERNAL_LINK)
         return HK_ERR_NOT_DECLARED;
     return HK_OK;
 }
@@ -72,7 +72,7 @@ static const char *const s_lights_features[] = {
     "i2c-controller",
 };
 static const char *const s_display_features[] = {
-    "base-plane",
+    "uart",
 };
 static const hk_app_capability_request_t s_capabilities[] = {
     {
@@ -80,7 +80,7 @@ static const hk_app_capability_request_t s_capabilities[] = {
         s_lights_features, 2U, NULL, 0U,
     },
     {
-        "hackylens.cap.display", 0U, "0.1.0", "0.2.0",
+        "hackylens.cap.external-link", 1U, "0.1.0", "0.2.0",
         s_display_features, 1U, "headless", 1U,
     },
 };
@@ -95,8 +95,8 @@ static hk_result_t start(const hk_app_context_t *ctx)
     hk_owner_t owner = HK_OWNER_NONE;
     const hk_time_t *time = NULL;
     const hk_input_t *direct_input = &s_input;
-    hk_display_t input = {0};
-    hk_display_t link = {0};
+    hk_external_link_t input = {0};
+    hk_external_link_t link = {0};
     hk_app_service_t service = {0};
     uint32_t generation = 0U;
     uint8_t available = 0U;
@@ -113,7 +113,7 @@ static hk_result_t start(const hk_app_context_t *ctx)
        !s_fixture->owner_live ||
        s_fixture->copied_lights.lease.owner.generation !=
            s_fixture->live_owner.generation ||
-       hk_app_context_display(ctx, 1U, &link) != HK_ERR_NOT_DECLARED ||
+       hk_app_context_external_link(ctx, 2U, &link) != HK_ERR_NOT_DECLARED ||
        hk_app_context_service(
            ctx, "hackylens.service.settings", &service) != HK_OK ||
        service.context_generation != ctx->generation ||
@@ -123,7 +123,7 @@ static hk_result_t start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
 
     if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_DISPLAY, 0U, &available, &fallback) != HK_OK ||
+           ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 1U, &available, &fallback) != HK_OK ||
        strcmp(fallback, "headless") != 0)
         return HK_ERR_INTERNAL;
     if((s_fixture->mode == MODE_OPTIONAL_ABSENT && available) ||
@@ -131,10 +131,10 @@ static hk_result_t start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
     if(s_fixture->mode == MODE_OPTIONAL_ABSENT)
     {
-        if(hk_app_context_display(ctx, 0U, &input) != HK_ERR_CAPABILITY_ABSENT)
+        if(hk_app_context_external_link(ctx, 1U, &input) != HK_ERR_CAPABILITY_ABSENT)
             return HK_ERR_INTERNAL;
     }
-    else if(hk_app_context_display(ctx, 0U, &input) != HK_OK)
+    else if(hk_app_context_external_link(ctx, 1U, &input) != HK_OK)
     {
         return HK_ERR_INTERNAL;
     }
@@ -261,8 +261,6 @@ static hk_capability_id_t capability_id(const char *id)
 {
     if(strcmp(id, "hackylens.cap.external-link") == 0)
         return HK_CAPABILITY_ID_EXTERNAL_LINK;
-    if(strcmp(id, "hackylens.cap.display") == 0)
-        return HK_CAPABILITY_ID_DISPLAY;
     return 0U;
 }
 
@@ -281,9 +279,6 @@ static hk_result_t feature_mask(
         else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
                 strcmp(features[index], "i2c-controller") == 0)
             *mask |= HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(features[index], "base-plane") == 0)
-            *mask |= HK_DISPLAY_FEATURE_BASE_PLANE;
         else
             return HK_ERR_FEATURE_UNAVAILABLE;
     }
@@ -325,10 +320,8 @@ static hk_result_t resolve_capability(
     if(result != HK_OK)
         return result;
 
-    provider_features = id == HK_CAPABILITY_ID_EXTERNAL_LINK
-                            ? HK_EXTERNAL_LINK_FEATURES_0_1
-                            : HK_DISPLAY_FEATURES_0_1;
-    if(id == HK_CAPABILITY_ID_EXTERNAL_LINK)
+    provider_features = HK_EXTERNAL_LINK_FEATURES_0_1;
+    if(declaration->instance == 0U)
     {
         if(fixture->mode == MODE_REQUIRED_ABSENT)
             present = 0U;
@@ -394,7 +387,7 @@ static hk_result_t acquire_capability(
     if(!fixture->owner_live || owner.generation != fixture->live_owner.generation)
         return HK_ERR_WRONG_OWNER;
     if(fixture->mode == MODE_OPTIONAL_ACQUIRE_BUSY &&
-       request->id == HK_CAPABILITY_ID_DISPLAY)
+       request->instance == 1U)
         return HK_ERR_BUSY;
     *lease = (hk_lease_t){
         fixture->acquire_calls,

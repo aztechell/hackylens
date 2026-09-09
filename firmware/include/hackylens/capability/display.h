@@ -1,7 +1,7 @@
 #ifndef HACKYLENS_CAPABILITY_DISPLAY_H
 #define HACKYLENS_CAPABILITY_DISPLAY_H
 
-#include "owner.h"
+#include "common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,13 +32,6 @@ extern "C" {
 #define HK_DISPLAY_LIMIT_HEIGHT UINT32_C(2)
 #define HK_DISPLAY_INFO_VERSION 1U
 #define HK_DISPLAY_SURFACE_VERSION 1U
-
-#define HK_DISPLAY_REQUEST_0_1_INIT                                 \
-    {                                                               \
-        sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, \
-        HK_CAPABILITY_ID_DISPLAY, {0U, 1U, 0U, 0U},                 \
-        {0U, 2U, 0U, 0U}, 0U, 0U, 0U                               \
-    }
 
 typedef struct
 {
@@ -78,72 +71,64 @@ typedef struct
     uint32_t reserved;
 } hk_display_surface_t;
 
-HK_DECLARE_CAPABILITY_HANDLE(hk_display_t);
+typedef struct hk_display_service hk_display_service_t;
+/* A session must remain at its opening address until close or retire. */
+typedef struct
+{
+    const hk_display_service_t *service;
+    uint32_t plane;
+} hk_display_t;
 
-hk_result_t hk_display_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint32_t plane,
-    hk_display_t *handle);
-hk_result_t hk_display_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_display_t *handle);
+const hk_display_service_t *hk_display_service(void);
+hk_result_t hk_display_open(
+    const hk_display_service_t *service, uint32_t plane, hk_display_t *session);
+hk_result_t hk_display_close(hk_display_t *session, hk_deadline_t deadline);
+/* Always relinquishes the claim and borrowed references; failed cleanup
+ * quarantines the plane until reset. */
+hk_result_t hk_display_retire(hk_display_t *session, hk_deadline_t deadline);
 hk_result_t hk_display_get_info(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_display_info_t *info);
 
 hk_result_t hk_display_begin_batch(
-    hk_owner_t owner,
     const hk_display_t *handle);
 hk_result_t hk_display_set_clip(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *clip);
 hk_result_t hk_display_clear(
-    hk_owner_t owner,
     const hk_display_t *handle,
     uint16_t rgb565);
 hk_result_t hk_display_fill_rect(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565);
 hk_result_t hk_display_stroke_rect(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect,
     uint16_t rgb565);
 hk_result_t hk_display_text(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *bounds,
     const char *utf8,
     uint32_t size_bytes,
     uint16_t rgb565);
 hk_result_t hk_display_blit(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *destination,
     const hk_buffer_view_t *pixels,
     uint32_t pixel_format);
 hk_result_t hk_display_mark_dirty(
-    hk_owner_t owner,
     const hk_display_t *handle,
     const hk_display_rect_t *rect);
 
 hk_result_t hk_display_surface_acquire(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_display_surface_t *surface);
 hk_result_t hk_display_present(
-    hk_owner_t owner,
     const hk_display_t *handle,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel);
 hk_result_t hk_display_abort(
-    hk_owner_t owner,
     const hk_display_t *handle);
 
 #ifdef __cplusplus

@@ -10,6 +10,7 @@ set(HK_APP_RUNTIME_HOST_SOURCES
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/capability_core.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/time.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/lights.c"
+    "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/display.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/input.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/input_state.c"
     "${HACKYLENS_SOURCE_DIR}/tests/time_normative_fake_backend.c"

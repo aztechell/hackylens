@@ -20,20 +20,10 @@ static const char *const s_lights_features[] = {
     "i2c-controller",
     "i2c-target",
 };
-static const char *const s_display_features[] = {
-    "base-plane",
-    "batch",
-    "dirty-regions",
-    "rgb565",
-};
 static const hk_app_capability_request_t s_capabilities[] = {
     {
         "hackylens.cap.external-link", 0U, "0.1.0", "0.2.0",
         s_lights_features, 3U, NULL, 0U,
-    },
-    {
-        "hackylens.cap.display", 0U, "0.1.0", "0.2.0",
-        s_display_features, 4U, NULL, 0U,
     },
 };
 static const hk_app_service_request_t s_services[] = {
@@ -246,7 +236,6 @@ static hk_result_t acquire_capability(
     hk_lease_t *lease)
 {
     hk_app_runtime_host_t *host = user;
-    hk_result_t result;
 
     *lease = HK_LEASE_NONE;
     if(host->fail_acquire_id == request->id &&
@@ -255,20 +244,6 @@ static hk_result_t acquire_capability(
     if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
         return hk_capability_core_acquire(&host->core, owner, request,
             HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, lease);
-    if(request->id == HK_CAPABILITY_ID_DISPLAY)
-    {
-        hk_display_t handle;
-
-        result = hk_display_acquire(
-            owner, request, HK_DISPLAY_PLANE_BASE, &handle);
-        if(result == HK_OK)
-        {
-            *lease = handle.lease;
-            host->display_lease = handle.lease;
-            host->display_held = 1U;
-        }
-        return result;
-    }
     return HK_ERR_NOT_DECLARED;
 }
 
@@ -296,14 +271,6 @@ static hk_result_t owner_cleanup(
 
     host->owner_cleanup_calls++;
     host->owner_deadline = deadline;
-    if(host->display_held)
-    {
-        hk_display_t handle = {.lease = host->display_lease};
-
-        (void)hk_display_release(owner, deadline, &handle);
-        host->display_held = 0U;
-        host->display_lease = HK_LEASE_NONE;
-    }
     result = hk_capability_core_owner_close(
         &host->core, owner, 0U, deadline);
     if(host->fail_owner_cleanup_result != HK_OK)
@@ -519,6 +486,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
         .time = hk_time_service(),
         .input = hk_input_service(),
         .lights = hk_lights_service(),
+        .display = hk_display_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

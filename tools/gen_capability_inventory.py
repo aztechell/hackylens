@@ -26,8 +26,10 @@ import app_composition
 TIME_SERVICE_ID = "hackylens.cap.time"
 INPUT_SERVICE_ID = "hackylens.cap.input"
 LIGHTS_SERVICE_ID = "hackylens.cap.lights"
+DISPLAY_SERVICE_ID = "hackylens.cap.display"
 DIRECT_SERVICE_TYPES = {TIME_SERVICE_ID: "hk_time_t", INPUT_SERVICE_ID: "hk_input_t",
-                        LIGHTS_SERVICE_ID: "hk_lights_service_t"}
+                        LIGHTS_SERVICE_ID: "hk_lights_service_t",
+                        DISPLAY_SERVICE_ID: "hk_display_service_t"}
 
 CATALOG_PATH = ROOT / "platforms" / "k210" / "capabilities.toml"
 APP_MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
@@ -825,6 +827,12 @@ def generated_c(composition: Composition) -> str:
         lines.extend([
             '#include "lights_provider.h"',
             'const hk_lights_service_t hk_lights_binding = {0};',
+            '',
+        ])
+    if not any(item.id == DISPLAY_SERVICE_ID for item in composition.capabilities):
+        lines.extend([
+            '#include "display_provider.h"',
+            'const hk_display_service_t hk_display_binding = {0};',
             '',
         ])
     if capabilities:

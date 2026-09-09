@@ -16,7 +16,7 @@ typedef struct
 {
     hk_app_switch_t switcher;
     const hk_time_t *time;
-    hk_display_t display;
+    hk_display_t *display;
     hk_display_info_t display_info;
     hk_display_surface_t locked_surface;
     uint8_t initialized;
@@ -57,13 +57,22 @@ static hk_result_t owner_open(
 {
     hk_result_t result;
 
-    (void)user;
+    app_runtime_integration_t *integration = user;
     if(!owner)
         return HK_ERR_INVALID_ARGUMENT;
     *owner = HK_OWNER_NONE;
     result = capability_owner_runtime_enter(app);
     if(result == HK_OK)
         *owner = capability_owner_runtime_current(app);
+    if(result == HK_OK)
+    {
+        integration->display = &integration->switcher.runtime.display[0];
+        result = hk_display_open(
+            integration->switcher.runtime.ops.display,
+            HK_DISPLAY_PLANE_BASE, integration->display);
+    }
+    if(result == HK_OK)
+        result = hk_ui_display_bind(integration->display);
     return result;
 }
 
@@ -79,16 +88,6 @@ static hk_result_t acquire_capability(
     if(!request || !lease)
         return HK_ERR_INVALID_ARGUMENT;
     *lease = HK_LEASE_NONE;
-    if(request->id == HK_CAPABILITY_ID_DISPLAY)
-    {
-        hk_display_t handle = {0};
-        result = hk_display_acquire(
-            owner, request, HK_DISPLAY_PLANE_BASE, &handle);
-        *lease = handle.lease;
-        if(result == HK_OK)
-            result = hk_ui_display_bind(owner, &handle);
-        return result;
-    }
     if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
     {
         hk_external_link_t handle = {0};
@@ -120,9 +119,15 @@ static hk_result_t owner_cleanup(
     hk_owner_t owner,
     hk_deadline_t deadline)
 {
-    (void)user;
+    app_runtime_integration_t *integration = user;
     hk_result_t light_result = camera_light_retire(deadline);
     hk_result_t owner_result = capability_owner_runtime_close(owner, deadline);
+
+    hk_ui_display_unbind();
+    integration->display = NULL;
+    integration->display_batch_active = 0U;
+    integration->display_surface_active = 0U;
+    integration->locked_surface = (hk_display_surface_t){0};
     return light_result != HK_OK ? light_result : owner_result;
 }
 
@@ -163,8 +168,7 @@ static hk_result_t surface_invalidate(
         region = &full;
     }
     return hk_display_mark_dirty(
-        integration->switcher.runtime.owner,
-        &integration->display, region);
+        integration->display, region);
 }
 
 static hk_result_t surface_clear(void *user, uint16_t rgb565)
@@ -174,8 +178,7 @@ static hk_result_t surface_clear(void *user, uint16_t rgb565)
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
     return hk_display_clear(
-        integration->switcher.runtime.owner,
-        &integration->display, rgb565);
+        integration->display, rgb565);
 }
 
 static hk_result_t surface_fill_rect(
@@ -188,8 +191,7 @@ static hk_result_t surface_fill_rect(
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
     return hk_display_fill_rect(
-        integration->switcher.runtime.owner,
-        &integration->display, rect, rgb565);
+        integration->display, rect, rgb565);
 }
 
 static hk_result_t surface_stroke_rect(
@@ -202,8 +204,7 @@ static hk_result_t surface_stroke_rect(
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
     return hk_display_stroke_rect(
-        integration->switcher.runtime.owner,
-        &integration->display, rect, rgb565);
+        integration->display, rect, rgb565);
 }
 
 static hk_result_t surface_text(
@@ -218,8 +219,7 @@ static hk_result_t surface_text(
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
     return hk_display_text(
-        integration->switcher.runtime.owner,
-        &integration->display, bounds, utf8, size_bytes, rgb565);
+        integration->display, bounds, utf8, size_bytes, rgb565);
 }
 
 static hk_result_t surface_blit(
@@ -233,8 +233,7 @@ static hk_result_t surface_blit(
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
     return hk_display_blit(
-        integration->switcher.runtime.owner,
-        &integration->display, destination, pixels, pixel_format);
+        integration->display, destination, pixels, pixel_format);
 }
 
 static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
@@ -252,14 +251,13 @@ static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
     if(integration->display_batch_active)
     {
         result = hk_display_abort(
-            integration->switcher.runtime.owner, &integration->display);
+            integration->display);
         if(result != HK_OK)
             return result;
         integration->display_batch_active = 0U;
     }
     result = hk_display_surface_acquire(
-        integration->switcher.runtime.owner,
-        &integration->display, pixels);
+        integration->display, pixels);
     if(result != HK_OK)
         return result;
     integration->locked_surface = *pixels;
@@ -282,29 +280,15 @@ static hk_result_t render_begin(
         .lock = surface_lock,
     };
     app_runtime_integration_t *integration = user;
-    const hk_app_context_t *ctx = &runtime->context;
-    hk_result_t result = HK_ERR_CAPABILITY_ABSENT;
+    hk_result_t result;
 
-    integration->display = (hk_display_t){0};
-    for(uint16_t index = 0U; index < ctx->capability_count; index++)
-    {
-        const hk_app_capability_grant_t *grant = &ctx->capabilities[index];
-
-        if(grant->id != HK_CAPABILITY_ID_DISPLAY || grant->instance != 0U)
-            continue;
-        if(!grant->available)
-            return HK_ERR_CAPABILITY_ABSENT;
-        integration->display.lease = grant->lease;
-        result = HK_OK;
-        break;
-    }
-    if(result != HK_OK)
-        return result;
+    if(!integration->display || !integration->display->service)
+        return HK_ERR_CAPABILITY_ABSENT;
     result = hk_display_get_info(
-        runtime->owner, &integration->display,
+        integration->display,
         &integration->display_info);
     if(result == HK_OK)
-        result = hk_display_begin_batch(runtime->owner, &integration->display);
+        result = hk_display_begin_batch(integration->display);
     if(result != HK_OK)
         return result;
     integration->display_batch_active = 1U;
@@ -326,8 +310,7 @@ static hk_result_t render_present(void *user, hk_deadline_t deadline)
 {
     app_runtime_integration_t *integration = user;
     hk_result_t result = hk_display_present(
-        integration->switcher.runtime.owner,
-        &integration->display, deadline, NULL);
+        integration->display, deadline, NULL);
 
     if(result == HK_OK)
     {
@@ -347,8 +330,7 @@ static hk_result_t render_abort(void *user)
        !integration->display_surface_active)
         return HK_OK;
     result = hk_display_abort(
-        integration->switcher.runtime.owner,
-        &integration->display);
+        integration->display);
     if(result == HK_OK)
     {
         integration->display_batch_active = 0U;
@@ -384,6 +366,7 @@ hk_result_t app_runtime_integration_initialize(void)
         .time = s_integration.time,
         .input = hk_input_service(),
         .lights = hk_lights_service(),
+        .display = hk_display_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

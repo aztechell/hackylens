@@ -32,7 +32,7 @@ typedef struct
 
 hk_result_t hk_ui_display_prepare(void);
 hk_result_t hk_ui_display_release(void);
-hk_result_t hk_ui_display_bind(hk_owner_t owner, const hk_display_t *display);
+hk_result_t hk_ui_display_bind(const hk_display_t *display);
 void hk_ui_display_unbind(void);
 void hk_ui_display_draw_boot_logo(void);
 void hk_ui_display_fill_rect(

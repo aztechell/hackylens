@@ -1,4 +1,5 @@
 #include "lights_normative_backend.h"
+#include "capability_fake_display.h"
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -24,7 +25,7 @@ typedef enum
 {
     FAIL_NONE = 0,
     FAIL_GRANT_LIGHTS,
-    FAIL_GRANT_DISPLAY,
+    FAIL_DISPLAY_ABSENT,
     FAIL_GRANT_SERVICE,
     FAIL_START,
     FAIL_EVENT,
@@ -81,6 +82,11 @@ static hk_result_t simple_start(const hk_app_context_t *ctx)
            ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
        !available)
         return HK_ERR_INTERNAL;
+    if(s_simple.fail == FAIL_DISPLAY_ABSENT)
+    {
+        hk_display_t *session = NULL;
+        return hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &session);
+    }
     if(s_simple.fail == FAIL_START_RENDER)
         return hk_app_context_request_render(ctx, NULL);
     if(s_simple.fail == FAIL_START_PENDING)
@@ -176,16 +182,18 @@ static int check_failure_point(fail_point_t point)
     if(point == FAIL_GRANT_LIGHTS)
         hk_app_runtime_host_fail_acquire(
             &host, HK_CAPABILITY_ID_EXTERNAL_LINK, HK_ERR_IO);
-    else if(point == FAIL_GRANT_DISPLAY)
-        hk_app_runtime_host_fail_acquire(
-            &host, HK_CAPABILITY_ID_DISPLAY, HK_ERR_IO);
+    else if(point == FAIL_DISPLAY_ABSENT)
+    {
+        hk_app_runtime_host_runtime(&host)->ops.display = NULL;
+        expected = HK_ERR_CAPABILITY_ABSENT;
+    }
     else if(point == FAIL_GRANT_SERVICE)
         hk_app_runtime_host_fail_service(&host, HK_ERR_IO);
     else if(point == FAIL_OWNER_CLEANUP)
         hk_app_runtime_host_fail_owner_cleanup(&host, HK_ERR_IO);
     launch_fails = (uint8_t)(
         point == FAIL_START ||
-        point == FAIL_GRANT_LIGHTS || point == FAIL_GRANT_DISPLAY ||
+        point == FAIL_GRANT_LIGHTS || point == FAIL_DISPLAY_ABSENT ||
         point == FAIL_GRANT_SERVICE);
     if(launch_fails)
         CHECK(open_app(&host, &app, expected) == 0);
@@ -215,7 +223,7 @@ static int check_failure_point(fail_point_t point)
     }
     CHECK(check_inactive(&host, expected) == 0);
     CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == owner_calls);
-    if(point == FAIL_START ||
+    if(point == FAIL_START || point == FAIL_DISPLAY_ABSENT ||
        !launch_fails)
         CHECK(s_simple.stop_calls == 1U);
     else if(launch_fails && point != FAIL_START)
@@ -482,11 +490,64 @@ static int check_lights_scope_retirement(void)
     return 0;
 }
 
+static hk_display_t *s_scope_display[2];
+static uint8_t s_expire_display;
+static hk_result_t scope_display_start(const hk_app_context_t *ctx)
+{
+    hk_display_surface_t pixels;
+    hk_display_t *again = NULL;
+    hk_result_t result = hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &s_scope_display[0]);
+    if(result != HK_OK) return result;
+    result = hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &again);
+    if(result != HK_OK || again != s_scope_display[0]) return HK_ERR_INTERNAL;
+    result = hk_app_context_display(ctx, HK_DISPLAY_PLANE_OVERLAY, &s_scope_display[1]);
+    if(result != HK_OK) return result;
+    result = hk_display_surface_acquire(s_scope_display[0], &pixels);
+    if(result != HK_OK) return result;
+    return hk_display_begin_batch(s_scope_display[1]);
+}
+static hk_result_t scope_display_stop(const hk_app_context_t *ctx)
+{
+    hk_deadline_t deadline;
+    if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK) return HK_ERR_INTERNAL;
+    if(s_expire_display) hk_fake_display_set_now_us(deadline.at_us);
+    /* Deliberately omit display cleanup; runtime must still retire both. */
+    return HK_ERR_IO;
+}
+static int check_display_scope_retirement(void)
+{
+    for(unsigned expire = 0U; expire < 2U; ++expire)
+    {
+        hk_app_runtime_host_t host;
+        hk_app_t app;
+        hk_app_v2_entry_t entry = s_simple_entry;
+        hk_display_t replacement = {0};
+        CHECK(reset_simple(&host, &app) == 0);
+        s_expire_display = (uint8_t)expire;
+        entry.start = scope_display_start;
+        entry.stop = scope_display_stop;
+        app.entry = &entry;
+        CHECK(open_app(&host, &app, HK_OK) == 0);
+        CHECK(hk_app_switch_close(hk_app_runtime_host_switch(&host), HK_APP_STOP_COMPLETED) == HK_ERR_IO);
+        CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+        CHECK(!s_scope_display[0]->service && !s_scope_display[1]->service);
+        CHECK(hk_fake_display_metrics()->active_planes == 0U && hk_fake_display_metrics()->borrowed_views == 0U);
+        CHECK(hk_fake_display_metrics()->last_deadline.at_us == host.owner_deadline.at_us);
+        for(unsigned i = 0U; i < 2U; ++i)
+        {
+            uint32_t plane = i ? HK_DISPLAY_PLANE_OVERLAY : HK_DISPLAY_PLANE_BASE;
+            CHECK(hk_display_open(hk_display_service(), plane, &replacement) == (expire ? HK_ERR_INTERNAL : HK_OK));
+            if(!expire) CHECK(hk_display_close(&replacement, HK_DEADLINE_IMMEDIATE) == HK_OK);
+        }
+    }
+    return 0;
+}
+
 int main(void)
 {
     static const fail_point_t points[] = {
             FAIL_GRANT_LIGHTS,
-        FAIL_GRANT_DISPLAY,
+        FAIL_DISPLAY_ABSENT,
         FAIL_GRANT_SERVICE,
         FAIL_START,
         FAIL_EVENT,
@@ -511,6 +572,7 @@ int main(void)
     CHECK(check_invalid_tick_budget() == 0);
     CHECK(check_minimal_storage_isolation() == 0);
     CHECK(check_lights_scope_retirement() == 0);
+    CHECK(check_display_scope_retirement() == 0);
     printf("APP_RUNTIME_HOST_OK\n");
     return 0;
 }

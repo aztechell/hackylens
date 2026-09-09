@@ -26,6 +26,7 @@ HOST_RUNTIME_SOURCES = (
     "tests/time_normative_fake_backend.c",
     "tests/input_normative_fake_backend.c",
     "tests/capability_fake_display.c",
+    "firmware/src/capabilities/display.c",
     "tests/app_runtime_host_support.c",
     "tests/fixtures/app_sdk/minimal_app.c",
 )
@@ -44,6 +45,9 @@ class AppRuntimeV2Tests(unittest.TestCase):
         extra_sources: tuple[str, ...] = (),
         extra_includes: tuple[Path, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
+        if source_name in ("app_runtime_v2_harness.c", "app_runtime_mixed_harness.c", "app_runtime_grants_harness.c"):
+            extra_sources += ("firmware/src/capabilities/display.c", "tests/capability_fake_display.c")
+            extra_includes += (ROOT / "tests",)
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-app-runtime-") as temp:

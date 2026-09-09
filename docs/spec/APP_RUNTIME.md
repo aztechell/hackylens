@@ -18,15 +18,18 @@ corresponding implementation change; see the [change process](README.md).
 
 ## S8 typed-service cleanup
 
-Time and Input bindings have board lifetime. Lights channel sessions obtained
+Time and Input bindings have board lifetime. Lights and Display sessions obtained
 through the app context reside in private runtime storage and are retired with
 the original teardown deadline, even if stop or earlier cleanup fails. Camera
 session retirement is an explicit production fallback. Neither path retires
 persistent settings or MicroPython worker sessions. Those MP sessions are
 retired only at the worker's terminal handoff.
 
-The owner/lease rules below continue to apply to Display and External Link
-while they remain on the broker. Lights retirement must complete its logical
+Display uses `hk_app_context_display(ctx, plane, &session)` and stable runtime
+storage. UI borrows that session by pointer; it never reconstructs a handle per
+frame. BASE and OVERLAY ownership and real frame/transaction generations remain.
+The owner/lease rules below continue to apply to External Link
+while it remains on the broker. Service retirement must complete its logical
 invalidation before app storage is reused; a failed safe-off quarantines the
 affected channel. It does not bypass the remaining broker cleanup.
 
@@ -174,7 +177,7 @@ an existing firmware presentation service; runtime opens no competing batch
 and render requests return `HK_ERR_FEATURE_UNAVAILABLE`. The app cannot present, begin/abort a Display batch, select
 an LCD plane, obtain a framebuffer owner, or call a driver through this API.
 
-For a render pass the runtime borrows the app's injected public Display handle,
+For a render pass the runtime borrows its stable public Display session,
 opens one bounded provider transaction, applies the pending invalidations, and
 passes an opaque `hk_app_surface_t` to `render`. Command-batch drawing
 (clear/rectangle/text/blit) and `hk_app_surface_lock` of the existing BASE
@@ -184,9 +187,9 @@ is invalidated before any later app work. Runtime alone presents or aborts the
 transaction with one absolute deadline derived
 from `limits.render_budget_us`; measured callback time uses the same monotonic
 Time provider. A callback, provider, present, or budget failure aborts the
-batch where possible and enters the common unwind. If an optional Display grant
-is absent, the invalidation is deterministically consumed without opening a
-hardware path; a required absent Display has already failed preflight. A busy
+batch where possible and enters the common unwind. Production integration opens
+BASE before app start; absent Display fails that launch. Required Display
+availability is also checked by build composition. A busy
 Display keeps the invalidation pending for a later poll.
 
 If `render` requests another invalidation after runtime has consumed the
