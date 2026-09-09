@@ -15,6 +15,26 @@
         }                                                                    \
     } while(0)
 
+typedef struct { hk_lease_t lease; } fixture_grant_t;
+/* Generic broker fixture only; production External Link uses sessions. */
+static hk_result_t fixture_context_grant(const hk_app_context_t *ctx, uint16_t instance, fixture_grant_t *handle)
+{
+    uint8_t available;
+    const char *fallback;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    handle->lease = HK_LEASE_NONE;
+    hk_result_t result = hk_app_context_capability_status(ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, instance, &available, &fallback);
+    if(result != HK_OK) return result;
+    if(!available) return HK_ERR_CAPABILITY_ABSENT;
+    for(uint16_t i=0U; i<ctx->capability_count; ++i) {
+        if(ctx->capabilities[i].id == HK_CAPABILITY_ID_EXTERNAL_LINK && ctx->capabilities[i].instance == instance) {
+            handle->lease = ctx->capabilities[i].lease;
+            return HK_OK;
+        }
+    }
+    return HK_ERR_NOT_DECLARED;
+}
+
 typedef enum
 {
     MODE_AVAILABLE = 0,
@@ -43,7 +63,7 @@ typedef struct
     uint8_t owner_live;
     hk_owner_t live_owner;
     hk_app_context_t copied_context;
-    hk_external_link_t copied_lights;
+    fixture_grant_t copied_lights;
 } grants_fixture_t;
 
 /* Time is a board-lifetime immutable pointer, outside broker grants. */
@@ -95,8 +115,8 @@ static hk_result_t start(const hk_app_context_t *ctx)
     hk_owner_t owner = HK_OWNER_NONE;
     const hk_time_t *time = NULL;
     const hk_input_t *direct_input = &s_input;
-    hk_external_link_t input = {0};
-    hk_external_link_t link = {0};
+    fixture_grant_t input = {0};
+    fixture_grant_t link = {0};
     hk_app_service_t service = {0};
     uint32_t generation = 0U;
     uint8_t available = 0U;
@@ -109,11 +129,11 @@ static hk_result_t start(const hk_app_context_t *ctx)
        hk_app_context_capability_status(
            ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
        !available || fallback != NULL ||
-       hk_app_context_external_link(ctx, 0U, &s_fixture->copied_lights) != HK_OK ||
+       fixture_context_grant(ctx, 0U, &s_fixture->copied_lights) != HK_OK ||
        !s_fixture->owner_live ||
        s_fixture->copied_lights.lease.owner.generation !=
            s_fixture->live_owner.generation ||
-       hk_app_context_external_link(ctx, 2U, &link) != HK_ERR_NOT_DECLARED ||
+       fixture_context_grant(ctx, 2U, &link) != HK_ERR_NOT_DECLARED ||
        hk_app_context_service(
            ctx, "hackylens.service.settings", &service) != HK_OK ||
        service.context_generation != ctx->generation ||
@@ -131,10 +151,10 @@ static hk_result_t start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
     if(s_fixture->mode == MODE_OPTIONAL_ABSENT)
     {
-        if(hk_app_context_external_link(ctx, 1U, &input) != HK_ERR_CAPABILITY_ABSENT)
+        if(fixture_context_grant(ctx, 1U, &input) != HK_ERR_CAPABILITY_ABSENT)
             return HK_ERR_INTERNAL;
     }
-    else if(hk_app_context_external_link(ctx, 1U, &input) != HK_OK)
+    else if(fixture_context_grant(ctx, 1U, &input) != HK_OK)
     {
         return HK_ERR_INTERNAL;
     }
@@ -168,11 +188,11 @@ static hk_result_t render(
 
 static hk_result_t stop(const hk_app_context_t *ctx)
 {
-    hk_external_link_t time = {0};
+    fixture_grant_t time = {0};
 
     s_fixture->stop_calls++;
     if(!s_fixture->owner_live ||
-       hk_app_context_external_link(ctx, 0U, &time) != HK_OK ||
+       fixture_context_grant(ctx, 0U, &time) != HK_OK ||
        time.lease.owner.generation != s_fixture->live_owner.generation)
         return HK_ERR_INTERNAL;
     if(s_fixture->mode == MODE_CORRUPT_PUBLIC_OWNER)
@@ -495,7 +515,7 @@ static int check_preflight_failures(void)
 
 static int fake_handle_is_live(
     const grants_fixture_t *fixture,
-    const hk_external_link_t *handle)
+    const fixture_grant_t *handle)
 {
     return fixture->owner_live &&
            handle->lease.owner.slot == fixture->live_owner.slot &&
@@ -507,7 +527,7 @@ static int check_grants_and_retirement(void)
     grants_fixture_t fixture;
     hk_app_runtime_t runtime;
     hk_app_t app = descriptor();
-    hk_external_link_t first_lights;
+    fixture_grant_t first_lights;
     hk_app_context_t first_context;
     const hk_time_t *retired_time = &s_time;
     const hk_input_t *retired_input = &s_input;
@@ -529,7 +549,7 @@ static int check_grants_and_retirement(void)
     CHECK(retired_time == NULL);
     CHECK(hk_app_context_input(&first_context, &retired_input) == HK_ERR_STALE_HANDLE);
     CHECK(retired_input == NULL);
-    CHECK(hk_app_context_external_link(
+    CHECK(fixture_context_grant(
         &first_context, 0U, &fixture.copied_lights) == HK_ERR_STALE_HANDLE);
 
     fixture.mode = MODE_AVAILABLE;

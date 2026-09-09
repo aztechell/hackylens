@@ -48,6 +48,9 @@ class AppRuntimeV2Tests(unittest.TestCase):
         if source_name in ("app_runtime_v2_harness.c", "app_runtime_mixed_harness.c", "app_runtime_grants_harness.c"):
             extra_sources += ("firmware/src/capabilities/display.c", "tests/capability_fake_display.c")
             extra_includes += (ROOT / "tests",)
+        if source_name != "app_runtime_production_harness.c":
+            extra_sources += ("tests/capability_fake_external_link.c",)
+            extra_includes += (ROOT / "tests",)
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-app-runtime-") as temp:

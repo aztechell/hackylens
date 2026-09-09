@@ -2,6 +2,7 @@
 #define HACKYLENS_APP_CONTEXT_H
 
 #include <stdint.h>
+#include <hackylens/capability/owner.h>
 
 #include <hackylens/capability/display.h>
 #include <hackylens/capability/external_link.h>
@@ -73,8 +74,8 @@ hk_result_t hk_app_context_display(
     hk_display_t **session);
 hk_result_t hk_app_context_external_link(
     const hk_app_context_t *ctx,
-    uint16_t instance,
-    hk_external_link_t *handle);
+    uint64_t mode_features,
+    hk_external_link_t **session);
 hk_result_t hk_app_context_lights(
     const hk_app_context_t *ctx,
     uint32_t channels,

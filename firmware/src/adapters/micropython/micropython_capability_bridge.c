@@ -10,7 +10,6 @@
 #include <hackylens/capability/lights.h>
 #include <hackylens/capability/time.h>
 
-#include "../../core/hk_capability_client.h"
 #include "../../capabilities/display_stage_private.h"
 #include "../../config/display_config.h"
 #include "../../services/external_link_service.h"
@@ -87,7 +86,6 @@ static micropython_binding_control_t g_control_storage
     __attribute__((aligned(64)));
 static uint8_t g_external_owned;
 static hk_external_link_t g_external;
-static hk_owner_t g_external_owner;
 static uint32_t g_lights_owned;
 static hk_lights_t g_illumination_lights;
 static hk_lights_t g_rgb_lights;
@@ -337,24 +335,17 @@ static micropython_binding_result_t binding_external_result(hk_result_t result)
 
 static hk_result_t binding_claim_external(void)
 {
-    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    uint64_t features;
     hk_result_t result;
 
     if(g_external_owned)
         return HK_OK;
     external_link_service_suspend();
-    g_external_owner = capability_client_consumer_owner(
-        "consumer:micropython-adapter");
-    if(hk_owner_is_zero(g_external_owner))
-    {
-        external_link_service_resume();
-        return HK_ERR_STALE_HANDLE;
-    }
-    request.required_features =
+    features =
         HK_EXTERNAL_LINK_FEATURE_UART |
         HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
-    result = hk_external_link_acquire(
-        g_external_owner, &request, request.required_features, &g_external);
+    result = hk_external_link_open(
+        hk_external_link_service(), features, &g_external);
     if(result != HK_OK)
     {
         external_link_service_resume();
@@ -376,7 +367,7 @@ static hk_result_t binding_select_uart(uint32_t baud)
         return result;
     if(g_external_mode != BINDING_EXTERNAL_UART || g_uart_baud != baud)
         result = hk_external_link_configure_uart(
-            g_external_owner, &g_external, &config);
+            &g_external, &config);
     if(result != HK_OK)
         return result;
     g_uart_baud = baud;
@@ -397,7 +388,7 @@ static hk_result_t binding_select_i2c(void)
         return result;
     if(g_external_mode != BINDING_EXTERNAL_I2C)
         result = hk_external_link_configure_i2c_controller(
-            g_external_owner, &g_external, &config);
+            &g_external, &config);
     if(result != HK_OK)
         return result;
     g_external_mode = BINDING_EXTERNAL_I2C;
@@ -616,7 +607,7 @@ static micropython_binding_result_t binding_execute(
         };
         if(result == HK_OK)
             result = hk_external_link_uart_read(
-                g_external_owner, &g_external, &rx, &received);
+                &g_external, &rx, &received);
         control->output_length = received;
         return binding_external_result(result);
     }
@@ -666,7 +657,7 @@ static micropython_binding_result_t binding_external_operation_start(
                 &deadline);
         if(result == HK_OK)
             result = hk_external_link_uart_write_begin(
-                g_external_owner, &g_external, &tx, deadline, NULL,
+                &g_external, &tx, deadline, NULL,
                 &g_external_operation.operation);
     }
     else
@@ -691,7 +682,7 @@ static micropython_binding_result_t binding_external_operation_start(
         };
         if(result == HK_OK)
             result = hk_external_link_i2c_transfer_begin(
-                g_external_owner, &g_external, &transfer, deadline, NULL,
+                &g_external, &transfer, deadline, NULL,
                 &g_external_operation.operation);
     }
     if(result != HK_PENDING)
@@ -718,10 +709,10 @@ static void binding_external_operation_progress(
         control, ticket, g_external_operation.run_id);
     result = cancelled ?
         hk_external_link_cancel(
-            g_external_owner, &g_external,
+            &g_external,
             &g_external_operation.operation, &progress) :
         hk_external_link_poll(
-            g_external_owner, &g_external,
+            &g_external,
             &g_external_operation.operation, &progress);
     if(result == HK_PENDING)
         return;
@@ -744,7 +735,7 @@ static void binding_external_operation_cancel(void)
     if(g_external_operation.active && g_external_owned)
     {
         (void)hk_external_link_cancel(
-            g_external_owner, &g_external,
+            &g_external,
             &g_external_operation.operation, &progress);
     }
     binding_external_operation_reset();
@@ -754,12 +745,6 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
 {
     micropython_binding_control_t *control = binding_control();
     hk_result_t display_result = HK_ERR_STALE_HANDLE;
-
-    /* A failed ordinary broker release stays retryable until its S8 migration.
-       Never overwrite the only live handle when starting the next VM run. */
-    if(g_external_owned &&
-       micropython_capability_bridge_cleanup() != HK_OK)
-        return;
 
     control->run_active = 0U;
     control->run_id = run_id;
@@ -773,8 +758,7 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
     control->output_length = 0U;
     control->result = MICROPYTHON_BINDING_OK;
     g_external_owned = 0U;
-    g_external.lease = HK_LEASE_NONE;
-    g_external_owner = HK_OWNER_NONE;
+    g_external = (hk_external_link_t){0};
     g_lights_owned = 0U;
     g_external_mode = BINDING_EXTERNAL_NONE;
     g_uart_baud = 115200U;
@@ -872,13 +856,11 @@ hk_result_t micropython_capability_bridge_cleanup(void)
         binding_external_operation_cancel();
     if(g_external_owned)
     {
-        result = hk_external_link_release(
-            g_external_owner, HK_DEADLINE_IMMEDIATE, &g_external);
+        result = hk_external_link_retire(
+            &g_external, deadline);
         if(first == HK_OK) first = result;
-        if(result == HK_OK) {
-            g_external_owned = 0U;
-            external_link_service_resume();
-        }
+        g_external_owned = 0U;
+        external_link_service_resume();
     }
     result = hk_lights_retire(&g_illumination_lights, deadline);
     if(first == HK_OK) first = result;
@@ -891,7 +873,6 @@ hk_result_t micropython_capability_bridge_cleanup(void)
         if(first == HK_OK) first = result;
         g_display_owned = 0U;
     }
-    if(!g_external_owned) g_external_owner = HK_OWNER_NONE;
     g_lights_owned = 0U;
     if(!g_external_owned) g_external_mode = BINDING_EXTERNAL_NONE;
     binding_display_stage_reset(0U);

@@ -79,6 +79,7 @@ typedef struct
     const hk_input_t *input;
     const hk_lights_service_t *lights;
     const hk_display_service_t *display;
+    const hk_external_link_service_t *external_link;
     hk_app_runtime_resolve_capability_fn resolve_capability;
     hk_app_runtime_resolve_service_fn resolve_service;
     hk_app_runtime_owner_open_fn owner_open;
@@ -96,6 +97,7 @@ typedef struct hk_app_runtime
     hk_app_context_t context;
     hk_lights_t lights[3];
     hk_display_t display[2];
+    hk_external_link_t external_link;
     hk_capability_request_t
         resolved_capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
     uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];

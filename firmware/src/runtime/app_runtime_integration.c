@@ -82,24 +82,9 @@ static hk_result_t acquire_capability(
     const hk_capability_request_t *request,
     hk_lease_t *lease)
 {
-    hk_result_t result;
-
-    (void)user;
-    if(!request || !lease)
-        return HK_ERR_INVALID_ARGUMENT;
+    (void)user; (void)owner; (void)request;
+    if(!lease) return HK_ERR_INVALID_ARGUMENT;
     *lease = HK_LEASE_NONE;
-    if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
-    {
-        hk_external_link_t handle = {0};
-        uint64_t modes = request->required_features &
-                         HK_EXTERNAL_LINK_FEATURES_0_1;
-
-        if(modes == 0U)
-            return HK_ERR_INVALID_ARGUMENT;
-        result = hk_external_link_acquire(owner, request, modes, &handle);
-        *lease = handle.lease;
-        return result;
-    }
     return HK_ERR_NOT_DECLARED;
 }
 
@@ -367,6 +352,7 @@ hk_result_t app_runtime_integration_initialize(void)
         .input = hk_input_service(),
         .lights = hk_lights_service(),
         .display = hk_display_service(),
+        .external_link = hk_external_link_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

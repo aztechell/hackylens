@@ -4,8 +4,7 @@
 
 #include <hackylens/capability/external_link.h>
 
-#include "capability_core_binding.h"
-#include "capability_provider.h"
+#include "external_link_provider.h"
 #include "external_link_normative_suite.h"
 #include "hal_external_link.h"
 
@@ -23,10 +22,7 @@
         }                                                                    \
     } while(0)
 
-extern const hk_capability_provider_t hk_k210_external_link_provider;
 
-static hk_lease_t s_leases[TEST_LEASES];
-static uint32_t s_lease_generations[TEST_LEASES];
 static uint64_t s_now_us;
 static uint8_t s_uart_tx[TEST_BYTES * 2U];
 static uint32_t s_uart_tx_size;
@@ -46,7 +42,6 @@ static uint8_t s_i2c_tx[TEST_BYTES];
 static uint32_t s_i2c_tx_size;
 static uint8_t s_i2c_aborted;
 static uint8_t s_i2c_active;
-static uint8_t s_provider_quarantined;
 static const hal_external_i2c_callbacks_t *s_target_callbacks;
 static uint8_t s_target_locked;
 static uint8_t s_inject_on_unlock;
@@ -54,107 +49,6 @@ static uint8_t s_unlock_write[TEST_BYTES];
 static uint32_t s_unlock_write_size;
 static uint32_t s_target_lock_calls;
 static uint32_t s_target_unlock_calls;
-
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static uint8_t lease_equal(const hk_lease_t *left, const hk_lease_t *right)
-{
-    return (uint8_t)(left && right && left->slot == right->slot &&
-                     left->generation == right->generation &&
-                     left->capability_id == right->capability_id &&
-                     owner_equal(left->owner, right->owner));
-}
-
-hk_result_t capability_owner_runtime_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
-    hk_capability_id_t expected_type, hk_lease_t *lease)
-{
-    if(!request || !lease || hk_owner_is_zero(owner) ||
-       expected_type != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-       request->id != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-       (request->required_features & ~HK_EXTERNAL_LINK_FEATURES_0_1) != 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(s_provider_quarantined)
-        return HK_ERR_INVALID_STATE;
-    for(uint32_t slot = 0U; slot < TEST_LEASES; ++slot)
-    {
-        if(!hk_lease_is_zero(&s_leases[slot]))
-            continue;
-        if(++s_lease_generations[slot] == 0U)
-            return HK_ERR_LIMIT;
-        s_leases[slot] = (hk_lease_t){
-            slot, s_lease_generations[slot], owner,
-            HK_CAPABILITY_ID_EXTERNAL_LINK,
-        };
-        *lease = s_leases[slot];
-        return HK_OK;
-    }
-    return HK_ERR_LIMIT;
-}
-
-static hk_result_t validate_runtime_lease(
-    hk_owner_t owner, const hk_lease_t *lease,
-    hk_capability_id_t expected_type, uint8_t allow_quarantined,
-    void **provider_context)
-{
-    if(!lease || !provider_context ||
-       expected_type != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-       lease->capability_id != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-       lease->slot >= TEST_LEASES)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(!owner_equal(owner, lease->owner))
-        return HK_ERR_WRONG_OWNER;
-    if(!lease_equal(lease, &s_leases[lease->slot]))
-        return HK_ERR_STALE_HANDLE;
-    if(s_provider_quarantined && !allow_quarantined)
-        return HK_ERR_INVALID_STATE;
-    *provider_context = hk_k210_external_link_provider.context;
-    return HK_OK;
-}
-
-hk_result_t capability_owner_runtime_validate(
-    hk_owner_t owner, const hk_lease_t *lease,
-    hk_capability_id_t expected_type, void **provider_context)
-{
-    return validate_runtime_lease(
-        owner, lease, expected_type, 0U, provider_context);
-}
-
-hk_result_t capability_owner_runtime_release(
-    hk_owner_t owner, hk_capability_id_t expected_type,
-    hk_deadline_t deadline, hk_lease_t *lease)
-{
-    void *context;
-    hk_result_t result;
-
-    (void)deadline;
-    if(!lease)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = validate_runtime_lease(
-        owner, lease, expected_type, 1U, &context);
-    if(result != HK_OK)
-        return result;
-    s_leases[lease->slot] = HK_LEASE_NONE;
-    *lease = HK_LEASE_NONE;
-    return HK_OK;
-}
-
-hk_result_t capability_owner_runtime_quarantine(
-    hk_owner_t owner, const hk_lease_t *lease,
-    hk_capability_id_t expected_type)
-{
-    void *context;
-    hk_result_t result = validate_runtime_lease(
-        owner, lease, expected_type, 1U, &context);
-
-    if(result == HK_OK)
-        s_provider_quarantined = 1U;
-    return result;
-}
 
 uint64_t hal_time_us(void)
 {
@@ -319,8 +213,7 @@ void hal_external_i2c_stop(void)
 
 static void backend_reset(void)
 {
-    memset(s_leases, 0, sizeof(s_leases));
-    memset(s_lease_generations, 0, sizeof(s_lease_generations));
+    *hk_external_link_binding.state = (hk_external_link_state_t){0};
     memset(s_uart_tx, 0, sizeof(s_uart_tx));
     memset(s_uart_rx, 0, sizeof(s_uart_rx));
     memset(s_i2c_source, 0, sizeof(s_i2c_source));
@@ -340,7 +233,6 @@ static void backend_reset(void)
     s_i2c_tx_size = 0U;
     s_i2c_aborted = 0U;
     s_i2c_active = 0U;
-    s_provider_quarantined = 0U;
     s_target_callbacks = NULL;
     s_target_locked = 0U;
     s_inject_on_unlock = 0U;
@@ -399,8 +291,6 @@ static int backend_uart_receive(const uint8_t *data, size_t size)
 
 static int run_uart_loopback_capture_tests(void)
 {
-    static const hk_owner_t owner = {25U, 27U};
-    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
     hk_external_link_t link = {0};
     hk_external_link_uart_config_t uart = {
         sizeof(uart), HK_EXTERNAL_LINK_UART_CONFIG_VERSION, 115200U, 0U,
@@ -424,24 +314,17 @@ static int run_uart_loopback_capture_tests(void)
         transmit[index] = (uint8_t)(index * 73U + 19U);
 
     backend_reset();
-    request.required_features = HK_EXTERNAL_LINK_FEATURE_UART;
-    HARNESS_CHECK(hk_external_link_acquire(
-        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_configure_uart(
-        owner, &link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
     s_uart_loopback = 1U;
-    HARNESS_CHECK(hk_external_link_uart_write_begin(
-        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_uart_write_begin(&link, &tx, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
     for(uint32_t poll = 0U; poll < 16U && result == HK_PENDING; ++poll)
-        result = hk_external_link_poll(
-            owner, &link, &operation, &progress);
+        result = hk_external_link_poll(&link, &operation, &progress);
     HARNESS_CHECK(result == HK_OK);
     while(total < sizeof(receive))
     {
         memset(chunk, 0, sizeof(chunk));
-        HARNESS_CHECK(hk_external_link_uart_read(
-            owner, &link, &rx, &received) == HK_OK);
+        HARNESS_CHECK(hk_external_link_uart_read(&link, &rx, &received) == HK_OK);
         HARNESS_CHECK(received != 0U && received <= sizeof(chunk));
         memcpy(receive + total, chunk, received);
         total += received;
@@ -449,61 +332,40 @@ static int run_uart_loopback_capture_tests(void)
     HARNESS_CHECK(total == sizeof(transmit));
     HARNESS_CHECK(memcmp(receive, transmit, sizeof(transmit)) == 0);
 
-    HARNESS_CHECK(hk_external_link_configure_uart(
-        owner, &link, &uart) == HK_OK);
-    HARNESS_CHECK(hk_external_link_uart_read(
-        owner, &link, &rx, &received) == HK_OK && received == 0U);
+    HARNESS_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(&link, &rx, &received) == HK_OK && received == 0U);
 
     operation = HK_EXTERNAL_LINK_OP_NONE;
-    HARNESS_CHECK(hk_external_link_uart_write_begin(
-        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_PENDING);
-    HARNESS_CHECK(hk_external_link_poll(
-        owner, &link, &operation, &progress) == HK_PENDING);
-    HARNESS_CHECK(hk_external_link_cancel(
-        owner, &link, &operation, &progress) == HK_ERR_CANCELLED);
-    HARNESS_CHECK(hk_external_link_release(
-        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_acquire(
-        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_configure_uart(
-        owner, &link, &uart) == HK_OK);
-    HARNESS_CHECK(hk_external_link_uart_read(
-        owner, &link, &rx, &received) == HK_OK && received == 0U);
-    HARNESS_CHECK(hk_external_link_release(
-        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_write_begin(&link, &tx, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_cancel(&link, &operation, &progress) == HK_ERR_CANCELLED);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(&link, &rx, &received) == HK_OK && received == 0U);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
 
     backend_reset();
-    HARNESS_CHECK(hk_external_link_acquire(
-        owner, &request, HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_configure_uart(
-        owner, &link, &uart) == HK_OK);
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_UART, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
     s_uart_loopback = 1U;
     memset(chunk, 0x5a, sizeof(chunk));
     HARNESS_CHECK(backend_uart_receive(chunk, sizeof(chunk)) == 0);
     operation = HK_EXTERNAL_LINK_OP_NONE;
     result = HK_PENDING;
-    HARNESS_CHECK(hk_external_link_uart_write_begin(
-        owner, &link, &tx, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_uart_write_begin(&link, &tx, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
     for(uint32_t poll = 0U; poll < 16U && result == HK_PENDING; ++poll)
-        result = hk_external_link_poll(
-            owner, &link, &operation, &progress);
+        result = hk_external_link_poll(&link, &operation, &progress);
     HARNESS_CHECK(result == HK_OK);
-    HARNESS_CHECK(hk_external_link_uart_read(
-        owner, &link, &rx, &received) == HK_ERR_OVERFLOW);
+    HARNESS_CHECK(hk_external_link_uart_read(&link, &rx, &received) == HK_ERR_OVERFLOW);
     HARNESS_CHECK(received == 0U);
-    HARNESS_CHECK(hk_external_link_uart_read(
-        owner, &link, &rx, &received) == HK_OK && received == 0U);
-    HARNESS_CHECK(hk_external_link_release(
-        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_uart_read(&link, &rx, &received) == HK_OK && received == 0U);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
     return 0;
 }
 
 static int run_target_handoff_tests(void)
 {
-    static const hk_owner_t owner = {21U, 23U};
-    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
     hk_external_link_t link = {0};
     hk_external_link_i2c_target_config_t target = {
         sizeof(target), HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION,
@@ -530,62 +392,50 @@ static int run_target_handoff_tests(void)
 
     backend_reset();
     backend_set_now(100U);
-    request.required_features = HK_EXTERNAL_LINK_FEATURE_I2C_TARGET;
-    HARNESS_CHECK(hk_external_link_acquire(
-        owner, &request, HK_EXTERNAL_LINK_FEATURE_I2C_TARGET, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_configure_i2c_target(
-        owner, &link, &target) == HK_OK);
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_I2C_TARGET, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_OK);
 
     backend_target_write(write1, sizeof(write1));
     backend_target_write(write2, sizeof(write2));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write1));
     HARNESS_CHECK(memcmp(receive, write1, sizeof(write1)) == 0);
     memset(receive, 0, sizeof(receive));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write2));
     HARNESS_CHECK(memcmp(receive, write2, sizeof(write2)) == 0);
 
-    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(
-        owner, &link, &tx) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
     backend_target_read(observed, sizeof(observed));
     backend_target_write(write3, sizeof(write3));
     HARNESS_CHECK(observed[0] == response[0] &&
                   observed[1] == response[1] && observed[2] == 0U);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ &&
                   event.requested_bytes == sizeof(observed));
     memset(receive, 0, sizeof(receive));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write3));
     HARNESS_CHECK(memcmp(receive, write3, sizeof(write3)) == 0);
 
     backend_target_write(write1, sizeof(write1));
-    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(
-        owner, &link, &tx) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
     observed[0] = s_target_callbacks->transmit();
-    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(
-        owner, &link, &next_tx) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &next_tx) == HK_OK);
     observed[1] = s_target_callbacks->transmit();
     observed[2] = s_target_callbacks->transmit();
     s_target_callbacks->event(HAL_EXTERNAL_I2C_EVENT_STOP);
     HARNESS_CHECK(observed[0] == response[0] &&
                   observed[1] == response[1] && observed[2] == 0U);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_ERR_OVERFLOW);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_ERR_OVERFLOW);
     backend_target_read(next_observed, sizeof(next_observed));
     HARNESS_CHECK(next_observed[0] == next_response[0] &&
                   next_observed[1] == next_response[1] &&
                   next_observed[2] == 0U);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ &&
                   event.requested_bytes == sizeof(next_observed));
 
@@ -594,15 +444,13 @@ static int run_target_handoff_tests(void)
     s_unlock_write_size = sizeof(write2);
     s_inject_on_unlock = 1U;
     memset(receive, 0, sizeof(receive));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write1));
     HARNESS_CHECK(memcmp(receive, write1, sizeof(write1)) == 0);
     HARNESS_CHECK(!s_target_locked && !s_inject_on_unlock);
     memset(receive, 0, sizeof(receive));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write2));
     HARNESS_CHECK(memcmp(receive, write2, sizeof(write2)) == 0);
@@ -610,15 +458,12 @@ static int run_target_handoff_tests(void)
     backend_target_write(write1, sizeof(write1));
     backend_target_write(write2, sizeof(write2));
     backend_target_write(write3, sizeof(write3));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_ERR_OVERFLOW);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_ERR_OVERFLOW);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_NONE);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_PENDING);
     backend_target_write(write3, sizeof(write3));
     memset(receive, 0, sizeof(receive));
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
     HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
                   event.received_bytes == sizeof(write3));
     HARNESS_CHECK(memcmp(receive, write3, sizeof(write3)) == 0);
@@ -627,24 +472,17 @@ static int run_target_handoff_tests(void)
     backend_target_write(write1, sizeof(write1));
     backend_target_write(write2, sizeof(write2));
     backend_target_write(write3, sizeof(write3));
-    HARNESS_CHECK(hk_external_link_configure_i2c_target(
-        owner, &link, &target) == HK_OK);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_PENDING);
 
     backend_target_write(write1, sizeof(write1));
     backend_target_write(write2, sizeof(write2));
     backend_target_write(write3, sizeof(write3));
-    HARNESS_CHECK(hk_external_link_release(
-        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_acquire(
-        owner, &request, HK_EXTERNAL_LINK_FEATURE_I2C_TARGET, &link) == HK_OK);
-    HARNESS_CHECK(hk_external_link_configure_i2c_target(
-        owner, &link, &target) == HK_OK);
-    HARNESS_CHECK(hk_external_link_i2c_target_poll(
-        owner, &link, &rx, &event) == HK_PENDING);
-    HARNESS_CHECK(hk_external_link_release(
-        owner, (hk_deadline_t){1000U}, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_I2C_TARGET, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_PENDING);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
     return 0;
 }
 

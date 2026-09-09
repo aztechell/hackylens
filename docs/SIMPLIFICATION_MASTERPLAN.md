@@ -593,6 +593,32 @@ HMPY display прошёл normal completion, exception, requested stop и timeou
 Display принят. External Link и финальное удаление оставшейся
 broker/catalog/owner machinery ещё не выполнены.
 
+### Перенос External Link (2026-09-09)
+
+External Link переведён на immutable binding и стабильную connector session.
+Generic lease/owner не участвует в UART/I2C. Сохранены exclusive modes,
+incremental operations, IRQ handoff, cancellation и quarantine. Счётчик
+operation generation теперь сохраняется между close/open одной и той же
+сессии: старый токен не может совпасть с операцией нового запуска.
+
+Обычный close повторяем после ошибки. Retire безусловно останавливает
+peripheral/IRQ и удаляет ссылки на TX/RX перед инвалидированием сессии;
+ошибка карантинирует connector. MP и runtime передают External Link, Lights
+и Display один исходный cleanup deadline, пытаются очистить все ресурсы
+и сохраняют первую ошибку. Настройки внешнего сервиса восстанавливаются
+после завершения MP.
+
+234 host tests прошли. Общий fake/K210 suite проверяет старый operation token
+после повторного открытия, pending transfer при expired close/retire и
+отсутствие последующих эффектов. Обе сборки, architecture/provider hashes
+и resource guard прошли. Full image: 1,549,432 байта (−3,392 к Display;
+−16,960 к принятому S7), static RAM: 2,896,320 байт (−136 к Display;
+−2,152 к S7). Логи: `build/s8-external-*.log`.
+
+CI и аппаратная проверка этого этапа ещё ожидаются. Все hardware services
+перенесены; финальное удаление неиспользуемой broker/catalog/owner machinery
+остаётся отдельным незавершённым шагом S8.
+
 ### Цель
 
 Сохранить board-independent typed hardware access, но удалить dynamic machinery,

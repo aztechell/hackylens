@@ -14,8 +14,6 @@
         }                                                                  \
     } while(0)
 
-static const hk_owner_t OWNER_A = {11U, 17U};
-static const hk_owner_t OWNER_B = {12U, 19U};
 
 static uint8_t cancel_probe(const void *context)
 {
@@ -25,7 +23,6 @@ static uint8_t cancel_probe(const void *context)
 int external_link_normative_suite_run(
     const external_link_normative_backend_t *backend)
 {
-    hk_capability_request_t request = HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
     hk_external_link_t link = {0};
     hk_external_link_t second = {0};
     hk_external_link_t stale = {0};
@@ -88,135 +85,112 @@ int external_link_normative_suite_run(
         i2c_source[i] = (uint8_t)(0x80U + i);
     }
 
-    request.required_features = HK_EXTERNAL_LINK_FEATURES_0_1;
-    SUITE_CHECK(hk_external_link_acquire(
-        OWNER_A, &request, HK_EXTERNAL_LINK_FEATURES_0_1, &link) == HK_OK);
-    SUITE_CHECK(hk_external_link_get_info(OWNER_A, &link, &info) == HK_OK);
+    SUITE_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURES_0_1, &link) == HK_OK);
+    SUITE_CHECK(hk_external_link_get_info(&link, &info) == HK_OK);
     SUITE_CHECK(info.features == HK_EXTERNAL_LINK_FEATURES_0_1);
     SUITE_CHECK(info.maximum_poll_bytes == 32U);
     SUITE_CHECK(info.maximum_i2c_write_bytes == 256U);
-    SUITE_CHECK(hk_external_link_acquire(
-        OWNER_B, &request, HK_EXTERNAL_LINK_FEATURE_UART, &second) ==
+    SUITE_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_UART, &second) ==
         HK_ERR_BUSY);
 
     uart.struct_size = (uint16_t)(sizeof(uart) - 1U);
-    SUITE_CHECK(hk_external_link_configure_uart(
-        OWNER_A, &link, &uart) == HK_ERR_INVALID_ARGUMENT);
+    SUITE_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_ERR_INVALID_ARGUMENT);
     uart.struct_size = sizeof(uart);
     uart.struct_version++;
-    SUITE_CHECK(hk_external_link_configure_uart(
-        OWNER_A, &link, &uart) == HK_ERR_VERSION_INCOMPATIBLE);
+    SUITE_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_ERR_VERSION_INCOMPATIBLE);
     uart.struct_version = HK_EXTERNAL_LINK_UART_CONFIG_VERSION;
 
     controller.struct_size = (uint16_t)(sizeof(controller) - 1U);
-    SUITE_CHECK(hk_external_link_configure_i2c_controller(
-        OWNER_A, &link, &controller) == HK_ERR_INVALID_ARGUMENT);
+    SUITE_CHECK(hk_external_link_configure_i2c_controller(&link, &controller) == HK_ERR_INVALID_ARGUMENT);
     controller.struct_size = sizeof(controller);
     controller.struct_version++;
-    SUITE_CHECK(hk_external_link_configure_i2c_controller(
-        OWNER_A, &link, &controller) == HK_ERR_VERSION_INCOMPATIBLE);
+    SUITE_CHECK(hk_external_link_configure_i2c_controller(&link, &controller) == HK_ERR_VERSION_INCOMPATIBLE);
     controller.struct_version =
         HK_EXTERNAL_LINK_I2C_CONTROLLER_CONFIG_VERSION;
 
     target.struct_size = (uint16_t)(sizeof(target) - 1U);
-    SUITE_CHECK(hk_external_link_configure_i2c_target(
-        OWNER_A, &link, &target) == HK_ERR_INVALID_ARGUMENT);
+    SUITE_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_ERR_INVALID_ARGUMENT);
     target.struct_size = sizeof(target);
     target.struct_version++;
-    SUITE_CHECK(hk_external_link_configure_i2c_target(
-        OWNER_A, &link, &target) == HK_ERR_VERSION_INCOMPATIBLE);
+    SUITE_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_ERR_VERSION_INCOMPATIBLE);
     target.struct_version = HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION;
 
     transfer.struct_size = (uint16_t)(sizeof(transfer) - 1U);
-    SUITE_CHECK(hk_external_link_i2c_transfer_begin(
-        OWNER_A, &link, &transfer, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_ERR_INVALID_ARGUMENT);
+    SUITE_CHECK(hk_external_link_i2c_transfer_begin(&link, &transfer, (hk_deadline_t){1000U}, NULL, &operation) == HK_ERR_INVALID_ARGUMENT);
     transfer.struct_size = sizeof(transfer);
     transfer.struct_version++;
-    SUITE_CHECK(hk_external_link_i2c_transfer_begin(
-        OWNER_A, &link, &transfer, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_ERR_VERSION_INCOMPATIBLE);
+    SUITE_CHECK(hk_external_link_i2c_transfer_begin(&link, &transfer, (hk_deadline_t){1000U}, NULL, &operation) == HK_ERR_VERSION_INCOMPATIBLE);
     transfer.struct_version = HK_EXTERNAL_LINK_I2C_TRANSFER_VERSION;
 
-    SUITE_CHECK(hk_external_link_configure_uart(
-        OWNER_A, &link, &uart) == HK_OK);
-    SUITE_CHECK(hk_external_link_uart_write_begin(
-        OWNER_A, &link, &uart_view, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_PENDING);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
+    SUITE_CHECK(hk_external_link_uart_write_begin(&link, &uart_view, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_PENDING);
     SUITE_CHECK(progress.tx_completed_bytes == 32U);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_PENDING);
     SUITE_CHECK(progress.tx_completed_bytes == 64U);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_OK);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_OK);
     SUITE_CHECK(progress.tx_completed_bytes == sizeof(uart_bytes));
     SUITE_CHECK((progress.flags & HK_EXTERNAL_LINK_PROGRESS_TERMINAL) != 0U);
 
-    SUITE_CHECK(hk_external_link_uart_write_begin(
-        OWNER_A, &link, &uart_view, (hk_deadline_t){1000U}, &cancel,
-        &operation) == HK_PENDING);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_uart_write_begin(&link, &uart_view, (hk_deadline_t){1000U}, &cancel, &operation) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_PENDING);
     SUITE_CHECK(progress.tx_completed_bytes == 32U);
     cancelled = 1U;
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_ERR_CANCELLED);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_ERR_CANCELLED);
     effects = backend->uart_tx_bytes();
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_ERR_CANCELLED);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_ERR_CANCELLED);
     SUITE_CHECK(backend->uart_tx_bytes() == effects);
     cancelled = 0U;
 
-    SUITE_CHECK(hk_external_link_configure_i2c_controller(
-        OWNER_A, &link, &controller) == HK_OK);
+    SUITE_CHECK(hk_external_link_configure_i2c_controller(&link, &controller) == HK_OK);
     backend->set_i2c_rx(i2c_source, sizeof(i2c_source));
-    SUITE_CHECK(hk_external_link_i2c_transfer_begin(
-        OWNER_A, &link, &transfer, (hk_deadline_t){1000U}, NULL,
-        &operation) == HK_PENDING);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_i2c_transfer_begin(&link, &transfer, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_PENDING);
     SUITE_CHECK(progress.tx_completed_bytes == 20U);
     SUITE_CHECK(progress.rx_completed_bytes == 12U);
-    SUITE_CHECK(hk_external_link_poll(
-        OWNER_A, &link, &operation, &progress) == HK_OK);
+    SUITE_CHECK(hk_external_link_poll(&link, &operation, &progress) == HK_OK);
     SUITE_CHECK(progress.rx_completed_bytes == 20U);
     SUITE_CHECK(memcmp(i2c_rx, i2c_source, sizeof(i2c_rx)) == 0);
 
-    SUITE_CHECK(hk_external_link_configure_i2c_target(
-        OWNER_A, &link, &target) == HK_OK);
+    SUITE_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_OK);
     backend->target_write(target_write, sizeof(target_write));
-    SUITE_CHECK(hk_external_link_i2c_target_poll(
-        OWNER_A, &link, &target_rx, &event) == HK_OK);
+    SUITE_CHECK(hk_external_link_i2c_target_poll(&link, &target_rx, &event) == HK_OK);
     SUITE_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE);
     SUITE_CHECK(event.received_bytes == sizeof(target_write));
     SUITE_CHECK(memcmp(target_receive, target_write, sizeof(target_write)) == 0);
-    SUITE_CHECK(hk_external_link_i2c_target_preload_response(
-        OWNER_A, &link, &target_tx) == HK_OK);
+    SUITE_CHECK(hk_external_link_i2c_target_preload_response(&link, &target_tx) == HK_OK);
     backend->target_read(target_observed, sizeof(target_observed));
     SUITE_CHECK(target_observed[0] == 9U && target_observed[1] == 8U &&
                 target_observed[2] == 7U && target_observed[3] == 0U &&
                 target_observed[4] == 0U);
     target_rx.data = NULL;
     target_rx.size_bytes = 0U;
-    SUITE_CHECK(hk_external_link_i2c_target_poll(
-        OWNER_A, &link, &target_rx, &event) == HK_OK);
+    SUITE_CHECK(hk_external_link_i2c_target_poll(&link, &target_rx, &event) == HK_OK);
     SUITE_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_READ);
     SUITE_CHECK(event.requested_bytes == sizeof(target_observed));
 
+    /* Reusing the same session storage must never revive an old operation. */
+    SUITE_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
+    SUITE_CHECK(hk_external_link_uart_write_begin(&link, &uart_view, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
+    hk_external_link_op_t old_operation = operation;
+    SUITE_CHECK(hk_external_link_close(&link, HK_DEADLINE_IMMEDIATE) == HK_OK);
+    SUITE_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURES_0_1, &link) == HK_OK);
+    SUITE_CHECK(hk_external_link_configure_uart(&link, &uart) == HK_OK);
+    SUITE_CHECK(hk_external_link_uart_write_begin(&link, &uart_view, (hk_deadline_t){1000U}, NULL, &operation) == HK_PENDING);
+    SUITE_CHECK(operation.generation != old_operation.generation);
+    SUITE_CHECK(hk_external_link_poll(&link, &old_operation, &progress) == HK_ERR_STALE_HANDLE);
+    /* Expired ordinary close is retryable; forced retirement below quiesces. */
+    backend->set_now_us(2000U);
+    SUITE_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_ERR_DEADLINE_EXCEEDED);
+    SUITE_CHECK(link.service != NULL);
     stale = link;
     backend->set_now_us(2000U);
-    SUITE_CHECK(hk_external_link_release(
-        OWNER_A, (hk_deadline_t){1000U}, &link) ==
+    SUITE_CHECK(hk_external_link_retire(&link, (hk_deadline_t){1000U}) ==
         HK_ERR_DEADLINE_EXCEEDED);
-    SUITE_CHECK(hk_lease_is_zero(&link.lease));
-    SUITE_CHECK(hk_external_link_get_info(
-        OWNER_A, &stale, &info) == HK_ERR_STALE_HANDLE);
-    SUITE_CHECK(hk_external_link_acquire(
-        OWNER_A, &request, HK_EXTERNAL_LINK_FEATURE_UART, &blocked) ==
-        HK_ERR_INVALID_STATE);
-    SUITE_CHECK(hk_external_link_release(
-        OWNER_A, HK_DEADLINE_IMMEDIATE, &link) == HK_OK);
+    SUITE_CHECK((!link.service));
+    SUITE_CHECK(hk_external_link_get_info(&stale, &info) == HK_ERR_STALE_HANDLE);
+    SUITE_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_UART, &blocked) ==
+        HK_ERR_INTERNAL);
+    SUITE_CHECK(hk_external_link_close(&link, HK_DEADLINE_IMMEDIATE) == HK_OK);
     return 0;
 }

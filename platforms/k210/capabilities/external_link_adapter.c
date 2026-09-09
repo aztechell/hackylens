@@ -1,4 +1,3 @@
-#include "../../../firmware/src/capabilities/capability_provider.h"
 #include "../../../firmware/src/capabilities/external_link_provider.h"
 
 #include <hackylens/capability/external_link.h>
@@ -48,7 +47,7 @@ typedef struct
 
 typedef struct
 {
-    hk_lease_t lease;
+    const hk_external_link_t *session;
     uint64_t mode_features;
     uint32_t mode;
     uint32_t uart_baud;
@@ -81,20 +80,7 @@ typedef struct
 } k210_external_state_t;
 
 static k210_external_state_t s_external;
-
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static uint8_t lease_equal(const hk_lease_t *left, const hk_lease_t *right)
-{
-    return (uint8_t)(left && right && left->slot == right->slot &&
-                     left->generation == right->generation &&
-                     left->capability_id == right->capability_id &&
-                     owner_equal(left->owner, right->owner));
-}
+static hk_external_link_state_t s_claim;
 
 static uint8_t deadline_expired(hk_deadline_t deadline)
 {
@@ -198,9 +184,9 @@ static void stop_mode(k210_external_state_t *state)
 }
 
 static hk_result_t validate_state(
-    k210_external_state_t *state, const hk_lease_t *lease)
+    k210_external_state_t *state, const hk_external_link_t *session)
 {
-    if(!state || !state->active || !lease_equal(&state->lease, lease))
+    if(!state || !state->active || state->session != session)
         return HK_ERR_INTERNAL;
     return HK_OK;
 }
@@ -229,44 +215,46 @@ static hk_result_t set_mode(k210_external_state_t *state, uint32_t mode)
 }
 
 static hk_result_t k210_external_open(
-    void *context, const hk_lease_t *lease, uint64_t mode_features)
+    void *context, const hk_external_link_t *session, uint64_t mode_features)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
 
-    if(!state || !lease || mode_features == 0U ||
+    if(!state || !session || mode_features == 0U ||
        (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
     if(state->active)
         return HK_ERR_BUSY;
+    uint32_t next_generation = state->next_operation_generation;
     memset(state, 0, sizeof(*state));
-    state->lease = *lease;
+    state->next_operation_generation = next_generation;
+    state->session = session;
     state->mode_features = mode_features;
     state->active = 1U;
     return HK_OK;
 }
 
 static hk_result_t k210_external_close(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
+    void *context, const hk_external_link_t *session, hk_deadline_t deadline)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
     if(deadline_expired(deadline))
         return HK_ERR_DEADLINE_EXCEEDED;
     stop_mode(state);
-    state->lease = HK_LEASE_NONE;
+    state->session = NULL;
     state->mode_features = 0U;
     state->active = 0U;
     return HK_OK;
 }
 
 static hk_result_t k210_external_info(
-    void *context, const hk_lease_t *lease, hk_external_link_info_t *info)
+    void *context, const hk_external_link_t *session, hk_external_link_info_t *info)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -285,10 +273,10 @@ static hk_result_t k210_external_info(
 }
 
 static hk_result_t k210_external_mode(
-    void *context, const hk_lease_t *lease, uint32_t *mode)
+    void *context, const hk_external_link_t *session, uint32_t *mode)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -299,11 +287,11 @@ static hk_result_t k210_external_mode(
 }
 
 static hk_result_t k210_external_configure_uart(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_uart_config_t *config)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -322,11 +310,11 @@ static hk_result_t k210_external_configure_uart(
 }
 
 static hk_result_t k210_external_configure_i2c_controller(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_i2c_controller_config_t *config)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -524,11 +512,11 @@ static const hal_external_i2c_callbacks_t s_target_callbacks = {
 };
 
 static hk_result_t k210_external_configure_i2c_target(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_i2c_target_config_t *config)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -589,12 +577,12 @@ static void start_operation(
 }
 
 static hk_result_t k210_external_uart_write_begin(
-    void *context, const hk_lease_t *lease, const hk_buffer_view_t *tx,
+    void *context, const hk_external_link_t *session, const hk_buffer_view_t *tx,
     hk_deadline_t deadline, const hk_cancel_t *cancel,
     hk_external_link_op_t *operation)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -611,7 +599,7 @@ static hk_result_t k210_external_uart_write_begin(
 }
 
 static hk_result_t k210_external_uart_read(
-    void *context, const hk_lease_t *lease, hk_buffer_view_t *rx,
+    void *context, const hk_external_link_t *session, hk_buffer_view_t *rx,
     uint32_t *received_bytes)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
@@ -619,7 +607,7 @@ static hk_result_t k210_external_uart_read(
     uint32_t write;
     uint32_t available;
     size_t capacity;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -653,13 +641,13 @@ static hk_result_t k210_external_uart_read(
 }
 
 static hk_result_t k210_external_i2c_transfer_begin(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_i2c_transfer_t *transfer,
     hk_deadline_t deadline, const hk_cancel_t *cancel,
     hk_external_link_op_t *operation)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -774,13 +762,13 @@ static void poll_i2c(k210_external_state_t *state)
 }
 
 static hk_result_t k210_external_poll(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_op_t *operation_token,
     hk_external_link_op_progress_t *progress)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
     k210_external_operation_t *operation;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -827,12 +815,12 @@ static hk_result_t k210_external_poll(
 }
 
 static hk_result_t k210_external_cancel(
-    void *context, const hk_lease_t *lease,
+    void *context, const hk_external_link_t *session,
     const hk_external_link_op_t *operation_token,
     hk_external_link_op_progress_t *progress)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -848,7 +836,7 @@ static hk_result_t k210_external_cancel(
 }
 
 static hk_result_t k210_external_target_poll(
-    void *context, const hk_lease_t *lease, hk_buffer_view_t *rx,
+    void *context, const hk_external_link_t *session, hk_buffer_view_t *rx,
     hk_external_link_target_event_t *event)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
@@ -857,7 +845,7 @@ static hk_result_t k210_external_target_poll(
     uint32_t received;
     uint8_t index;
     uint8_t buffer_slot;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -910,12 +898,12 @@ static hk_result_t k210_external_target_poll(
 }
 
 static hk_result_t k210_external_target_preload(
-    void *context, const hk_lease_t *lease, const hk_buffer_view_t *tx)
+    void *context, const hk_external_link_t *session, const hk_buffer_view_t *tx)
 {
     k210_external_state_t *state = (k210_external_state_t *)context;
     uint8_t slot;
     uint32_t irq_state;
-    hk_result_t result = validate_state(state, lease);
+    hk_result_t result = validate_state(state, session);
 
     if(result != HK_OK)
         return result;
@@ -964,46 +952,19 @@ static hk_result_t k210_external_target_preload(
     return HK_OK;
 }
 
-static hk_result_t k210_external_cleanup_lease(
-    void *context, const hk_lease_t *lease, hk_deadline_t deadline)
+static void k210_external_retire(void *context, const hk_external_link_t *session)
 {
-    hk_external_link_provider_t *provider =
-        (hk_external_link_provider_t *)context;
-    k210_external_state_t *state;
-
-    if(!provider || !provider->context)
-        return HK_ERR_INTERNAL;
-    state = (k210_external_state_t *)provider->context;
-    if(!state->active || !lease_equal(&state->lease, lease))
-        return HK_OK;
-    return k210_external_close(state, lease, deadline);
+    k210_external_state_t *state = context;
+    if(state->session != session) return;
+    stop_mode(state);
+    state->session = NULL;
+    state->mode_features = 0U;
+    state->active = 0U;
 }
 
-static hk_result_t k210_external_cleanup(
-    void *context, hk_owner_t owner, hk_deadline_t deadline)
-{
-    hk_external_link_provider_t *provider =
-        (hk_external_link_provider_t *)context;
-    k210_external_state_t *state;
-
-    if(!provider || !provider->context)
-        return HK_ERR_INTERNAL;
-    state = (k210_external_state_t *)provider->context;
-    if(!state->active || !owner_equal(state->lease.owner, owner))
-        return HK_OK;
-    return k210_external_close(state, &state->lease, deadline);
-}
-
-static hk_result_t k210_external_cleanup_dispatch(
-    void *context, hk_owner_t owner, uint16_t target_core,
-    hk_deadline_t deadline)
-{
-    if(target_core != 0U)
-        return HK_ERR_WRONG_CONTEXT;
-    return k210_external_cleanup(context, owner, deadline);
-}
-
-static hk_external_link_provider_t s_external_provider = {
+const hk_external_link_service_t hk_external_link_binding = {
+    .state = &s_claim,
+    .retire = k210_external_retire,
     .context = &s_external,
     .open = k210_external_open,
     .close = k210_external_close,
@@ -1021,10 +982,3 @@ static hk_external_link_provider_t s_external_provider = {
     .target_preload = k210_external_target_preload,
 };
 
-const hk_capability_provider_t hk_k210_external_link_provider = {
-    .context = &s_external_provider,
-    .cleanup_lease = k210_external_cleanup_lease,
-    .cleanup = k210_external_cleanup,
-    .cleanup_dispatch = k210_external_cleanup_dispatch,
-    .max_leases = 1U,
-};

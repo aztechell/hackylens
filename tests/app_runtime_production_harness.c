@@ -458,19 +458,22 @@ hk_result_t hk_display_surface_acquire(
 
 
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
+struct hk_external_link_service { uint8_t unused; };
+static const hk_external_link_service_t s_external_binding = {0};
+const hk_external_link_service_t *hk_external_link_service(void) { return &s_external_binding; }
+hk_result_t hk_external_link_open(
+    const hk_external_link_service_t *service,
     uint64_t mode_features,
     hk_external_link_t *handle)
 {
-    (void)owner;
-    (void)request;
+    (void)service;
     (void)mode_features;
     (void)handle;
     return HK_ERR_NOT_DECLARED;
 }
 
+hk_result_t hk_external_link_retire(hk_external_link_t *handle, hk_deadline_t deadline)
+{ (void)deadline; *handle = (hk_external_link_t){0}; return HK_OK; }
 screen_t hk_screen_get(void)
 {
     return SCREEN_APP;

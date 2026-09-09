@@ -3,46 +3,27 @@
 #include <limits.h>
 #include <stddef.h>
 
-#include "capability_core_binding.h"
 #include "external_link_provider.h"
 
-static hk_result_t quarantine_internal(
-    hk_owner_t owner, const hk_external_link_t *handle, hk_result_t result)
+const hk_external_link_service_t *hk_external_link_service(void)
 {
-    if(result == HK_ERR_INTERNAL && handle)
-        (void)capability_owner_runtime_quarantine(
-            owner, &handle->lease, HK_CAPABILITY_ID_EXTERNAL_LINK);
+    return hk_external_link_binding.get_info ? &hk_external_link_binding : NULL;
+}
+static hk_result_t quarantine_internal(const hk_external_link_t *handle, hk_result_t result)
+{
+    if(result == HK_ERR_INTERNAL && handle && handle->service &&
+       handle->service->state && handle->service->state->claimant == handle)
+        handle->service->state->quarantined = 1U;
     return result;
 }
-
-static hk_result_t provider_for(
-    hk_owner_t owner, const hk_external_link_t *handle,
-    hk_external_link_provider_t **provider)
+static hk_result_t provider_for(const hk_external_link_t *handle,
+    const hk_external_link_service_t **provider)
 {
-    void *context = NULL;
-    hk_result_t result;
-
-    if(!handle || !provider)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = capability_owner_runtime_validate(
-        owner, &handle->lease, HK_CAPABILITY_ID_EXTERNAL_LINK, &context);
-    if(result != HK_OK)
-        return result;
-    *provider = (hk_external_link_provider_t *)context;
-    if(!*provider || !(*provider)->open || !(*provider)->close ||
-       !(*provider)->get_info || !(*provider)->get_mode ||
-       !(*provider)->configure_uart ||
-       !(*provider)->configure_i2c_controller ||
-       !(*provider)->configure_i2c_target ||
-       !(*provider)->uart_write_begin || !(*provider)->uart_read ||
-       !(*provider)->i2c_transfer_begin || !(*provider)->poll ||
-       !(*provider)->cancel || !(*provider)->target_poll ||
-       !(*provider)->target_preload || (*provider)->reserved != 0U)
-    {
-        (void)capability_owner_runtime_quarantine(
-            owner, &handle->lease, HK_CAPABILITY_ID_EXTERNAL_LINK);
-        return HK_ERR_INTERNAL;
-    }
+    if(!handle || !provider) return HK_ERR_INVALID_ARGUMENT;
+    if(!handle->service || !handle->service->state ||
+       handle->service->state->claimant != handle) return HK_ERR_STALE_HANDLE;
+    if(handle->service->state->quarantined) return HK_ERR_INTERNAL;
+    *provider = handle->service;
     return HK_OK;
 }
 
@@ -70,80 +51,75 @@ static hk_result_t validate_struct(
     return HK_OK;
 }
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
+hk_result_t hk_external_link_open(const hk_external_link_service_t *service,
     uint64_t mode_features, hk_external_link_t *handle)
 {
-    hk_capability_request_t provider_request;
-    hk_external_link_provider_t *provider;
     hk_result_t result;
-
-    if(!request || !handle || mode_features == 0U ||
-       (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1) != 0U)
+    if(!handle || !mode_features || (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1))
         return HK_ERR_INVALID_ARGUMENT;
-    handle->lease = HK_LEASE_NONE;
-    provider_request = *request;
-    provider_request.required_features |= mode_features;
-    result = capability_owner_runtime_acquire(
-        owner, &provider_request, HK_CAPABILITY_ID_EXTERNAL_LINK,
-        &handle->lease);
-    if(result != HK_OK)
-        return result;
-    result = provider_for(owner, handle, &provider);
-    if(result == HK_OK)
-        result = provider->open(
-            provider->context, &handle->lease, mode_features);
-    if(result != HK_OK)
-    {
-        (void)capability_owner_runtime_release(
-            owner, HK_CAPABILITY_ID_EXTERNAL_LINK,
-            HK_DEADLINE_IMMEDIATE, &handle->lease);
-        return result;
-    }
+    if(!service) return HK_ERR_CAPABILITY_ABSENT;
+    if(!service->state || !service->open || !service->close || !service->retire ||
+       !service->get_info || !service->get_mode || !service->configure_uart ||
+       !service->configure_i2c_controller || !service->configure_i2c_target ||
+       !service->uart_write_begin || !service->uart_read || !service->i2c_transfer_begin ||
+       !service->poll || !service->cancel || !service->target_poll || !service->target_preload ||
+       service->reserved) return HK_ERR_INTERNAL;
+    if(service->state->quarantined) return HK_ERR_INTERNAL;
+    if(service->state->claimant) return HK_ERR_BUSY;
+    *handle = (hk_external_link_t){service, mode_features};
+    result = service->open(service->context, handle, mode_features);
+    if(result != HK_OK) { *handle = (hk_external_link_t){0}; return result; }
+    service->state->claimant = handle;
     return HK_OK;
 }
-
-hk_result_t hk_external_link_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_external_link_t *handle)
+hk_result_t hk_external_link_close(hk_external_link_t *handle, hk_deadline_t deadline)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *service;
     hk_result_t result;
-
-    if(!handle || deadline.at_us == UINT64_MAX)
-        return HK_ERR_INVALID_ARGUMENT;
-    if(hk_lease_is_zero(&handle->lease))
-        return HK_OK;
-    result = provider_for(owner, handle, &provider);
-    if(result != HK_OK)
-        return result;
-    result = provider->close(provider->context, &handle->lease, deadline);
-    if(result != HK_OK)
-    {
-        hk_result_t cleanup_result;
-
-        (void)capability_owner_runtime_quarantine(
-            owner, &handle->lease, HK_CAPABILITY_ID_EXTERNAL_LINK);
-        cleanup_result = capability_owner_runtime_release(
-            owner, HK_CAPABILITY_ID_EXTERNAL_LINK, deadline, &handle->lease);
-        (void)cleanup_result;
-        return result;
+    if(!handle || deadline.at_us == UINT64_MAX) return HK_ERR_INVALID_ARGUMENT;
+    if(!handle->service && !handle->mode_features) return HK_OK;
+    result = provider_for(handle, &service);
+    if(result != HK_OK) return result;
+    result = service->close(service->context, handle, deadline);
+    if(result != HK_OK) return quarantine_internal(handle, result);
+    service->state->claimant = NULL;
+    *handle = (hk_external_link_t){0};
+    return HK_OK;
+}
+hk_result_t hk_external_link_retire(hk_external_link_t *handle, hk_deadline_t deadline)
+{
+    const hk_external_link_service_t *service;
+    hk_result_t result;
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    if(!handle->service && !handle->mode_features)
+        return deadline.at_us == UINT64_MAX ? HK_ERR_INVALID_ARGUMENT : HK_OK;
+    service = handle->service;
+    if(!service || !service->state || service->state->claimant != handle) {
+        *handle = (hk_external_link_t){0}; return HK_ERR_STALE_HANDLE;
     }
-    return capability_owner_runtime_release(
-        owner, HK_CAPABILITY_ID_EXTERNAL_LINK, deadline, &handle->lease);
+    result = deadline.at_us == UINT64_MAX ? HK_ERR_INVALID_ARGUMENT :
+        service->close(service->context, handle, deadline);
+    /* Bounded hardware quiesce and borrow invalidation are mandatory even
+       after expiry. No peripheral callback may retain caller storage. */
+    service->retire(service->context, handle);
+    if(result != HK_OK) service->state->quarantined = 1U;
+    service->state->claimant = NULL;
+    *handle = (hk_external_link_t){0};
+    return result;
 }
 
 #define EXTERNAL_CALL(name, argument)                                         \
     do {                                                                       \
-        hk_external_link_provider_t *provider;                                 \
-        hk_result_t result = provider_for(owner, handle, &provider);           \
+        const hk_external_link_service_t *provider;                                 \
+        hk_result_t result = provider_for(handle, &provider);           \
         if(result == HK_OK)                                                    \
             result = provider->name(                                           \
-                provider->context, &handle->lease, argument);                  \
-        return quarantine_internal(owner, handle, result);                     \
+                provider->context, handle, argument);                  \
+        return quarantine_internal(handle, result);                     \
     } while(0)
 
 hk_result_t hk_external_link_get_info(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_external_link_info_t *info)
 {
     if(!info)
@@ -152,7 +128,7 @@ hk_result_t hk_external_link_get_info(
 }
 
 hk_result_t hk_external_link_get_mode(
-    hk_owner_t owner, const hk_external_link_t *handle, uint32_t *mode)
+    const hk_external_link_t *handle, uint32_t *mode)
 {
     if(!mode)
         return HK_ERR_INVALID_ARGUMENT;
@@ -160,7 +136,7 @@ hk_result_t hk_external_link_get_mode(
 }
 
 hk_result_t hk_external_link_configure_uart(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config)
 {
     hk_result_t result;
@@ -178,7 +154,7 @@ hk_result_t hk_external_link_configure_uart(
 }
 
 hk_result_t hk_external_link_configure_i2c_controller(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_controller_config_t *config)
 {
     hk_result_t result;
@@ -196,7 +172,7 @@ hk_result_t hk_external_link_configure_i2c_controller(
 }
 
 hk_result_t hk_external_link_configure_i2c_target(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_target_config_t *config)
 {
     hk_result_t result;
@@ -215,11 +191,11 @@ hk_result_t hk_external_link_configure_i2c_target(
 }
 
 hk_result_t hk_external_link_uart_write_begin(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_buffer_view_t *tx, hk_deadline_t deadline,
     const hk_cancel_t *cancel, hk_external_link_op_t *operation)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result;
 
     if(!operation || deadline.at_us == UINT64_MAX)
@@ -228,19 +204,19 @@ hk_result_t hk_external_link_uart_write_begin(
     result = validate_view(tx, HK_BUFFER_ACCESS_READABLE, 256U, 0U);
     if(result != HK_OK)
         return result;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = provider->uart_write_begin(
-            provider->context, &handle->lease, tx, deadline, cancel,
+            provider->context, handle, tx, deadline, cancel,
             operation);
-    return quarantine_internal(owner, handle, result);
+    return quarantine_internal(handle, result);
 }
 
 hk_result_t hk_external_link_uart_read(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_buffer_view_t *rx, uint32_t *received_bytes)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result;
 
     if(!received_bytes)
@@ -249,20 +225,20 @@ hk_result_t hk_external_link_uart_read(
     result = validate_view(rx, HK_BUFFER_ACCESS_WRITABLE, 256U, 1U);
     if(result != HK_OK)
         return result;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = provider->uart_read(
-            provider->context, &handle->lease, rx, received_bytes);
-    return quarantine_internal(owner, handle, result);
+            provider->context, handle, rx, received_bytes);
+    return quarantine_internal(handle, result);
 }
 
 hk_result_t hk_external_link_i2c_transfer_begin(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_transfer_t *transfer,
     hk_deadline_t deadline, const hk_cancel_t *cancel,
     hk_external_link_op_t *operation)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result;
 
     if(!transfer || !operation || deadline.at_us == UINT64_MAX)
@@ -285,52 +261,52 @@ hk_result_t hk_external_link_i2c_transfer_begin(
         return result;
     if(transfer->tx.size_bytes == 0U && transfer->rx.size_bytes == 0U)
         return HK_ERR_INVALID_ARGUMENT;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = provider->i2c_transfer_begin(
-            provider->context, &handle->lease, transfer, deadline, cancel,
+            provider->context, handle, transfer, deadline, cancel,
             operation);
-    return quarantine_internal(owner, handle, result);
+    return quarantine_internal(handle, result);
 }
 
 static hk_result_t operation_call(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress, uint8_t cancel)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result;
 
     if(!operation || !progress)
         return HK_ERR_INVALID_ARGUMENT;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = (cancel ? provider->cancel : provider->poll)(
-            provider->context, &handle->lease, operation, progress);
-    return quarantine_internal(owner, handle, result);
+            provider->context, handle, operation, progress);
+    return quarantine_internal(handle, result);
 }
 
 hk_result_t hk_external_link_poll(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
-    return operation_call(owner, handle, operation, progress, 0U);
+    return operation_call(handle, operation, progress, 0U);
 }
 
 hk_result_t hk_external_link_cancel(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
-    return operation_call(owner, handle, operation, progress, 1U);
+    return operation_call(handle, operation, progress, 1U);
 }
 
 hk_result_t hk_external_link_i2c_target_poll(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_buffer_view_t *rx, hk_external_link_target_event_t *event)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result;
 
     if(!event)
@@ -338,26 +314,26 @@ hk_result_t hk_external_link_i2c_target_poll(
     result = validate_view(rx, HK_BUFFER_ACCESS_WRITABLE, 256U, 1U);
     if(result != HK_OK)
         return result;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = provider->target_poll(
-            provider->context, &handle->lease, rx, event);
-    return quarantine_internal(owner, handle, result);
+            provider->context, handle, rx, event);
+    return quarantine_internal(handle, result);
 }
 
 hk_result_t hk_external_link_i2c_target_preload_response(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_buffer_view_t *tx)
 {
-    hk_external_link_provider_t *provider;
+    const hk_external_link_service_t *provider;
     hk_result_t result = validate_view(
         tx, HK_BUFFER_ACCESS_READABLE, 256U, 1U);
 
     if(result != HK_OK)
         return result;
-    result = provider_for(owner, handle, &provider);
+    result = provider_for(handle, &provider);
     if(result == HK_OK)
         result = provider->target_preload(
-            provider->context, &handle->lease, tx);
-    return quarantine_internal(owner, handle, result);
+            provider->context, handle, tx);
+    return quarantine_internal(handle, result);
 }

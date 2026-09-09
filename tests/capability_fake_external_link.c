@@ -41,15 +41,14 @@ typedef struct
     uint64_t features;
     uint64_t acquired_features;
     uint64_t now_us;
-    uint32_t lease_generation;
     uint32_t next_operation_generation;
     uint32_t mode;
     uint32_t uart_drain_polls;
-    uint8_t lease_active;
+    uint8_t session_active;
     uint8_t target_event_pending;
     uint8_t target_preload_active;
     uint8_t quarantined;
-    hk_owner_t owner;
+    const hk_external_link_t *claimant;
     hk_fake_external_link_operation_t operation;
     hk_result_t next_i2c_result;
     uint32_t next_i2c_after_bytes;
@@ -71,25 +70,10 @@ typedef struct
 
 static hk_fake_external_link_state_t g_fake;
 
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
 static uint8_t operation_is_zero(const hk_external_link_op_t *operation)
 {
     return (uint8_t)(operation && operation->slot == 0U &&
                      operation->generation == 0U);
-}
-
-static uint8_t version_less(hk_version_t left, hk_version_t right)
-{
-    if (left.major != right.major)
-        return (uint8_t)(left.major < right.major);
-    if (left.minor != right.minor)
-        return (uint8_t)(left.minor < right.minor);
-    return (uint8_t)(left.patch < right.patch);
 }
 
 static uint8_t deadline_expired(hk_deadline_t deadline)
@@ -164,44 +148,15 @@ static void clear_target_state(void)
     memset(g_fake.target_read, 0, sizeof(g_fake.target_read));
 }
 
-static hk_result_t validate_request(
-    const hk_capability_request_t *request,
-    uint64_t mode_features)
+struct hk_external_link_service { uint8_t unused; };
+static const hk_external_link_service_t s_service = {0};
+const hk_external_link_service_t *hk_external_link_service(void) { return &s_service; }
+static hk_result_t validate_handle(const hk_external_link_t *handle)
 {
-    const hk_version_t implemented = {0U, 1U, 0U, 0U};
-    uint64_t required;
-
-    if (!request || request->struct_size < sizeof(*request) ||
-        request->struct_version != HK_CAPABILITY_REQUEST_VERSION ||
-        request->reserved != 0U || request->minimum.reserved != 0U ||
-        request->maximum_exclusive.reserved != 0U ||
-        request->id != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-        mode_features == 0U ||
-        (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1) != 0U ||
-        (request->required_features & ~HK_EXTERNAL_LINK_FEATURES_0_1) != 0U)
-        return HK_ERR_INVALID_ARGUMENT;
-    if (version_less(implemented, request->minimum) ||
-        !version_less(implemented, request->maximum_exclusive))
-        return HK_ERR_VERSION_INCOMPATIBLE;
-    required = request->required_features | mode_features;
-    if ((required & ~g_fake.features) != 0U)
-        return HK_ERR_FEATURE_UNAVAILABLE;
-    return HK_OK;
-}
-
-static hk_result_t validate_handle(
-    hk_owner_t owner,
-    const hk_external_link_t *handle)
-{
-    if (!handle || hk_lease_is_zero(&handle->lease) ||
-        handle->lease.capability_id != HK_CAPABILITY_ID_EXTERNAL_LINK)
-        return HK_ERR_INVALID_ARGUMENT;
-    if (!owner_equal(owner, handle->lease.owner))
-        return HK_ERR_WRONG_OWNER;
-    if (!g_fake.lease_active ||
-        handle->lease.generation != g_fake.lease_generation ||
-        handle->lease.slot != 0U || !owner_equal(owner, g_fake.owner))
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    if(!g_fake.session_active || g_fake.claimant != handle || handle->service != &s_service)
         return HK_ERR_STALE_HANDLE;
+    if(g_fake.quarantined) return HK_ERR_INTERNAL;
     return HK_OK;
 }
 
@@ -397,7 +352,6 @@ void hk_fake_external_link_reset(uint64_t features)
 {
     memset(&g_fake, 0, sizeof(g_fake));
     g_fake.features = features & HK_EXTERNAL_LINK_FEATURES_0_1;
-    g_fake.lease_generation = 1U;
     g_fake.next_i2c_result = HK_OK;
     g_fake.metrics.current_mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
     g_fake.metrics.last_result = HK_OK;
@@ -454,7 +408,7 @@ hk_result_t hk_fake_external_link_push_target_event(
     uint32_t captured;
     uint32_t prefix;
 
-    if (!g_fake.lease_active ||
+    if (!g_fake.session_active ||
         g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
         return remember(HK_ERR_INVALID_STATE);
     if (g_fake.target_event_pending)
@@ -542,104 +496,60 @@ const hk_fake_external_link_event_t *hk_fake_external_link_event(
     return &g_fake.events[index];
 }
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint64_t mode_features,
-    hk_external_link_t *handle)
+hk_result_t hk_external_link_open(const hk_external_link_service_t *service,
+    uint64_t mode_features, hk_external_link_t *handle)
 {
-    hk_result_t result;
-    uint32_t generation;
-
-    if (!handle || !hk_lease_is_zero(&handle->lease) ||
-        hk_owner_is_zero(owner))
+    if(!handle || !mode_features || (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1))
         return remember(HK_ERR_INVALID_ARGUMENT);
-    result = validate_request(request, mode_features);
-    if (result != HK_OK)
-        return remember(result);
-    if (g_fake.quarantined)
-        return remember(HK_ERR_INVALID_STATE);
-    if (g_fake.lease_active)
-        return remember(HK_ERR_BUSY);
-    if (g_fake.lease_generation == UINT32_MAX)
-        return remember(HK_ERR_LIMIT);
-    generation = ++g_fake.lease_generation;
-    g_fake.lease_active = 1U;
-    g_fake.owner = owner;
-    g_fake.acquired_features = request->required_features | mode_features;
+    if(!service) return remember(HK_ERR_CAPABILITY_ABSENT);
+    if(mode_features & ~g_fake.features) return remember(HK_ERR_FEATURE_UNAVAILABLE);
+    if(g_fake.quarantined) return remember(HK_ERR_INTERNAL);
+    if(g_fake.session_active) return remember(HK_ERR_BUSY);
+    g_fake.session_active = 1U; g_fake.claimant = handle;
+    g_fake.acquired_features = mode_features;
     g_fake.mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
     g_fake.metrics.current_mode = g_fake.mode;
-    g_fake.metrics.active_leases = 1U;
-    handle->lease.slot = 0U;
-    handle->lease.generation = generation;
-    handle->lease.owner = owner;
-    handle->lease.capability_id = HK_CAPABILITY_ID_EXTERNAL_LINK;
-    log_event(
-        HK_FAKE_EXTERNAL_LINK_EVENT_ACQUIRE,
-        0U,
-        0U,
-        0U,
-        HK_OK,
-        HK_DEADLINE_IMMEDIATE);
+    g_fake.metrics.active_sessions = 1U;
+    *handle = (hk_external_link_t){service, mode_features};
+    log_event(HK_FAKE_EXTERNAL_LINK_EVENT_ACQUIRE, 0U, 0U, 0U, HK_OK, HK_DEADLINE_IMMEDIATE);
     return remember(HK_OK);
 }
-
-hk_result_t hk_external_link_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_external_link_t *handle)
+static void invalidate_session(hk_external_link_t *handle)
 {
-    hk_result_t result;
-
-    if (!handle || deadline.at_us == UINT64_MAX)
-        return remember(HK_ERR_INVALID_ARGUMENT);
-    if (hk_lease_is_zero(&handle->lease))
-        return remember(HK_OK);
-    if (handle->lease.capability_id == 0U)
-        return remember(HK_ERR_STALE_HANDLE);
-    if (handle->lease.capability_id != HK_CAPABILITY_ID_EXTERNAL_LINK)
-        return remember(HK_ERR_INVALID_ARGUMENT);
-    if (handle->lease.generation == 0U ||
-        handle->lease.owner.generation == 0U)
-        return remember(HK_ERR_STALE_HANDLE);
-    result = validate_handle(owner, handle);
-    if (result != HK_OK)
-        return remember(result);
-    if (deadline_expired(deadline))
-    {
-        memset(&g_fake.operation, 0, sizeof(g_fake.operation));
-        clear_borrowed_buffers();
-        g_fake.metrics.active_operations = 0U;
-        g_fake.metrics.active_leases = 0U;
-        g_fake.lease_active = 0U;
-        g_fake.quarantined = 1U;
-        handle->lease = HK_LEASE_NONE;
-        return remember(HK_ERR_DEADLINE_EXCEEDED);
-    }
-    if (g_fake.operation.state == HK_FAKE_OP_IN_FLIGHT)
-        reset_peripheral();
+    if(g_fake.operation.state == HK_FAKE_OP_IN_FLIGHT) reset_peripheral();
     memset(&g_fake.operation, 0, sizeof(g_fake.operation));
-    clear_borrowed_buffers();
-    g_fake.metrics.active_operations = 0U;
-    g_fake.metrics.active_leases = 0U;
+    clear_borrowed_buffers(); clear_target_state();
+    g_fake.metrics.active_operations = 0U; g_fake.metrics.active_sessions = 0U;
     g_fake.metrics.current_mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
-    clear_target_state();
     g_fake.mode = HK_EXTERNAL_LINK_MODE_UNCONFIGURED;
-    g_fake.lease_active = 0U;
-    g_fake.acquired_features = 0U;
-    log_event(
-        HK_FAKE_EXTERNAL_LINK_EVENT_RELEASE,
-        0U,
-        0U,
-        0U,
-        HK_OK,
-        deadline);
-    handle->lease = HK_LEASE_NONE;
+    g_fake.session_active = 0U; g_fake.claimant = NULL; g_fake.acquired_features = 0U;
+    *handle = (hk_external_link_t){0};
+}
+hk_result_t hk_external_link_close(hk_external_link_t *handle, hk_deadline_t deadline)
+{
+    if(!handle || deadline.at_us == UINT64_MAX) return remember(HK_ERR_INVALID_ARGUMENT);
+    if(!handle->service && !handle->mode_features) return remember(HK_OK);
+    hk_result_t result = validate_handle(handle);
+    if(result != HK_OK) return remember(result);
+    if(deadline_expired(deadline)) return remember(HK_ERR_DEADLINE_EXCEEDED);
+    invalidate_session(handle);
+    log_event(HK_FAKE_EXTERNAL_LINK_EVENT_RELEASE, 0U, 0U, 0U, HK_OK, deadline);
     return remember(HK_OK);
+}
+hk_result_t hk_external_link_retire(hk_external_link_t *handle, hk_deadline_t deadline)
+{
+    if(!handle) return HK_ERR_INVALID_ARGUMENT;
+    if(!handle->service && !handle->mode_features)
+        return deadline.at_us == UINT64_MAX ? HK_ERR_INVALID_ARGUMENT : HK_OK;
+    if(g_fake.claimant != handle) { *handle = (hk_external_link_t){0}; return HK_ERR_STALE_HANDLE; }
+    hk_result_t result = deadline.at_us == UINT64_MAX ? HK_ERR_INVALID_ARGUMENT :
+        deadline_expired(deadline) ? HK_ERR_DEADLINE_EXCEEDED : HK_OK;
+    invalidate_session(handle);
+    if(result != HK_OK) g_fake.quarantined = 1U;
+    return remember(result);
 }
 
 hk_result_t hk_external_link_get_info(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_external_link_info_t *info)
 {
@@ -647,7 +557,7 @@ hk_result_t hk_external_link_get_info(
 
     if (!info)
         return remember(HK_ERR_INVALID_ARGUMENT);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result != HK_OK)
         return remember(result);
     memset(info, 0, sizeof(*info));
@@ -671,7 +581,6 @@ hk_result_t hk_external_link_get_info(
 }
 
 hk_result_t hk_external_link_get_mode(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     uint32_t *mode)
 {
@@ -679,7 +588,7 @@ hk_result_t hk_external_link_get_mode(
 
     if (!mode)
         return remember(HK_ERR_INVALID_ARGUMENT);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result != HK_OK)
         return remember(result);
     *mode = g_fake.mode;
@@ -687,7 +596,6 @@ hk_result_t hk_external_link_get_mode(
 }
 
 hk_result_t hk_external_link_configure_uart(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config)
 {
@@ -704,7 +612,7 @@ hk_result_t hk_external_link_configure_uart(
         config->baud < HK_FAKE_UART_MINIMUM_BAUD ||
         config->baud > HK_FAKE_UART_MAXIMUM_BAUD)
         return remember(result == HK_OK ? HK_ERR_INVALID_ARGUMENT : result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK)
         result = validate_mode_feature(HK_EXTERNAL_LINK_FEATURE_UART);
     if (result == HK_OK)
@@ -713,7 +621,6 @@ hk_result_t hk_external_link_configure_uart(
 }
 
 hk_result_t hk_external_link_configure_i2c_controller(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_controller_config_t *config)
 {
@@ -730,7 +637,7 @@ hk_result_t hk_external_link_configure_i2c_controller(
         config->frequency_hz < HK_FAKE_I2C_MINIMUM_HZ ||
         config->frequency_hz > HK_FAKE_I2C_MAXIMUM_HZ)
         return remember(result == HK_OK ? HK_ERR_INVALID_ARGUMENT : result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK)
         result = validate_mode_feature(
             HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER);
@@ -740,7 +647,6 @@ hk_result_t hk_external_link_configure_i2c_controller(
 }
 
 hk_result_t hk_external_link_configure_i2c_target(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_target_config_t *config)
 {
@@ -756,7 +662,7 @@ hk_result_t hk_external_link_configure_i2c_target(
     if (result != HK_OK || config->reserved0 != 0U ||
         config->reserved1 != 0U || config->address > UINT16_C(0x7f))
         return remember(result == HK_OK ? HK_ERR_INVALID_ARGUMENT : result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK)
         result = validate_mode_feature(HK_EXTERNAL_LINK_FEATURE_I2C_TARGET);
     if (result == HK_OK)
@@ -765,7 +671,6 @@ hk_result_t hk_external_link_configure_i2c_target(
 }
 
 hk_result_t hk_external_link_uart_write_begin(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx,
     hk_deadline_t deadline,
@@ -780,7 +685,7 @@ hk_result_t hk_external_link_uart_write_begin(
 
     if (result != HK_OK)
         return remember(result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK && g_fake.mode != HK_EXTERNAL_LINK_MODE_UART)
         result = HK_ERR_INVALID_STATE;
     if (result == HK_OK)
@@ -800,7 +705,6 @@ hk_result_t hk_external_link_uart_write_begin(
 }
 
 hk_result_t hk_external_link_uart_read(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_buffer_view_t *rx,
     uint32_t *received_bytes)
@@ -818,7 +722,7 @@ hk_result_t hk_external_link_uart_read(
         1U);
     if (result != HK_OK)
         return remember(result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result != HK_OK)
         return remember(result);
     if (g_fake.mode != HK_EXTERNAL_LINK_MODE_UART)
@@ -850,7 +754,6 @@ hk_result_t hk_external_link_uart_read(
 }
 
 hk_result_t hk_external_link_i2c_transfer_begin(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_transfer_t *transfer,
     hk_deadline_t deadline,
@@ -883,7 +786,7 @@ hk_result_t hk_external_link_i2c_transfer_begin(
     if (result != HK_OK ||
         (transfer->tx.size_bytes == 0U && transfer->rx.size_bytes == 0U))
         return remember(result == HK_OK ? HK_ERR_INVALID_ARGUMENT : result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK &&
         g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_CONTROLLER)
         result = HK_ERR_INVALID_STATE;
@@ -904,7 +807,6 @@ hk_result_t hk_external_link_i2c_transfer_begin(
 }
 
 hk_result_t hk_external_link_poll(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
@@ -916,7 +818,7 @@ hk_result_t hk_external_link_poll(
 
     if (!progress)
         return remember(HK_ERR_INVALID_ARGUMENT);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK)
         result = validate_operation(operation);
     if (result != HK_OK)
@@ -1047,7 +949,6 @@ hk_result_t hk_external_link_poll(
 }
 
 hk_result_t hk_external_link_cancel(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
@@ -1056,7 +957,7 @@ hk_result_t hk_external_link_cancel(
 
     if (!progress)
         return remember(HK_ERR_INVALID_ARGUMENT);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result == HK_OK)
         result = validate_operation(operation);
     if (result != HK_OK)
@@ -1071,7 +972,6 @@ hk_result_t hk_external_link_cancel(
 }
 
 hk_result_t hk_external_link_i2c_target_poll(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_buffer_view_t *rx,
     hk_external_link_target_event_t *event)
@@ -1087,7 +987,7 @@ hk_result_t hk_external_link_i2c_target_poll(
         1U);
     if (result != HK_OK)
         return remember(result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result != HK_OK)
         return remember(result);
     if (g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
@@ -1127,7 +1027,6 @@ hk_result_t hk_external_link_i2c_target_poll(
 }
 
 hk_result_t hk_external_link_i2c_target_preload_response(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx)
 {
@@ -1139,7 +1038,7 @@ hk_result_t hk_external_link_i2c_target_preload_response(
 
     if (result != HK_OK)
         return remember(result);
-    result = validate_handle(owner, handle);
+    result = validate_handle(handle);
     if (result != HK_OK)
         return remember(result);
     if (g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)

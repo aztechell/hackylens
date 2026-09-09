@@ -9,6 +9,7 @@
 
 #include "capability_core_binding.h"
 #include "capability_fake_display.h"
+#include "capability_fake_external_link.h"
 #include "input_normative_backend.h"
 #include "time_normative_backend.h"
 #include "lights_normative_backend.h"
@@ -460,6 +461,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     now_us = time_normative_backend_reset();
     input_normative_backend_reset();
     hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
+    hk_fake_external_link_reset(HK_EXTERNAL_LINK_FEATURES_0_1);
     lights_normative_backend_reset(now_us);
     hk_fake_display_set_now_us(now_us);
     result = input_normative_backend_sample(now_us, 0U);
@@ -475,7 +477,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     host->lights_provider = (hk_capability_provider_t){.acquire = lights_provider_acquire, .max_leases = 16U};
     host->lights_provider.cleanup = lights_provider_cleanup;
     host->providers[0] = &host->lights_provider;
-    host->grants[0].request = (hk_capability_request_t)HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
+    host->grants[0].request = (hk_capability_request_t){sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, HK_CAPABILITY_ID_EXTERNAL_LINK, {0U,1U,0U,0U}, {0U,2U,0U,0U}, 0U,0U,0U};
     host->grants[0].request.required_features = HK_EXTERNAL_LINK_FEATURES_0_1;
     result = hk_capability_core_init(
         &host->core, host->inventory, host->providers, 1U);
@@ -487,6 +489,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
         .input = hk_input_service(),
         .lights = hk_lights_service(),
         .display = hk_display_service(),
+        .external_link = hk_external_link_service(),
         .resolve_capability = resolve_capability,
         .resolve_service = resolve_service,
         .owner_open = owner_open,

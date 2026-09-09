@@ -65,6 +65,8 @@ static uint8_t g_fail_light_retire;
 static uint32_t g_retired_light_mask;
 static uint64_t g_light_cleanup_deadline;
 static uint64_t g_display_cleanup_deadline;
+static uint64_t g_external_cleanup_deadline;
+static hk_result_t g_external_retire_result;
 static uint8_t g_deadline_mismatch;
 static uint8_t g_cleanup_events[8];
 static size_t g_cleanup_event_count;
@@ -474,15 +476,21 @@ static void test_cleanup_failure_attempts_remaining_channels(void)
         "LED session opens");
     require_true(call_binding(MICROPYTHON_BINDING_OP_RGB, rgb, NULL, 0U) == MICROPYTHON_BINDING_OK,
         "RGB session opens");
+    uint32_t uart[6] = {115200U};
+    require_true(call_binding(MICROPYTHON_BINDING_OP_UART_INIT, uart, NULL, 0U) == MICROPYTHON_BINDING_OK,
+        "External Link session opens");
+    g_external_retire_result = HK_ERR_DEADLINE_EXCEEDED;
     g_fail_light_retire = 1U;
-    require_true(micropython_capability_bridge_cleanup() == HK_ERR_IO,
+    require_true(micropython_capability_bridge_cleanup() == HK_ERR_DEADLINE_EXCEEDED,
         "first cleanup error is returned");
     require_true(g_retired_light_mask == (HK_LIGHTS_CHANNEL_ILLUMINATION | HK_LIGHTS_CHANNEL_RGB) &&
         g_overlay_release_calls == 1U, "failure cannot skip remaining cleanup");
     require_true(!g_deadline_mismatch && g_light_cleanup_deadline != 0U &&
-        g_light_cleanup_deadline == g_display_cleanup_deadline,
-        "lights and display share the original cleanup deadline");
+        g_light_cleanup_deadline == g_display_cleanup_deadline &&
+        g_external_cleanup_deadline == g_display_cleanup_deadline,
+        "external link, lights and display share the original cleanup deadline");
     g_fail_light_retire = 0U;
+    g_external_retire_result = HK_OK;
 }
 static void test_failed_display_retire_invalidates_once(void)
 {
@@ -744,37 +752,36 @@ hk_result_t hk_lights_set_rgb(
     return HK_OK;
 }
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
+struct hk_external_link_service { uint8_t unused; };
+static const hk_external_link_service_t s_external_binding = {0};
+const hk_external_link_service_t *hk_external_link_service(void) { return &s_external_binding; }
+hk_result_t hk_external_link_open(
+    const hk_external_link_service_t *service,
     uint64_t mode_features, hk_external_link_t *handle)
 {
-    if(!request || !handle)
+    if(!service || !handle)
         return HK_ERR_INVALID_ARGUMENT;
-    g_external_request_id = request->id;
+    g_external_request_id = HK_CAPABILITY_ID_EXTERNAL_LINK;
     g_external_requested_features = mode_features;
-    handle->lease = (hk_lease_t){
-        9U, 1U, owner, HK_CAPABILITY_ID_EXTERNAL_LINK,
-    };
+    *handle = (hk_external_link_t){service, mode_features};
     return HK_OK;
 }
 
-hk_result_t hk_external_link_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_external_link_t *handle)
+hk_result_t hk_external_link_retire(
+    hk_external_link_t *handle, hk_deadline_t deadline)
 {
-    (void)owner;
-    (void)deadline;
+    g_external_cleanup_deadline = deadline.at_us;
     if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
     g_external_operation_active = 0U;
-    handle->lease = HK_LEASE_NONE;
-    return HK_OK;
+    *handle = (hk_external_link_t){0};
+    return g_external_retire_result;
 }
 
 hk_result_t hk_external_link_configure_uart(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config)
 {
-    (void)owner;
     if(!handle || !config)
         return HK_ERR_INVALID_ARGUMENT;
     g_uart_init_calls++;
@@ -782,19 +789,17 @@ hk_result_t hk_external_link_configure_uart(
 }
 
 hk_result_t hk_external_link_configure_i2c_controller(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_controller_config_t *config)
 {
-    (void)owner;
     return handle && config ? HK_OK : HK_ERR_INVALID_ARGUMENT;
 }
 
 hk_result_t hk_external_link_uart_write_begin(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_buffer_view_t *tx, hk_deadline_t deadline,
     const hk_cancel_t *cancel, hk_external_link_op_t *operation)
 {
-    (void)owner;
     (void)deadline;
     (void)cancel;
     if(!handle || !tx || !operation)
@@ -813,10 +818,9 @@ hk_result_t hk_external_link_uart_write_begin(
 }
 
 hk_result_t hk_external_link_uart_read(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_buffer_view_t *rx, uint32_t *received_bytes)
 {
-    (void)owner;
     (void)handle;
     (void)rx;
     *received_bytes = 0U;
@@ -824,12 +828,11 @@ hk_result_t hk_external_link_uart_read(
 }
 
 hk_result_t hk_external_link_i2c_transfer_begin(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_transfer_t *transfer,
     hk_deadline_t deadline, const hk_cancel_t *cancel,
     hk_external_link_op_t *operation)
 {
-    (void)owner;
     (void)handle;
     (void)deadline;
     (void)cancel;
@@ -861,13 +864,12 @@ static void external_progress(hk_external_link_op_progress_t *progress)
 }
 
 hk_result_t hk_external_link_poll(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
     uint32_t budget = 32U;
 
-    (void)owner;
     (void)handle;
     (void)operation;
     if(!g_external_operation_active)
@@ -916,11 +918,10 @@ hk_result_t hk_external_link_poll(
 }
 
 hk_result_t hk_external_link_cancel(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
-    (void)owner;
     (void)handle;
     (void)operation;
     g_external_operation_active = 0U;

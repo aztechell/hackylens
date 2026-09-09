@@ -81,8 +81,8 @@ class ExternalLinkContractTests(unittest.TestCase):
         compiler = self.compiler()
         source = """
             #include <hackylens/capability/external_link.h>
-            _Static_assert(sizeof(hk_external_link_t) == sizeof(hk_lease_t),
-                           "external-link handle must be one lease token");
+            _Static_assert(sizeof(hk_external_link_t) <= 24U,
+                           "external-link session must stay bounded");
             _Static_assert(sizeof(hk_external_link_op_t) == 8U,
                            "operation token must remain fixed-shape");
             _Static_assert(HK_CAPABILITY_ID_EXTERNAL_LINK == 0x00010004U,
@@ -92,9 +92,8 @@ class ExternalLinkContractTests(unittest.TestCase):
             _Static_assert(HK_EXTERNAL_LINK_TARGET_FILL_BYTE == 0U,
                            "target fill byte changed");
             int main(void) {
-                hk_capability_request_t request =
-                    HK_EXTERNAL_LINK_REQUEST_0_1_INIT;
-                return request.id == HK_CAPABILITY_ID_EXTERNAL_LINK ? 0 : 1;
+                hk_external_link_t session = {0};
+                return session.service != 0;
             }
         """
         with tempfile.TemporaryDirectory(

@@ -36,7 +36,7 @@ typedef struct
 
 typedef struct
 {
-    uint32_t active_leases;
+    uint32_t active_sessions;
     uint32_t active_operations;
     uint32_t current_mode;
     uint32_t route_changes;

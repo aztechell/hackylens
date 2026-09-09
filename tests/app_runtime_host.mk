@@ -15,6 +15,7 @@ HACKYLENS_APP_RUNTIME_HOST_SOURCES := \
   $(HACKYLENS_SOURCE_DIR)/tests/lights_normative_fake_backend.c \
   $(HACKYLENS_SOURCE_DIR)/tests/input_normative_fake_backend.c \
   $(HACKYLENS_SOURCE_DIR)/tests/capability_fake_display.c \
+  $(HACKYLENS_SOURCE_DIR)/tests/capability_fake_external_link.c \
   $(HACKYLENS_SOURCE_DIR)/tests/app_runtime_host_support.c
 
 HACKYLENS_APP_RUNTIME_HOST_INCLUDE_FLAGS := \

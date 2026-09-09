@@ -27,9 +27,11 @@ TIME_SERVICE_ID = "hackylens.cap.time"
 INPUT_SERVICE_ID = "hackylens.cap.input"
 LIGHTS_SERVICE_ID = "hackylens.cap.lights"
 DISPLAY_SERVICE_ID = "hackylens.cap.display"
+EXTERNAL_LINK_SERVICE_ID = "hackylens.cap.external-link"
 DIRECT_SERVICE_TYPES = {TIME_SERVICE_ID: "hk_time_t", INPUT_SERVICE_ID: "hk_input_t",
                         LIGHTS_SERVICE_ID: "hk_lights_service_t",
-                        DISPLAY_SERVICE_ID: "hk_display_service_t"}
+                        DISPLAY_SERVICE_ID: "hk_display_service_t",
+                        EXTERNAL_LINK_SERVICE_ID: "hk_external_link_service_t"}
 
 CATALOG_PATH = ROOT / "platforms" / "k210" / "capabilities.toml"
 APP_MANIFEST_ROOT = ROOT / "firmware" / "src" / "apps"
@@ -833,6 +835,12 @@ def generated_c(composition: Composition) -> str:
         lines.extend([
             '#include "display_provider.h"',
             'const hk_display_service_t hk_display_binding = {0};',
+            '',
+        ])
+    if not any(item.id == EXTERNAL_LINK_SERVICE_ID for item in composition.capabilities):
+        lines.extend([
+            '#include "external_link_provider.h"',
+            'const hk_external_link_service_t hk_external_link_binding = {0};',
             '',
         ])
     if capabilities:

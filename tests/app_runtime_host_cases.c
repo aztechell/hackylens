@@ -1,5 +1,6 @@
 #include "lights_normative_backend.h"
 #include "capability_fake_display.h"
+#include "capability_fake_external_link.h"
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L
 #endif
@@ -492,6 +493,7 @@ static int check_lights_scope_retirement(void)
 
 static hk_display_t *s_scope_display[2];
 static uint8_t s_expire_display;
+static hk_external_link_t *s_scope_external;
 static hk_result_t scope_display_start(const hk_app_context_t *ctx)
 {
     hk_display_surface_t pixels;
@@ -504,13 +506,27 @@ static hk_result_t scope_display_start(const hk_app_context_t *ctx)
     if(result != HK_OK) return result;
     result = hk_display_surface_acquire(s_scope_display[0], &pixels);
     if(result != HK_OK) return result;
-    return hk_display_begin_batch(s_scope_display[1]);
+    result = hk_display_begin_batch(s_scope_display[1]);
+    if(result != HK_OK) return result;
+    result = hk_app_context_external_link(ctx, HK_EXTERNAL_LINK_FEATURE_UART, &s_scope_external);
+    if(result != HK_OK) return result;
+    hk_external_link_uart_config_t config = {sizeof(config), HK_EXTERNAL_LINK_UART_CONFIG_VERSION, 115200U, 0U};
+    result = hk_external_link_configure_uart(s_scope_external, &config);
+    if(result != HK_OK) return result;
+    static const uint8_t tx[] = {1U,2U};
+    hk_buffer_view_t view = {(void *)tx, sizeof(tx), 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_external_link_op_t operation = HK_EXTERNAL_LINK_OP_NONE;
+    result = hk_external_link_uart_write_begin(s_scope_external, &view, (hk_deadline_t){UINT64_C(1000000000)}, NULL, &operation);
+    return result == HK_PENDING ? HK_OK : result;
 }
 static hk_result_t scope_display_stop(const hk_app_context_t *ctx)
 {
     hk_deadline_t deadline;
     if(hk_app_context_teardown_deadline(ctx, &deadline) != HK_OK) return HK_ERR_INTERNAL;
-    if(s_expire_display) hk_fake_display_set_now_us(deadline.at_us);
+    if(s_expire_display) {
+        hk_fake_display_set_now_us(deadline.at_us);
+        hk_fake_external_link_set_now_us(deadline.at_us);
+    }
     /* Deliberately omit display cleanup; runtime must still retire both. */
     return HK_ERR_IO;
 }
@@ -531,6 +547,8 @@ static int check_display_scope_retirement(void)
         CHECK(hk_app_switch_close(hk_app_runtime_host_switch(&host), HK_APP_STOP_COMPLETED) == HK_ERR_IO);
         CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
         CHECK(!s_scope_display[0]->service && !s_scope_display[1]->service);
+        CHECK(!s_scope_external->service && hk_fake_external_link_metrics()->active_operations == 0U &&
+            hk_fake_external_link_metrics()->borrowed_tx_bytes == 0U);
         CHECK(hk_fake_display_metrics()->active_planes == 0U && hk_fake_display_metrics()->borrowed_views == 0U);
         CHECK(hk_fake_display_metrics()->last_deadline.at_us == host.owner_deadline.at_us);
         for(unsigned i = 0U; i < 2U; ++i)

@@ -20,9 +20,7 @@
         }                                                                  \
     } while(0)
 
-static const hk_owner_t SERVICE_OWNER = {4U, 9U};
 static uint64_t s_now_us;
-static uint32_t s_link_generation;
 static uint32_t s_acquires;
 static uint32_t s_releases;
 static uint32_t s_uart_configs;
@@ -42,13 +40,6 @@ static hk_external_link_target_event_t s_target_event;
 static uint8_t s_target_rx[HK_LINK_MAX_FRAME];
 static uint8_t s_target_tx[HK_LINK_MAX_FRAME];
 static uint32_t s_target_tx_size;
-
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    return consumer_id && strcmp(
-        consumer_id, "consumer:external-link-service") == 0 ?
-        SERVICE_OWNER : HK_OWNER_NONE;
-}
 
 struct hk_time { uint8_t binding; };
 static const hk_time_t s_time = {1U};
@@ -74,41 +65,40 @@ hk_result_t hk_time_deadline_after_us(
     return HK_OK;
 }
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner, const hk_capability_request_t *request,
+struct hk_external_link_service { uint8_t unused; };
+static const hk_external_link_service_t s_external_binding = {0};
+const hk_external_link_service_t *hk_external_link_service(void) { return &s_external_binding; }
+hk_result_t hk_external_link_open(
+    const hk_external_link_service_t *service,
     uint64_t mode_features, hk_external_link_t *handle)
 {
-    if(!request || !handle || request->id != HK_CAPABILITY_ID_EXTERNAL_LINK ||
+    if(!service || !handle || HK_CAPABILITY_ID_EXTERNAL_LINK != HK_CAPABILITY_ID_EXTERNAL_LINK ||
        mode_features != (HK_EXTERNAL_LINK_FEATURE_UART |
                          HK_EXTERNAL_LINK_FEATURE_I2C_TARGET))
         return HK_ERR_INVALID_ARGUMENT;
-    s_request_capability_id = request->id;
+    s_request_capability_id = HK_CAPABILITY_ID_EXTERNAL_LINK;
     s_acquires++;
-    handle->lease = (hk_lease_t){
-        3U, ++s_link_generation, owner, HK_CAPABILITY_ID_EXTERNAL_LINK,
-    };
+    *handle = (hk_external_link_t){service, mode_features};
     return HK_OK;
 }
 
-hk_result_t hk_external_link_release(
-    hk_owner_t owner, hk_deadline_t deadline, hk_external_link_t *handle)
+hk_result_t hk_external_link_retire(
+    hk_external_link_t *handle, hk_deadline_t deadline)
 {
-    (void)owner;
     (void)deadline;
     if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
-    if(hk_lease_is_zero(&handle->lease))
+    if(!handle->service)
         return HK_OK;
     s_releases++;
-    handle->lease = HK_LEASE_NONE;
+    *handle = (hk_external_link_t){0};
     return HK_OK;
 }
 
 hk_result_t hk_external_link_configure_uart(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config)
 {
-    (void)owner;
     if(!handle || !config || config->baud != 115200U)
         return HK_ERR_INVALID_ARGUMENT;
     s_uart_configs++;
@@ -116,10 +106,9 @@ hk_result_t hk_external_link_configure_uart(
 }
 
 hk_result_t hk_external_link_configure_i2c_target(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_i2c_target_config_t *config)
 {
-    (void)owner;
     if(!handle || !config || config->address != 0x32U)
         return HK_ERR_INVALID_ARGUMENT;
     s_target_configs++;
@@ -127,12 +116,11 @@ hk_result_t hk_external_link_configure_i2c_target(
 }
 
 hk_result_t hk_external_link_uart_read(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_buffer_view_t *rx, uint32_t *received_bytes)
 {
     uint32_t size;
 
-    (void)owner;
     (void)handle;
     if(!rx || !received_bytes)
         return HK_ERR_INVALID_ARGUMENT;
@@ -149,11 +137,10 @@ hk_result_t hk_external_link_uart_read(
 }
 
 hk_result_t hk_external_link_uart_write_begin(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_buffer_view_t *tx, hk_deadline_t deadline,
     const hk_cancel_t *cancel, hk_external_link_op_t *operation)
 {
-    (void)owner;
     (void)handle;
     (void)cancel;
     if(!tx || !operation || deadline.at_us != s_now_us + UINT64_C(1000000))
@@ -167,11 +154,10 @@ hk_result_t hk_external_link_uart_write_begin(
 }
 
 hk_result_t hk_external_link_poll(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
-    (void)owner;
     (void)handle;
     if(!operation || !progress || operation->generation != s_operation.generation)
         return HK_ERR_STALE_HANDLE;
@@ -196,11 +182,10 @@ hk_result_t hk_external_link_poll(
 }
 
 hk_result_t hk_external_link_cancel(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress)
 {
-    (void)owner;
     (void)handle;
     (void)operation;
     s_cancel_calls++;
@@ -212,10 +197,9 @@ hk_result_t hk_external_link_cancel(
 }
 
 hk_result_t hk_external_link_i2c_target_poll(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     hk_buffer_view_t *rx, hk_external_link_target_event_t *event)
 {
-    (void)owner;
     (void)handle;
     if(!rx || !event)
         return HK_ERR_INVALID_ARGUMENT;
@@ -229,10 +213,9 @@ hk_result_t hk_external_link_i2c_target_poll(
 }
 
 hk_result_t hk_external_link_i2c_target_preload_response(
-    hk_owner_t owner, const hk_external_link_t *handle,
+    const hk_external_link_t *handle,
     const hk_buffer_view_t *tx)
 {
-    (void)owner;
     (void)handle;
     if(!tx || tx->size_bytes > sizeof(s_target_tx))
         return HK_ERR_INVALID_ARGUMENT;

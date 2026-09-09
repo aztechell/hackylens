@@ -58,7 +58,7 @@ affinity = 0
 resources = ["external-uart", "external-i2c"]
 routes = ["external-uart-rx", "external-uart-tx", "external-i2c-clock", "external-i2c-data"]
 provider_source = "platforms/k210/capabilities/external_link_adapter.c"
-provider_symbol = "hk_k210_external_link_provider"
+provider_symbol = "hk_external_link_binding"
 max_leases = 1
 
 [[capabilities]]

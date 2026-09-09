@@ -1,7 +1,7 @@
 #ifndef HACKYLENS_CAPABILITY_EXTERNAL_LINK_H
 #define HACKYLENS_CAPABILITY_EXTERNAL_LINK_H
 
-#include "owner.h"
+#include "common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,13 +41,6 @@ extern "C" {
 #define HK_EXTERNAL_LINK_I2C_TRANSFER_VERSION 1U
 #define HK_EXTERNAL_LINK_OP_PROGRESS_VERSION 1U
 #define HK_EXTERNAL_LINK_TARGET_EVENT_VERSION 1U
-
-#define HK_EXTERNAL_LINK_REQUEST_0_1_INIT                              \
-    {                                                                 \
-        sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, \
-        HK_CAPABILITY_ID_EXTERNAL_LINK, {0U, 1U, 0U, 0U},             \
-        {0U, 2U, 0U, 0U}, 0U, 0U, 0U                                 \
-    }
 
 typedef struct
 {
@@ -132,76 +125,66 @@ typedef struct
     uint32_t reserved;
 } hk_external_link_target_event_t;
 
-HK_DECLARE_CAPABILITY_HANDLE(hk_external_link_t);
+typedef struct hk_external_link_service hk_external_link_service_t;
+/* Stable-address claim. Copies do not transfer connector ownership. */
+typedef struct {
+    const hk_external_link_service_t *service;
+    uint64_t mode_features;
+} hk_external_link_t;
+const hk_external_link_service_t *hk_external_link_service(void);
 
-hk_result_t hk_external_link_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    uint64_t mode_features,
-    hk_external_link_t *handle);
-hk_result_t hk_external_link_release(
-    hk_owner_t owner,
-    hk_deadline_t deadline,
-    hk_external_link_t *handle);
+hk_result_t hk_external_link_open(
+    const hk_external_link_service_t *service, uint64_t mode_features,
+    hk_external_link_t *session);
+hk_result_t hk_external_link_close(hk_external_link_t *session, hk_deadline_t deadline);
+hk_result_t hk_external_link_retire(hk_external_link_t *session, hk_deadline_t deadline);
 hk_result_t hk_external_link_get_info(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_external_link_info_t *info);
 hk_result_t hk_external_link_get_mode(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     uint32_t *mode);
 
 hk_result_t hk_external_link_configure_uart(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config);
 hk_result_t hk_external_link_configure_i2c_controller(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_controller_config_t *config);
 hk_result_t hk_external_link_configure_i2c_target(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_target_config_t *config);
 
 hk_result_t hk_external_link_uart_write_begin(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel,
     hk_external_link_op_t *operation);
 hk_result_t hk_external_link_uart_read(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_buffer_view_t *rx,
     uint32_t *received_bytes);
 hk_result_t hk_external_link_i2c_transfer_begin(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_i2c_transfer_t *transfer,
     hk_deadline_t deadline,
     const hk_cancel_t *cancel,
     hk_external_link_op_t *operation);
 hk_result_t hk_external_link_poll(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress);
 hk_result_t hk_external_link_cancel(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_external_link_op_t *operation,
     hk_external_link_op_progress_t *progress);
 
 hk_result_t hk_external_link_i2c_target_poll(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     hk_buffer_view_t *rx,
     hk_external_link_target_event_t *event);
 hk_result_t hk_external_link_i2c_target_preload_response(
-    hk_owner_t owner,
     const hk_external_link_t *handle,
     const hk_buffer_view_t *tx);
 

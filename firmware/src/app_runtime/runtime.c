@@ -366,6 +366,9 @@ static hk_result_t teardown(
         retain_error(runtime, result);
     }
 
+    result = hk_external_link_retire(&runtime->external_link, runtime->teardown_deadline);
+    retain_error(runtime, result);
+
     if(!hk_owner_is_zero(runtime->owner))
     {
         runtime->state = HK_APP_RUNTIME_STOPPING;
@@ -676,50 +679,6 @@ hk_result_t hk_app_context_capability_status(
     return HK_ERR_NOT_DECLARED;
 }
 
-static hk_result_t context_capability(
-    const hk_app_context_t *ctx,
-    hk_capability_id_t id,
-    uint16_t instance,
-    hk_lease_t *lease)
-{
-    hk_result_t result;
-    uint16_t index;
-
-    if(!lease)
-        return HK_ERR_INVALID_ARGUMENT;
-    *lease = HK_LEASE_NONE;
-    result = validate_callback_context(ctx, NULL);
-    if(result != HK_OK)
-        return result;
-    for(index = 0U; index < ctx->capability_count; index++)
-    {
-        const hk_app_capability_grant_t *grant = &ctx->capabilities[index];
-        if(grant->id != id || grant->instance != instance)
-            continue;
-        if(!grant->available)
-            return HK_ERR_CAPABILITY_ABSENT;
-        if(hk_owner_is_zero(ctx->owner) || hk_lease_is_zero(&grant->lease))
-            return HK_ERR_INVALID_STATE;
-        if(!owner_equal(grant->lease.owner, ctx->owner) ||
-           grant->lease.capability_id != id)
-            return HK_ERR_STALE_HANDLE;
-        *lease = grant->lease;
-        return HK_OK;
-    }
-    return HK_ERR_NOT_DECLARED;
-}
-
-#define HK_APP_CONTEXT_TYPED_ACCESSOR(function_name, type_name, capability_id) \
-    hk_result_t function_name(                                                \
-        const hk_app_context_t *ctx, uint16_t instance, type_name *handle)    \
-    {                                                                         \
-        if(!handle)                                                           \
-            return HK_ERR_INVALID_ARGUMENT;                                   \
-        handle->lease = HK_LEASE_NONE;                                        \
-        return context_capability(                                            \
-            ctx, capability_id, instance, &handle->lease);                    \
-    }
-
 hk_result_t hk_app_context_time(
     const hk_app_context_t *ctx, const hk_time_t **time)
 {
@@ -748,10 +707,29 @@ hk_result_t hk_app_context_input(
     *input = ctx->input;
     return *input ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
 }
-HK_APP_CONTEXT_TYPED_ACCESSOR(
-    hk_app_context_external_link,
-    hk_external_link_t,
-    HK_CAPABILITY_ID_EXTERNAL_LINK)
+hk_result_t hk_app_context_external_link(const hk_app_context_t *ctx,
+    uint64_t mode_features, hk_external_link_t **session)
+{
+    hk_app_runtime_t *runtime = NULL;
+    hk_result_t result;
+    if(!session) return HK_ERR_INVALID_ARGUMENT;
+    *session = NULL;
+    result = validate_callback_context(ctx, &runtime);
+    if(result != HK_OK) return result;
+    if(!mode_features || (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!runtime->ops.external_link) return HK_ERR_CAPABILITY_ABSENT;
+    if(runtime->external_link.service) {
+        if((runtime->external_link.mode_features & mode_features) != mode_features)
+            return HK_ERR_BUSY;
+        *session = &runtime->external_link;
+        return HK_OK;
+    }
+    if(runtime->teardown_started) return HK_ERR_INVALID_STATE;
+    result = hk_external_link_open(runtime->ops.external_link, mode_features, &runtime->external_link);
+    if(result == HK_OK) *session = &runtime->external_link;
+    return result;
+}
 hk_result_t hk_app_context_display(
     const hk_app_context_t *ctx, uint32_t plane, hk_display_t **session)
 {
@@ -816,7 +794,6 @@ hk_result_t hk_app_context_lights(
     return HK_ERR_BUSY;
 }
 
-#undef HK_APP_CONTEXT_TYPED_ACCESSOR
 
 hk_result_t hk_app_context_service(
     const hk_app_context_t *ctx,

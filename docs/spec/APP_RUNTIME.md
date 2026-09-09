@@ -28,8 +28,10 @@ retired only at the worker's terminal handoff.
 Display uses `hk_app_context_display(ctx, plane, &session)` and stable runtime
 storage. UI borrows that session by pointer; it never reconstructs a handle per
 frame. BASE and OVERLAY ownership and real frame/transaction generations remain.
-The owner/lease rules below continue to apply to External Link
-while it remains on the broker. Service retirement must complete its logical
+External Link now uses a runtime-owned connector session via
+`hk_app_context_external_link(ctx, mode_features, &session)`. Its retirement
+shares the original teardown deadline with Lights and Display. The generic
+owner/grant machinery below is transitional and has no hardware consumers. Service retirement must complete its logical
 invalidation before app storage is reused; a failed safe-off quarantines the
 affected channel. It does not bypass the remaining broker cleanup.
 

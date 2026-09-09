@@ -38,7 +38,9 @@ The binding is immutable; a channel session must not be copied or moved.
 Display similarly uses `hk_app_context_display(ctx, plane, &session)`, returning
 a stable runtime-owned plane session. Draw calls take that pointer without an
 owner argument. Runtime retires both planes on teardown, including failure.
-External Link retains the broker Capability API ABI. A new wrapper type requires a concrete ABI, ownership, or
+External Link uses `hk_app_context_external_link(ctx, mode_features, &session)`
+and runtime-owned connector storage. Operation tokens remain separate and
+retain their generations across session reopen. A new wrapper type requires a concrete ABI, ownership, or
 language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 

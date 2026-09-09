@@ -27,22 +27,23 @@ common size/version rules in the Capability API.
 
 ## Acquisition, connector ownership, and routing
 
-`hk_external_link_acquire` takes `mode_features`, the complete set of modes the
-lease intends to use. Those bits are added to `request.required_features`
-during capability negotiation. Trying to configure a mode outside that
-negotiated set returns `HK_ERR_NOT_DECLARED`; a negotiated feature unsupported
-by the selected provider returns `HK_ERR_FEATURE_UNAVAILABLE`.
+`hk_external_link_service()` returns the immutable connector binding.
+`hk_external_link_open(service, mode_features, &session)` claims it into
+stable-address caller storage. Operations take that session pointer without a
+broker owner or version negotiation. The selected modes must be supported;
+configuring a mode outside the session's set returns `HK_ERR_NOT_DECLARED`.
+Copies of session fields do not transfer ownership and are stale.
 
-Release follows the common lifecycle exactly: a null handle pointer is
-`HK_ERR_INVALID_ARGUMENT`, an all-zero typed handle is idempotent `HK_OK`, a
-partially-zero or otherwise malformed non-zero handle is
-`HK_ERR_STALE_HANDLE`, and a valid non-zero handle of another capability type
-is `HK_ERR_INVALID_ARGUMENT`. The first successful release zeros the caller's
-handle; a copied non-zero handle is stale afterward.
+`hk_external_link_close(session, deadline)` is idempotent for an empty session
+and leaves a failed ordinary close retryable. `hk_external_link_retire` always
+quiesces IRQ/peripheral activity and discards borrowed TX/RX pointers before
+invalidating the claim, including when the deadline is expired. Failed
+retirement quarantines the connector until reboot. Safety quiesce starts no
+new transfer and does not renew the supplied deadline.
 
 One capability instance represents one physical connector. UART and I2C modes
 that share pins, muxes, or peripherals MUST NOT be advertised as independently
-ownable capabilities. There is one exclusive connector lease, even when the
+ownable capabilities. There is one exclusive connector session, even when the
 provider supports all three modes.
 
 Supported modes and routes are generated from the selected descriptor,
@@ -73,11 +74,16 @@ provider returns `HK_ERR_FEATURE_UNAVAILABLE`.
 
 ## Operation token and state machine
 
+Operation generations MUST remain monotonic across connector close/open cycles,
+including reopening at the same session address. The provider never resets the
+counter at session open; exhausted generations reject new operations. This
+prevents an old operation token from aliasing a later run's active transfer.
+
 Potentially blocking transfers use a generation-checked
 `hk_external_link_op_t`. The all-zero value is no operation. A successful
 begin returns `HK_PENDING` and a non-zero token. `poll` and `cancel` validate
-the owner, connector lease, and token generation before observing hardware.
-There is one in-flight operation per lease across both operation kinds:
+the connector session and token generation before observing hardware.
+There is one in-flight operation per session across both operation kinds:
 
 - UART write begin;
 - I2C controller transfer begin, including combined write/read.
@@ -98,9 +104,9 @@ begin. Progress reports accepted TX bytes and the completed RX prefix. A
 provider MAY report a smaller `maximum_poll_bytes`, but version 0.1 MUST process
 at most 32 bytes across all phases in one `poll` call.
 
-Argument/owner/token errors do not alter the operation. Terminal results are
-latched. Release and trusted owner cleanup quiesce any active operation,
-invalidate the token and lease, and return borrowed buffers only after hardware
+Argument/session/token errors do not alter the operation. Terminal results are
+latched. Close and retirement quiesce any active operation,
+invalidate the token and session, and return borrowed buffers only after hardware
 is safe.
 
 ## UART semantics
@@ -118,7 +124,7 @@ keeps full-duplex or loopback traffic from depending on the main-loop poll
 interval. If that bounded storage is exceeded, the next read returns
 `HK_ERR_OVERFLOW`, resets the UART receive path, and publishes zero bytes; the
 caller then continues from an explicit resynchronized state. Mode changes,
-failed/cancelled writes, release, and owner cleanup stop the RX interrupt and
+failed/cancelled writes, close, and retirement stop the RX interrupt and
 clear its staged data before the storage can be reused by I2C target mode.
 
 ## I2C controller and target semantics
@@ -156,8 +162,7 @@ actual `requested_bytes`; it is notification, not a pending request that
 `preload_response` can complete. Preloading after a WRITE is therefore the
 normal request/next-read flow. If a preload call races with a READ already in
 progress, the active READ retains its snapshot and the new preload belongs to
-the following READ. Mode reconfiguration, mode change, release, and owner
-cleanup discard unread preload and queued target events.
+the following READ. Mode reconfiguration, mode change, close, and retirement discard unread preload and queued target events.
 
 The K210 handoff has two bounded completed-event slots backed by two reusable
 payload buffers; READ notifications do not reserve a payload buffer. ISR and
@@ -169,7 +174,7 @@ event window; a write already being discarded remains ignored through its
 STOP. The next transaction completed after that boundary is the first
 observable event. This is the explicit resynchronization state: no prefix or
 queued event from before the overflow is replayed. Mode change, release, and
-owner cleanup clear both the queued window and the overflow latch. An active
+session retirement clear both the queued window and the overflow latch. An active
 READ keeps its one-shot preload snapshot, and a racing preload still arms the
 following READ exactly as above.
 
@@ -192,18 +197,18 @@ TX buffers are borrowed read-only until terminal completion. RX buffers are
 borrowed writable and cannot be read before terminal completion except for the
 completed RX prefix reported by `rx_completed_bytes`; that prefix is stable and
 readable. The cancel view is also borrowed through terminal. After terminal
-cancellation, timeout, release, or owner cleanup, the provider MUST NOT perform
+cancellation, timeout, close, or retirement, the provider MUST NOT perform
 late writes to UART, I2C, or the caller's RX buffer.
 
 ## Phase 2.10 implementation boundary
 
 The normal external-link protocol service is a native capability consumer. A
 MicroPython run that needs raw connector access asks product policy to pause the
-normal service; that service voluntarily releases its lease. After MicroPython
-owner cleanup, the normal service reacquires and restores its configured HMPY
+normal service; that service voluntarily retires its session. After MicroPython
+session retirement, the normal service reacquires and restores its configured HMPY
 mode.
 
-The capability core does not preempt owners or encode this product policy. The
+The connector service does not preempt sessions or encode this product policy. The
 MicroPython cross-core bridge contains transport/ticket/cancel logic only and
 calls the same provider as the native service. Those K210 provider and consumer
 migrations belong to Phase 2.10; Phase 2.9 does not change production external
