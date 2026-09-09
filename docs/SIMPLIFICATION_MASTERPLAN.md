@@ -581,8 +581,16 @@ handoff worker. Сохранены транзакции, dirty regions, rollback
 −13,568 к принятому S7), static RAM: 2,896,456 байт (−224 к Lights;
 −2,016 к S7). Логи: `build/s8-display-*.log`.
 
-Аппаратная приёмка Display и CI пока ожидаются. External Link и финальное
-удаление оставшейся broker/catalog/owner machinery ещё не выполнены.
+Коммит `9e13c6c` прошёл CI run `34315752971` и установлен на COM10.
+UART smoke SETTINGS → CAMERA → PONG → MENU прошёл; CAMERA present около
+31 ms (это наблюдение smoke, не сравнительная квалификация производительности).
+HMPY display прошёл normal completion, exception, requested stop и timeout;
+следующие запуски успешно открывали OVERLAY. Отдельный внешний MP-скрипт
+продолжал display_present при переходе SETTINGS → MENU и завершился по Stop.
+Временный файл удалён, исходный список файлов сохранён. Логи:
+`build/s8-display-hardware.log`, `build/s8-display-hmpy.log`.
+Визуальная приёмка Display ожидает подтверждения пользователя. External Link
+и финальное удаление оставшейся broker/catalog/owner machinery ещё не выполнены.
 
 ### Цель
 
