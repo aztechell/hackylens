@@ -981,4 +981,3 @@ const hk_external_link_service_t hk_external_link_binding = {
     .target_poll = k210_external_target_poll,
     .target_preload = k210_external_target_preload,
 };
-
