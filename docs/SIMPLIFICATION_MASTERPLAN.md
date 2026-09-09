@@ -589,8 +589,9 @@ HMPY display прошёл normal completion, exception, requested stop и timeou
 продолжал display_present при переходе SETTINGS → MENU и завершился по Stop.
 Временный файл удалён, исходный список файлов сохранён. Логи:
 `build/s8-display-hardware.log`, `build/s8-display-hmpy.log`.
-Визуальная приёмка Display ожидает подтверждения пользователя. External Link
-и финальное удаление оставшейся broker/catalog/owner machinery ещё не выполнены.
+Пользователь подтвердил визуальную приёмку меню, CAMERA и PONG: «всё нормально».
+Display принят. External Link и финальное удаление оставшейся
+broker/catalog/owner machinery ещё не выполнены.
 
 ### Цель
 
