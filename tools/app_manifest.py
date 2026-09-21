@@ -289,14 +289,14 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         raise ManifestError(
             f"{path}: capability cannot be both required and optional"
         )
-    for name in required_names + optional_names:
-        if name not in HARDWARE_SERVICES | FIRMWARE_SERVICES:
-            raise ManifestError(f"{path}: unknown required service {name!r}")
-    for name in optional_names:
-        if name in FIRMWARE_SERVICES:
+    for service_name in required_names + optional_names:
+        if service_name not in HARDWARE_SERVICES | FIRMWARE_SERVICES:
+            raise ManifestError(f"{path}: unknown required service {service_name!r}")
+    for service_name in optional_names:
+        if service_name in FIRMWARE_SERVICES:
             raise ManifestError(f"{path}: services cannot be optional")
-        if name not in OPTIONAL_FALLBACKS:
-            raise ManifestError(f"optional {name!r} has no build-time fallback")
+        if service_name not in OPTIONAL_FALLBACKS:
+            raise ManifestError(f"optional {service_name!r} has no build-time fallback")
 
     debug = (
         _string(

@@ -71,6 +71,7 @@ class AppManifestSchemaTests(unittest.TestCase):
             "alpha-tool", "zeta-legacy",
         ])
         alpha = first["apps"][0]
+        self.assertEqual(alpha["name"], "Alpha Tool")
         self.assertEqual(alpha["generated_symbol"], "hk_generated_app_alpha_tool")
         self.assertEqual(alpha["menu"]["order"], 10)
         self.assertTrue(alpha["menu"]["visible"])
