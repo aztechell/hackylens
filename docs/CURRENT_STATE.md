@@ -30,7 +30,7 @@ rate, and button handling waits for the current frame to finish. The
 sections below record earlier milestones and are historical where they mention
 mixed lifecycle composition or the legacy adapter. See [S7 evidence](S7_EVIDENCE.md).
 
-## S8 in progress (2026-09-09)
+## S8 implementation complete; physical qualification open (2026-09-21)
 
 Time, Input, Lights, Display and External Link now use direct typed bindings.
 Lights channel sessions, Display planes/transactions and External Link modes,
@@ -43,8 +43,8 @@ is not established by that lifecycle test.
 The final S8 cleanup removes generic owner/grant/inventory runtime tables and
 the inventory generator/catalog. Build selection checks direct typed bindings;
 app context keeps identity, generation and Time/Input references, while actual
-scoped sessions remain private to runtime. Final build/CI qualification is in
-progress, so S8 remains open. The Phase 1–3
+scoped sessions remain private to runtime. Both final builds and all 227 host tests pass; firmware is installed on COM10.
+Physical UART/I2C peer exchange remains unconfirmed, so S8 acceptance stays open. The Phase 1–3
 sections below are historical; their generated inventory, owner injection and
 legacy-adapter descriptions do not describe the migrated service interfaces.
 Current measurements and qualification are in the simplification masterplan.
