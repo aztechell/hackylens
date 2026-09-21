@@ -3,7 +3,6 @@ contract-id: hackylens.native-app-manifest
 owner: platform-architecture
 version: 0.1.0
 stability: experimental
-phase: 3
 schema-major: 1
 format-scope: native-app-build
 runtime-parsed: false
@@ -151,12 +150,12 @@ every app-package production translation unit without a manifest owner. For each
 enabled app, only its app root and directories explicitly named by
 `private_includes` MAY become private compiler include roots.
 
-## Native app manifest versus Phase 4 Project Format
+## Native app manifest versus Project Format
 
 The native app manifest describes C sources compiled into one firmware image.
 It is not a developer project package, device filesystem object, installed
 program, Python runtime selection, asset synchronization format, or executable
-discovery record. Those concerns belong to the future Phase 4 Project Format.
+discovery record. Those concerns belong to the future Project Format.
 
 ## Compatibility
 
@@ -171,6 +170,4 @@ others.
 - [Feature App SDK](APP_SDK.md)
 - [Capability API](CAPABILITY_API.md)
 - [Versioning Policy](VERSIONING.md)
-- [Architecture Vision](../ARCHITECTURE_VISION.md)
 - [Roadmap](../ROADMAP.md)
-- [ADR-0008](../adr/0008-generate-native-app-composition.md)

@@ -18,7 +18,7 @@ import check_arch
 import gen_board
 
 
-class Phase2ArchitectureGuardTests(unittest.TestCase):
+class ServiceArchitectureGuardTests(unittest.TestCase):
     def test_explicit_policy_classifies_every_production_source(self) -> None:
         policy = check_arch.load_layer_policy()
         unclassified = [
@@ -36,7 +36,7 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
             "app",
         )
 
-    def test_phase2_negative_edges_are_hard_rules(self) -> None:
+    def test_service_negative_edges_are_hard_rules(self) -> None:
         cases = (
             ("firmware/src/apps/demo/app.c", "firmware/src/drivers/device.h"),
             ("firmware/src/apps/demo/app.c", "boards/example/board.c"),
@@ -330,7 +330,7 @@ class Phase2ArchitectureGuardTests(unittest.TestCase):
         )
 
     def test_repository_guard_is_green(self) -> None:
-        self.assertEqual(check_arch.phase2_source_failures(), [])
+        self.assertEqual(check_arch.service_source_failures(), [])
 
 
 if __name__ == "__main__":

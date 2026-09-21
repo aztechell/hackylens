@@ -17,9 +17,8 @@ HackyLens provides a compact on-device environment for camera experiments, QR sc
 > preview. The primary project goal is a lightweight, portable application
 > architecture for robotics hardware: board-independent feature apps, explicit
 > platform capabilities, and a direct path from MicroPython prototypes to native
-> apps. See the [architecture vision](docs/ARCHITECTURE_VISION.md),
-> [current-state audit](docs/CURRENT_STATE.md), and
-> [platform roadmap](docs/ROADMAP.md).
+> apps. See the [architecture and current status](docs/ARCHITECTURE.md) and
+> [roadmap](docs/ROADMAP.md).
 
 > [!WARNING]
 > Flashing custom firmware replaces the firmware currently installed on the device. Make sure you are comfortable entering the K210 bootloader and restoring your preferred firmware before proceeding.
@@ -265,20 +264,12 @@ Run `python tools\hkflash.py --help` or the help for an individual subcommand to
 HackyLens Code is intentionally maintained in the separate sibling
 `hackylens-code` repository.
 
-Current work follows the [Simplification masterplan](docs/SIMPLIFICATION_MASTERPLAN.md),
-which takes precedence over older architecture and governance requirements.
-[Architecture vision](docs/ARCHITECTURE_VISION.md) and the
-[Platform roadmap](docs/ROADMAP.md) describe goals and deferred work;
-[Current state](docs/CURRENT_STATE.md) records implementation status.
-Implementation details are available in
-[Architecture](docs/ARCHITECTURE.md), [Modules](docs/MODULES.md),
-[AI models](docs/AI_MODELS.md), [App lifecycle](docs/APP_LIFECYCLE.md), and
-[RAM/flash budget](docs/RAM_BUDGET.md).
-
-Current technical contracts are indexed in the
-[platform specifications](docs/spec/README.md). [ADRs](docs/adr/README.md)
-preserve historical decisions; new ADRs and phase evidence schemas are not
-required for simplification work.
+See [Architecture](docs/ARCHITECTURE.md) for the current implementation,
+hardware acceptance and limitations, and [Roadmap](docs/ROADMAP.md) for product
+and research priorities. Detailed references cover [modules](docs/MODULES.md),
+[AI models](docs/AI_MODELS.md), [app lifecycle](docs/spec/APP_RUNTIME.md),
+[RAM/flash budget](docs/RAM_BUDGET.md) and [public interfaces](docs/spec/README.md).
+Historical plans and decisions remain in Git history.
 
 ## License
 

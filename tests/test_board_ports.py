@@ -26,7 +26,7 @@ if str(TOOLS) not in sys.path:
 import board_contract
 import build_firmware
 import check_arch
-import check_phase1_resources
+import resource_checks
 import firmware_attestation
 import firmware_sidecar
 import hkflash
@@ -1026,27 +1026,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
         self.assertIn("#define HMPY_PROTOCOL_VERSION 1U", codec)
 
 
-class ResourceEvidenceTests(unittest.TestCase):
-    def test_resource_policy_accepts_ram_savings_without_padding(self) -> None:
-        acceptance = {
-            "flash_delta_max_bytes": 8192,
-            "static_ram_delta_max_bytes": 0,
-            "new_background_tasks_queues_or_heap_allocations": 0,
-        }
-        self.assertTrue(
-            check_phase1_resources.resource_budget_passes(8192, -176, [], acceptance)
-        )
-        self.assertFalse(
-            check_phase1_resources.resource_budget_passes(8193, -176, [], acceptance)
-        )
-        self.assertFalse(
-            check_phase1_resources.resource_budget_passes(0, 1, [], acceptance)
-        )
-        self.assertFalse(
-            check_phase1_resources.resource_budget_passes(
-                0, -176, ["new allocation"], acceptance
-            )
-        )
+class ResourceRegressionTests(unittest.TestCase):
 
     def test_build_path_mapping_is_global_and_host_paths_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1073,64 +1053,6 @@ class ResourceEvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "embeds host path"):
                 build_firmware.reject_embedded_host_paths(unsafe, [ROOT, sdk])
 
-    def test_baseline_identity_repository_and_bootstrap_provenance_are_strict(self) -> None:
-        baseline_path = ROOT / "docs" / "evidence" / "phase1-baseline.json"
-        document = check_phase1_resources.load_baseline(baseline_path)
-        baseline = document["baseline"]
-        self.assertIsInstance(baseline, dict)
-        self.assertEqual(
-            check_phase1_resources.sha256(baseline_path),
-            check_phase1_resources.PINNED_BASELINE_SHA256,
-        )
-        check_phase1_resources.verify_baseline_repository_provenance(document)
-
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "baseline.json"
-            wrong_type = copy.deepcopy(document)
-            wrong_type["baseline"]["raw_image_bytes"] = True
-            with self.assertRaisesRegex(RuntimeError, "expected integer"):
-                check_phase1_resources.validate_baseline_document(wrong_type)
-
-            wrong_formula = copy.deepcopy(document)
-            wrong_formula["formulas"]["static_ram"] = "bss_bytes"
-            with self.assertRaisesRegex(RuntimeError, "formulas"):
-                check_phase1_resources.validate_baseline_document(wrong_formula)
-
-            unknown = copy.deepcopy(document)
-            unknown["baseline"]["invented"] = 1
-            with self.assertRaisesRegex(RuntimeError, "unknown"):
-                check_phase1_resources.validate_baseline_document(unknown)
-
-            path.write_bytes(check_phase1_resources.canonical_json_bytes(wrong_formula))
-            with self.assertRaisesRegex(RuntimeError, "provenance digest mismatch"):
-                check_phase1_resources.load_baseline(path)
-
-        wrong_version = copy.deepcopy(document)
-        wrong_version["baseline"]["firmware_version"] = "9.9.9"
-        with self.assertRaisesRegex(RuntimeError, "commit VERSION"):
-            check_phase1_resources.verify_baseline_repository_provenance(wrong_version)
-
-        wrong_sdk = copy.deepcopy(document)
-        wrong_sdk["toolchain"]["kendryte_standalone_sdk_revision"] = "f" * 40
-        with self.assertRaisesRegex(RuntimeError, "SDK revision"):
-            check_phase1_resources.verify_baseline_repository_provenance(wrong_sdk)
-
-        wrong_toolchain = copy.deepcopy(document)
-        wrong_toolchain["toolchain"]["archive_sha256"] = "f" * 64
-        with self.assertRaisesRegex(RuntimeError, "archive SHA-256"):
-            check_phase1_resources.verify_baseline_repository_provenance(wrong_toolchain)
-
-        wrong_toolchain_version = copy.deepcopy(document)
-        wrong_toolchain_version["toolchain"]["kendryte_toolchain"] = "v0.0.0"
-        with self.assertRaisesRegex(RuntimeError, "toolchain version"):
-            check_phase1_resources.verify_baseline_repository_provenance(
-                wrong_toolchain_version
-            )
-
-        with self.assertRaisesRegex(RuntimeError, "unavailable"):
-            check_phase1_resources.ensure_commit_available("0" * 40)
-        with self.assertRaisesRegex(RuntimeError, "not an ancestor"):
-            check_phase1_resources.ensure_commit_is_ancestor("0" * 40)
 
     def test_complete_runtime_object_snapshots_cover_headers_multiline_wrappers_and_new(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1156,9 +1078,6 @@ class ResourceEvidenceTests(unittest.TestCase):
                 ["git", "rev-parse", "HEAD"], cwd=repository, check=True,
                 text=True, capture_output=True,
             ).stdout.strip()
-            check_phase1_resources.ensure_tracked_result(
-                source, root=repository
-            )
             moved = repository / "firmware" / "renamed.c"
             source.rename(moved)
             header = repository / "firmware" / "new_runtime.hpp"
@@ -1201,9 +1120,7 @@ class ResourceEvidenceTests(unittest.TestCase):
                 "void *(*cross_tu_alias)(size_t) = malloc;\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(RuntimeError, "not tracked"):
-                check_phase1_resources.ensure_tracked_result(header, root=repository)
-            findings = check_phase1_resources.added_runtime_objects(
+            findings = resource_checks.added_runtime_objects(
                 commit, root=repository
             )
             joined = "\n".join(findings)
@@ -1264,7 +1181,7 @@ class ResourceEvidenceTests(unittest.TestCase):
                 "void *use_old_wrapper(void) { return old_buffer(); }\n",
                 encoding="utf-8",
             )
-            wrapper_findings = check_phase1_resources.added_runtime_objects(
+            wrapper_findings = resource_checks.added_runtime_objects(
                 commit, root=repository
             )
             self.assertIn("call:old_buffer", "\n".join(wrapper_findings))
@@ -1272,7 +1189,7 @@ class ResourceEvidenceTests(unittest.TestCase):
             renamed = repository / "firmware" / "renamed.c"
             old.rename(renamed)
             self.assertEqual(
-                check_phase1_resources.added_runtime_objects(
+                resource_checks.added_runtime_objects(
                     commit, root=repository
                 ),
                 [],
@@ -1282,7 +1199,7 @@ class ResourceEvidenceTests(unittest.TestCase):
                 "void *replacement_buffer(void) { return malloc(8); }\n",
                 encoding="utf-8",
             )
-            findings = check_phase1_resources.added_runtime_objects(
+            findings = resource_checks.added_runtime_objects(
                 commit, root=repository
             )
             self.assertTrue(findings)
@@ -1326,7 +1243,7 @@ class ResourceEvidenceTests(unittest.TestCase):
                 "}\n",
                 encoding="utf-8",
             )
-            findings = check_phase1_resources.added_runtime_objects(
+            findings = resource_checks.added_runtime_objects(
                 commit, root=repository
             )
             self.assertIn("call:malloc", "\n".join(findings))
@@ -1362,115 +1279,12 @@ class ResourceEvidenceTests(unittest.TestCase):
                 "void *new_use(void) { return MAKE(); }\n",
                 encoding="utf-8",
             )
-            findings = check_phase1_resources.added_runtime_objects(
+            findings = resource_checks.added_runtime_objects(
                 commit, root=repository
             )
             self.assertIn("call:MAKE", "\n".join(findings))
 
-    def test_result_freshness_projection_checks_metrics_and_hash_types(self) -> None:
-        path = ROOT / "docs" / "evidence" / "phase1-result.json"
-        document = check_phase1_resources.validate_result_document(
-            json.loads(path.read_text(encoding="utf-8"))
-        )
-        alternate = copy.deepcopy(document)
-        self.assertEqual(
-            document["hash_scope"],
-            check_phase1_resources.LOCAL_HASH_SCOPE,
-        )
-        alternate["elf"]["local_sha256"] = "a" * 64
-        self.assertEqual(
-            check_phase1_resources.deterministic_result_projection(document),
-            check_phase1_resources.deterministic_result_projection(alternate),
-        )
-        alternate["elf"]["data_bytes"] += 1
-        self.assertNotEqual(
-            check_phase1_resources.deterministic_result_projection(document),
-            check_phase1_resources.deterministic_result_projection(alternate),
-        )
-        malformed = copy.deepcopy(document)
-        malformed["image"]["local_sha256"] = "not-a-hash"
-        with self.assertRaisesRegex(RuntimeError, "local_sha256"):
-            check_phase1_resources.validate_result_document(malformed)
-        generic_hash = copy.deepcopy(document)
-        generic_hash["image"]["sha256"] = generic_hash["image"].pop("local_sha256")
-        with self.assertRaisesRegex(RuntimeError, "missing or unknown"):
-            check_phase1_resources.validate_result_document(generic_hash)
 
-    def test_phase1_hardware_evidence_is_canonical_sanitized_and_hash_bound(self) -> None:
-        path = ROOT / "docs" / "evidence" / "phase1-hardware-smoke.json"
-        encoded = path.read_bytes()
-        document = json.loads(encoded.decode("utf-8"))
-        self.assertEqual(
-            encoded, firmware_attestation.canonical_json_bytes(document)
-        )
-        self.assertEqual(document["schema"], 1)
-        self.assertTrue(document["accepted"])
-        self.assertEqual(document["board"], "huskylens-sen0305")
-        self.assertEqual(document["firmware"]["version"], "0.3.0")
-        self.assertFalse(document["privacy"]["host_port_recorded"])
-        self.assertFalse(document["privacy"]["usb_serial_recorded"])
-        self.assertNotIn(b"COM10", encoded)
-
-        closure_link = document["closure_result"]
-        self.assertEqual(set(closure_link), {"path", "sha256"})
-        self.assertEqual(
-            closure_link["path"],
-            "docs/evidence/phase1-closure-result.json",
-        )
-        self.assertNotEqual(
-            closure_link["path"], "docs/evidence/phase1-result.json"
-        )
-        closure_path = (ROOT / closure_link["path"]).resolve()
-        self.assertEqual(
-            closure_path.parent, (ROOT / "docs" / "evidence").resolve()
-        )
-        closure_encoded = closure_path.read_bytes()
-        self.assertEqual(
-            hashlib.sha256(closure_encoded).hexdigest(),
-            closure_link["sha256"],
-        )
-        closure = check_phase1_resources.validate_result_document(
-            json.loads(closure_encoded.decode("utf-8"))
-        )
-        self.assertEqual(
-            closure_encoded,
-            firmware_attestation.canonical_json_bytes(closure),
-        )
-        self.assertTrue(closure["accepted"])
-        self.assertEqual(document["board"], closure["board"])
-        self.assertEqual(
-            document["firmware"]["version"], closure["firmware_version"]
-        )
-        self.assertEqual(
-            document["firmware"]["image_bytes"],
-            closure["image"]["raw_bytes"],
-        )
-        self.assertEqual(
-            document["firmware"]["image_sha256"],
-            closure["image"]["local_sha256"],
-        )
-        self.assertEqual(
-            set(document["results"]),
-            {
-                "boot", "buttons", "camera", "display", "external_links",
-                "flash_package_round_trip", "hmpy", "lights", "sd",
-            },
-        )
-        self.assertTrue(
-            all(result["status"] == "pass"
-                for result in document["results"].values())
-        )
-        for artifact in document["visual_artifacts"]:
-            artifact_path = ROOT / artifact["path"]
-            content = artifact_path.read_bytes()
-            self.assertTrue(content.startswith(b"\x89PNG\r\n\x1a\n"))
-            self.assertEqual(hashlib.sha256(content).hexdigest(), artifact["sha256"])
-            self.assertEqual(
-                int.from_bytes(content[16:20], "big"), artifact["width"]
-            )
-            self.assertEqual(
-                int.from_bytes(content[20:24], "big"), artifact["height"]
-            )
 
 
 if __name__ == "__main__":

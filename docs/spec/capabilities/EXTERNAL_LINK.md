@@ -200,7 +200,7 @@ readable. The cancel view is also borrowed through terminal. After terminal
 cancellation, timeout, close, or retirement, the provider MUST NOT perform
 late writes to UART, I2C, or the caller's RX buffer.
 
-## Phase 2.10 implementation boundary
+## Production integration
 
 The normal external-link protocol service is a native capability consumer. A
 MicroPython run that needs raw connector access asks product policy to pause the
@@ -210,9 +210,7 @@ mode.
 
 The connector service does not preempt sessions or encode this product policy. The
 MicroPython cross-core bridge contains transport/ticket/cancel logic only and
-calls the same provider as the native service. Those K210 provider and consumer
-migrations belong to Phase 2.10; Phase 2.9 does not change production external
-service, HAL, routing, or MicroPython runtime behavior.
+calls the same provider as the native service.
 
 ## Fake and acceptance
 
@@ -229,8 +227,7 @@ no heap, task, queue, or unbounded event storage.
 
 SEN0305 physical acceptance requires UART TX/RX loopback and a known 7-bit I2C
 target, plus restoration of the normal external/HMPY service. Host tests alone
-cannot close the electrical gate; that later physical gate is not Phase 2.9
-completion evidence.
+cannot establish electrical behavior.
 
 ## References
 

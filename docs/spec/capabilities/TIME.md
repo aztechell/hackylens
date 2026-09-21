@@ -7,11 +7,8 @@ stability: experimental
 
 # Typed Time service
 
-S8 replaces the experimental lease-based Time source interface with a direct
-immutable binding. Native apps and MicroPython still use the same production
-clock and bounded-sleep implementation. Other services retain their broker
-until their own migration. The old Time acquire/release/owner interface is
-removed rather than retained as a compatibility layer.
+Time uses a direct immutable binding. Native apps and MicroPython use the same
+production clock and bounded-sleep implementation.
 
 ## Binding and operations
 

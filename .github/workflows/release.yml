@@ -114,7 +114,7 @@ jobs:
           Invoke-NativeChecked python tools/check_arch.py --verify-build-profile full
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect present
           Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
-          Invoke-NativeChecked python tools/check_s7_resources.py
+          Invoke-NativeChecked python tools/check_resources.py
 
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'

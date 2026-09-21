@@ -69,16 +69,15 @@ whose safe-off failed is quarantined and cannot be reacquired. Cleanup attempts
 all affected channels using the same original deadline and preserves the first
 error. No fresh deadline is created after a preceding failure.
 
-Runtime fallback retires camera/native sessions before the remaining broker
-cleanup and attempts both even on failure. It does not depend on the camera UI
+Runtime fallback retires camera/native sessions and attempts every scoped
+retirement even on failure. It does not depend on the camera UI
 light-active flag. Persistent settings sessions are outside app teardown.
 
 MicroPython sessions belong to the bridge run, including external HMPY runs.
 Closing the native MicroPython screen only requests stop; it must not release
 channels while the worker can still access them. Retirement occurs at the
-existing terminal worker handoff or submit failure. Lights and Display cleanup
-share one deadline and all cleanup paths are attempted. External Link retains
-its existing immediate cleanup until its own S8 migration.
+existing terminal worker handoff or submit failure. Lights, Display and External Link cleanup
+share one deadline and all cleanup paths are attempted.
 
 The provider handles safe-off, while the settings service reclaims channels and
 restores persisted values after temporary camera or MicroPython use. A failed

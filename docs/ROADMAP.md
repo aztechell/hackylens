@@ -1,82 +1,39 @@
-# HackyLens Platform Roadmap
+# Roadmap
 
-## Текущий порядок работ
+HackyLens targets useful SEN0305 firmware and measurable reuse of application
+logic. The current implementation, acceptance and limitations are in
+[Architecture](ARCHITECTURE.md); interface details are in [technical references](spec/README.md).
 
-Активный execution plan —
-[SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md). Только он задаёт
-порядок S1–S9, инварианты и exit gates текущего упрощения. Этот roadmap не
-создаёт параллельные gates и не меняет статусы пакетов.
+## Next product and research work
 
-Прежняя цепочка Phase 0–10 и её platform-first/governance требования заменены
-этим roadmap; исходный текст доступен в Git history. Phase 3.1–3.8 остаются
-исторически завершёнными, Phase 3.9–3.17 приостановлены, Phase 4+ не начинается.
-Подробные старые [Phase 2](PHASE2_MASTERPLAN.md) и
-[Phase 3](PHASE3_MASTERPLAN.md) masterplans сохраняются как исторические записи.
+- Improve SEN0305 features around concrete use cases, including heavy GIF
+  playback and input latency where measurements show a bottleneck.
+- Physically qualify a second K210 board with unchanged applications. Record
+  exactly which BSP, service or application changes the port requires; Cube
+  compile conformance alone is not physical portability evidence.
+- Extend MicroPython only for demanded scenarios through existing shared typed
+  services. Camera/KPU/vision are not part of the current Python API.
+- Compare paired Python/native applications on common workloads: behavior,
+  migration effort, flash/RAM, latency distributions and cleanup under failure.
+  Report hardware, toolchain and workload limits alongside results.
 
-## Ближайшая работа
+Choose the next increment from the actual use case and available hardware.
+A Q1 paper needs a testable claim and comparative evidence; architecture size
+or the mere existence of C and Python APIs does not establish that claim.
 
-- S7 завершён: все 12 apps используют единый lifecycle, legacy adapter удалён.
-  Приёмка включает известное ограничение скорости тяжёлых GIF.
-- S8: упрощать Capability broker за app-facing boundary по одному service,
-  сохраняя реальные конфликты ресурсов, отмену, lifetime и безопасный cleanup.
-- S9: удалить оставшиеся временные surfaces и устаревшую документацию,
-  подтвердить итоговую firmware и завершить консолидацию текущей архитектуры.
+## Deferred until needed
 
-Точные статусы и порядок миграции находятся только в masterplan. Физические
-проверки повторяются для затронутых paths; новый документационный статус не
-заменяет build, CI или hardware evidence.
+Project Format, package/on-device Program Manager, dynamic native loading,
+Python-to-native generators, multi-project IDE expansion and a separate
+conformance ecosystem are deferred. The existing IDE/HMPY workflow remains.
+Original-firmware feature parity is not a prerequisite for testing the
+architecture hypothesis.
 
-## Сохраняемые свойства
+## Development constraints
 
-- Рабочая firmware SEN0305/K210 и build-time app composition.
-- Board-independent feature logic и один production hardware path для native
-  apps и MicroPython.
-- Ограниченный runtime без новых общих heap/task/queue/core/framebuffer
-  механизмов ради будущих возможностей.
-- Совместимость MicroPython API v1/HMPY, stable app/autostart IDs и persistence.
-- Защита незавершённых asynchronous operations, один teardown deadline и
-  cleanup ресурсов даже после возвращённой ошибки app stop.
-- Воспроизводимая сборка и измеримые flash/static RAM/latency.
-
-## Направления после упрощения
-
-Это кандидаты на следующие product/research increments, а не уже начатая фаза
-и не дополнительный список условий завершения S9:
-
-- Улучшать SEN0305 features по конкретным пользовательским сценариям.
-- Физически квалифицировать вторую K210-плату и проверить неизменённые apps;
-  записать, какие изменения потребовались в BSP, services и приложениях.
-- Расширять MicroPython API по необходимости, используя существующие typed
-  services, и проверить парные Python/native приложения общими fixtures.
-- Сравнить варианты архитектуры на одинаковых workloads: ресурсы, задержки,
-  стоимость переноса и start/stop/cleanup behavior.
-
-Порядок этих increments выбирается после упрощения по реальному сценарию и
-доступному hardware. Они не требуют предварительно завершить Project Format,
-генераторы или IDE ecosystem. Сборка Cube conformance harness не считается
-физическим портом, а наличие Python и C API не считается выполненным переносом.
-
-## Отложено до реального use case
-
-- Project Format, package management и on-device Program Manager.
-- Python-to-native skeleton generator и новые общие host frameworks.
-- Dynamic loading и runtime discovery/registration.
-- Расширение IDE до multi-project environment как условие firmware development.
-- Стандартизация, отдельный conformance ecosystem и новые governance schemas.
-
-Рабочий IDE/HMPY workflow сохраняется; отложено его расширение в обязательную
-платформенную подсистему. Полная parity с original firmware не является условием
-проверки архитектурной гипотезы.
-
-## Где смотреть факты
-
-- [Architecture](ARCHITECTURE.md): реализованные слои и аппаратные пути.
-- [Current state](CURRENT_STATE.md): состояние реализации и ограничения.
-- [Architecture vision](ARCHITECTURE_VISION.md): цели и принципы проектирования.
-- [Technical contracts](spec/README.md): текущие API и правила их изменения.
-- [SEN0305 physical status](PHASE2_PHYSICAL_STATUS.md): принятые observations и
-  границы их применимости.
-
-Текущий hardware acceptance не распространяется автоматически на другой image,
-изменённый path или другую плату. Исторические measurements сохраняют свою
-идентичность и ограничения при дальнейшем упрощении.
+Keep one native lifecycle, one app manifest source, explicit board selection
+and shared native/Python hardware implementations. Preserve MicroPython API v1,
+HMPY, persisted IDs/settings and actual resource lifetimes. Validate changed
+paths and resource costs; carry forward independent hardware observations.
+Ordinary changes need code, tests and current documentation, not phase plans,
+ADR templates or additional evidence schemas.

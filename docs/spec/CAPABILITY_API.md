@@ -8,10 +8,9 @@ stability: experimental
 # HackyLens typed hardware services
 
 The public headers remain under `firmware/include/hackylens/capability/`.
-S8 replaces the generic capability broker with direct typed services. The path
-name does not imply runtime discovery, version negotiation or grant injection.
-The [simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md) records the
-migration and its qualification status.
+These are direct typed services. The path name does not imply runtime discovery,
+version negotiation or grant injection. [Architecture](../ARCHITECTURE.md)
+describes their integration.
 
 ## Bindings and availability
 
@@ -78,7 +77,7 @@ not prove its physical behavior or general portability.
 Hardware checks follow changed paths. An unrelated accepted observation need
 not be repeated. UART session lifecycle without an external peer does not
 establish physical UART/I2C data exchange. Full and MicroPython-disabled builds,
-resource measurements and CI remain part of S8 acceptance.
+resource measurements and CI validate changes to these services.
 
 ## References
 

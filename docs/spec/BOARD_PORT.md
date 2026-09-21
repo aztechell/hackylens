@@ -79,18 +79,14 @@ Stub, flash, baud, and retry defaults are forbidden, and USB detection is
 
 ## Architecture boundaries and composition
 
-Phase 1 forbids apps from including board/BSP, platform HAL, or K210 SDK
-headers. Existing board-independent driver and service APIs MAY remain direct
-app dependencies when they contain no board identity, pins, routing, or HAL
-assumptions. Removing app-to-driver dependencies is deferred to the Capability
-Platform phase.
+Apps must not include board/BSP, driver, platform HAL, or K210 SDK headers.
+Bundled apps may use existing portable firmware services under architecture
+and feature-boundary checks. Standalone apps use the public SDK.
 
-Runtime needs such as time and boot/recovery use private internal C facades.
-They are not versioned public contracts, capabilities, SDK APIs, or discovery
-surfaces. Native App Manifests are the sole app-composition input. Transitional
-`hackylens.service.legacy-*` declarations preserve only the former Phase 2
-driver-availability exclusions; they MUST NOT provide runtime hardware access.
-`--require-app` turns such an exclusion into a build error.
+Time uses the shared immutable typed service. Boot/recovery composition remains
+private to firmware. Native App Manifests are the sole app-composition input;
+required services are checked against board availability at build time.
+`--require-app` turns a board-driven exclusion into a build error.
 
 ## Layout and artifact safety
 
@@ -102,8 +98,8 @@ and no runtime board parser.
 Every successful firmware build first writes a canonical private schema-2 build
 attestation. It binds the exact image size and SHA-256 to the firmware version,
 board/platform/runtime profile, target, build profile, complete enabled/disabled
-app composition, diagnostic capability exclusions, generated capability-
-inventory SHA-256, board-driven exclusions, and fault-injection state. The
+app composition, the SHA-256 of the build-time service selection report,
+diagnostic exclusions, board-driven exclusions, and fault-injection state. The
 attestation is build metadata, not a public contract or runtime discovery
 surface. Only an unmodified `full` target with the complete `hackylens-full`
 composition is `release_qualified`; feature-disabled and fault-injection builds

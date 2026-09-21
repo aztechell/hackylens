@@ -207,9 +207,9 @@ same contract suite runs against the K210 adapter with stubbed panel transport.
 Host acceptance covers native screens, full-frame camera/files, Pong dirty
 frames, MicroPython overlay, cancellation/retry, cleanup, restoration, and the
 advertised 500 ms operation bound. Stubbed transport timing validates the
-deadline state machine only; it is not physical latency evidence. Real SEN0305
-full-present `<= 500 ms` and matched-workload `<= 10%` regression qualification
-is recorded in Phase 2.13 and is not claimed by Phase 2.8.
+deadline state machine only; it is not physical latency evidence. Physical validation measures SEN0305
+full-present against the `500 ms` bound. Performance comparisons require the
+same workload and build configuration; host timing does not qualify hardware.
 
 ## References
 

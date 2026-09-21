@@ -239,7 +239,7 @@ def source_files() -> list[Path]:
 
 
 def load_layer_policy(path: Path = LAYER_POLICY_PATH) -> dict[str, object]:
-    """Load and strictly validate the explicit Phase 2 layer map."""
+    """Load and strictly validate the explicit production layer map."""
 
     document = tomllib.loads(path.read_text(encoding="utf-8"))
     if set(document) != {"schema", "source_roots", "layers", "forbidden_edges"}:
@@ -763,7 +763,7 @@ def layout_failures() -> list[str]:
         ROOT / "tools" / "service_bindings.py",
         ROOT / "tools" / "check_capabilities.py",
         ROOT / "tools" / "architecture_layers.toml",
-        ROOT / "tests" / "test_phase2_architecture.py",
+        ROOT / "tests" / "test_service_architecture.py",
         ROOT / "firmware" / "src" / "storage" / "sd_card.h",
         ROOT / "firmware" / "src" / "services" / "frame_pool.c",
         ROOT / "firmware" / "src" / "services" / "frame_pool.h",
@@ -974,7 +974,7 @@ def python_gated_provider_lines(source: str) -> list[int]:
     ]
 
 
-def phase2_source_failures() -> list[str]:
+def service_source_failures() -> list[str]:
     policy = load_layer_policy()
     failures: list[str] = []
     graph: dict[str, list[str]] = {}
@@ -1285,7 +1285,7 @@ def main(argv: list[str] | None = None) -> int:
     failures = layout_failures()
     failures.extend(check_capabilities.validate())
     failures.extend(check_app_sdk.source_boundary_failures())
-    failures.extend(phase2_source_failures())
+    failures.extend(service_source_failures())
     for path in source_files():
         path_rel = relative(path)
         source_text = path.read_text(encoding="utf-8")

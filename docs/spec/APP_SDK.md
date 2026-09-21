@@ -3,7 +3,6 @@ contract-id: hackylens.feature-app-sdk
 owner: platform-architecture
 version: 0.2.0
 stability: experimental
-phase: 3
 compatibility-app-runtime: >=0.2.0,<0.3.0
 compatibility-app-manifest: >=0.1.0,<0.2.0
 compatibility-capability-api: >=0.1.0,<0.2.0
@@ -11,11 +10,8 @@ compatibility-capability-api: >=0.1.0,<0.2.0
 
 # HackyLens Feature App SDK
 
-This document describes the currently exposed SDK. The
-[Simplification masterplan](../SIMPLIFICATION_MASTERPLAN.md) controls ongoing
-app and service migrations; the SDK does not require restoring the suspended
-Phase 3 generator, host runtime fake, or future service contracts. Public
-interface changes follow the [current change process](README.md).
+This document describes the SDK exposed by `sdk/include/`. Public interface
+changes follow the [change process](README.md).
 
 ## Public entry surface
 
@@ -185,7 +181,7 @@ normalized to `HK_ERR_INVALID_STATE` by production Runtime. Teardown creates
 one finite absolute monotonic deadline at teardown start and uses that same
 deadline for stop and scoped service provider cleanup.
 
-Capability operations keep Phase 2 semantics. Every Input event reader has an
+Typed service operations preserve their bounded behavior. Every Input event reader has an
 independent caller-owned sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
 stable state and exact dropped count before resynchronizing without replay.
 Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
@@ -223,7 +219,7 @@ SDK `0.2.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` schema majo
 `1`, and Capability API `0.1.x`. Runtime and SDK consumers request
 `[0.2.0, 0.3.0)`; Capability API remains `[0.1.0, 0.2.0)`. An experimental
 breaking change increments MINOR. Publishing this SDK does not change Firmware
-`0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, Legacy App Lifecycle `0.2.0`, or
+`0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, or
 MicroPython API `1.0.0`.
 
 All twelve bundled apps use the same runtime entry. No legacy adapter or
@@ -244,5 +240,3 @@ command. Resource cleanup polls pending KPU/core1 completion, not inactive apps.
 - [Native App Manifest](APP_MANIFEST.md)
 - [Capability API](CAPABILITY_API.md)
 - [Versioning Policy](VERSIONING.md)
-- [Architecture Vision](../ARCHITECTURE_VISION.md)
-- [ADR-0007](../adr/0007-adopt-generation-checked-app-lifecycle.md)

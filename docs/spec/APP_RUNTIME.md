@@ -3,19 +3,17 @@ contract-id: hackylens.app-runtime
 owner: firmware-runtime
 version: 0.2.0
 stability: experimental
-phase: 3
 compatibility-app-manifest: >=0.1.0,<0.2.0
 compatibility-capability-api: >=0.1.0,<0.2.0
 ---
 
 # HackyLens App Runtime
 
-This is the current runtime contract, not the suspended Phase 3 execution plan.
-[Simplification](../SIMPLIFICATION_MASTERPLAN.md) controls migration order and
-preserves the lifecycle and resource-safety behavior described below. Update this contract with the
-corresponding implementation change; see the [change process](README.md).
+This contract describes the production runtime in `firmware/src/runtime/`.
+Update it with changes to the public SDK, implementation and behavioral tests;
+see the [change process](README.md).
 
-## S8 typed-service cleanup
+## Typed-service cleanup
 
 Time and Input bindings have board lifetime. Lights and Display sessions obtained
 through the app context reside in private runtime storage and are retired with
@@ -42,7 +40,7 @@ allocation-free.
 
 The runtime consumes immutable descriptors generated at build time. It does not
 parse TOML, discover apps on a filesystem, register apps during boot, load
-native code dynamically, or provide the Phase 4 Project Format and Program
+native code dynamically, or provide a Project Format or Program
 Manager. All twelve bundled apps use the same typed entry and foreground
 switch. No legacy descriptor, selector, or adapter remains.
 
@@ -373,21 +371,19 @@ does not wrap silently.
 ## Memory and timing
 
 Runtime tables, descriptors, tokens, state slots, and event storage have fixed
-capacities accounted for in the S7 resource comparison. The runtime adds no
-heap allocation, task, queue, core, or full framebuffer. Lifecycle dispatch
-overhead excludes callback body and provider I/O and is checked against the
-[Phase 3 baseline](../PHASE3_BASELINE.md).
+capacities accounted for in [RAM / Flash Budget](../RAM_BUDGET.md). The runtime
+adds no heap allocation, task, queue, core, or full framebuffer. Measure lifecycle
+dispatch overhead separately from callback body and provider I/O.
 
 ## Compatibility
 
 App Runtime `0.2.x` accepts native App Manifest `0.1.x` with schema major `1`
 and Capability API `0.1.x`. Experimental Feature App SDK consumers request
 runtime `[0.2.0, 0.3.0)`. Because the contract is experimental, a future `0.3.0`
-line may be breaking. Firmware, HMPY, Board Port, Legacy App Lifecycle, and
+line may be breaking. Firmware, HMPY, Board Port, and
 MicroPython API versions do not change merely because this contract is
 published. The eight-callback `0.1.x` lifecycle is not retained behind a
-compatibility wrapper. The legacy adapter and manifest selector were removed
-in S7. Existing bundled camera/media services are not standalone SDK APIs.
+compatibility wrapper. There is no legacy adapter or manifest lifecycle selector. Existing bundled camera/media services are not standalone SDK APIs.
 
 ## References
 
@@ -395,6 +391,3 @@ in S7. Existing bundled camera/media services are not standalone SDK APIs.
 - [Feature App SDK](APP_SDK.md)
 - [Capability API](CAPABILITY_API.md)
 - [Versioning Policy](VERSIONING.md)
-- [Architecture Vision](../ARCHITECTURE_VISION.md)
-- [Phase 3 Masterplan](../PHASE3_MASTERPLAN.md)
-- [ADR-0007](../adr/0007-adopt-generation-checked-app-lifecycle.md)

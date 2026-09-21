@@ -20,7 +20,7 @@ Feature bits:
 | `1 << 1` | `HK_INPUT_FEATURE_EVENTS` | Sequenced edge events |
 | `1 << 2` | `HK_INPUT_FEATURE_DEBOUNCED_BUTTONS` | Time-based logical buttons |
 
-These identifiers remain build metadata during S8; the direct binding does not
+These identifiers are build metadata; the direct binding does not
 negotiate versions or features at runtime.
 
 ## Logical state and events
@@ -78,7 +78,7 @@ provider cursor-slot table or per-reader generation allocation.
 
 The initial provider uses one explicit static ring of eight events. Its capacity
 is reported by `hk_input_get_info`; the ring is fixed provider storage accounted
-for by the Phase 2 static-RAM evidence, not an inventory limit. It is not a
+for in the static RAM budget, not an inventory limit. It is not a
 hidden task or queue.
 
 When a reader falls behind overwritten events, `hk_input_next_event` returns
@@ -118,5 +118,5 @@ qualified.
 ## References
 
 - [Capability API](../CAPABILITY_API.md)
-- [Current App Lifecycle](../../APP_LIFECYCLE.md)
+- [App Runtime](../APP_RUNTIME.md)
 - [MicroPython API](../../MICROPYTHON_API.md)

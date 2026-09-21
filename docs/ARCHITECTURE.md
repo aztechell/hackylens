@@ -5,12 +5,65 @@ HackyLens 0.4.0 is modular firmware built from common `firmware/src` layers, the
 > HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
-This document describes the implemented v0.4 architecture. During simplification,
-[SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md) controls work scope,
-ordering, and exit gates. [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md) records
-design goals; [CURRENT_STATE.md](CURRENT_STATE.md) records implementation status
-and evidence limitations. S7 removed the legacy lifecycle adapter. S8 uses direct typed hardware bindings
-and scoped retirement; its current qualification is recorded in the masterplan.
+This is the current architecture and implementation status. [Roadmap](ROADMAP.md)
+contains product priorities; [technical references](spec/README.md) describe
+public interfaces. Historical plans and decisions remain in Git history.
+
+The project aims to reuse feature logic across K210 boards, compose firmware
+from isolated native apps, and share hardware services with MicroPython.
+Portability and Python-to-native migration must be demonstrated with real
+applications, measurements and physical ports. They are not established by the
+number of interfaces or by compiling a second board descriptor.
+
+```text
+Native feature apps       MicroPython scripts
+        |                         |
+   App runtime              Python bindings
+        +------------+------------+
+                     |
+              Typed services
+                     |
+              Drivers / K210 HAL
+                     |
+              Selected board BSP
+```
+
+Native apps are statically linked C/C++ code; MicroPython executes scripts.
+There is no runtime native loader, manifest parser or provider discovery.
+Camera/KPU/vision are not currently exposed by MicroPython API v1.
+
+## Runtime and hardware service ownership
+
+All twelve apps use `start/event/render/stop`, one foreground switch and one
+build-generated immutable registry. Render is optional and separate because
+runtime owns Display transactions. App identity and persisted autostart IDs do
+not depend on menu order. Existing bundled portable firmware services are not
+therefore standalone public SDK APIs.
+
+Time and Input have immutable board-lifetime bindings. Input retains one sampler,
+debounce state and event ring with independent reader cursors. Lights uses
+stable channel sessions; Display uses stable plane sessions and transactions;
+External Link owns exclusive mode, incremental operations and IRQ handoff.
+Native code and MicroPython use the same production implementations. The old
+generic broker, owner/grant/lease tables and inventory generator are removed.
+Build-time service selection checks board resources/routes and app requirements;
+absent optional services have null accessors.
+
+Runtime prepares BASE before app start. Failed preparation and failed stop both
+reach cleanup. Teardown creates one absolute deadline and passes it unchanged
+to every scoped retirement, attempts all cleanup, retains the first error and
+invalidates state even after expiry. Failed safe-off quarantines only the
+relevant resource. Session storage must not move or be copied while claimed.
+Context, frame, surface, workspace and asynchronous operation generations remain
+where they reject stale work. Persistent settings and MicroPython sessions have
+separate lifetimes; MP resources retire only after worker terminal handoff.
+Camera frame borrows, KPU completion and core1 executor ownership remain explicit.
+
+Cooperative deadlines are not forced preemption of arbitrary C callbacks, and
+fixed buffers are not memory isolation for untrusted native code. New shared
+abstractions should serve a present use case and replace more complexity than
+they add. Ordinary changes update code, consumers, tests and relevant API docs;
+they do not require another ADR, evidence schema or governance checker.
 
 `firmware/targets/full.c` is a small composition root. It configures the runtime loop in `runtime/hk_main.c`, whose input polling and sleep timing remain platform-dependent. `core` owns app contracts, screen model, dispatch contracts, and neutral data contracts such as `core/pixel_source.h`; it does not access `hk_input` or `hal_time` directly.
 
@@ -18,7 +71,7 @@ and scoped retirement; its current qualification is recorded in the masterplan.
 
 `runtime/firmware_startup.c` owns startup orchestration. It initializes the platform clocks and hardware through `platforms/k210/startup/platform_bootstrap.c`, loads persisted settings, applies brightness and illumination/RGB settings, initializes the boot controller, shows the boot screen, and mounts storage. The neutral autostart controller then opens the persisted registry target or falls back to the menu; it never includes feature headers.
 
-`platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, and writes the boot banner; feature view initialization belongs to each app's `enter` callback.
+`platform_bootstrap` is limited to board, HAL, LCD, and hardware-driver initialization. `controllers/boot_controller.c` registers shell callbacks, prepares the menu view, and writes the boot banner; feature view initialization belongs to each app's `start` callback.
 
 ## Layer boundaries
 
@@ -27,7 +80,7 @@ and scoped retirement; its current qualification is recorded in the masterplan.
 - `controllers` coordinate scenarios and pass state to services and UI views.
 - `services` own runtime operations such as camera sessions, settings application, debug console I/O, LCD screenshot sourcing, and screenshot UART streaming.
 - `storage` encodes and persists data. `storage/screenshot_bmp.c` only encodes BMP using a supplied `screenshot_pixel_source_t`; it never accesses the LCD or UART.
-- `ui` renders views and is the only application-facing layer that draws through the LCD driver.
+- `ui` renders views through the typed Display session; raw LCD transport stays below its provider.
 
 Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol and CRC. `services/screenshot_source.c` supplies the LCD shadow source, `storage/screenshot_bmp.c` encodes bytes, and `services/debug_screenshot_stream.c` sends them through `services/debug_console_service.c`.
 
@@ -97,7 +150,7 @@ do not include feature headers or select features with conditionals.
 
 CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
 
-FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and SLEEP likewise own their controllers and views; SLEEP receives the input snapshot through the registry background lifecycle for auto-sleep.
+FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and SLEEP likewise own their controllers and views; the shared auto-sleep controller observes input activity without polling inactive apps.
 
 FACE DETECT owns its YOLO detector adapter, view, icon, and debug command. The feature supplies a constant model descriptor and keeps all face-specific output decoding, while generic aligned storage, KPU ownership, DVP frame handoff, output validation, timing, and deferred unload belong to shared services. Its model remains `/hackylens.kmodels/detect.kmodel` on the SD card and is not embedded in firmware flash.
 
@@ -127,3 +180,66 @@ and OBJECT data remain unchanged.
 ## Architecture guard
 
 `tools/check_arch.py` uses one declarative table for all twelve feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.
+
+## Supported hardware and current qualification
+
+SEN0305 is the physically accepted runtime port. Maix Cube is descriptor/BSP
+compile conformance only: its full runtime, packaging and flashing are not
+qualified. Even a future second K210 port would not establish portability
+across arbitrary MCU families. Every build explicitly selects a board; its
+`board.toml` owns wiring, defaults, flash layout and programming metadata.
+
+Accepted firmware `8527aab` is installed on COM10. Full raw image is 1,545,272 B;
+static RAM (`data + bss`) is 2,893,216 B. The MicroPython-disabled raw image is
+1,353,528 B. Full raw SHA-256 is
+`811be8cdc6ea18b66fa1d657e1c3850de568ae1e58c76a8408b1306e22bbf18b`.
+Against accepted S7 `0405a09`, this saves 21,120 B flash and 5,256 B static RAM.
+The 227-test suite, both builds, architecture/provider evidence and resource
+guard passed; CI for documentation HEAD `1f304e4` passed in run `35564255150`.
+
+The consolidated acceptance includes user-confirmed QR, Input, Lights, Display,
+Sleep and FILES/GIF; the user confirmed remaining UART/I2C exchange on
+2026-09-21. Automated device checks cover boot, settings/camera/Pong/menu
+switches, four MP terminal paths and an external MP OVERLAY run surviving native
+SETTINGS → MENU switches. CAMERA present was observed near 31 ms; this is a
+smoke observation, not a matched-workload latency distribution. No repeat of
+unaffected accepted checks is needed for documentation/tooling cleanup.
+
+Heavy GIFs can still play below nominal speed; button response may wait for a
+frame to finish. Original-firmware parity, long-run qualification, a physically
+qualified second board, matched Python/native migration experiments and broader
+MicroPython hardware APIs remain product/research work. User UART/I2C acceptance
+is not an instrumented throughput or electrical-characterization dataset.
+
+A useful Python-to-native experiment separates domain state from hardware,
+implements equivalent behavior through these shared services, then compares
+correctness, code changes, latency and memory under the same fixtures. No
+skeleton generator or project manager is a prerequisite.
+
+### Simplification resource comparison
+
+The starting revision `71ec63fffe2926642fba00ff8d28519fd93750d9` was rebuilt
+with the pinned K210 toolchain for this comparison. Full raw image: 1,562,168 B;
+static RAM: 2,860,328 B. The accepted final firmware is 16,896 B smaller in flash
+and uses 32,888 B more static RAM. This is not an across-the-board RAM reduction.
+Symbol comparison attributes the main additions to 12 × 1,024 B bounded app
+state and 25,744 B of QR decoder scratch moved from stack to static storage;
+removed broker/runtime tables offset part of that growth. The QR scratch change
+addresses the working decoder path and stack pressure; it is not governance
+metadata or a new full framebuffer. Static RAM alone does not measure peak
+stack/heap usage. Older plans and exact resource records can be retrieved from
+Git history; current budgets remain executable in `tools/check_resources.py`.
+
+### Current validation workflow
+
+The documentation/tooling cleanup leaves the accepted firmware source unchanged.
+The current host suite has 218 tests; removed cases checked retired historical
+phase schemas and provenance, not the surviving service behavior. Normal-push CI
+builds full SEN0305 and MicroPython-disabled images and checks their architecture
+and resource limits. `tools/package_release.py --board huskylens-sen0305` validates
+image/sidecar/attestation identity and creates the release package locally; it
+does not publish a release. Exact source and workflow status are available in Git
+and CI, without another rolling qualification schema. Hardware acceptance above
+carries forward only while the corresponding implementation and image are
+unchanged. Matched original-versus-final latency distributions remain a research
+measurement, not a result inferred from reduced source size.

@@ -5,10 +5,10 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-import check_s7_resources as gate
+import check_resources as gate
 
 
-class S7ResourceTests(unittest.TestCase):
+class FirmwareResourceTests(unittest.TestCase):
     def test_budgets_accept_boundary_and_reject_each_excess(self):
         baseline = json.loads(gate.BASELINE.read_text(encoding="utf-8"))
         current = copy.deepcopy(baseline["measurement"])

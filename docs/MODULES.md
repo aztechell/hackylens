@@ -15,24 +15,19 @@ pin and peripheral operations stay in board/HAL. See
 Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG,
 OBJECT DETECT, MICROPYTHON, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
 
-## Capability core
+## Typed services and app runtime
 
-`firmware/include/hackylens/capability/` contains the experimental Capability
-API 0.1 common ABI. `firmware/src/capabilities/capability_core.c` owns fixed
-owner/lease tables, grant and generation validation, affinity checks, provider
-quarantine/recovery, and bounded owner-wide cleanup. Provider callbacks and
-mutable core state are private in `capability_provider.h`; public typed handles
-contain only an `hk_lease_t`.
+`firmware/include/hackylens/capability/` exposes Time, Input, Lights, Display
+and External Link. Each has one immutable platform binding. Time and Input have
+board lifetime; Lights, Display and External Link use stable sessions and local
+conflict checks. Native code and MicroPython use the same implementations.
+There is no generic owner table, broker or generated provider inventory.
 
-Phase 2 is complete for the SEN0305 runtime profile. The generated immutable
-inventory contains exactly Time, Input, Display, External Link, and Lights;
-native and MicroPython consumers share the same providers and lifecycle core.
-`runtime/capability_owner_runtime.c` privately binds generation-checked owners
-around menu entry/exit callbacks without changing `hk_app_t`. Deterministic
-fakes and K210 providers run the same normative contract suites. Public storage,
-camera, vision, and AI capabilities remain Phase 3+. Phase 3.1 publishes the App
-Runtime, Native App Manifest, and Feature App SDK contracts without yet changing
-firmware behavior.
+`firmware/src/runtime/` owns the foreground start/event/render/stop lifecycle.
+Scoped cleanup retires all native sessions with one original teardown deadline,
+even after an earlier error. Persistent settings and MicroPython worker sessions
+retain their own lifetimes. Shared fake/K210 suites check service contracts.
+See [App Runtime](spec/APP_RUNTIME.md) and [typed services](spec/CAPABILITY_API.md).
 
 Compile-time app flags are generated into `hk_config.h` by
 `tools/build_firmware.py`. Canonical manifests generate one immutable registry
@@ -45,15 +40,15 @@ executor remains when APRILTAG or MICROPYTHON requires it. Shared camera sources
 are retained only while at least one camera consumer is enabled; the shared
 planar AI input requires FACE or OBJECT.
 
-Key public interfaces:
+Key interfaces (firmware-private unless exported by the SDK):
 
-- `hackylens/capability/common.h`, `inventory.h`, and `owner.h` for the public
-  Capability API ABI, immutable discovery shape, and typed-handle convention.
+- `hackylens/capability/common.h` for results, deadlines and buffer views,
+  plus the five typed service headers for hardware operations.
 - `core/ai_model_types.h` and `services/ai_model_runtime.h` for model metadata
   and the instance-based load/run/stop/unload API. `storage/ai_model_storage.h`
   and `platforms/k210/hal/hal_kpu.h` are implementation boundaries used by the runtime, not
   feature APIs. See `docs/AI_MODELS.md` for the SD manifest and conversion lab.
-- `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for private generated descriptor/legacy-binding metadata, stable autostart lookup, and the screen model. Canonical registry enumeration is the only source of enabled autostart choices and is independent of menu visibility/order; the generated reserved-ID set governs persistence even for disabled apps. SETTINGS and SLEEP have no autostart ID.
+- `core/hk_app.h`, `core/hk_app_registry.h`, and `core/hk_screen.h` for private generated descriptor and typed-entry metadata, stable autostart lookup, and the screen model. Canonical registry enumeration is the only source of enabled autostart choices and is independent of menu visibility/order; the generated reserved-ID set governs persistence even for disabled apps. SETTINGS and SLEEP have no autostart ID.
 - `apps/camera/camera_app.h`, `apps/qr_camera/qr_camera_app.h`, `apps/files/files_app.h`, `apps/buttons/buttons_app.h`, `apps/settings/settings_app.h`, and `apps/sleep/sleep_app.h` are the sole public contracts for the newly isolated modules. Their private controllers, adapters, decoders, views, and configuration are not shared APIs.
 - `controllers/settings_menu_controller.h` for reusable instance-based settings menus. Owners supply item descriptors and callbacks; the component owns navigation, edit/cycle interaction, static or dynamic choices, partial redraw, repeat, and commit notification but never persistence or application lifecycle. CAMERA, QR, APRILTAG, OBJECT DETECT, and system SETTINGS are current consumers.
 - `core/pixel_source.h` for a neutral pixel-reader contract.
@@ -86,11 +81,11 @@ Private headers are allowed only within their subsystem boundary; they are not c
 `tools/architecture_layers.toml` is the explicit layer classification consumed
 by architecture guard v2. The guard checks repository sources, forwarding and
 resolved symlink targets, generated compiler dependency files, undefined object
-symbols, generated-only provider inventory, and identical provider objects in
+symbols, static typed bindings, and identical provider objects in
 full and MicroPython-disabled profiles. The `public-capability` layer contains
 the public headers and the five common lifecycle frontends; provider bindings,
 private state machines, and K210 adapters remain `capability-implementation`.
-The Phase 3 map additionally reserves generic `sdk`, `app-runtime`, `manifest`,
+The map also classifies `sdk`, `app-runtime`, `manifest`,
 and `generated-app-registry` layers. SDK headers may depend on
 `public-capability` only; runtime and generated descriptors cannot acquire a
 board/HAL/driver policy edge. The rules use path families and contain no

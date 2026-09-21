@@ -1,7 +1,7 @@
-"""Compare the full S7 firmware with the measured pre-migration commit."""
+"""Enforce firmware image, RAM and runtime-resource regression limits."""
 import json
 from pathlib import Path
-import check_phase2_resources as resources
+import resource_checks as resources
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / "docs/baselines/s7-resources.json"
@@ -27,8 +27,8 @@ def main():
     failures = budget_failures(current, baseline)
     failures += resources._new_direct_resources(baseline["commit"])
     if failures:
-        raise SystemExit("[ERR] S7 resources: " + "; ".join(failures))
-    print("[OK] S7 image/RAM budgets and no new direct runtime resources")
+        raise SystemExit("[ERR] Firmware resources: " + "; ".join(failures))
+    print("[OK] Firmware image/RAM budgets and no new direct runtime resources")
     print(json.dumps(current, indent=2))
 
 

@@ -4,7 +4,7 @@ The firmware uses statically allocated camera frame buffers, an LCD shadow, SD s
 
 Current ownership:
 
-- LCD shadow and row buffer: `drivers/lcd_st7789.c`; the 153,600-byte shadow is also the leased RGB565-BE full-frame staging surface, so LCD present does not allocate another framebuffer.
+- LCD shadow and row buffer: `drivers/lcd_st7789.c`; the 153,600-byte shadow is also the borrowed RGB565-BE full-frame staging surface, so LCD present does not allocate another framebuffer.
 - Two camera stream slots: `services/frame_pool.c`; preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c` without allocating a third frame. When the camera reservation is inactive, files decoding or the Display batch provider may take the single generation-checked scratch workspace borrow; copied or stale borrow tokens cannot release a later borrower.
 - SD/FAT sector buffers: `storage/fat32_sd.c`.
 - PNG inflate and image row buffers: `apps/files/image_decode_png_inflate.c` and `apps/files/image_decode_common.c`; the complete allocation disappears with `--disable-app files`.
@@ -23,7 +23,7 @@ Current ownership:
   bytes of KModel main memory. The model allocation exists only while OBJECT
   is loaded; no second copy of its 35,000-byte output tensor is retained.
 - The shared core-1 executor adds only control words and a permanent idle loop
-  when APRILTAG is enabled. KPU output post-processing remains on core 0.
+  when APRILTAG or MicroPython is enabled. KPU output post-processing remains on core 0.
 
 The settings record grows from the legacy 16-byte payload through the 96-byte
 v2 payload, 97-byte v3 payload, and 105-byte v4 payload to a 106-byte v5

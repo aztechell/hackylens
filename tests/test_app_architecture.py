@@ -17,8 +17,8 @@ if str(TOOLS) not in sys.path:
 import check_arch
 
 
-class Phase3ArchitecturePolicyTests(unittest.TestCase):
-    def test_phase3_layers_are_generic_and_unambiguous(self) -> None:
+class AppArchitecturePolicyTests(unittest.TestCase):
+    def test_app_layers_are_generic_and_unambiguous(self) -> None:
         policy = check_arch.load_layer_policy()
         expected = {
             "sdk/include/hackylens/app.h": "sdk",
@@ -46,7 +46,7 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
         for app_id in check_arch.FEATURES:
             self.assertNotIn(
                 f'"{app_id}"', layer_text,
-                "Phase 3 layer policy must not allowlist concrete apps",
+                "App layer policy must not allowlist concrete apps",
             )
 
     def test_sdk_can_reuse_public_capability_types_only(self) -> None:
