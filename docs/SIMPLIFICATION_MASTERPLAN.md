@@ -620,10 +620,29 @@ MicroPython успешно открывается повторно после no
 requested stop и timeout. Временный файл удалён, список пользовательских файлов
 сохранён. Это проверка lifecycle без внешнего peer; реальный обмен UART/I2C
 с контроллером пока не подтверждён. CI `34367041716` остановился на лишней
-пустой строке EOF в adapter; форматирование исправлено, повторный CI ожидается.
-Все hardware services
-перенесены; финальное удаление неиспользуемой broker/catalog/owner machinery
-остаётся отдельным незавершённым шагом S8.
+пустой строке EOF в adapter; исправление `5c6a558` прошло CI `34383547804`.
+Все hardware services перенесены.
+
+### Финальное удаление broker (2026-09-21)
+
+Удалены generic owner/grant/lease tables, owner runtime, inventory API,
+capability catalog, consumer grants и inventory generator. App context хранит
+identity/generation и Time/Input bindings; Lights/Display/External Link sessions
+остаются в приватном runtime storage. Prepare открывает BASE до app start;
+ошибка prepare также проходит полное retirement. Stop и все cleanup получают
+один исходный deadline, первая ошибка сохраняется, state инвалидируется.
+Build tooling выбирает пять typed providers по ресурсам и маршрутам board;
+отсутствующие optional bindings нулевые, requirements проверяются при сборке.
+
+Проверены 227 host tests (226 в общем прогоне и исправленный Input test module
+отдельно), обе сборки, architecture/object evidence, board/binding checks и
+resource guard. Full raw image: 1,545,016 байт (−21,376 к S7); static RAM:
+2,893,200 байт (−5,272 к S7). Без MicroPython: 1,353,272 байта.
+Raw SHA-256: `1153a4e7e3ffae4096558e5bdc5020fe94d446a7a48d5b9c08b511f982a1353d`.
+Независимое code review не выявило lifecycle regressions; найденные старые
+предположения формата diagnostic artifacts исправлены и проверены.
+Финальные flash/smoke и CI ещё ожидаются. S8 остаётся открытым до qualification;
+физический обмен UART/I2C с внешним peer пока не подтверждён.
 
 ### Цель
 

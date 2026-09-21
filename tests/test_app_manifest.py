@@ -75,14 +75,7 @@ class AppManifestSchemaTests(unittest.TestCase):
         self.assertEqual(alpha["menu"]["order"], 10)
         self.assertTrue(alpha["menu"]["visible"])
         self.assertEqual(alpha["autostart"]["id"], 42)
-        self.assertEqual(
-            alpha["capabilities"]["optional"][0]["id"],
-            "hackylens.cap.display",
-        )
-        self.assertEqual(
-            alpha["capabilities"]["optional"][0]["fallback"],
-            "headless",
-        )
+        self.assertEqual(alpha["optional"], ["display"])
         self.assertEqual(
             first["apps"][1]["sources"],
             ["src/zeta_legacy.c", "src/zeta_view.c"],

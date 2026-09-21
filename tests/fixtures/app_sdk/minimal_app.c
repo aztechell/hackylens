@@ -34,36 +34,27 @@ static hk_result_t state_from(
 static hk_result_t minimal_start(const hk_app_context_t *ctx)
 {
     const char *app_id = NULL;
-    const char *fallback = NULL;
-    hk_owner_t identity_owner = HK_OWNER_NONE;
     uint32_t generation = 0U;
-    uint8_t available = 0U;
     minimal_state_t *state = NULL;
     hk_result_t result;
 
     if(hk_app_context_identity(
-           ctx, &app_id, &generation, &identity_owner) != HK_OK ||
-       !app_id || generation == 0U || hk_owner_is_zero(identity_owner))
-        return HK_ERR_INTERNAL;
-    if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
-       !available || fallback)
+           ctx, &app_id, &generation) != HK_OK ||
+       !app_id || generation == 0U)
         return HK_ERR_INTERNAL;
 
     result = state_from(ctx, &state);
     if(result != HK_OK)
         return result;
     if(hk_app_context_identity(
-           ctx, &app_id, &generation, &state->owner) != HK_OK ||
-       !app_id || generation == 0U || hk_owner_is_zero(state->owner))
+           ctx, &app_id, &generation) != HK_OK ||
+       !app_id || generation == 0U)
         return HK_ERR_INTERNAL;
     if(hk_app_context_time(ctx, &state->time) != HK_OK ||
        hk_app_context_input(ctx, &state->input) != HK_OK ||
        hk_input_cursor_open(state->input, &state->input_cursor) != HK_OK ||
        hk_input_cursor_open(state->input, &state->input_second) != HK_OK ||
-       hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &state->display) != HK_OK ||
-       hk_app_context_service(
-           ctx, "hackylens.service.fixture", &state->service) != HK_OK)
+       hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &state->display) != HK_OK)
         return HK_ERR_INTERNAL;
     state->consume_input = 1U;
     return HK_OK;

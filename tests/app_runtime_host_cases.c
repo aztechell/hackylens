@@ -25,20 +25,18 @@
 typedef enum
 {
     FAIL_NONE = 0,
-    FAIL_GRANT_LIGHTS,
+    FAIL_PREPARE,
     FAIL_DISPLAY_ABSENT,
-    FAIL_GRANT_SERVICE,
     FAIL_START,
     FAIL_EVENT,
     FAIL_TICK,
     FAIL_RENDER,
     FAIL_STOP,
-    FAIL_OWNER_CLEANUP,
+    FAIL_CLEANUP,
     FAIL_START_RENDER,
     FAIL_START_PENDING,
     FAIL_SLOW_TICK,
     FAIL_SLOW_RENDER,
-    FAIL_HOLD_LIGHTS,
 } fail_point_t;
 
 typedef struct
@@ -59,14 +57,13 @@ static _Alignas(HK_APP_STATE_ALIGNMENT)
 static hk_result_t consume_budget(const hk_app_context_t *ctx)
 {
     const hk_time_t *time;
-    hk_owner_t owner = HK_OWNER_NONE;
     hk_deadline_t wake;
     const char *app_id = NULL;
     uint32_t generation = 0U;
 
     if(hk_app_context_identity(
-           ctx, &app_id, &generation, &owner) != HK_OK ||
-       !app_id || generation == 0U || hk_owner_is_zero(owner) ||
+           ctx, &app_id, &generation) != HK_OK ||
+       !app_id || generation == 0U ||
        hk_app_context_time(ctx, &time) != HK_OK ||
        hk_time_deadline_after_us(time, 101U, &wake) != HK_OK)
         return HK_ERR_INTERNAL;
@@ -75,14 +72,7 @@ static hk_result_t consume_budget(const hk_app_context_t *ctx)
 
 static hk_result_t simple_start(const hk_app_context_t *ctx)
 {
-    uint8_t available = 0U;
-    const char *fallback = NULL;
-
     s_simple.copied = *ctx;
-    if(hk_app_context_capability_status(
-           ctx, HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, &available, &fallback) != HK_OK ||
-       !available)
-        return HK_ERR_INTERNAL;
     if(s_simple.fail == FAIL_DISPLAY_ABSENT)
     {
         hk_display_t *session = NULL;
@@ -126,8 +116,6 @@ static hk_result_t simple_stop(const hk_app_context_t *ctx)
     s_simple.stop_calls++;
     if(hk_app_context_teardown_deadline(ctx, &s_simple.stop_deadline) != HK_OK)
         return HK_ERR_INTERNAL;
-    if(s_simple.fail == FAIL_HOLD_LIGHTS)
-        return HK_OK;
     return s_simple.fail == FAIL_STOP ? HK_ERR_IO : HK_OK;
 }
 
@@ -175,27 +163,23 @@ static int check_failure_point(fail_point_t point)
     hk_app_runtime_host_t host;
     hk_app_t app;
     hk_result_t expected = HK_ERR_IO;
-    uint32_t owner_calls = 1U;
+    uint32_t cleanup_calls = 1U;
     uint8_t launch_fails = 0U;
 
     CHECK(reset_simple(&host, &app) == 0);
     s_simple.fail = point;
-    if(point == FAIL_GRANT_LIGHTS)
-        hk_app_runtime_host_fail_acquire(
-            &host, HK_CAPABILITY_ID_EXTERNAL_LINK, HK_ERR_IO);
+    if(point == FAIL_PREPARE)
+        hk_app_runtime_host_fail_prepare(&host, HK_ERR_IO);
     else if(point == FAIL_DISPLAY_ABSENT)
     {
         hk_app_runtime_host_runtime(&host)->ops.display = NULL;
         expected = HK_ERR_CAPABILITY_ABSENT;
     }
-    else if(point == FAIL_GRANT_SERVICE)
-        hk_app_runtime_host_fail_service(&host, HK_ERR_IO);
-    else if(point == FAIL_OWNER_CLEANUP)
-        hk_app_runtime_host_fail_owner_cleanup(&host, HK_ERR_IO);
+    else if(point == FAIL_CLEANUP)
+        hk_app_runtime_host_fail_cleanup(&host, HK_ERR_IO);
     launch_fails = (uint8_t)(
         point == FAIL_START ||
-        point == FAIL_GRANT_LIGHTS || point == FAIL_DISPLAY_ABSENT ||
-        point == FAIL_GRANT_SERVICE);
+        point == FAIL_PREPARE || point == FAIL_DISPLAY_ABSENT);
     if(launch_fails)
         CHECK(open_app(&host, &app, expected) == 0);
     else
@@ -223,7 +207,7 @@ static int check_failure_point(fail_point_t point)
                       HK_APP_STOP_FORCED) == expected);
     }
     CHECK(check_inactive(&host, expected) == 0);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == owner_calls);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == cleanup_calls);
     if(point == FAIL_START || point == FAIL_DISPLAY_ABSENT ||
        !launch_fails)
         CHECK(s_simple.stop_calls == 1U);
@@ -232,7 +216,7 @@ static int check_failure_point(fail_point_t point)
     return 0;
 }
 
-static int check_capability_contracts(void)
+static int check_typed_service_contracts(void)
 {
     hk_app_runtime_host_t host;
     hk_app_t app;
@@ -280,7 +264,7 @@ static int check_capability_contracts(void)
     CHECK(minimal_app_check_input_overflow(9U));
     CHECK(hk_app_switch_close(switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     CHECK(check_inactive(&host, HK_OK) == 0);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
     return 0;
 }
 
@@ -294,7 +278,7 @@ static int check_start_invariants(void)
     CHECK(open_app(&host, &app, HK_ERR_INVALID_STATE) == 0);
     CHECK(check_inactive(&host, HK_ERR_INVALID_STATE) == 0);
     CHECK(s_simple.stop_calls == 1U);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
 
     CHECK(reset_simple(&host, &app) == 0);
     s_simple.fail = FAIL_START_PENDING;
@@ -318,7 +302,7 @@ static int check_tick_render_budget(void)
     CHECK(check_inactive(&host, HK_OK) == 0);
     CHECK(s_simple.stop_reason == HK_APP_STOP_DEADLINE);
     CHECK(s_simple.stop_calls == 1U);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
 
     CHECK(reset_simple(&host, &app) == 0);
     s_simple.fail = FAIL_SLOW_RENDER;
@@ -361,7 +345,7 @@ static int check_teardown_deadline_and_generation(void)
               hk_app_runtime_host_switch(&host),
               HK_APP_STOP_COMPLETED) == HK_OK);
     CHECK(s_simple.stop_deadline.at_us == expected.at_us);
-    CHECK(hk_app_runtime_host_owner_deadline(&host).at_us == expected.at_us);
+    CHECK(hk_app_runtime_host_cleanup_deadline(&host).at_us == expected.at_us);
     CHECK(hk_app_runtime_validate_wakeup_token(runtime, token) ==
           HK_ERR_STALE_HANDLE);
     stale = s_simple.copied;
@@ -383,29 +367,6 @@ static int check_teardown_deadline_and_generation(void)
     return 0;
 }
 
-static int check_provider_quarantine(void)
-{
-    hk_app_runtime_host_t host;
-    hk_app_t app;
-
-    CHECK(reset_simple(&host, &app) == 0);
-    s_simple.fail = FAIL_HOLD_LIGHTS;
-    hk_app_runtime_host_fail_provider_cleanup(&host, HK_ERR_IO);
-    CHECK(open_app(&host, &app, HK_OK) == 0);
-    CHECK(hk_app_switch_close(
-              hk_app_runtime_host_switch(&host),
-              HK_APP_STOP_COMPLETED) == HK_ERR_INTERNAL);
-    CHECK(check_inactive(&host, HK_ERR_INTERNAL) == 0);
-    CHECK(hk_app_runtime_host_lights_quarantined(&host));
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
-    CHECK(open_app(&host, &app, HK_ERR_INVALID_STATE) == 0);
-    CHECK(hk_app_runtime_state(hk_app_runtime_host_runtime(&host)) ==
-          HK_APP_RUNTIME_INACTIVE);
-    CHECK(hk_app_runtime_state(hk_app_runtime_host_runtime(&host)) !=
-          HK_APP_RUNTIME_FAULTED);
-    return 0;
-}
-
 static int check_invalid_tick_budget(void)
 {
     hk_app_runtime_host_t host;
@@ -414,7 +375,7 @@ static int check_invalid_tick_budget(void)
     CHECK(reset_simple(&host, &app) == 0);
     app.limits.tick_budget_us = 0U;
     CHECK(open_app(&host, &app, HK_ERR_INVALID_ARGUMENT) == 0);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 0U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 0U);
     return 0;
 }
 
@@ -478,7 +439,7 @@ static int check_lights_scope_retirement(void)
             (HK_LIGHTS_CHANNEL_ILLUMINATION | HK_LIGHTS_CHANNEL_RGB));
         CHECK(hk_app_switch_close(hk_app_runtime_host_switch(&host),
             HK_APP_STOP_COMPLETED) == HK_ERR_IO);
-        CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+        CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
         CHECK(s_scope_lights[0]->service == NULL && s_scope_lights[1]->service == NULL);
         for(unsigned i = 0U; i < 2U; ++i) {
             uint32_t channel = i ? HK_LIGHTS_CHANNEL_RGB : HK_LIGHTS_CHANNEL_ILLUMINATION;
@@ -545,12 +506,12 @@ static int check_display_scope_retirement(void)
         app.entry = &entry;
         CHECK(open_app(&host, &app, HK_OK) == 0);
         CHECK(hk_app_switch_close(hk_app_runtime_host_switch(&host), HK_APP_STOP_COMPLETED) == HK_ERR_IO);
-        CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+        CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
         CHECK(!s_scope_display[0]->service && !s_scope_display[1]->service);
         CHECK(!s_scope_external->service && hk_fake_external_link_metrics()->active_operations == 0U &&
             hk_fake_external_link_metrics()->borrowed_tx_bytes == 0U);
         CHECK(hk_fake_display_metrics()->active_planes == 0U && hk_fake_display_metrics()->borrowed_views == 0U);
-        CHECK(hk_fake_display_metrics()->last_deadline.at_us == host.owner_deadline.at_us);
+        CHECK(hk_fake_display_metrics()->last_deadline.at_us == host.cleanup_deadline.at_us);
         for(unsigned i = 0U; i < 2U; ++i)
         {
             uint32_t plane = i ? HK_DISPLAY_PLANE_OVERLAY : HK_DISPLAY_PLANE_BASE;
@@ -564,15 +525,14 @@ static int check_display_scope_retirement(void)
 int main(void)
 {
     static const fail_point_t points[] = {
-            FAIL_GRANT_LIGHTS,
+            FAIL_PREPARE,
         FAIL_DISPLAY_ABSENT,
-        FAIL_GRANT_SERVICE,
-        FAIL_START,
+            FAIL_START,
         FAIL_EVENT,
         FAIL_TICK,
         FAIL_RENDER,
         FAIL_STOP,
-        FAIL_OWNER_CLEANUP,
+        FAIL_CLEANUP,
     };
     size_t index;
 
@@ -582,11 +542,10 @@ int main(void)
     CHECK(HK_APP_SDK_MANIFEST_SCHEMA_MAJOR == 1U);
     for(index = 0U; index < sizeof(points) / sizeof(points[0]); index++)
         CHECK(check_failure_point(points[index]) == 0);
-    CHECK(check_capability_contracts() == 0);
+    CHECK(check_typed_service_contracts() == 0);
     CHECK(check_start_invariants() == 0);
     CHECK(check_tick_render_budget() == 0);
     CHECK(check_teardown_deadline_and_generation() == 0);
-    CHECK(check_provider_quarantine() == 0);
     CHECK(check_invalid_tick_budget() == 0);
     CHECK(check_minimal_storage_isolation() == 0);
     CHECK(check_lights_scope_retirement() == 0);

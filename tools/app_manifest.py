@@ -26,8 +26,6 @@ OPTIONAL_FIELDS = {
 ALLOWED_FIELDS = REQUIRED_FIELDS | OPTIONAL_FIELDS
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
 
-CAPABILITY_MINIMUM = "0.1.0"
-CAPABILITY_MAXIMUM_EXCLUSIVE = "0.2.0"
 DESCRIPTOR_VERSION = "0.1.0"
 PLACEHOLDER_STATIC_RAM_BYTES = 1_048_576
 PLACEHOLDER_STACK_BYTES = 16_384
@@ -42,36 +40,9 @@ MAX_APP_ID_BYTES = 63
 MAX_DISPLAY_NAME_BYTES = 96
 MAX_DEBUG_BYTES = 1024
 MAX_TICK_MS = 60_000
-MAX_CAPABILITY_REQUESTS = 16
-MAX_SERVICES = 16
-
-# One build-time mapping from short names to existing Capability/service IDs.
-# Feature sets preserve the current grant/composition ABI; they are not a
-# second manifest. Per-app exceptions exist only where runtime acquire paths
-# or optional composition currently differ.
-CAPABILITY_IDS = {
-    "display": "hackylens.cap.display",
-    "input": "hackylens.cap.input",
-    "time": "hackylens.cap.time",
-    "lights": "hackylens.cap.lights",
-    "external-link": "hackylens.cap.external-link",
-}
-SERVICE_IDS = {
-    "camera": "hackylens.firmware.camera",
-    "sd-card": "hackylens.firmware.sd-card",
-    "internal-flash": "hackylens.firmware.internal-flash",
-    "settings": "hackylens.service.settings",
-}
-OPTIONAL_FALLBACKS = {
-    "display": "headless",
-    "external-link": "hide-external-link-menu",
-}
-_DISPLAY_FEATURES = ("base-plane", "borrowed-surface", "dirty-regions", "rgb565")
-_INPUT_FEATURES = ("debounced-buttons", "events", "state")
-_TIME_SLEEP_UNTIL_APPS = frozenset({"apriltag", "camera", "micropython"})
-_EXTERNAL_LINK_FEATURES = {
-    "micropython": ("i2c-controller", "uart"),
-}
+HARDWARE_SERVICES = frozenset({"display", "input", "time", "lights", "external-link"})
+FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings"})
+OPTIONAL_FALLBACKS = {"display": "headless", "external-link": "hide-external-link-menu"}
 
 
 class ManifestError(ValueError):
@@ -248,70 +219,6 @@ def _path_array(
     return sorted(paths, key=lambda item: (item.casefold(), item))
 
 
-def _capability_features(name: str, app_id: str) -> tuple[str, ...]:
-    if name == "display":
-        return _DISPLAY_FEATURES
-    if name == "input":
-        return _INPUT_FEATURES
-    if name == "time":
-        if app_id in _TIME_SLEEP_UNTIL_APPS:
-            return ("monotonic-us", "sleep-until")
-        return ("monotonic-us",)
-    if name == "lights":
-        return ("illumination", "rgb")
-    if name == "external-link":
-        return _EXTERNAL_LINK_FEATURES.get(app_id, ("i2c-controller", "uart"))
-    raise ManifestError(f"unknown required service {name!r}")
-
-
-def _capability_request(name: str, app_id: str, *, optional: bool) -> dict[str, Any]:
-    request: dict[str, Any] = {
-        "id": CAPABILITY_IDS[name],
-        "instance": 0,
-        "minimum": CAPABILITY_MINIMUM,
-        "maximum_exclusive": CAPABILITY_MAXIMUM_EXCLUSIVE,
-        "features": list(_capability_features(name, app_id)),
-    }
-    if optional:
-        fallback = OPTIONAL_FALLBACKS.get(name)
-        if fallback is None:
-            raise ManifestError(f"optional {name!r} has no build-time fallback")
-        request["fallback"] = fallback
-    return request
-
-
-def _service_request(name: str, app_id: str) -> dict[str, str]:
-    service_id = SERVICE_IDS[name]
-    suffix = service_id.split(".", 2)[-1]
-    return {"id": service_id, "namespace": f"{app_id}.{suffix}"}
-
-
-def _expand_names(
-    names: Sequence[str],
-    label: str,
-    app_id: str,
-    *,
-    optional: bool,
-) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    capabilities: list[dict[str, Any]] = []
-    services: list[dict[str, str]] = []
-    for name in names:
-        if name in CAPABILITY_IDS:
-            capabilities.append(
-                _capability_request(name, app_id, optional=optional)
-            )
-            continue
-        if name in SERVICE_IDS:
-            if optional:
-                raise ManifestError(f"{label}: services cannot be optional")
-            services.append(_service_request(name, app_id))
-            continue
-        raise ManifestError(f"{label}: unknown required service {name!r}")
-    capabilities.sort(key=lambda item: (item["id"], item["instance"]))
-    services.sort(key=lambda item: (item["id"], item["namespace"]))
-    return capabilities, services
-
-
 def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
     """Load one manifest and return its path-independent canonical model."""
 
@@ -382,27 +289,14 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         raise ManifestError(
             f"{path}: capability cannot be both required and optional"
         )
-    required, required_services = _expand_names(
-        required_names, f"{path}: requires", app_id, optional=False
-    )
-    optional, extra_services = _expand_names(
-        optional_names, f"{path}: optional", app_id, optional=True
-    )
-    services = required_services + extra_services
-    capability_keys = [(item["id"], item["instance"]) for item in required + optional]
-    if len(capability_keys) != len(set(capability_keys)):
-        raise ManifestError(
-            f"{path}: capability cannot be both required and optional"
-        )
-    if len(capability_keys) > MAX_CAPABILITY_REQUESTS:
-        raise ManifestError(
-            f"{path}: capabilities exceed fixed runtime capacity "
-            f"{MAX_CAPABILITY_REQUESTS}"
-        )
-    if len(services) > MAX_SERVICES:
-        raise ManifestError(
-            f"{path}: services exceed fixed runtime capacity {MAX_SERVICES}"
-        )
+    for name in required_names + optional_names:
+        if name not in HARDWARE_SERVICES | FIRMWARE_SERVICES:
+            raise ManifestError(f"{path}: unknown required service {name!r}")
+    for name in optional_names:
+        if name in FIRMWARE_SERVICES:
+            raise ManifestError(f"{path}: services cannot be optional")
+        if name not in OPTIONAL_FALLBACKS:
+            raise ManifestError(f"optional {name!r} has no build-time fallback")
 
     debug = (
         _string(
@@ -424,8 +318,8 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         "private_includes": private_includes,
         "menu": menu,
         "autostart": autostart,
-        "capabilities": {"required": required, "optional": optional},
-        "services": services,
+        "requires": sorted(required_names),
+        "optional": sorted(optional_names),
         "limits": {
             "static_ram_bytes": PLACEHOLDER_STATIC_RAM_BYTES,
             "stack_bytes": PLACEHOLDER_STACK_BYTES,

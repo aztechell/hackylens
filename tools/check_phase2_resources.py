@@ -46,7 +46,7 @@ REQUIRED_APP_BY_CAPABILITY = {
     "hackylens.cap.input": "pong",
     "hackylens.cap.display": "pong",
     "hackylens.cap.external-link": "micropython",
-    "hackylens.cap.lights": "settings",
+    "hackylens.cap.lights": "micropython",
 }
 SOURCE_PATHS = (
     ".github/workflows/release.yml",
@@ -208,10 +208,10 @@ def capture_profile(
     composition = read_json(paths["composition"], "profile composition")
     capabilities = read_json(paths["capabilities"], "profile capabilities")
     attestation = read_json(paths["attestation"], "profile attestation")
-    entry_ids = [item.get("id") for item in capabilities.get("entries", [])]
-    if entry_ids != [item for item in EXPECTED_CAPABILITIES
-                     if item != "hackylens.cap.time"]:
-        raise RuntimeError(f"{profile_name} runtime inventory must exclude static Time")
+    if capabilities.get("bindings") != [
+        item.provider_source for item in build_firmware.service_bindings.BINDINGS
+    ]:
+        raise RuntimeError(f"{profile_name} must retain all five typed bindings")
     measurement = artifact_measurement(paths)
     return {
         "schema": 1,
@@ -237,9 +237,8 @@ def expected_diagnostic_compositions() -> dict[str, dict[str, Any]]:
             # S8 made Time a required static scheduler binding. Retain a
             # negative composition check, rather than build a broken image.
             try:
-                build_firmware.compose_capabilities(
+                build_firmware.select_services(
                     board, set(), set(), {capability},
-                    allow_required_consumer_exclusion=True,
                 )
             except RuntimeError as exc:
                 expected[capability] = {
@@ -249,13 +248,12 @@ def expected_diagnostic_compositions() -> dict[str, dict[str, Any]]:
                 }
                 continue
             raise RuntimeError("static Time exclusion must fail before staging")
-        composition = build_firmware.compose_capabilities(
+        composition = build_firmware.select_services(
             board, set(), set(), {capability},
-            allow_required_consumer_exclusion=True,
         )
         required_app = REQUIRED_APP_BY_CAPABILITY[capability]
         try:
-            build_firmware.compose_capabilities(
+            build_firmware.select_services(
                 board, set(), {required_app}, {capability}
             )
         except RuntimeError as exc:
@@ -270,22 +268,14 @@ def expected_diagnostic_compositions() -> dict[str, dict[str, Any]]:
             "exclusion_codes": sorted({
                 str(item["code"]) for item in composition.exclusions
             }),
-            "required_consumer_exclusions": list(
-                composition.required_consumer_exclusions
-            ),
+            "required_consumer_exclusions": [],
             "optional_fallbacks": list(composition.optional_fallbacks),
             "required_app": required_app,
             "required_app_error": required_diagnostic,
         }
     external = expected["hackylens.cap.external-link"]
-    fallback_names = {
-        str(item.get("fallback")) for item in external["optional_fallbacks"]
-    }
     if "settings" in external["disabled_apps"]:
         raise RuntimeError("optional external-link absence disabled settings")
-    # SETTINGS reaches the link through the service, not an app grant.
-    if "disable-external-link-service" not in fallback_names:
-        raise RuntimeError("external-link optional fallbacks are incomplete")
     return expected
 
 
@@ -311,20 +301,20 @@ def capture_diagnostic(
         raise RuntimeError("diagnostic build did not exclude exactly one capability")
     if composition.get("disabled_apps") != expected[capability]["disabled_apps"]:
         raise RuntimeError("diagnostic disabled-app projection mismatch")
-    if composition.get("required_consumer_exclusions") != \
+    if composition.get("required_consumer_exclusions", []) != \
             expected[capability]["required_consumer_exclusions"]:
         raise RuntimeError("diagnostic required-consumer exclusion mismatch")
     if attestation.get("release_qualified") is not False:
         raise RuntimeError("diagnostic build claims release qualification")
     if attestation.get("build_profile") != "hackylens-feature-modified":
         raise RuntimeError("diagnostic build profile is not feature-modified")
-    entry_ids = [item.get("id") for item in capabilities.get("entries", [])]
-    if entry_ids != [item for item in EXPECTED_CAPABILITIES
-                     if item not in {capability, "hackylens.cap.time"}]:
+    entry_ids = ["hackylens.cap." + Path(source).stem.removesuffix("_adapter").replace("_", "-")
+                 for source in capabilities.get("bindings", [])]
+    if entry_ids != [item for item in EXPECTED_CAPABILITIES if item != capability]:
         raise RuntimeError("diagnostic capability inventory mismatch")
     absences = capabilities.get("absences", [])
     if not any(
-        item.get("id") == capability and item.get("code") == "provider-excluded"
+        item.get("id") == capability.removeprefix("hackylens.cap.") and item.get("code") == "provider-excluded"
         for item in absences
     ):
         raise RuntimeError("diagnostic absence is not explicit provider-excluded")
@@ -342,7 +332,7 @@ def capture_diagnostic(
             str(item.get("code")) for item in composition.get("exclusions", [])
         }),
         "required_consumer_exclusions": composition.get(
-            "required_consumer_exclusions"
+            "required_consumer_exclusions", []
         ),
         "entry_ids": entry_ids,
         **artifact_measurement(paths),
@@ -355,13 +345,13 @@ def capture_conformance() -> dict[str, Any]:
     capabilities_path = paths["capabilities"]
     composition = read_json(composition_path, "Cube composition")
     capabilities = read_json(capabilities_path, "Cube capabilities")
-    entry_ids = [item.get("id") for item in capabilities.get("entries", [])]
-    if entry_ids:
-        raise RuntimeError("Cube compile-conformance inventory must exclude static Time")
-    if capabilities.get("runtime_supported") is not False:
-        raise RuntimeError("Cube conformance inventory claims runtime support")
-    if capabilities.get("support") != "conformance":
-        raise RuntimeError("Cube inventory support is not conformance")
+    entry_ids = ["hackylens.cap." + Path(source).stem.removesuffix("_adapter").replace("_", "-")
+                 for source in capabilities.get("bindings", [])]
+    if entry_ids != ["hackylens.cap.time"]:
+        raise RuntimeError("Cube compile-conformance bindings must contain only Time")
+    board = load_board(CONFORMANCE_BOARD_ID)
+    if board.support != "conformance":
+        raise RuntimeError("Cube board support is not conformance")
     return {
         "schema": 1,
         "kind": "compile-conformance",

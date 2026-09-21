@@ -341,50 +341,13 @@ int main(void)
         self.assertIn("qr_camera_v2_entry", first)
         self.assertNotIn("legacy", first)
 
-    def test_settings_and_sleep_do_not_acquire_firmware_owned_caps(self) -> None:
+    def test_build_requirements_are_not_runtime_descriptor_tables(self) -> None:
+        source = app_registry.generated_source(self.model, app_composition.enable_definition)
+        for token in (".capabilities", ".services", "hk_app_capability_request_t", "hk_app_service_request_t"):
+            self.assertNotIn(token, source)
         apps = {app["id"]: app for app in self.model["apps"]}
-        settings_required = [
-            item["id"] for item in apps["settings"]["capabilities"]["required"]
-        ]
-        sleep_required = [
-            item["id"] for item in apps["sleep"]["capabilities"]["required"]
-        ]
-        self.assertEqual(settings_required, [
-            "hackylens.cap.display",
-            "hackylens.cap.input",
-        ])
-        self.assertEqual(apps["settings"]["capabilities"]["optional"], [])
-        self.assertEqual(sleep_required, [
-            "hackylens.cap.display",
-            "hackylens.cap.input",
-            "hackylens.cap.time",
-        ])
-        self.assertNotIn("hackylens.cap.lights", sleep_required)
-
-    def test_files_and_qr_camera_keep_firmware_owned_seams(self) -> None:
-        apps = {app["id"]: app for app in self.model["apps"]}
-        expected = {
-            "hackylens.cap.display",
-            "hackylens.cap.input",
-            "hackylens.cap.time",
-        }
-        for app_id in ("files", "qr-camera"):
-            with self.subTest(app=app_id):
-                required = [
-                    item["id"] for item in apps[app_id]["capabilities"]["required"]
-                ]
-                self.assertNotIn("lifecycle", apps[app_id])
-                self.assertEqual(set(required), expected)
-                self.assertEqual(apps[app_id]["services"], [])
-                self.assertNotIn("hackylens.cap.lights", required)
-                self.assertNotIn(
-                    "hackylens.service.legacy-camera",
-                    [item["id"] for item in apps[app_id]["services"]],
-                )
-                self.assertNotIn(
-                    "hackylens.service.legacy-sd-card",
-                    [item["id"] for item in apps[app_id]["services"]],
-                )
+        for name in ("settings", "sleep", "files", "qr-camera"):
+            self.assertNotIn("lights", apps[name]["requires"])
 
     def test_current_legacy_menu_autostart_debug_and_tick_parity(self) -> None:
         expected_order = [

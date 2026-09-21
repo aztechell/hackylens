@@ -9,9 +9,8 @@ This document describes the implemented v0.4 architecture. During simplification
 [SIMPLIFICATION_MASTERPLAN.md](SIMPLIFICATION_MASTERPLAN.md) controls work scope,
 ordering, and exit gates. [ARCHITECTURE_VISION.md](ARCHITECTURE_VISION.md) records
 design goals; [CURRENT_STATE.md](CURRENT_STATE.md) records implementation status
-and evidence limitations. Existing broker and legacy paths described below
-remain current until migrated; their description does not require retaining
-them after the corresponding simplification package.
+and evidence limitations. S7 removed the legacy lifecycle adapter. S8 uses direct typed hardware bindings
+and scoped retirement; its current qualification is recorded in the masterplan.
 
 `firmware/targets/full.c` is a small composition root. It configures the runtime loop in `runtime/hk_main.c`, whose input polling and sleep timing remain platform-dependent. `core` owns app contracts, screen model, dispatch contracts, and neutral data contracts such as `core/pixel_source.h`; it does not access `hk_input` or `hal_time` directly.
 
@@ -60,9 +59,9 @@ Settings and temporary camera/MicroPython policy remain above that provider;
 only the K210 adapter includes the lights driver interface.
 
 Display 0.1 is implemented by the production K210 provider and the deterministic
-fixed-capacity host fake. The provider owns BASE/OVERLAY plane leases, bounded
+fixed-capacity host fake. The provider owns BASE/OVERLAY plane sessions, bounded
 batch/surface staging, clipped dirty regions, borrowed-buffer lifetime, present
-retry, repair, and cleanup. A private UI binding holds the typed BASE handle;
+retry, repair, and cleanup. A private UI binding holds the stable typed BASE session;
 MicroPython holds OVERLAY. Both reuse the one ST7789 shadow framebuffer over a
 raw transport that has no app, run-ID, or Python policy. The provider reports
 composition-specific bounded batch limits: the full profile reserves the
@@ -78,7 +77,7 @@ All twelve menu applications are self-contained modules: `apps/terminal/`,
 `apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point,
 controller, view, icon, feature configuration, and feature-specific
 state/services. The only public header of a module is its `*_app.h`, and the app
-implementation owns its legacy binding. Generated registry code uses typed
+implementation owns its typed lifecycle entry. Generated registry code uses typed
 extern entry objects and does not include app-private headers.
 
 The build manifest maps each app ID to its whole directory. `--disable-app`
@@ -91,8 +90,9 @@ are omitted while the general KPU HAL remains available.
 
 Canonical manifests generate the immutable descriptor and menu arrays. The
 small app-neutral core registry dispatches primary and secondary screen
-ownership, legacy lifecycle callbacks, background ticks, SD events, menu icons,
-and debug commands. Shared screen, SD, debug, boot, and system-tick controllers
+ownership, menu icons and explicit debug commands. The single foreground
+runtime dispatches lifecycle callbacks, timer and SD events; inactive apps do
+not receive background ticks. Shared screen, SD, debug, boot, and system-tick controllers
 do not include feature headers or select features with conditionals.
 
 CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.

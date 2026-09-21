@@ -31,16 +31,6 @@ enum
     HK_ERR_INTERNAL = -16
 };
 
-typedef uint32_t hk_capability_id_t;
-
-typedef struct
-{
-    uint16_t major;
-    uint16_t minor;
-    uint16_t patch;
-    uint16_t reserved;
-} hk_version_t;
-
 typedef struct
 {
     uint64_t at_us;
@@ -56,20 +46,6 @@ typedef struct
 
 typedef struct
 {
-    uint32_t slot;
-    uint32_t generation;
-} hk_owner_t;
-
-typedef struct
-{
-    uint32_t slot;
-    uint32_t generation;
-    hk_owner_t owner;
-    hk_capability_id_t capability_id;
-} hk_lease_t;
-
-typedef struct
-{
     void *data;
     uint32_t size_bytes;
     uint32_t stride_bytes;
@@ -79,19 +55,6 @@ typedef struct
 #define HK_BUFFER_ACCESS_READABLE (UINT32_C(1) << 0)
 #define HK_BUFFER_ACCESS_WRITABLE (UINT32_C(1) << 1)
 
-typedef struct
-{
-    uint16_t struct_size;
-    uint16_t struct_version;
-    hk_capability_id_t id;
-    hk_version_t minimum;
-    hk_version_t maximum_exclusive;
-    uint64_t required_features;
-    uint16_t instance;
-    uint16_t reserved;
-} hk_capability_request_t;
-
-#define HK_CAPABILITY_REQUEST_VERSION 1U
 #define HK_DEADLINE_IMMEDIATE ((hk_deadline_t){0U})
 
 #ifdef __cplusplus

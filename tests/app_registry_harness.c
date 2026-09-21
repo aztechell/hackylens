@@ -374,12 +374,6 @@ int main(void)
 #endif
     );
 
-    for(uint8_t app_index = 0U; app_index < g_hk_generated_app_count; app_index++)
-    {
-        const hk_app_t *app = g_hk_generated_apps[app_index];
-        for(uint16_t cap_index = 0U; cap_index < app->capability_count; cap_index++)
-            CHECK(strcmp(app->capabilities[cap_index].id, "hackylens.cap.time") != 0);
-    }
     camera = app_by_id("camera");
     settings = app_by_id("settings");
     sleep = app_by_id("sleep");
@@ -388,27 +382,8 @@ int main(void)
     CHECK(hk_app_for_id("absent") == NULL);
     CHECK(camera->entry == &camera_v2_entry);
     CHECK(camera->limits.tick_interval_us == 20000U);
-    CHECK(camera->service_count == 0U);
-    CHECK(settings->capability_count == 0U);
-    CHECK(sleep->capability_count == 0U);
-    CHECK(app_by_id("files")->capability_count == 0U);
-    CHECK(app_by_id("files")->service_count == 0U);
     CHECK(app_by_id("files")->limits.tick_interval_us == 20000U);
-    CHECK(app_by_id("qr-camera")->capability_count == 0U);
-    CHECK(app_by_id("qr-camera")->service_count == 0U);
     CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 20000U);
-    for(uint16_t index = 0U; index < settings->capability_count; index++)
-    {
-        const hk_app_capability_request_t *request =
-            &settings->capabilities[index];
-        CHECK(request->optional == 0U);
-        CHECK(strcmp(request->id, "hackylens.cap.lights") != 0);
-        CHECK(strcmp(request->id, "hackylens.cap.external-link") != 0);
-    }
-    for(uint16_t index = 0U; index < sleep->capability_count; index++)
-        CHECK(strcmp(sleep->capabilities[index].id,
-                     "hackylens.cap.lights") != 0);
-
     CHECK(hk_app_registry_handle_debug_command("APPDEBUG") == 0U);
     CHECK(s_debug_calls == 0U);
     CHECK(hk_app_registry_handle_debug_command("HKCAM") == 1U);

@@ -42,9 +42,8 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
     camera_state_t *state = app_state(ctx);
     const char *id;
     uint32_t generation;
-    hk_owner_t owner = HK_OWNER_NONE;
     hk_input_snapshot_t input = {0};
-    if(!state || hk_app_context_identity(ctx, &id, &generation, &owner) != HK_OK ||
+    if(!state || hk_app_context_identity(ctx, &id, &generation) != HK_OK ||
        hk_app_context_input(ctx, &state->input) != HK_OK ||
        hk_input_get_state(state->input, &input.state) != HK_OK)
         return HK_ERR_INTERNAL;

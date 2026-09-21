@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 import app_registry
 from app_manifest import (
-    FIRMWARE_SERVICE_PREFIX,
+    FIRMWARE_SERVICES,
     ManifestError,
     canonical_json_bytes,
     validate_tree,
@@ -32,16 +32,7 @@ def enable_definition(app_id: str) -> str:
 
 
 def _firmware_requirements(app: Mapping[str, Any]) -> list[str]:
-    requirements: list[str] = []
-    for service in app["services"]:
-        service_id = service["id"]
-        if not service_id.startswith(FIRMWARE_SERVICE_PREFIX):
-            continue
-        requirement = service_id[len(FIRMWARE_SERVICE_PREFIX):]
-        if not requirement:
-            raise CompositionError(f"{app['id']}: empty firmware service requirement")
-        requirements.append(requirement)
-    return sorted(requirements)
+    return sorted(set(app["requires"]) & (FIRMWARE_SERVICES - {"settings"}))
 
 
 def load_model(manifest_root: Path = MANIFEST_ROOT) -> dict[str, Any]:
@@ -111,8 +102,8 @@ def generated_document(
             "sources": sources,
             "private_includes": sorted(set(include_paths)),
             "firmware_requirements": _firmware_requirements(app),
-            "capabilities": app["capabilities"],
-            "services": app["services"],
+            "requires": app["requires"],
+            "optional": app["optional"],
         })
     model_bytes = canonical_json_bytes(model)
     return {

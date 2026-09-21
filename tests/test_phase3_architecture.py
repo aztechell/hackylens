@@ -86,17 +86,13 @@ class Phase3ArchitecturePolicyTests(unittest.TestCase):
         source = (
             "#include <hackylens/app/runtime.h>\n"
             "#ifdef __cplusplus\n"
-            "static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U);\n"
-            "static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U);\n"
             "static_assert(HK_APP_MAX_INVALIDATIONS == 8U);\n"
             "int main(void) { hk_app_context_t value = {}; hk_app_event_t event = {}; "
-            "return value.owner.slot + static_cast<int>(event.sequence); }\n"
+            "return value.generation + static_cast<int>(event.sequence); }\n"
             "#else\n"
-            "_Static_assert(HK_APP_CONTEXT_MAX_CAPABILITIES == 16U, \"caps\");\n"
-            "_Static_assert(HK_APP_CONTEXT_MAX_SERVICES == 16U, \"services\");\n"
             "_Static_assert(HK_APP_MAX_INVALIDATIONS == 8U, \"invalidations\");\n"
             "int main(void) { hk_app_context_t value = {0}; "
-            "hk_app_event_t event = {0}; return value.owner.slot + (int)event.sequence; }\n"
+            "hk_app_event_t event = {0}; return value.generation + (int)event.sequence; }\n"
             "#endif\n"
         )
         compilers = (

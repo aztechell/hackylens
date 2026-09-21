@@ -15,19 +15,6 @@ def _c_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def _count_expression(name: str, c_type: str) -> str:
-    return f"(uint16_t)(sizeof({name}) / sizeof({c_type}))"
-
-
-def _request_rows(app: Mapping[str, Any]) -> list[tuple[Mapping[str, Any], bool]]:
-    rows = [(request, False) for request in app["capabilities"]["required"]]
-    rows.extend((request, True) for request in app["capabilities"]["optional"])
-    # Static Time/Input/Lights binding is resolved at build time, never negotiated per app.
-    return [(request, optional) for request, optional in rows
-            if request["id"] not in {"hackylens.cap.time", "hackylens.cap.input",
-                                     "hackylens.cap.lights", "hackylens.cap.display", "hackylens.cap.external-link"}]
-
-
 def generated_header(model: Mapping[str, Any]) -> str:
     apps = list(model["apps"])
     if len(apps) > 254:
@@ -93,67 +80,6 @@ def generated_source(
         if debug_symbol != "NULL":
             lines.append(f"extern uint8_t {debug_symbol}(const char *command);")
 
-        requests = _request_rows(app)
-        for request_index, (request, _) in enumerate(requests):
-            features = list(request["features"])
-            if not features:
-                continue
-            feature_name = f"s_app_{app_index}_request_{request_index}_features"
-            lines.append(f"static const char *const {feature_name}[] = {{")
-            for feature in features:
-                lines.append(f"    {_c_string(str(feature))},")
-            lines.extend(["};", ""])
-
-        request_array = f"s_app_{app_index}_capabilities"
-        if requests:
-            lines.append(
-                f"static const hk_app_capability_request_t {request_array}[] = {{"
-            )
-            for request_index, (request, optional) in enumerate(requests):
-                features = list(request["features"])
-                feature_name = (
-                    f"s_app_{app_index}_request_{request_index}_features"
-                    if features else "NULL"
-                )
-                fallback = (
-                    _c_string(str(request["fallback"]))
-                    if optional else "NULL"
-                )
-                lines.extend([
-                    "    {",
-                    f"        {_c_string(str(request['id']))}, {int(request['instance'])}U,",
-                    f"        {_c_string(str(request['minimum']))},",
-                    f"        {_c_string(str(request['maximum_exclusive']))},",
-                    f"        {feature_name}, {len(features)}U,",
-                    f"        {fallback}, {1 if optional else 0}U,",
-                    "    },",
-                ])
-            lines.extend(["};", ""])
-
-        services = [service for service in app["services"]
-                    if not service["id"].startswith("hackylens.firmware.")]
-        service_array = f"s_app_{app_index}_services"
-        if services:
-            lines.append(f"static const hk_app_service_request_t {service_array}[] = {{")
-            for service in services:
-                lines.append(
-                    "    {"
-                    f"{_c_string(str(service['id']))}, "
-                    f"{_c_string(str(service['namespace']))}"
-                    "},"
-                )
-            lines.extend(["};", ""])
-
-        capability_pointer = request_array if requests else "NULL"
-        capability_count = (
-            _count_expression(request_array, "hk_app_capability_request_t")
-            if requests else "0U"
-        )
-        service_pointer = service_array if services else "NULL"
-        service_count = (
-            _count_expression(service_array, "hk_app_service_request_t")
-            if services else "0U"
-        )
         limits = app["limits"]
         lines.extend([
             f"const hk_app_t {app['generated_symbol']} = {{",
@@ -178,10 +104,6 @@ def generated_source(
             f"        {int(limits['tick_budget_us'])}U,",
             f"        {int(limits['render_budget_us'])}U,",
             "    },",
-            f"    .capabilities = {capability_pointer},",
-            f"    .capability_count = {capability_count},",
-            f"    .services = {service_pointer},",
-            f"    .service_count = {service_count},",
             f"    .draw_icon = {icon_symbol},",
             f"    .debug_command = {debug_symbol},",
             "};",

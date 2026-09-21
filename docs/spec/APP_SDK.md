@@ -60,8 +60,8 @@ SDK `0.2.x` defines or re-exports only:
   reasons from App Runtime `0.2.x`;
 - the borrowed, generation-checked `hk_app_context_t` interface;
 - ordered app events, including Timer and Runtime Close;
-- the bounded view/surface interface backed by an injected Display handle;
-- declared capability and app-scoped service handle access;
+- the bounded view/surface interface backed by a runtime-owned Display session;
+- typed Time/Input bindings and scoped Lights/Display/External Link sessions;
 - fixed-capacity private app-state access;
 - `hk_app_context_request_close` as the portable close-request seam;
 - result, version, deadline, cancellation, buffer, and capability types from
@@ -73,24 +73,19 @@ peripheral instance, route, board ID inference, HAL object, or driver pointer.
 Absence and optional fallback are explicit results, never guessed from hardware
 identity.
 
-The public definition is `sdk/include/hackylens/app/context.h`. It has ABI
-size/version fields, immutable app identity, one generation-checked owner, and
-inline fixed-capacity tables for at most 16 declared capability grants and 16
-app-scoped service handles. It contains no runtime-private or hardware pointer.
-The tables are runtime-owned observations, not mutable app registration or
-discovery surfaces. Lifecycle callbacks receive the context through a
-`const hk_app_context_t *`; writable app state remains available through
-`hk_app_context_state` rather than by making the context mutable.
+The public definition is `sdk/include/hackylens/app/context.h`. It carries ABI
+size/version, app identity, context generation and immutable Time/Input binding
+pointers. It contains no generic owner, grant table or runtime inventory.
+Lifecycle callbacks receive `const hk_app_context_t *`; writable app state is
+available through `hk_app_context_state`.
 
-During `start` through `stop`, identity, declaration status, and typed handle
-accessors are valid after injection. Typed accessors return the existing public
-Capability API handle for an available declared `(id, instance)`. An absent
-optional returns `HK_ERR_CAPABILITY_ABSENT` and its status accessor returns the
-exact manifest fallback. An undeclared capability or service returns
-`HK_ERR_NOT_DECLARED` without calling a provider. App-scoped service handles
-carry the same owner and context generation. Availability observed by `start`
-is stable: failure to acquire a grant reported available fails launch before
-`start` and triggers owner-wide unwind; it cannot become an implicit fallback.
+During `start` through `stop`, accessors validate the current callback context.
+Time/Input access returns the board-lifetime binding or
+`HK_ERR_CAPABILITY_ABSENT`. Lights, Display and External Link accessors return
+stable runtime-owned sessions. Their providers enforce actual channel, plane
+and connector conflicts. New sessions cannot be opened during teardown.
+Build-time required-service checks exclude incompatible apps before firmware
+compilation; runtime does not repeat manifest version/feature negotiation.
 
 The event, stop-reason, wakeup-token, and render-surface definitions are in
 `sdk/include/hackylens/app/runtime.h`. `hk_app_event_t` is a bounded
@@ -149,29 +144,28 @@ acquire a second Time implementation. App Runtime creates the value exactly once
 through public `hk_time_deadline_after_us`, the immutable Time service binding,
 and a runtime-controlled finite policy
 budget; the manifest and app cannot configure or extend it. An already-expired
-value remains the required value for later owner-wide cleanup.
+value remains the required value for later scoped service cleanup.
 
 ## Ownership and memory
 
 Contexts, handles, surfaces, events, and state views are borrowed for the
 lifetimes specified by App Runtime and the corresponding capability. Apps MUST
 NOT retain a callback-scoped context or surface after the callback returns.
-Every handle is scoped to the current app owner and generation and is invalid
-after teardown. Handles remain valid during `stop`; runtime then attempts
-owner-wide cleanup before invalidating handles and context. Copying either the
-context or a handle does not extend its lifetime or allow access to a later
-generation.
+Scoped service sessions remain valid during `stop`; runtime then attempts
+retirement of every session before invalidating the context and reusing state.
+Sessions must not be copied or moved: provider claims use their stable address.
+Copying a context does not extend its lifetime or authorize a later generation.
+Immutable Time/Input bindings have board lifetime; context and asynchronous
+operation generations remain where they protect real lifetimes.
 
-Context owner and grant fields are snapshots only. The runtime's authoritative
-owner and resolved availability are private and cannot be changed through the
-SDK object; cleanup never trusts owner data read back from the callback
-snapshot.
+Session storage and cleanup authority remain private to runtime. Cleanup never
+trusts fields read back from a callback's public context snapshot.
 
 SDK functions are bounded and allocation-free. They do not create tasks,
 queues, cores, general background work, or hidden heap storage. Large buffers
 remain explicit borrows. App state is descriptor-sized fixed storage and is
 reused only after the normative runtime teardown and generation invalidation.
-The build-generated descriptor supplies manifest `state_bytes` and the fixed
+The app entry supplies state storage and its size; the descriptor uses the fixed
 `HK_APP_STATE_ALIGNMENT` ABI policy; alignment is not a runtime request or an
 app-manifest tuning field.
 
@@ -189,14 +183,15 @@ Public lifecycle callbacks are `start`, `event`, `render`, and `stop(ctx)`.
 only in `RUNNING`, never while `start` is executing. Lifecycle `HK_PENDING` is
 normalized to `HK_ERR_INVALID_STATE` by production Runtime. Teardown creates
 one finite absolute monotonic deadline at teardown start and uses that same
-deadline for stop and owner-wide provider cleanup.
+deadline for stop and scoped service provider cleanup.
 
 Capability operations keep Phase 2 semantics. Every Input event reader has an
 independent caller-owned sequence cursor and reports `HK_ERR_OVERFLOW` with the latest
 stable state and exact dropped count before resynchronizing without replay.
 Time rejects durations above `HK_TIME_MAX_SLEEP_US` and addition overflow with
-`HK_ERR_LIMIT`. Every release rejects `UINT64_MAX` as an invalid absolute
-deadline before changing lease state. Display treats zero-area rectangles as
+`HK_ERR_LIMIT`. Ordinary close rejects `UINT64_MAX` as an invalid absolute
+deadline; forced retirement still invalidates the session and quarantines an
+unsafe resource on failure. Display treats zero-area rectangles as
 successful no-ops, accepts `set_clip(NULL)` as the full display, requires the
 normative batch/surface state for commands, present, and abort, and preserves
 staged state after validation failure.

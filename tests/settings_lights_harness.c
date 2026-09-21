@@ -43,16 +43,6 @@ void settings_set_rgb_green(uint8_t value) { s_rgb_green = value; }
 void settings_set_rgb_blue(uint8_t value) { s_rgb_blue = value; }
 void settings_set_screen_brightness(uint8_t value) { s_backlight = value; }
 
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    hk_owner_t owner = {1U, 1U};
-
-    if(consumer_id && consumer_id[18] == 'i')
-        owner.slot = 2U;
-    else if(consumer_id && consumer_id[18] == 'r')
-        owner.slot = 3U;
-    return owner;
-}
 
 struct hk_lights_service { uint8_t unused; };
 static const hk_lights_service_t s_lights_binding = {0};

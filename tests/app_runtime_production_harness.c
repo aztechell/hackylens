@@ -22,7 +22,6 @@
 typedef struct
 {
     uint64_t now_us;
-    hk_owner_t app_owner;
     hk_app_wakeup_token_t wakeup;
     hk_app_event_kind_t events[16];
     uint64_t sequences[16];
@@ -30,10 +29,6 @@ typedef struct
     uint8_t input_sent;
     uint8_t wakeup_sent;
     uint8_t batch_active;
-    uint32_t owner_initialize_count;
-    uint32_t owner_enter_count;
-    uint32_t owner_close_count;
-    uint32_t owner_exit_count;
     uint32_t input_acquire_count;
     uint32_t input_state_count;
     uint32_t input_event_count;
@@ -158,62 +153,6 @@ static const hk_app_t s_secondary_app = {
     .entry = &s_secondary_entry,
     .limits = {1024U, 256U, 64U, HK_APP_STATE_ALIGNMENT, 100U, 100U, 100U},
 };
-
-hk_result_t hk_generated_capability_request_for(
-    const char *consumer_id, const char *capability_id, uint16_t instance,
-    hk_capability_request_t *request)
-{
-    (void)consumer_id; (void)capability_id; (void)instance; (void)request;
-    return HK_ERR_NOT_DECLARED;
-}
-
-hk_result_t capability_owner_runtime_initialize(void)
-{
-    s_fixture.owner_initialize_count++;
-    return HK_OK;
-}
-
-hk_result_t capability_owner_runtime_enter(const hk_app_t *app)
-{
-    if(!app)
-        return HK_ERR_INVALID_ARGUMENT;
-    s_fixture.owner_enter_count++;
-    s_fixture.app_owner = (hk_owner_t){7U, s_fixture.owner_enter_count};
-    return HK_OK;
-}
-
-hk_owner_t capability_owner_runtime_current(const hk_app_t *app)
-{
-    return app ? s_fixture.app_owner : HK_OWNER_NONE;
-}
-
-hk_result_t capability_owner_runtime_close(
-    hk_owner_t owner,
-    hk_deadline_t deadline)
-{
-    if(hk_owner_is_zero(owner) || owner.slot != s_fixture.app_owner.slot ||
-       deadline.at_us == UINT64_MAX)
-        return HK_ERR_WRONG_OWNER;
-    s_fixture.owner_close_count++;
-    s_fixture.app_owner = HK_OWNER_NONE;
-    return HK_OK;
-}
-
-hk_result_t capability_owner_runtime_exit(const hk_app_t *app)
-{
-    if(!app || hk_owner_is_zero(s_fixture.app_owner))
-        return HK_ERR_INVALID_STATE;
-    s_fixture.owner_exit_count++;
-    s_fixture.app_owner = HK_OWNER_NONE;
-    return HK_OK;
-}
-
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    if(consumer_id && strcmp(consumer_id, "consumer:firmware-runtime") == 0)
-        return (hk_owner_t){90U, 1U};
-    return HK_OWNER_NONE;
-}
 
 struct hk_time { uint8_t binding; };
 static const hk_time_t s_time = {1U};
@@ -555,8 +494,6 @@ int main(void)
         (void)hk_main();
     CHECK(jump_result == 1);
     CHECK(app_runtime_integration_active() == &s_v2_app);
-    CHECK(s_fixture.owner_initialize_count == 1U);
-    CHECK(s_fixture.owner_enter_count == 1U);
     CHECK(s_fixture.input_acquire_count == 1U);
     CHECK(s_fixture.input_state_count >= 2U);
     CHECK(s_fixture.input_event_count == 1U);
@@ -582,7 +519,6 @@ int main(void)
     for(uint8_t index = 0U; index < s_fixture.event_count; index++)
         CHECK(s_fixture.sequences[index] == (uint64_t)index + 1U);
     CHECK(s_fixture.stop_count == 1U);
-    CHECK(s_fixture.owner_close_count == 1U);
     CHECK(s_fixture.stop_reason == HK_APP_STOP_BACK);
     CHECK(app_runtime_integration_active() == NULL);
 
@@ -590,8 +526,6 @@ int main(void)
     CHECK(s_fixture.secondary_enter_count == 1U);
     CHECK(app_runtime_integration_close(HK_APP_STOP_SWITCH) == HK_OK);
     CHECK(s_fixture.secondary_exit_count == 1U);
-    CHECK(s_fixture.owner_close_count == 2U);
-    CHECK(s_fixture.owner_enter_count == 2U);
     CHECK(app_runtime_integration_active() == NULL);
     printf("APP_RUNTIME_PRODUCTION_OK\n");
     return 0;

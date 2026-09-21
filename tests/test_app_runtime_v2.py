@@ -19,7 +19,6 @@ if str(TOOLS) not in sys.path:
 HOST_RUNTIME_SOURCES = (
     "firmware/src/app_runtime/surface.c",
     "firmware/src/app_runtime/switch.c",
-    "firmware/src/capabilities/capability_core.c",
     "firmware/src/capabilities/time.c",
     "firmware/src/capabilities/input.c",
     "firmware/src/capabilities/input_state.c",
@@ -105,10 +104,6 @@ class AppRuntimeV2Tests(unittest.TestCase):
         for measured_ns in match.groups():
             self.assertLessEqual(int(measured_ns), 100_000)
 
-    def test_manifest_exact_grants_and_owner_retirement(self) -> None:
-        result = self.compile_and_run_harness("app_runtime_grants_harness.c")
-        self.assertEqual(result.stdout, "APP_RUNTIME_GRANTS_OK\n")
-
     def test_mixed_runtime_switch_events_and_failure_paths(self) -> None:
         result = self.compile_and_run_harness(
             "app_runtime_mixed_harness.c",
@@ -140,7 +135,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
 
-    def test_owner_and_preflight_authority_stay_private(self) -> None:
+    def test_scope_hooks_stay_private(self) -> None:
         private_header = (
             ROOT / "firmware/src/app_runtime/runtime_private.h"
         ).read_text(encoding="utf-8")
@@ -172,11 +167,10 @@ class AppRuntimeV2Tests(unittest.TestCase):
         self.assertNotIn("hk_app_tick_fn", public_runtime)
         self.assertNotIn("hk_app_cleanup_fn", public_runtime)
         self.assertNotIn("typedef hk_result_t (*hk_app_cleanup_fn)", private_header)
-        self.assertIn("hk_owner_t owner;", private_header)
-        self.assertIn(
-            "uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];",
-            private_header,
-        )
+        self.assertNotIn("hk_owner_t", private_header)
+        self.assertNotIn("resolved_available", private_header)
+        self.assertIn("hk_app_runtime_prepare_fn prepare;", private_header)
+        self.assertIn("hk_app_runtime_cleanup_fn cleanup;", private_header)
 
     def test_generated_descriptor_carries_manifest_state_size_and_abi_alignment(self) -> None:
         import app_composition

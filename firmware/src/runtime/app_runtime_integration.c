@@ -6,11 +6,8 @@
 #include <hackylens/capability/lights.h>
 
 #include "../app_runtime/surface_private.h"
-#include "../capabilities/capability_inventory_binding.h"
-#include "../core/hk_capability_client.h"
 #include "../ui/display_binding.h"
 #include "../services/camera_light.h"
-#include "capability_owner_runtime.h"
 
 typedef struct
 {
@@ -28,92 +25,31 @@ static app_runtime_integration_t s_integration;
 
 static hk_result_t render_abort(void *user);
 
-static hk_result_t resolve_capability(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_capability_request_t *declaration,
-    hk_capability_request_t *request)
+static hk_result_t prepare(void *user, const hk_app_t *app)
 {
-    (void)user;
-    return hk_generated_capability_request_for(
-        app->id, declaration->id, declaration->instance, request);
-}
-
-static hk_result_t resolve_service(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)app;
-    (void)declaration;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t owner_open(
-    void *user,
-    const hk_app_t *app,
-    hk_owner_t *owner)
-{
+    app_runtime_integration_t *integration = user;
     hk_result_t result;
 
-    app_runtime_integration_t *integration = user;
-    if(!owner)
-        return HK_ERR_INVALID_ARGUMENT;
-    *owner = HK_OWNER_NONE;
-    result = capability_owner_runtime_enter(app);
-    if(result == HK_OK)
-        *owner = capability_owner_runtime_current(app);
-    if(result == HK_OK)
-    {
-        integration->display = &integration->switcher.runtime.display[0];
-        result = hk_display_open(
-            integration->switcher.runtime.ops.display,
-            HK_DISPLAY_PLANE_BASE, integration->display);
-    }
+    (void)app;
+    integration->display = &integration->switcher.runtime.display[0];
+    result = hk_display_open(integration->switcher.runtime.ops.display,
+        HK_DISPLAY_PLANE_BASE, integration->display);
     if(result == HK_OK)
         result = hk_ui_display_bind(integration->display);
     return result;
 }
 
-static hk_result_t acquire_capability(
-    void *user,
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_lease_t *lease)
-{
-    (void)user; (void)owner; (void)request;
-    if(!lease) return HK_ERR_INVALID_ARGUMENT;
-    *lease = HK_LEASE_NONE;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t acquire_service(
-    void *user,
-    hk_owner_t owner,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)owner;
-    (void)declaration;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t owner_cleanup(
-    void *user,
-    hk_owner_t owner,
-    hk_deadline_t deadline)
+static hk_result_t cleanup(void *user, hk_deadline_t deadline)
 {
     app_runtime_integration_t *integration = user;
-    hk_result_t light_result = camera_light_retire(deadline);
-    hk_result_t owner_result = capability_owner_runtime_close(owner, deadline);
+    hk_result_t result = camera_light_retire(deadline);
 
     hk_ui_display_unbind();
     integration->display = NULL;
     integration->display_batch_active = 0U;
     integration->display_surface_active = 0U;
     integration->locked_surface = (hk_display_surface_t){0};
-    return light_result != HK_OK ? light_result : owner_result;
+    return result;
 }
 
 static hk_result_t now_us(void *user, uint64_t *value)
@@ -340,9 +276,6 @@ hk_result_t app_runtime_integration_initialize(void)
     if(s_integration.initialized)
         return HK_OK;
     memset(&s_integration, 0, sizeof(s_integration));
-    result = capability_owner_runtime_initialize();
-    if(result != HK_OK)
-        return result;
     s_integration.time = hk_time_service();
     if(!s_integration.time)
         return HK_ERR_CAPABILITY_ABSENT;
@@ -353,12 +286,8 @@ hk_result_t app_runtime_integration_initialize(void)
         .lights = hk_lights_service(),
         .display = hk_display_service(),
         .external_link = hk_external_link_service(),
-        .resolve_capability = resolve_capability,
-        .resolve_service = resolve_service,
-        .owner_open = owner_open,
-        .acquire_capability = acquire_capability,
-        .acquire_service = acquire_service,
-        .owner_cleanup = owner_cleanup,
+        .prepare = prepare,
+        .cleanup = cleanup,
         .deadline_after_us = deadline_after_us,
     };
     result = hk_app_switch_init(

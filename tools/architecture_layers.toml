@@ -74,9 +74,7 @@ paths = ["firmware/src/adapters/**"]
 name = "capability-implementation"
 paths = [
   "firmware/src/capabilities/*.h",
-  "firmware/src/capabilities/capability_core.c",
-  "firmware/src/capabilities/capability_inventory_generated.c",
-  "firmware/src/capabilities/capability_owner.c",
+  "firmware/src/capabilities/absent_bindings.c",
   "firmware/src/capabilities/input_state.c",
   "platforms/*/capabilities/**",
 ]

@@ -32,8 +32,8 @@ typedef struct
     uint8_t begin_busy;
     uint8_t render_requests_again;
     uint8_t batch_active;
-    uint32_t owner_open_count;
-    uint32_t owner_cleanup_count;
+    uint32_t prepare_count;
+    uint32_t cleanup_count;
     uint32_t stop_count;
     uint32_t tick_count;
     uint32_t render_count;
@@ -180,77 +180,26 @@ static hk_app_t secondary_descriptor(void)
     return app;
 }
 
-static hk_result_t resolve_capability(
+static hk_result_t prepare(
     void *user,
-    const hk_app_t *app,
-    const hk_app_capability_request_t *declaration,
-    hk_capability_request_t *request)
-{
-    (void)user;
-    (void)app;
-    (void)declaration;
-    (void)request;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t resolve_service(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)app;
-    (void)declaration;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t owner_open(
-    void *user,
-    const hk_app_t *app,
-    hk_owner_t *owner)
+    const hk_app_t *app)
 {
     fixture_t *fixture = user;
 
     (void)app;
-    fixture->owner_open_count++;
-    *owner = (hk_owner_t){2U, fixture->owner_open_count};
+    fixture->prepare_count++;
     return HK_OK;
 }
 
-static hk_result_t acquire_capability(
+static hk_result_t cleanup(
     void *user,
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_lease_t *lease)
-{
-    (void)user;
-    (void)owner;
-    (void)request;
-    (void)lease;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t acquire_service(
-    void *user,
-    hk_owner_t owner,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)owner;
-    (void)declaration;
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t owner_cleanup(
-    void *user,
-    hk_owner_t owner,
     hk_deadline_t deadline)
 {
     fixture_t *fixture = user;
 
-    if(hk_owner_is_zero(owner) || deadline.at_us == UINT64_MAX)
+    if(deadline.at_us == UINT64_MAX)
         return HK_ERR_INTERNAL;
-    fixture->owner_cleanup_count++;
+    fixture->cleanup_count++;
     return HK_OK;
 }
 
@@ -391,12 +340,8 @@ static int reset_fixture(fixture_t *fixture)
 {
     hk_app_runtime_ops_t runtime_ops = {
         .user = fixture,
-        .resolve_capability = resolve_capability,
-        .resolve_service = resolve_service,
-        .owner_open = owner_open,
-        .acquire_capability = acquire_capability,
-        .acquire_service = acquire_service,
-        .owner_cleanup = owner_cleanup,
+        .prepare = prepare,
+        .cleanup = cleanup,
         .deadline_after_us = deadline_after_us,
     };
     hk_app_switch_ops_t switch_ops = {
@@ -495,7 +440,7 @@ static int check_back_during_start(void)
     CHECK(hk_app_switch_open(&fixture.switcher, &v2, NULL) == HK_ERR_CANCELLED);
     CHECK(hk_app_switch_active(&fixture.switcher) == NULL);
     CHECK(fixture.stop_count == 1U);
-    CHECK(fixture.owner_cleanup_count == 1U);
+    CHECK(fixture.cleanup_count == 1U);
     CHECK(fixture.stop_reason == HK_APP_STOP_BACK);
     return 0;
 }

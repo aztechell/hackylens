@@ -40,7 +40,6 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
 {
     const hk_app_v2_entry_t *entry;
     uintptr_t state_address;
-    uint16_t index;
 
     if(!descriptor || descriptor->struct_size != sizeof(hk_app_t) ||
        descriptor->struct_version != HK_APP_DESCRIPTOR_VERSION ||
@@ -56,48 +55,8 @@ static hk_result_t validate_descriptor(const hk_app_t *descriptor)
        descriptor->limits.render_budget_us == 0U ||
        entry->state_capacity_bytes < descriptor->limits.state_bytes ||
        descriptor->limits.state_alignment != HK_APP_STATE_ALIGNMENT ||
-       descriptor->capability_count > HK_APP_CONTEXT_MAX_CAPABILITIES ||
-       descriptor->service_count > HK_APP_CONTEXT_MAX_SERVICES ||
-       (descriptor->capability_count > 0U && !descriptor->capabilities) ||
-       (descriptor->service_count > 0U && !descriptor->services) ||
        !entry->start || !entry->event || !entry->stop)
         return HK_ERR_INVALID_ARGUMENT;
-    for(index = 0U; index < descriptor->capability_count; index++)
-    {
-        const hk_app_capability_request_t *request =
-            &descriptor->capabilities[index];
-        uint16_t previous;
-
-        if(!request->id || !request->minimum || !request->maximum_exclusive ||
-           (request->feature_count > 0U && !request->features) ||
-           (request->optional && !request->fallback) ||
-           (!request->optional && request->fallback))
-            return HK_ERR_INVALID_ARGUMENT;
-        for(previous = 0U; previous < index; previous++)
-        {
-            const hk_app_capability_request_t *candidate =
-                &descriptor->capabilities[previous];
-            if(candidate->instance == request->instance &&
-               strcmp(candidate->id, request->id) == 0)
-                return HK_ERR_INVALID_ARGUMENT;
-        }
-    }
-    for(index = 0U; index < descriptor->service_count; index++)
-    {
-        const hk_app_service_request_t *service = &descriptor->services[index];
-        uint16_t previous;
-
-        if(!service->id || !service->namespace_name)
-            return HK_ERR_INVALID_ARGUMENT;
-        for(previous = 0U; previous < index; previous++)
-        {
-            const hk_app_service_request_t *candidate =
-                &descriptor->services[previous];
-            if(strcmp(candidate->id, service->id) == 0 ||
-               strcmp(candidate->namespace_name, service->namespace_name) == 0)
-                return HK_ERR_INVALID_ARGUMENT;
-        }
-    }
     state_address = (uintptr_t)entry->state_storage;
     if((state_address % descriptor->limits.state_alignment) != 0U)
         return HK_ERR_INVALID_ARGUMENT;
@@ -123,136 +82,6 @@ static hk_result_t finish_callback(
     return callback_result(result);
 }
 
-static uint8_t owner_equal(hk_owner_t left, hk_owner_t right)
-{
-    return (uint8_t)(left.slot == right.slot &&
-                     left.generation == right.generation);
-}
-
-static uint8_t request_is_valid(const hk_capability_request_t *request)
-{
-    if(!request || request->struct_size < sizeof(*request) ||
-       request->struct_version != HK_CAPABILITY_REQUEST_VERSION ||
-       request->id == 0U || request->reserved != 0U ||
-       request->minimum.reserved != 0U ||
-       request->maximum_exclusive.reserved != 0U)
-        return 0U;
-    if(request->minimum.major > request->maximum_exclusive.major)
-        return 0U;
-    if(request->minimum.major == request->maximum_exclusive.major &&
-       request->minimum.minor > request->maximum_exclusive.minor)
-        return 0U;
-    if(request->minimum.major == request->maximum_exclusive.major &&
-       request->minimum.minor == request->maximum_exclusive.minor &&
-       request->minimum.patch >= request->maximum_exclusive.patch)
-        return 0U;
-    return 1U;
-}
-
-static uint8_t is_optional_absence(hk_result_t result)
-{
-    return (uint8_t)(result == HK_ERR_CAPABILITY_ABSENT ||
-                     result == HK_ERR_VERSION_INCOMPATIBLE ||
-                     result == HK_ERR_FEATURE_UNAVAILABLE ||
-                     result == HK_ERR_NOT_DECLARED);
-}
-
-static hk_result_t resolve_declared_surface(hk_app_runtime_t *runtime)
-{
-    const hk_app_t *descriptor = runtime->descriptor;
-    uint16_t index;
-
-    runtime->context.capability_count = descriptor->capability_count;
-    runtime->context.service_count = descriptor->service_count;
-    for(index = 0U; index < descriptor->capability_count; index++)
-    {
-        const hk_app_capability_request_t *declaration =
-            &descriptor->capabilities[index];
-        hk_app_capability_grant_t *grant =
-            &runtime->context.capabilities[index];
-        hk_capability_request_t *request =
-            &runtime->resolved_capabilities[index];
-        hk_result_t result;
-
-        memset(request, 0, sizeof(*request));
-        grant->fallback = declaration->fallback;
-        grant->instance = declaration->instance;
-        grant->optional = declaration->optional;
-        result = runtime->ops.resolve_capability(
-            runtime->ops.user, descriptor, declaration, request);
-        if(!request_is_valid(request) || request->instance != declaration->instance)
-            return HK_ERR_INTERNAL;
-        grant->id = request->id;
-        if(result == HK_OK)
-        {
-            grant->available = 1U;
-            runtime->resolved_available[index] = 1U;
-            continue;
-        }
-        if(declaration->optional && is_optional_absence(result))
-        {
-            grant->available = 0U;
-            runtime->resolved_available[index] = 0U;
-            continue;
-        }
-        return result;
-    }
-    for(index = 0U; index < descriptor->service_count; index++)
-    {
-        const hk_app_service_request_t *declaration =
-            &descriptor->services[index];
-        hk_result_t result = runtime->ops.resolve_service(
-            runtime->ops.user, descriptor, declaration);
-
-        runtime->context.services[index].id = declaration->id;
-        runtime->context.services[index].namespace_name =
-            declaration->namespace_name;
-        if(result != HK_OK)
-            return result;
-    }
-    return HK_OK;
-}
-
-static hk_result_t inject_declared_surface(hk_app_runtime_t *runtime)
-{
-    uint16_t index;
-
-    for(index = 0U; index < runtime->descriptor->capability_count; index++)
-    {
-        hk_app_capability_grant_t *grant =
-            &runtime->context.capabilities[index];
-        hk_lease_t lease = HK_LEASE_NONE;
-        hk_result_t result;
-
-        if(!runtime->resolved_available[index])
-            continue;
-        result = runtime->ops.acquire_capability(
-            runtime->ops.user, runtime->owner,
-            &runtime->resolved_capabilities[index], &lease);
-        if(result != HK_OK)
-            return result;
-        if(hk_lease_is_zero(&lease) ||
-           !owner_equal(lease.owner, runtime->owner) ||
-           lease.capability_id != grant->id)
-            return HK_ERR_INTERNAL;
-        grant->lease = lease;
-    }
-    for(index = 0U; index < runtime->descriptor->service_count; index++)
-    {
-        const hk_app_service_request_t *declaration =
-            &runtime->descriptor->services[index];
-        hk_result_t result = runtime->ops.acquire_service(
-            runtime->ops.user, runtime->owner, declaration);
-        hk_app_service_t *handle = &runtime->context.services[index];
-
-        if(result != HK_OK)
-            return result;
-        handle->owner = runtime->owner;
-        handle->context_generation = runtime->context.generation;
-    }
-    return HK_OK;
-}
-
 static hk_app_stop_reason_t normalized_reason(hk_app_stop_reason_t reason)
 {
     if((unsigned)reason > (unsigned)HK_APP_STOP_SHUTDOWN)
@@ -268,8 +97,6 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
     runtime->stage = HK_APP_STAGE_INVALIDATING;
     runtime->context_valid = 0U;
     runtime->teardown_deadline_valid = 0U;
-    runtime->owner = HK_OWNER_NONE;
-    runtime->context.owner = HK_OWNER_NONE;
     memset(entry->state_storage, 0, runtime->descriptor->limits.state_bytes);
     if(runtime->context_generation == UINT32_MAX ||
        runtime->active_epoch == UINT32_MAX)
@@ -282,10 +109,6 @@ static void invalidate_instance(hk_app_runtime_t *runtime)
         runtime->active_epoch++;
     }
     runtime->descriptor = NULL;
-    memset(runtime->resolved_capabilities, 0,
-           sizeof(runtime->resolved_capabilities));
-    memset(runtime->resolved_available, 0,
-           sizeof(runtime->resolved_available));
     memset(runtime->invalidations, 0, sizeof(runtime->invalidations));
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
@@ -369,29 +192,14 @@ static hk_result_t teardown(
     result = hk_external_link_retire(&runtime->external_link, runtime->teardown_deadline);
     retain_error(runtime, result);
 
-    if(!hk_owner_is_zero(runtime->owner))
-    {
-        runtime->state = HK_APP_RUNTIME_STOPPING;
-        runtime->stage = HK_APP_STAGE_OWNER_CLEANUP;
-        result = runtime->ops.owner_cleanup(
-            runtime->ops.user,
-            runtime->owner,
-            runtime->teardown_deadline);
-        retain_error(runtime, result);
-    }
+    runtime->state = HK_APP_RUNTIME_STOPPING;
+    runtime->stage = HK_APP_STAGE_SCOPE_CLEANUP;
+    result = runtime->ops.cleanup(runtime->ops.user, runtime->teardown_deadline);
+    retain_error(runtime, result);
 
     result = runtime->first_error;
     invalidate_instance(runtime);
     return result;
-}
-
-static hk_result_t fail_without_teardown(
-    hk_app_runtime_t *runtime,
-    hk_result_t error)
-{
-    retain_error(runtime, error);
-    invalidate_instance(runtime);
-    return runtime->first_error;
 }
 
 static hk_result_t terminate_running(
@@ -430,10 +238,7 @@ hk_result_t hk_app_runtime_init(
     const hk_app_runtime_ops_t *ops,
     uint64_t teardown_budget_us)
 {
-    if(!runtime || !ops || !ops->resolve_capability ||
-       !ops->resolve_service || !ops->owner_open ||
-       !ops->acquire_capability || !ops->acquire_service ||
-       !ops->owner_cleanup ||
+    if(!runtime || !ops || !ops->prepare || !ops->cleanup ||
        !ops->deadline_after_us || teardown_budget_us == 0U ||
        teardown_budget_us == UINT64_MAX)
         return HK_ERR_INVALID_ARGUMENT;
@@ -452,7 +257,6 @@ hk_result_t hk_app_runtime_launch(
     const hk_app_t *descriptor)
 {
     const hk_app_v2_entry_t *entry;
-    hk_owner_t owner = HK_OWNER_NONE;
     hk_result_t result;
 
     if(!runtime || runtime->retired || runtime->state == HK_APP_RUNTIME_FAULTED)
@@ -475,8 +279,6 @@ hk_result_t hk_app_runtime_launch(
     runtime->context.app_id = descriptor->id;
     runtime->context.time = runtime->ops.time;
     runtime->context.input = runtime->ops.input;
-    runtime->owner = HK_OWNER_NONE;
-    runtime->context.owner = HK_OWNER_NONE;
     runtime->context.generation = runtime->context_generation;
     runtime->context_valid = 1U;
     runtime->teardown_deadline = HK_DEADLINE_IMMEDIATE;
@@ -484,28 +286,9 @@ hk_result_t hk_app_runtime_launch(
     entry = descriptor->entry;
     memset(entry->state_storage, 0, descriptor->limits.state_bytes);
 
-    result = resolve_declared_surface(runtime);
-    if(result != HK_OK)
-        return fail_without_teardown(runtime, result);
-
     runtime->stage = HK_APP_STAGE_STARTING;
     runtime->state = HK_APP_RUNTIME_STARTING;
-    result = runtime->ops.owner_open(runtime->ops.user, descriptor, &owner);
-    runtime->owner = owner;
-    runtime->context.owner = owner;
-    if(result != HK_OK)
-    {
-        retain_error(runtime, result);
-        if(hk_owner_is_zero(owner))
-            return fail_without_teardown(runtime, result);
-        return teardown(runtime, HK_APP_STOP_FORCED);
-    }
-    if(hk_owner_is_zero(owner))
-    {
-        retain_error(runtime, HK_ERR_INTERNAL);
-        return fail_without_teardown(runtime, HK_ERR_INTERNAL);
-    }
-    result = inject_declared_surface(runtime);
+    result = callback_result(runtime->ops.prepare(runtime->ops.user, descriptor));
     if(result != HK_OK)
     {
         retain_error(runtime, result);
@@ -636,47 +419,18 @@ static hk_result_t validate_callback_context(
 hk_result_t hk_app_context_identity(
     const hk_app_context_t *ctx,
     const char **app_id,
-    uint32_t *generation,
-    hk_owner_t *owner)
+    uint32_t *generation)
 {
     hk_result_t result;
 
-    if(!app_id || !generation || !owner)
+    if(!app_id || !generation)
         return HK_ERR_INVALID_ARGUMENT;
     result = validate_callback_context(ctx, NULL);
     if(result != HK_OK)
         return result;
     *app_id = ctx->app_id;
     *generation = ctx->generation;
-    *owner = ctx->owner;
     return HK_OK;
-}
-
-hk_result_t hk_app_context_capability_status(
-    const hk_app_context_t *ctx,
-    hk_capability_id_t id,
-    uint16_t instance,
-    uint8_t *available,
-    const char **fallback)
-{
-    hk_result_t result;
-    uint16_t index;
-
-    if(id == 0U || !available || !fallback)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = validate_callback_context(ctx, NULL);
-    if(result != HK_OK)
-        return result;
-    for(index = 0U; index < ctx->capability_count; index++)
-    {
-        const hk_app_capability_grant_t *grant = &ctx->capabilities[index];
-        if(grant->id != id || grant->instance != instance)
-            continue;
-        *available = grant->available;
-        *fallback = grant->fallback;
-        return HK_OK;
-    }
-    return HK_ERR_NOT_DECLARED;
 }
 
 hk_result_t hk_app_context_time(
@@ -794,36 +548,6 @@ hk_result_t hk_app_context_lights(
     return HK_ERR_BUSY;
 }
 
-
-hk_result_t hk_app_context_service(
-    const hk_app_context_t *ctx,
-    const char *id,
-    hk_app_service_t *handle)
-{
-    hk_result_t result;
-    uint16_t index;
-
-    if(!id || !handle)
-        return HK_ERR_INVALID_ARGUMENT;
-    memset(handle, 0, sizeof(*handle));
-    result = validate_callback_context(ctx, NULL);
-    if(result != HK_OK)
-        return result;
-    for(index = 0U; index < ctx->service_count; index++)
-    {
-        const hk_app_service_t *service = &ctx->services[index];
-        if(strcmp(service->id, id) != 0)
-            continue;
-        if(hk_owner_is_zero(service->owner))
-            return HK_ERR_INVALID_STATE;
-        if(!owner_equal(service->owner, ctx->owner) ||
-           service->context_generation != ctx->generation)
-            return HK_ERR_STALE_HANDLE;
-        *handle = *service;
-        return HK_OK;
-    }
-    return HK_ERR_NOT_DECLARED;
-}
 
 hk_result_t hk_app_context_state(
     const hk_app_context_t *ctx,

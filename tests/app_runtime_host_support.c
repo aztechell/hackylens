@@ -7,276 +7,26 @@
 #include <hackylens/capability/input.h>
 #include <hackylens/capability/time.h>
 
-#include "capability_core_binding.h"
 #include "capability_fake_display.h"
 #include "capability_fake_external_link.h"
 #include "input_normative_backend.h"
 #include "time_normative_backend.h"
 #include "lights_normative_backend.h"
 
-static hk_app_runtime_host_t *s_host;
-
-static const char *const s_lights_features[] = {
-    "uart",
-    "i2c-controller",
-    "i2c-target",
-};
-static const hk_app_capability_request_t s_capabilities[] = {
-    {
-        "hackylens.cap.external-link", 0U, "0.1.0", "0.2.0",
-        s_lights_features, 3U, NULL, 0U,
-    },
-};
-static const hk_app_service_request_t s_services[] = {
-    {"hackylens.service.fixture", "minimal-fixture.service"},
-};
-
-hk_result_t capability_owner_runtime_acquire(
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_capability_id_t expected_type,
-    hk_lease_t *lease)
+static hk_result_t prepare(void *user, const hk_app_t *app)
 {
-    if(!s_host)
-        return HK_ERR_INVALID_STATE;
-    return hk_capability_core_acquire(
-        &s_host->core, owner, request, expected_type, 0U, lease);
-}
-
-hk_result_t capability_owner_runtime_release(
-    hk_owner_t owner,
-    hk_capability_id_t expected_type,
-    hk_deadline_t deadline,
-    hk_lease_t *lease)
-{
-    if(!s_host)
-        return HK_ERR_INVALID_STATE;
-    return hk_capability_core_release(
-        &s_host->core, owner, expected_type, 0U, deadline, lease);
-}
-
-hk_result_t capability_owner_runtime_validate(
-    hk_owner_t owner,
-    const hk_lease_t *lease,
-    hk_capability_id_t expected_type,
-    void **provider_context)
-{
-    if(!s_host)
-        return HK_ERR_INVALID_STATE;
-    return hk_capability_core_validate_lease(
-        &s_host->core, owner, lease, expected_type, 0U, provider_context);
-}
-
-hk_result_t capability_owner_runtime_quarantine(
-    hk_owner_t owner,
-    const hk_lease_t *lease,
-    hk_capability_id_t expected_type)
-{
-    if(!s_host)
-        return HK_ERR_INVALID_STATE;
-    return hk_capability_core_quarantine_lease(
-        &s_host->core, owner, lease, expected_type, 0U);
-}
-
-static hk_result_t parse_version(const char *text, hk_version_t *version)
-{
-    uint32_t components[3] = {0U, 0U, 0U};
-
-    if(!text || !version)
-        return HK_ERR_INVALID_ARGUMENT;
-    for(uint32_t index = 0U; index < 3U; index++)
-    {
-        uint32_t digits = 0U;
-
-        while(*text >= '0' && *text <= '9')
-        {
-            components[index] = components[index] * 10U +
-                                (uint32_t)(*text - '0');
-            if(components[index] > UINT16_MAX)
-                return HK_ERR_VERSION_INCOMPATIBLE;
-            text++;
-            digits++;
-        }
-        if(digits == 0U || (index < 2U && *text++ != '.') ||
-           (index == 2U && *text != '\0'))
-            return HK_ERR_VERSION_INCOMPATIBLE;
-    }
-    *version = (hk_version_t){
-        (uint16_t)components[0],
-        (uint16_t)components[1],
-        (uint16_t)components[2],
-        0U,
-    };
-    return HK_OK;
-}
-
-static hk_capability_id_t capability_id(const char *id)
-{
-    if(id && strcmp(id, "hackylens.cap.time") == 0)
-        return HK_CAPABILITY_ID_TIME;
-    if(id && strcmp(id, "hackylens.cap.external-link") == 0)
-        return HK_CAPABILITY_ID_EXTERNAL_LINK;
-    if(id && strcmp(id, "hackylens.cap.display") == 0)
-        return HK_CAPABILITY_ID_DISPLAY;
-    return 0U;
-}
-
-static hk_result_t feature_mask(
-    hk_capability_id_t id,
-    const char *const *features,
-    uint16_t feature_count,
-    uint64_t *mask)
-{
-    *mask = 0U;
-    for(uint16_t index = 0U; index < feature_count; index++)
-    {
-        const char *feature = features[index];
-
-        if(id == HK_CAPABILITY_ID_TIME &&
-           strcmp(feature, "monotonic-us") == 0)
-            *mask |= HK_TIME_FEATURE_MONOTONIC_US;
-        else if(id == HK_CAPABILITY_ID_TIME &&
-                strcmp(feature, "sleep-until") == 0)
-            *mask |= HK_TIME_FEATURE_SLEEP_UNTIL;
-        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
-                strcmp(feature, "uart") == 0)
-            *mask |= HK_EXTERNAL_LINK_FEATURE_UART;
-        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
-                strcmp(feature, "i2c-controller") == 0)
-            *mask |= HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
-        else if(id == HK_CAPABILITY_ID_EXTERNAL_LINK &&
-                strcmp(feature, "i2c-target") == 0)
-            *mask |= HK_EXTERNAL_LINK_FEATURE_I2C_TARGET;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "base-plane") == 0)
-            *mask |= HK_DISPLAY_FEATURE_BASE_PLANE;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "overlay-plane") == 0)
-            *mask |= HK_DISPLAY_FEATURE_OVERLAY_PLANE;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "batch") == 0)
-            *mask |= HK_DISPLAY_FEATURE_BATCH;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "dirty-regions") == 0)
-            *mask |= HK_DISPLAY_FEATURE_DIRTY_REGIONS;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "rgb565") == 0)
-            *mask |= HK_DISPLAY_FEATURE_RGB565;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "borrowed-surface") == 0)
-            *mask |= HK_DISPLAY_FEATURE_BORROWED_SURFACE;
-        else if(id == HK_CAPABILITY_ID_DISPLAY &&
-                strcmp(feature, "text") == 0)
-            *mask |= HK_DISPLAY_FEATURE_TEXT;
-        else
-            return HK_ERR_FEATURE_UNAVAILABLE;
-    }
-    return HK_OK;
-}
-
-static hk_result_t resolve_capability(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_capability_request_t *declaration,
-    hk_capability_request_t *request)
-{
-    hk_capability_id_t id = capability_id(declaration->id);
-    hk_result_t result;
-
-    (void)user;
+    hk_app_runtime_host_t *host = user;
     (void)app;
-    memset(request, 0, sizeof(*request));
-    request->struct_size = sizeof(*request);
-    request->struct_version = HK_CAPABILITY_REQUEST_VERSION;
-    request->id = id != 0U ? id : HK_CAPABILITY_ID_TIME;
-    request->instance = declaration->instance;
-    result = parse_version(declaration->minimum, &request->minimum);
-    if(result != HK_OK)
-        return result;
-    result = parse_version(
-        declaration->maximum_exclusive, &request->maximum_exclusive);
-    if(result != HK_OK)
-        return result;
-    if(id == 0U)
-        return HK_ERR_NOT_DECLARED;
-    return feature_mask(
-        id, declaration->features, declaration->feature_count,
-        &request->required_features);
+    host->prepare_calls++;
+    return host->fail_prepare_result;
 }
 
-static hk_result_t resolve_service(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)app;
-    if(!declaration || !declaration->id ||
-       strcmp(declaration->id, "hackylens.service.fixture") != 0)
-        return HK_ERR_NOT_DECLARED;
-    return HK_OK;
-}
-
-static hk_result_t owner_open(
-    void *user,
-    const hk_app_t *app,
-    hk_owner_t *owner)
+static hk_result_t cleanup(void *user, hk_deadline_t deadline)
 {
     hk_app_runtime_host_t *host = user;
-
-    (void)app;
-    host->owner_open_calls++;
-    return hk_capability_core_owner_open(
-        &host->core, host->grants, 1U, owner);
-}
-
-static hk_result_t acquire_capability(
-    void *user,
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_lease_t *lease)
-{
-    hk_app_runtime_host_t *host = user;
-
-    *lease = HK_LEASE_NONE;
-    if(host->fail_acquire_id == request->id &&
-       host->fail_acquire_result != HK_OK)
-        return host->fail_acquire_result;
-    if(request->id == HK_CAPABILITY_ID_EXTERNAL_LINK)
-        return hk_capability_core_acquire(&host->core, owner, request,
-            HK_CAPABILITY_ID_EXTERNAL_LINK, 0U, lease);
-    return HK_ERR_NOT_DECLARED;
-}
-
-static hk_result_t acquire_service(
-    void *user,
-    hk_owner_t owner,
-    const hk_app_service_request_t *declaration)
-{
-    hk_app_runtime_host_t *host = user;
-
-    (void)owner;
-    (void)declaration;
-    if(host->fail_service_result != HK_OK)
-        return host->fail_service_result;
-    return HK_OK;
-}
-
-static hk_result_t owner_cleanup(
-    void *user,
-    hk_owner_t owner,
-    hk_deadline_t deadline)
-{
-    hk_app_runtime_host_t *host = user;
-    hk_result_t result;
-
-    host->owner_cleanup_calls++;
-    host->owner_deadline = deadline;
-    result = hk_capability_core_owner_close(
-        &host->core, owner, 0U, deadline);
-    if(host->fail_owner_cleanup_result != HK_OK)
-        return host->fail_owner_cleanup_result;
-    return result;
+    host->cleanup_calls++;
+    host->cleanup_deadline = deadline;
+    return host->fail_cleanup_result;
 }
 
 static hk_result_t deadline_after_us(
@@ -291,25 +41,6 @@ static hk_result_t deadline_after_us(
         return HK_ERR_LIMIT;
     deadline->at_us = now_us + duration_us;
     return HK_OK;
-}
-
-static hk_result_t lights_provider_acquire(void *context, hk_owner_t owner)
-{
-    (void)context; (void)owner;
-    return HK_OK;
-}
-
-static hk_result_t lights_provider_cleanup(
-    void *context,
-    hk_owner_t owner,
-    hk_deadline_t deadline)
-{
-    (void)context;
-    (void)owner;
-    (void)deadline;
-    if(!s_host)
-        return HK_ERR_INVALID_STATE;
-    return s_host->fail_provider_cleanup_result;
 }
 
 static hk_result_t host_now_us(void *user, uint64_t *now_us)
@@ -457,7 +188,6 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     if(!host)
         return HK_ERR_INVALID_ARGUMENT;
     memset(host, 0, sizeof(*host));
-    s_host = host;
     now_us = time_normative_backend_reset();
     input_normative_backend_reset();
     hk_fake_display_reset(HK_DISPLAY_PLANE_ALL);
@@ -468,21 +198,6 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
     if(result != HK_OK && result != HK_PENDING)
         return result;
     host->last_input_us = now_us;
-    host->inventory[0] = (hk_capability_info_t){
-        sizeof(hk_capability_info_t), HK_CAPABILITY_INFO_VERSION,
-        HK_CAPABILITY_ID_EXTERNAL_LINK, {0U, 1U, 0U, 0U}, HK_EXTERNAL_LINK_FEATURES_0_1,
-        HK_CAPABILITY_FLAG_SHARED, 0U, HK_CAPABILITY_CORE_ANY,
-        NULL, 0U, 0U,
-    };
-    host->lights_provider = (hk_capability_provider_t){.acquire = lights_provider_acquire, .max_leases = 16U};
-    host->lights_provider.cleanup = lights_provider_cleanup;
-    host->providers[0] = &host->lights_provider;
-    host->grants[0].request = (hk_capability_request_t){sizeof(hk_capability_request_t), HK_CAPABILITY_REQUEST_VERSION, HK_CAPABILITY_ID_EXTERNAL_LINK, {0U,1U,0U,0U}, {0U,2U,0U,0U}, 0U,0U,0U};
-    host->grants[0].request.required_features = HK_EXTERNAL_LINK_FEATURES_0_1;
-    result = hk_capability_core_init(
-        &host->core, host->inventory, host->providers, 1U);
-    if(result != HK_OK)
-        return result;
     runtime_ops = (hk_app_runtime_ops_t){
         .user = host,
         .time = hk_time_service(),
@@ -490,12 +205,8 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
         .lights = hk_lights_service(),
         .display = hk_display_service(),
         .external_link = hk_external_link_service(),
-        .resolve_capability = resolve_capability,
-        .resolve_service = resolve_service,
-        .owner_open = owner_open,
-        .acquire_capability = acquire_capability,
-        .acquire_service = acquire_service,
-        .owner_cleanup = owner_cleanup,
+        .prepare = prepare,
+        .cleanup = cleanup,
         .deadline_after_us = deadline_after_us,
     };
     switch_ops = (hk_app_switch_ops_t){
@@ -572,54 +283,24 @@ hk_result_t hk_app_runtime_host_push_input(
     return hk_app_runtime_host_set_now_us(host, host->last_input_us);
 }
 
-void hk_app_runtime_host_fail_acquire(
-    hk_app_runtime_host_t *host,
-    hk_capability_id_t id,
-    hk_result_t result)
+void hk_app_runtime_host_fail_prepare(hk_app_runtime_host_t *host, hk_result_t result)
 {
-    if(!host)
-        return;
-    host->fail_acquire_id = id;
-    host->fail_acquire_result = result;
+    if(host) host->fail_prepare_result = result;
 }
 
-void hk_app_runtime_host_fail_service(
-    hk_app_runtime_host_t *host, hk_result_t result)
+void hk_app_runtime_host_fail_cleanup(hk_app_runtime_host_t *host, hk_result_t result)
 {
-    if(host)
-        host->fail_service_result = result;
+    if(host) host->fail_cleanup_result = result;
 }
 
-void hk_app_runtime_host_fail_owner_cleanup(
-    hk_app_runtime_host_t *host, hk_result_t result)
+uint32_t hk_app_runtime_host_cleanup_calls(const hk_app_runtime_host_t *host)
 {
-    if(host)
-        host->fail_owner_cleanup_result = result;
+    return host ? host->cleanup_calls : 0U;
 }
 
-void hk_app_runtime_host_fail_provider_cleanup(
-    hk_app_runtime_host_t *host, hk_result_t result)
+hk_deadline_t hk_app_runtime_host_cleanup_deadline(const hk_app_runtime_host_t *host)
 {
-    if(host)
-        host->fail_provider_cleanup_result = result;
-}
-
-uint32_t hk_app_runtime_host_owner_cleanup_calls(
-    const hk_app_runtime_host_t *host)
-{
-    return host ? host->owner_cleanup_calls : 0U;
-}
-
-hk_deadline_t hk_app_runtime_host_owner_deadline(
-    const hk_app_runtime_host_t *host)
-{
-    return host ? host->owner_deadline : (hk_deadline_t){0U};
-}
-
-uint8_t hk_app_runtime_host_lights_quarantined(
-    const hk_app_runtime_host_t *host)
-{
-    return (uint8_t)(host && host->core.provider_state[0].quarantined);
+    return host ? host->cleanup_deadline : HK_DEADLINE_IMMEDIATE;
 }
 
 void hk_app_runtime_host_fill_app(
@@ -644,10 +325,4 @@ void hk_app_runtime_host_fill_app(
     app->limits.tick_interval_us = 500U;
     app->limits.tick_budget_us = 100U;
     app->limits.render_budget_us = 100U;
-    app->capabilities = s_capabilities;
-    app->capability_count =
-        (uint16_t)(sizeof(s_capabilities) / sizeof(s_capabilities[0]));
-    app->services = s_services;
-    app->service_count =
-        (uint16_t)(sizeof(s_services) / sizeof(s_services[0]));
 }

@@ -16,7 +16,6 @@
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_binary.h"
 #include "../../core/hk_camera_sizes.h"
-#include "../../core/hk_capability_client.h"
 #include "../../core/hk_events.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"

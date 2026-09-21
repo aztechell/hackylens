@@ -56,13 +56,12 @@ class AppCompositionTests(unittest.TestCase):
 
     def test_legacy_build_constraints_are_manifest_services_only(self) -> None:
         requirements = build_firmware.load_app_requirements()
-        self.assertEqual(requirements["camera"], {"camera", "sd-card"})
-        self.assertEqual(requirements["micropython"], {"internal-flash"})
+        self.assertTrue({"camera", "sd-card"} <= requirements["camera"])
+        self.assertTrue({"internal-flash", "lights", "external-link"} <= requirements["micropython"])
         self.assertFalse((ROOT / "firmware" / "app_requirements.toml").exists())
         for app in app_composition.load_model()["apps"]:
-            for service in app["services"]:
-                if service["id"].startswith(app_composition.FIRMWARE_SERVICE_PREFIX):
-                    self.assertNotIn("lifecycle", app)
+            self.assertNotIn("capabilities", app)
+            self.assertNotIn("services", app)
 
     def test_committed_generated_copies_are_removed(self) -> None:
         for path in app_composition.committed_generated_copies():

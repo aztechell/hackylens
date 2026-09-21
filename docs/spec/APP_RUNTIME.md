@@ -12,8 +12,7 @@ compatibility-capability-api: >=0.1.0,<0.2.0
 
 This is the current runtime contract, not the suspended Phase 3 execution plan.
 [Simplification](../SIMPLIFICATION_MASTERPLAN.md) controls migration order and
-may replace the broker/context machinery described below while preserving its
-required lifecycle and resource-safety behavior. Update this contract with the
+preserves the lifecycle and resource-safety behavior described below. Update this contract with the
 corresponding implementation change; see the [change process](README.md).
 
 ## S8 typed-service cleanup
@@ -30,10 +29,9 @@ storage. UI borrows that session by pointer; it never reconstructs a handle per
 frame. BASE and OVERLAY ownership and real frame/transaction generations remain.
 External Link now uses a runtime-owned connector session via
 `hk_app_context_external_link(ctx, mode_features, &session)`. Its retirement
-shares the original teardown deadline with Lights and Display. The generic
-owner/grant machinery below is transitional and has no hardware consumers. Service retirement must complete its logical
+shares the original teardown deadline with Lights and Display. Service retirement must complete its logical
 invalidation before app storage is reused; a failed safe-off quarantines the
-affected channel. It does not bypass the remaining broker cleanup.
+affected resource. No generic broker owner or grant cleanup remains.
 
 ## Purpose and scope
 
@@ -54,19 +52,17 @@ The lifecycle has `start`, `event`, optional `render`, and `stop`:
 
 ```text
 validate immutable descriptor
--> resolve declared capability/service availability
--> capability/service injection
+-> initialize context and production service scope
 -> start(ctx)
 -> event(ctx, event) / render(ctx, surface)
 -> stop(ctx)
 ```
 
-`start` absorbs the former probe/prepare work: identity, declared availability,
-injected handles, and app-state initialization all happen there after the
-runtime has created the owner and injected exact grants. There is no public
+`start` absorbs the former probe/prepare work and initializes app state after
+runtime has established the context and production service scope. There is no public
 `probe`, `prepare`, `tick`, or app `cleanup` callback. Timer due times arrive as
 `HK_APP_EVENT_TIMER`. App-owned resource release belongs in `stop`; runtime
-owner-wide capability/service cleanup always follows `stop`.
+scoped service cleanup always follows `stop`.
 
 `render` remains a separate callback because the runtime, not the app, owns the
 Display transaction: begin, apply dirty regions, present or abort. PONG dirty
@@ -85,25 +81,14 @@ read through `hk_app_context_teardown_deadline`. Internal stop reasons stay in
 runtime bookkeeping and the Runtime Close event; they are not stop-callback
 arguments.
 
-Before `start`, the runtime resolves every generated manifest declaration
-against the composed inventory. This is a resource-free preflight: it records
-the exact capability ID/instance request and whether an optional declaration
-uses its named fallback, but creates neither an app owner nor a lease. A missing
-required capability, incompatible version, unavailable required feature, or
-unresolved service excludes the app before any lifecycle callback. An optional
-capability is either recorded available or recorded absent with exactly its
-manifest fallback; there is no hardware-derived fallback. This availability is
-stable for the launch. If acquisition of a capability recorded available later
-fails for any reason, launch fails, `start` is not called, and runtime performs
-owner-wide unwind. Runtime MUST NOT silently change it to fallback after
-`start` has observed it.
-
-After successful preflight the runtime creates the one app owner and acquires
-the preflighted grants. Required and available optional handles plus app-scoped
-service handles are injected before `start`. No callback can request an
-undeclared grant; `HK_ERR_NOT_DECLARED` is returned before provider access.
-`start` may initialize app state and use injected handles; it MUST NOT leave an
-effect that `stop` plus owner-wide cleanup cannot release.
+Required-service availability is checked at build time. Runtime performs no
+inventory discovery, version negotiation or generic grant injection. Time and
+Input use immutable bindings. Lights, Display and External Link accessors open
+stable sessions in private runtime storage; providers enforce actual conflicts.
+Production integration opens and binds BASE before `start`, including apps
+that draw through existing portable UI services during startup. If preparation
+fails after opening a resource, common teardown retires that partial scope.
+`start` must not leave an effect that `stop` plus scoped retirement cannot release.
 
 `event` and `render` are legal only in `RUNNING`. `hk_app_context_request_render`
 and `hk_app_context_request_close` are also legal only in `RUNNING` during a
@@ -147,7 +132,7 @@ A terminal `event` or `render` callback failure uses that same running instance
 termination path. Runtime first retains the original callback error, then
 delivers exactly one Runtime Close event with `HK_APP_STOP_CALLBACK_FAILED`, and
 only then enters teardown. Failure of this Runtime Close callback cannot replace
-the original callback diagnostic and cannot skip stop or owner-wide cleanup.
+the original callback diagnostic and cannot skip stop or scoped service cleanup.
 `hk_app_context_request_close` is legal only during a `RUNNING` callback; after
 that callback returns `HK_OK`, runtime terminates with
 `HK_APP_STOP_COMPLETED`.
@@ -212,12 +197,6 @@ active instance and the existing controller falls back to MENU through that same
 close/open boundary. Portable v2 apps MUST NOT call menu or screen runtime
 directly; they request close through `hk_app_context_request_close`.
 
-Legacy descriptors use a private adapter at this switch boundary. The adapter
-preserves the existing input snapshot, screen, enter/exit, tick, SD, debug, and
-secondary-screen behavior, while owner creation and owner-wide cleanup use the
-same production capability-owner runtime. It is not a public SDK alternative
-and it does not bypass manifest composition.
-
 ## Stop reasons
 
 The first teardown cause is retained as the stop reason for the instance:
@@ -238,7 +217,7 @@ replace the first retained cause. These reasons remain internal runtime and
 Runtime Close diagnostics; `stop(ctx)` does not receive them.
 `stop` is required to be idempotent even though the runtime invokes it at most
 once for one teardown. It may quiesce app logic and release app-owned extra
-leases but MUST NOT invalidate the context or perform owner-wide cleanup.
+sessions but MUST NOT invalidate the context or skip runtime retirement.
 
 ## State machine
 
@@ -250,34 +229,28 @@ REUSABLE
   -> STARTING
   -> RUNNING
   -> STOPPING
-  -> OWNER_CLEANUP
+  -> SCOPE_CLEANUP
   -> INVALIDATING
   -> REUSABLE
 ```
 
-`STARTING` covers owner creation, grant injection, and the `start` callback.
-`STOPPING` is the `stop` callback. `OWNER_CLEANUP` is runtime owner-wide
-cleanup. Generation exhaustion leaves the slot `FAULTED`/`INVALIDATING` until
-reboot. There is no `PROBING`, `PREPARING`, or `APP_CLEANUP` stage.
+`STARTING` covers scope preparation and the `start` callback. `STOPPING` is the
+`stop` callback. `SCOPE_CLEANUP` retires runtime-owned service sessions and
+production fallback resources. Generation exhaustion leaves the slot faulted
+until reboot; generations do not wrap.
 
-The generated descriptor declares the manifest-derived private state size and
-the fixed Feature App ABI alignment. A lifecycle-v2 entry binds app-owned
-fixed-capacity storage. Before `STARTING`, runtime checks its capacity and
+The app entry binds its fixed-capacity state storage and size. The descriptor
+uses the fixed Feature App ABI alignment. Before `STARTING`, runtime checks its capacity and
 address against those immutable descriptor values, clears the declared byte
 range, and does not return that storage to `REUSABLE` until invalidation is
 complete. App state is never allocated from a heap and is not shared between
 generations.
 
-Descriptor identity, typed entry, finite limits, capability/service
-requests, menu/autostart metadata, and help/debug text are immutable generated
+Descriptor identity, typed entry, finite limits,
+menu/autostart metadata, and help/debug text are immutable generated
 data. The runtime may retain a descriptor pointer for one instance but MUST NOT
 modify it, construct a replacement, register another descriptor at boot, or
 derive identity from registry/menu position.
-
-The generated capability and service counts must fit the public context's fixed
-capacities of 16 capability grants and 16 service handles. Both manifest
-validation and runtime descriptor binding reject overflow; truncation and heap
-growth are forbidden.
 
 Only `RUNNING` accepts ordinary dispatch. Once teardown is requested, no new
 `event` or `render` callback may begin. A callback already on the synchronous
@@ -288,20 +261,18 @@ advances to `STOPPING`.
 
 Every terminal failure follows the deepest lifecycle stage reached:
 
-| Failure point | App `stop` | Owner-wide cleanup |
+| Failure point | App `stop` | Scoped cleanup |
 |---|---:|---:|
-| descriptor/state bind | no | no owner, otherwise yes |
-| declared-surface preflight | no | no owner exists yet |
-| owner open failed with a zero owner | no | no |
-| injection after a live owner | no | yes |
-| `start` entered, including `start` failure | exactly once | yes |
-| running callback, close request, or exit | exactly once | yes |
+| descriptor/state validation before preparation | no | no live scope |
+| partial production scope preparation | no | yes |
+| `start` entered, including failure | exactly once | yes |
+| running callback, close request or exit | exactly once | yes |
 
 A callback error is retained for diagnostics but does not skip a later unwind
 stage. An error from `stop`, or an already-expired teardown deadline, does not
-skip runtime owner-wide cleanup. Provider quarantine stays local to the failed
+skip runtime scoped service cleanup. Provider quarantine stays local to the failed
 provider and MUST NOT move the whole runtime into `FAULTED`. The runtime
-invokes `stop` at most once, while the context and its owner-scoped handles are
+invokes `stop` at most once, while the context and its app-scoped handles are
 still valid.
 
 ## Teardown deadline
@@ -334,16 +305,16 @@ finite deadline calculation fails, teardown records that diagnostic, stores
 `HK_DEADLINE_IMMEDIATE` as the single already-expired deadline, and continues
 the full sequence.
 
-That one deadline covers `stop(ctx)` and runtime owner-wide capability/service
-cleanup together. It MUST NOT be refreshed between stages, leases, services,
+That one deadline covers `stop(ctx)` and runtime scoped service
+cleanup together. It MUST NOT be refreshed between stages, sessions, services,
 providers, retries, affinity dispatches, or cleanup calls. The runtime passes
-the same stored absolute value to every release and owner-close operation even
+the same stored absolute value to every close and retire operation even
 after it expires.
 
-If `stop` consumes or exceeds the deadline, runtime owner-wide cleanup MUST
+If `stop` consumes or exceeds the deadline, runtime scoped service cleanup MUST
 still be attempted with the same already-expired absolute deadline. A provider
-that cannot reach its bounded safe state follows Phase 2 logical-close and
-quarantine semantics. Timeout or failure cannot skip handle and token
+that cannot reach its bounded safe state performs logical retirement and
+quarantines the affected resource. Timeout or failure cannot skip handle and token
 invalidation, context invalidation, deterministic state clearing, or slot
 retirement/reuse according to the generation rules.
 
@@ -352,17 +323,17 @@ retirement/reuse according to the generation rules.
 Teardown order is fixed and MUST NOT be reordered:
 
 1. call idempotent `stop(ctx)` when `start` was entered;
-2. perform bounded runtime owner-wide capability and service cleanup with the
+2. perform bounded runtime scoped service cleanup with the
    same stored deadline;
-3. quarantine every provider whose owner cleanup cannot reach a safe state,
+3. quarantine every provider whose retirement cannot reach a safe state,
    following the Capability API rules;
-4. invalidate all owner-scoped handles and deferred-work tokens;
+4. invalidate all app-scoped handles and deferred-work tokens;
 5. invalidate the context generation;
 6. make the cleared app state slot reusable.
 
 Provider cleanup is non-cancellable and receives the single stored teardown
-deadline defined above. Failed provider cleanup logically closes its leases and
-quarantines the provider before any new owner can acquire it. State reuse MUST
+deadline defined above. Failed provider cleanup invalidates its sessions and
+quarantines the affected resource before another session can open it. State reuse MUST
 NOT occur early merely because `stop` returned an error or exceeded the
 deadline.
 
@@ -374,32 +345,16 @@ context for later use, mutate runtime fields, or derive provider, service,
 driver, HAL, route, peripheral, board, or platform objects from it.
 
 The public context carries ABI size/version, immutable app identity, context
-generation, the one owner after successful injection, and fixed-capacity inline
-tables for exactly the generated capability and app-scoped service grants. It
-contains no runtime, provider, service implementation, driver, HAL, board, or
-platform pointer. From `start` through `stop`, acquired handles carry that same
-owner and context generation. Runtime owner-wide cleanup follows `stop`; only
-then are handles and the context invalidated.
+generation and Time/Input binding pointers. Runtime owns the stable session
+storage privately. Neither copying the callback context nor modifying its
+snapshot can suppress cleanup or authorize a later instance.
 
-The public owner, grant availability, leases, counts, and service handles are a
-read-only callback snapshot. App Runtime keeps the authoritative owner and
-preflight availability in private instance state. Acquisition, owner-wide
-cleanup, and invalidation use only that private authority, never fields read
-back from the public context. Consequently, even accidental corruption through
-a cast cannot suppress owner-wide cleanup or change which grants runtime tries
-to acquire.
-
-Injected capability handles retain the public Capability API ABI. They are
-owner-scoped and generation-checked; the App SDK does not wrap them in parallel
-types without a documented ABI need. A handle not declared by the native app
-manifest is not injected, and acquisition outside generated grants returns
-`HK_ERR_NOT_DECLARED`.
-
-If acquisition fails after any earlier grant was injected, the runtime skips
-`start`, performs owner-wide cleanup for the same owner, invalidates every
-partial handle and the context, and clears the state slot. Owner-table
-exhaustion fails launch deterministically. A copied context or handle from an
-old generation cannot become valid when the runtime slot is reused.
+Typed accessors return existing public service types without parallel SDK
+wrappers. Sessions remain usable during `stop`; new opens are rejected during
+teardown. Runtime retires all sessions before invalidating context and reusing
+state. Time/Input bindings themselves have board lifetime. Session-address
+identity and asynchronous operation generations protect the lifetimes that
+still exist; there are no generic owner/grant/lease tables.
 
 ## Stale callbacks and deferred work
 

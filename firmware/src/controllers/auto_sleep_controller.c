@@ -6,7 +6,6 @@
 #include <hackylens/capability/time.h>
 
 #include "../core/hk_app_registry.h"
-#include "../core/hk_capability_client.h"
 #include "../core/hk_menu.h"
 #include "../core/hk_screen.h"
 #include "../services/settings_service.h"

@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import tomllib
+import service_bindings
 from pathlib import Path
 
 import check_capabilities
@@ -759,9 +760,7 @@ def layout_failures() -> list[str]:
         ROOT / "tests" / "capability_fake_display.c",
         ROOT / "tests" / "display_contract_harness.c",
         ROOT / "tests" / "test_display_contract.py",
-        ROOT / "firmware" / "capability_consumers.toml",
-        ROOT / "platforms" / "k210" / "capabilities.toml",
-        ROOT / "tools" / "gen_capability_inventory.py",
+        ROOT / "tools" / "service_bindings.py",
         ROOT / "tools" / "check_capabilities.py",
         ROOT / "tools" / "architecture_layers.toml",
         ROOT / "tests" / "test_phase2_architecture.py",
@@ -769,7 +768,6 @@ def layout_failures() -> list[str]:
         ROOT / "firmware" / "src" / "services" / "frame_pool.c",
         ROOT / "firmware" / "src" / "services" / "frame_pool.h",
         ROOT / "firmware" / "src" / "services" / "frame_workspace.h",
-        ROOT / "firmware" / "src" / "core" / "hk_capability_client.h",
     ):
         if not required.exists():
             failures.append(
@@ -1010,25 +1008,21 @@ def phase2_source_failures() -> list[str]:
                 failures.append(f"{path_rel}:{number}: {violation}: {include}")
     failures.extend(transitive_layer_failures(graph, policy))
 
-    catalog = tomllib.loads(
-        (ROOT / "platforms" / "k210" / "capabilities.toml").read_text(
-            encoding="utf-8"
-        )
-    )
-    for capability in catalog["capabilities"]:
-        provider_path = ROOT / capability["provider_source"]
+    bindings = service_bindings.BINDINGS
+    for binding in bindings:
+        provider_path = ROOT / binding.provider_source
         source = provider_path.read_text(encoding="utf-8")
         for number in python_gated_provider_lines(source):
             failures.append(
-                f"{capability['provider_source']}:{number}: hardware provider "
+                f"{binding.provider_source}:{number}: hardware provider "
                 "must not be gated by a feature-app macro"
             )
     for path in files:
         source = path.read_text(encoding="utf-8")
         for number in manual_provider_inventory_lines(source):
             failures.append(
-                f"{repository_relative(path)}:{number}: provider inventory must "
-                "be generated, not hand-declared"
+                f"{repository_relative(path)}:{number}: generic provider inventory was removed; "
+                "use typed service bindings"
             )
     for app in sorted((SRC / "apps").rglob("*")):
         if app.is_file() and app.suffix.casefold() in SOURCE_SUFFIXES:
@@ -1222,15 +1216,11 @@ def object_undefined_symbol_failures(build_dir: Path) -> list[str]:
 
 
 def provider_object_hashes(build_dir: Path) -> dict[str, str]:
-    catalog = tomllib.loads(
-        (ROOT / "platforms" / "k210" / "capabilities.toml").read_text(
-            encoding="utf-8"
-        )
-    )
+    bindings = service_bindings.BINDINGS
     objects = list(build_dir.rglob("*.obj"))
     result: dict[str, str] = {}
-    for capability in catalog["capabilities"]:
-        source = canonical_repository_path(capability["provider_source"])
+    for binding in bindings:
+        source = canonical_repository_path(binding.provider_source)
         matches = [
             path for path in objects
             if canonical_repository_path(path).casefold().endswith(

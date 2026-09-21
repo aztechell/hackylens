@@ -1,5 +1,4 @@
 #include "firmware_startup.h"
-#include "capability_owner_runtime.h"
 
 #include <stdio.h>
 
@@ -104,8 +103,6 @@ void firmware_startup(void)
     debug_console_init();
     hk_screen_set_wake_handler(firmware_wake_from_sleep);
     platform_bootstrap_init_clocks();
-    if(capability_owner_runtime_initialize() != HK_OK)
-        printf("[CAPABILITY] owner initialization failed\r\n");
     {
         hk_result_t result = app_runtime_integration_initialize();
         if(result != HK_OK)

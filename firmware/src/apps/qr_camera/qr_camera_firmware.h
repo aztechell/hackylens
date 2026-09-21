@@ -20,7 +20,6 @@
 #include "../../core/hk_app_registry.h"
 #include "../../core/hk_back_exit.h"
 #include "../../core/hk_binary.h"
-#include "../../core/hk_capability_client.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_menu_runtime.h"
 #include "../../core/hk_screen.h"

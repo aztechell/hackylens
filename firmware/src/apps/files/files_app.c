@@ -42,15 +42,14 @@ static hk_result_t files_start(const hk_app_context_t *ctx)
     files_state_t *state = NULL;
     const char *app_id = NULL;
     uint32_t generation = 0U;
-    hk_owner_t owner = HK_OWNER_NONE;
     const hk_input_t *input = NULL;
     const hk_time_t *time = NULL;
     hk_result_t result = files_state_from(ctx, &state);
 
     if(result != HK_OK)
         return result;
-    if(hk_app_context_identity(ctx, &app_id, &generation, &owner) != HK_OK ||
-       !app_id || generation == 0U || hk_owner_is_zero(owner) ||
+    if(hk_app_context_identity(ctx, &app_id, &generation) != HK_OK ||
+       !app_id || generation == 0U ||
        hk_app_context_input(ctx, &input) != HK_OK ||
        hk_app_context_time(ctx, &time) != HK_OK)
         return HK_ERR_INTERNAL;

@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 
-#include "../firmware/src/capabilities/capability_provider.h"
 #include "../firmware/src/capabilities/lights_provider.h"
 
 #define CHECK(condition)                                                     \

@@ -26,24 +26,6 @@ typedef struct hk_app_v2_entry hk_app_v2_entry_t;
 
 typedef struct
 {
-    const char *id;
-    uint16_t instance;
-    const char *minimum;
-    const char *maximum_exclusive;
-    const char *const *features;
-    uint16_t feature_count;
-    const char *fallback;
-    uint8_t optional;
-} hk_app_capability_request_t;
-
-typedef struct
-{
-    const char *id;
-    const char *namespace_name;
-} hk_app_service_request_t;
-
-typedef struct
-{
     uint32_t static_ram_bytes;
     uint32_t stack_bytes;
     uint32_t state_bytes;
@@ -73,10 +55,6 @@ typedef struct hk_app
     const char *help;
     const char *debug_help;
     hk_app_limits_t limits;
-    const hk_app_capability_request_t *capabilities;
-    uint16_t capability_count;
-    const hk_app_service_request_t *services;
-    uint16_t service_count;
     uint8_t (*debug_command)(const char *command);
     void (*draw_icon)(uint16_t x, uint16_t y, uint16_t color, uint16_t bg);
 } hk_app_t;

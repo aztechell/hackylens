@@ -102,7 +102,7 @@ int main(void)
     CHECK(hk_app_switch_open(switcher, &app, NULL) == HK_OK);
     CHECK(hk_app_switch_close(switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     CHECK(hk_app_switch_active(switcher) == NULL);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) >= 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) >= 1U);
     CHECK(sleep_session_active() == 0U);
 
     printf("SLEEP_RUNTIME_OK\n");

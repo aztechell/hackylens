@@ -473,14 +473,7 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             build_firmware.compose_apps(self.cube, set(), {"camera"})
 
         requirements = build_firmware.load_app_requirements()
-        self.assertNotIn("lights", requirements["micropython"])
-        capability_requirements = (
-            build_firmware.capability_inventory.load_app_requirements()
-        )
-        self.assertTrue(any(
-            request.id == "hackylens.cap.lights"
-            for request in build_firmware.capability_inventory.load_consumer_requirements()["consumer:micropython-adapter"].required
-        ))
+        self.assertTrue({"lights", "external-link"} <= requirements["micropython"])
 
     def test_app_binding_still_forbids_board_hal_and_sdk(self) -> None:
         app = "apps/buttons/buttons_view.c"

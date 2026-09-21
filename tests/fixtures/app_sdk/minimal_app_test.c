@@ -35,14 +35,13 @@ static hk_result_t start_returns_pending(const hk_app_context_t *ctx)
 static hk_result_t consume_callback_budget(const hk_app_context_t *ctx)
 {
     const hk_time_t *time;
-    hk_owner_t owner = HK_OWNER_NONE;
     hk_deadline_t wake;
     const char *app_id = NULL;
     uint32_t generation = 0U;
 
     if(hk_app_context_identity(
-           ctx, &app_id, &generation, &owner) != HK_OK ||
-       !app_id || generation == 0U || hk_owner_is_zero(owner) ||
+           ctx, &app_id, &generation) != HK_OK ||
+       !app_id || generation == 0U ||
        hk_app_context_time(ctx, &time) != HK_OK ||
        hk_time_deadline_after_us(time, 101U, &wake) != HK_OK)
         return HK_ERR_INTERNAL;
@@ -123,7 +122,7 @@ int main(void)
     CHECK(hk_app_switch_close(switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     CHECK(hk_app_runtime_state(hk_app_runtime_host_runtime(&host)) ==
           HK_APP_RUNTIME_INACTIVE);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
 
     entry = minimal_app_entry;
     entry.state_storage = s_start_render_storage;
@@ -133,7 +132,7 @@ int main(void)
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) ==
           HK_ERR_INVALID_STATE);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
 
     entry = minimal_app_entry;
     entry.state_storage = s_pending_storage;
@@ -157,11 +156,10 @@ int main(void)
               hk_app_runtime_host_now_us(&host)) == HK_ERR_DEADLINE_EXCEEDED);
 
     CHECK(init_minimal(&host, &app, &minimal_app_entry) == 0);
-    hk_app_runtime_host_fail_acquire(
-        &host, HK_CAPABILITY_ID_EXTERNAL_LINK, HK_ERR_IO);
+    hk_app_runtime_host_fail_prepare(&host, HK_ERR_IO);
     CHECK(hk_app_switch_open(
               hk_app_runtime_host_switch(&host), &app, NULL) == HK_ERR_IO);
-    CHECK(hk_app_runtime_host_owner_cleanup_calls(&host) == 1U);
+    CHECK(hk_app_runtime_host_cleanup_calls(&host) == 1U);
 
     printf("APP_SDK_FIXTURE_OK\n");
     return 0;

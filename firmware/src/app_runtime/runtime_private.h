@@ -4,7 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <hackylens/capability/owner.h>
 #include <hackylens/app/runtime.h>
 
 #include "../core/hk_app.h"
@@ -32,7 +31,7 @@ typedef enum
     HK_APP_STAGE_STARTING,
     HK_APP_STAGE_RUNNING,
     HK_APP_STAGE_STOPPING,
-    HK_APP_STAGE_OWNER_CLEANUP,
+    HK_APP_STAGE_SCOPE_CLEANUP,
     HK_APP_STAGE_INVALIDATING,
 } hk_app_runtime_stage_t;
 
@@ -41,32 +40,12 @@ typedef hk_app_event_t hk_app_runtime_event_t;
 typedef hk_app_surface_t hk_app_runtime_surface_t;
 typedef hk_app_wakeup_token_t hk_app_runtime_token_t;
 
-typedef hk_result_t (*hk_app_runtime_resolve_capability_fn)(
-    void *user,
-    const hk_app_t *descriptor,
-    const hk_app_capability_request_t *declaration,
-    hk_capability_request_t *request);
-typedef hk_result_t (*hk_app_runtime_resolve_service_fn)(
-    void *user,
-    const hk_app_t *descriptor,
-    const hk_app_service_request_t *declaration);
-typedef hk_result_t (*hk_app_runtime_owner_open_fn)(
-    void *user,
-    const hk_app_t *descriptor,
-    hk_owner_t *owner);
-typedef hk_result_t (*hk_app_runtime_acquire_capability_fn)(
-    void *user,
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_lease_t *lease);
-typedef hk_result_t (*hk_app_runtime_acquire_service_fn)(
-    void *user,
-    hk_owner_t owner,
-    const hk_app_service_request_t *declaration);
-typedef hk_result_t (*hk_app_runtime_owner_cleanup_fn)(
-    void *user,
-    hk_owner_t owner,
-    hk_deadline_t deadline);
+/* Prepare binds integration resources before app.start. Cleanup also runs when
+ * prepare fails, using the same deadline as all typed session retirements. */
+typedef hk_result_t (*hk_app_runtime_prepare_fn)(
+    void *user, const hk_app_t *descriptor);
+typedef hk_result_t (*hk_app_runtime_cleanup_fn)(
+    void *user, hk_deadline_t deadline);
 typedef hk_result_t (*hk_app_runtime_deadline_after_fn)(
     void *user,
     uint64_t duration_us,
@@ -80,12 +59,8 @@ typedef struct
     const hk_lights_service_t *lights;
     const hk_display_service_t *display;
     const hk_external_link_service_t *external_link;
-    hk_app_runtime_resolve_capability_fn resolve_capability;
-    hk_app_runtime_resolve_service_fn resolve_service;
-    hk_app_runtime_owner_open_fn owner_open;
-    hk_app_runtime_acquire_capability_fn acquire_capability;
-    hk_app_runtime_acquire_service_fn acquire_service;
-    hk_app_runtime_owner_cleanup_fn owner_cleanup;
+    hk_app_runtime_prepare_fn prepare;
+    hk_app_runtime_cleanup_fn cleanup;
     hk_app_runtime_deadline_after_fn deadline_after_us;
 } hk_app_runtime_ops_t;
 
@@ -93,14 +68,10 @@ typedef struct hk_app_runtime
 {
     hk_app_runtime_ops_t ops;
     const hk_app_t *descriptor;
-    hk_owner_t owner;
     hk_app_context_t context;
     hk_lights_t lights[3];
     hk_display_t display[2];
     hk_external_link_t external_link;
-    hk_capability_request_t
-        resolved_capabilities[HK_APP_CONTEXT_MAX_CAPABILITIES];
-    uint8_t resolved_available[HK_APP_CONTEXT_MAX_CAPABILITIES];
     hk_display_rect_t invalidations[HK_APP_MAX_INVALIDATIONS];
     hk_deadline_t teardown_deadline;
     uint64_t event_sequence;

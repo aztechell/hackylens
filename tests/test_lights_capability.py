@@ -13,7 +13,7 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 import board_contract
-import gen_capability_inventory as generator
+import service_bindings as generator
 
 
 class LightsCapabilityTests(unittest.TestCase):
@@ -148,29 +148,26 @@ class LightsCapabilityTests(unittest.TestCase):
         )
 
     def test_composition_and_all_consumers_share_the_provider(self) -> None:
-        apps = set(generator.load_app_requirements())
         runtime_board = board_contract.load_board("huskylens-sen0305")
         cube = board_contract.load_board("sipeed-maix-cube")
-        runtime = generator.compose(runtime_board, apps, set(), set(), set())
-        conformance = generator.compose(cube, apps, set(), set(), set())
+        runtime = generator.select(runtime_board, set(), set(), set())
+        conformance = generator.select(cube, set(), set(), set())
 
         self.assertEqual(
-            [item.id for item in runtime.capabilities],
-            ["hackylens.cap.time", "hackylens.cap.input",
-             "hackylens.cap.display", "hackylens.cap.external-link",
-             "hackylens.cap.lights"],
+            [item.name for item in runtime.bindings],
+            ["time", "input",
+             "display", "external-link",
+             "lights"],
         )
         self.assertEqual(
-            [item.id for item in conformance.capabilities],
-            ["hackylens.cap.time"],
+            [item.name for item in conformance.bindings],
+            ["time"],
         )
-        # Native UI uses a shared service with a no-lights fallback. The VM's
-        # public API requires Lights through its adapter, not a second app lease.
-        with self.assertRaisesRegex(generator.CapabilityError, "micropython-adapter"):
-            generator.compose(runtime_board, apps, set(), set(), {"hackylens.cap.lights"})
-        disabled = generator.compose(runtime_board, apps, {"micropython"}, set(), {"hackylens.cap.lights"})
+        disabled = generator.select(runtime_board, set(), set(), {"lights"})
+        self.assertIn("micropython", disabled.disabled_apps)
         for app in ("camera", "face-detect", "apriltag", "object-detect", "qr-camera", "settings", "sleep"):
             self.assertNotIn(app, disabled.disabled_apps)
+
 
 
 

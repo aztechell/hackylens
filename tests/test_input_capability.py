@@ -13,7 +13,7 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 import board_contract
-import gen_capability_inventory as generator
+import service_bindings as generator
 
 
 class InputCapabilityTests(unittest.TestCase):
@@ -122,21 +122,20 @@ class InputCapabilityTests(unittest.TestCase):
         )
 
     def test_composition_requires_input_and_cube_stays_absent(self) -> None:
-        apps = set(generator.load_app_requirements())
         runtime_board = board_contract.load_board("huskylens-sen0305")
         cube = board_contract.load_board("sipeed-maix-cube")
-        runtime = generator.compose(runtime_board, apps, set(), set(), set())
-        conformance = generator.compose(cube, apps, set(), set(), set())
+        runtime = generator.select(runtime_board, set(), set(), set())
+        conformance = generator.select(cube, set(), set(), set())
 
         self.assertEqual(
-            [item.id for item in runtime.capabilities],
-            ["hackylens.cap.time", "hackylens.cap.input",
-             "hackylens.cap.display", "hackylens.cap.external-link",
-             "hackylens.cap.lights"],
+            [item.name for item in runtime.bindings],
+            ["time", "input",
+             "display", "external-link",
+             "lights"],
         )
         self.assertEqual(
-            [item.id for item in conformance.capabilities],
-            ["hackylens.cap.time"],
+            [item.name for item in conformance.bindings],
+            ["time"],
         )
         # Link the actual generated absent binding with the portable API.
         with tempfile.TemporaryDirectory(prefix="hackylens-input-absent-") as temp:
@@ -161,14 +160,14 @@ class InputCapabilityTests(unittest.TestCase):
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             subprocess.run([str(executable)], check=True, cwd=ROOT)
-        disabled = generator.compose(
-            runtime_board, apps, set(), set(), {"hackylens.cap.input"},
+        disabled = generator.select(
+            runtime_board, set(), set(), {"input"},
         )
-        self.assertEqual(disabled.disabled_apps, frozenset(apps))
-        with self.assertRaisesRegex(generator.CapabilityError, "required app"):
-            generator.compose(
-                runtime_board, apps, set(), {"pong"},
-                {"hackylens.cap.input"},
+        self.assertEqual(disabled.disabled_apps, frozenset(generator.app_composition.app_map(generator.app_composition.load_model())))
+        with self.assertRaisesRegex(ValueError, "required app"):
+            generator.select(
+                runtime_board, set(), {"pong"},
+                {"input"},
             )
 
 

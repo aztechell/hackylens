@@ -19,8 +19,8 @@ compatibility-capability-api: >=0.1.0,<0.2.0
 app. It is the sole source of app identity, source inclusion, required service
 presence, menu visibility/order, stable autostart identity, and tick period.
 
-Build tooling parses every production manifest once per firmware build, expands
-short service names through one build-time mapping, and emits an immutable
+Build tooling parses every production manifest once per firmware build, checks
+short service names against board service availability, and emits an immutable
 registry into the build directory. Firmware receives only those generated
 descriptors. Firmware MUST NOT contain a TOML parser, filesystem app discovery,
 runtime registration, mutable descriptor construction, or dynamic native-code
@@ -39,7 +39,7 @@ Every production manifest declares:
 | `entry` | yes | C symbol of the typed lifecycle entry object; it is not derived from `id` because entry symbols are explicit |
 | `sources` | yes | non-empty array of app-relative C/C++ translation units |
 | `requires` | yes | short names of required capabilities and/or build-time services; may be empty |
-| `optional` | no | non-empty short-name array of optional capabilities with named fallbacks |
+| `optional` | no | non-empty short-name array of optional hardware services with named fallbacks |
 | `private_includes` | no | non-empty app-relative private include directories; omit when empty |
 | `menu_order` | no | positive uint16 menu order; omit to hide the app |
 | `autostart_id` | no | stable uint16 autostart identity; omit or `0` means ineligible |
@@ -73,51 +73,23 @@ are rejected before compilation.
 
 ## Required services
 
-`requires` and `optional` use short names. One build-time mapping expands them
-to existing Capability API IDs or firmware service IDs:
+`requires` and `optional` use short service names directly. Hardware bindings
+are `time`, `input`, `display`, `lights` and `external-link`. Existing firmware
+service requirements are `camera`, `sd-card`, `internal-flash` and `settings`.
+There is no expansion into generic capability requests, instance numbers,
+version ranges, feature masks or owner grants.
 
-| Short name | Expansion |
-| --- | --- |
-| `display` | `hackylens.cap.display` |
-| `input` | `hackylens.cap.input` |
-| `time` | `hackylens.cap.time` |
-| `lights` | `hackylens.cap.lights` |
-| `external-link` | `hackylens.cap.external-link` |
-| `camera` | `hackylens.firmware.camera` |
-| `sd-card` | `hackylens.firmware.sd-card` |
-| `internal-flash` | `hackylens.firmware.internal-flash` |
-| `settings` | `hackylens.service.settings` |
+Unknown names and a name appearing in both lists are errors. Optional hardware
+services have fixed fallbacks: `display` → `headless`, `external-link` →
+`hide-external-link-menu`. Firmware services cannot be optional. Requirements
+control build inclusion; they neither inject SDK handles nor authorize raw
+hardware access. A missing required service excludes the app; `--require-app`
+turns that exclusion into an error.
 
-Unknown names are errors. The same name cannot be both required and optional.
-Optional capabilities have a fixed named fallback from the same mapping:
-`display` → `headless`, `external-link` → `hide-external-link-menu`. Services
-cannot be optional. `hackylens.firmware.*` requirements are build-only
-exclusions, not injected SDK handles or permission to access hardware directly.
-
-Capability requests keep instance `0` and the current `[0.1.0, 0.2.0)` range.
-Feature bits stay in the mapping, not in `app.toml`, because they exist only to
-preserve the current grant/composition ABI. Per-app exceptions in that mapping
-are limited to proven runtime acquire paths:
-
-- `time` adds `sleep-until` for CAMERA, APRILTAG, and MICROPYTHON;
-- `lights` uses illumination+RGB for camera-family apps;
-- `external-link` uses UART+I2C-controller for MICROPYTHON.
-
-SETTINGS and SLEEP do not declare `lights`. They apply persisted brightness
-through the existing `consumer:settings-lights` service. SETTINGS does not
-declare `external-link`; UART/I2C menu items still reconfigure
-`consumer:external-link-service`. FILES does not declare `sd-card`; storage
-access stays on the existing firmware mount/FAT32 path and foreground
-`HK_APP_EVENT_MEDIA` events. QR-CAMERA does not declare `lights`, `camera`, or
-`sd-card`. Illumination stays on `consumer:settings-lights` / `camera_light`;
-the camera session and QR text writes stay on the existing firmware seams.
-Runtime preflight acquires every available declaration, so persistent
-exclusive/channel leases and build-only firmware services would otherwise fail
-open.
-
-A missing required capability excludes the app; an explicit require-app build
-request turns that exclusion into a build error. Combined required and optional
-capability requests are limited to 16; services are limited to 16.
+Persistent settings, camera light control and the native external-link service
+keep their own typed sessions. App-scoped sessions live in runtime, and
+MicroPython sessions last until worker terminal handoff. Build requirements do
+not acquire these resources or create competing claims during app startup.
 
 ## Canonical model and command
 

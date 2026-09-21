@@ -43,11 +43,6 @@ static void reset_fixture(void)
     sleep_session_set_active(0U);
 }
 
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    (void)consumer_id;
-    return (hk_owner_t){1U, 1U};
-}
 
 struct hk_time { uint8_t binding; };
 static const hk_time_t s_time = {1U};

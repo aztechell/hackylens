@@ -30,6 +30,25 @@ rate, and button handling waits for the current frame to finish. The
 sections below record earlier milestones and are historical where they mention
 mixed lifecycle composition or the legacy adapter. See [S7 evidence](S7_EVIDENCE.md).
 
+## S8 in progress (2026-09-09)
+
+Time, Input, Lights, Display and External Link now use direct typed bindings.
+Lights channel sessions, Display planes/transactions and External Link modes,
+operation generations and quarantine preserve actual resource lifetimes.
+Native apps and MicroPython share the production implementations. Display has
+user acceptance; External Link UART session cleanup passed normal completion,
+exception, requested stop and timeout on COM10. Physical UART/I2C peer exchange
+is not established by that lifecycle test.
+
+The final S8 cleanup removes generic owner/grant/inventory runtime tables and
+the inventory generator/catalog. Build selection checks direct typed bindings;
+app context keeps identity, generation and Time/Input references, while actual
+scoped sessions remain private to runtime. Final build/CI qualification is in
+progress, so S8 remains open. The Phase 1–3
+sections below are historical; their generated inventory, owner injection and
+legacy-adapter descriptions do not describe the migrated service interfaces.
+Current measurements and qualification are in the simplification masterplan.
+
 ## Phase 1 status
 
 Firmware 0.4.0 implements the experimental Board Port Contract 0.1.0. The

@@ -98,37 +98,10 @@ class DisplayContractTests(unittest.TestCase):
                 ):
                     self.assertNotIn(forbidden, symbols)
 
-    def test_phase_2_8_enters_production_through_the_capability(self) -> None:
-        model = app_composition.load_model()
-        for app in model["apps"]:
-            required_ids = [item["id"] for item in app["capabilities"]["required"]]
-            self.assertIn(
-                "hackylens.cap.display",
-                required_ids,
-                app["id"],
-            )
-        self.assertIn(
-            "hackylens.cap.display",
-            (ROOT / "firmware" / "capability_consumers.toml").read_text(
-                encoding="utf-8"
-            ),
-        )
-        self.assertTrue(
-            (ROOT / "platforms" / "k210" / "capabilities" /
-             "display_adapter.c").exists()
-        )
-        catalog = (
-            ROOT / "platforms" / "k210" / "capabilities.toml"
-        ).read_text(encoding="utf-8")
-        self.assertIn('id = "hackylens.cap.display"', catalog)
-        self.assertIn(
-            'provider_source = "platforms/k210/capabilities/display_adapter.c"',
-            catalog,
-        )
-        self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
-                         "lcd_st7789.c").is_file())
-        self.assertTrue((ROOT / "firmware" / "src" / "drivers" /
-                         "lcd_st7789_transport.h").is_file())
+    def test_production_apps_require_display_binding(self) -> None:
+        for app in app_composition.load_model()["apps"]:
+            self.assertIn("display", app["requires"], app["id"])
+        self.assertTrue((ROOT / "platforms/k210/capabilities/display_adapter.c").is_file())
 
 
 if __name__ == "__main__":

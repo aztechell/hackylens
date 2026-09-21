@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../firmware/src/capabilities/capability_provider.h"
 #include "lights_normative_backend.h"
 
 #define CHECK(condition)                                                     \

@@ -28,14 +28,14 @@
 typedef enum
 {
     FAIL_NONE = 0,
-    FAIL_INJECT_NO_OWNER,
-    FAIL_INJECT_WITH_OWNER,
+    FAIL_PREPARE,
+    FAIL_PREPARE_PARTIAL,
     FAIL_START,
     FAIL_EVENT,
     FAIL_TICK,
     FAIL_RENDER,
     FAIL_STOP,
-    FAIL_OWNER_CLEANUP,
+    FAIL_CLEANUP,
     FAIL_DEADLINE,
     FAIL_INVALID_DEADLINE,
     PENDING_START,
@@ -48,11 +48,11 @@ typedef struct
     char trace[128];
     uint32_t trace_size;
     uint32_t deadline_calls;
-    uint32_t owner_cleanup_calls;
+    uint32_t cleanup_calls;
     uint32_t stop_calls;
     uint32_t close_event_calls;
     hk_deadline_t stop_deadline;
-    hk_deadline_t owner_deadline;
+    hk_deadline_t cleanup_deadline;
     hk_app_stop_reason_t observed_reason;
     hk_app_stop_reason_t close_reason;
     hk_app_runtime_token_t token;
@@ -104,7 +104,6 @@ static hk_result_t fake_start(const hk_app_context_t *ctx)
     trace('S');
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_STARTING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_STARTING ||
-       ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
        callback_state(ctx) != HK_OK ||
        hk_app_context_deferred_token(ctx, &s_fixture->token) != HK_ERR_INVALID_STATE)
         return HK_ERR_INTERNAL;
@@ -179,7 +178,6 @@ static hk_result_t fake_stop(const hk_app_context_t *ctx)
     s_fixture->stop_calls++;
     if(hk_app_runtime_state(s_fixture->runtime) != HK_APP_RUNTIME_STOPPING ||
        hk_app_runtime_stage(s_fixture->runtime) != HK_APP_STAGE_STOPPING ||
-       ctx->owner.slot != 3U || ctx->owner.generation != 7U ||
        callback_state(ctx) != HK_OK ||
        hk_app_context_teardown_deadline(
            ctx, &s_fixture->stop_deadline) != HK_OK)
@@ -217,58 +215,9 @@ static hk_app_t descriptor(void)
     return app;
 }
 
-static hk_result_t fake_resolve_capability(
+static hk_result_t fake_prepare(
     void *user,
-    const hk_app_t *app,
-    const hk_app_capability_request_t *declaration,
-    hk_capability_request_t *request)
-{
-    (void)user;
-    (void)app;
-    (void)declaration;
-    (void)request;
-    return HK_ERR_INTERNAL;
-}
-
-static hk_result_t fake_resolve_service(
-    void *user,
-    const hk_app_t *app,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)app;
-    (void)declaration;
-    return HK_ERR_INTERNAL;
-}
-
-static hk_result_t fake_acquire_capability(
-    void *user,
-    hk_owner_t owner,
-    const hk_capability_request_t *request,
-    hk_lease_t *lease)
-{
-    (void)user;
-    (void)owner;
-    (void)request;
-    (void)lease;
-    return HK_ERR_INTERNAL;
-}
-
-static hk_result_t fake_acquire_service(
-    void *user,
-    hk_owner_t owner,
-    const hk_app_service_request_t *declaration)
-{
-    (void)user;
-    (void)owner;
-    (void)declaration;
-    return HK_ERR_INTERNAL;
-}
-
-static hk_result_t fake_owner_open(
-    void *user,
-    const hk_app_t *app,
-    hk_owner_t *owner)
+    const hk_app_t *app)
 {
     fixture_t *fixture = user;
 
@@ -277,30 +226,26 @@ static hk_result_t fake_owner_open(
     if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_STARTING ||
        hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_STARTING)
         return HK_ERR_INTERNAL;
-    if(fixture->fail != FAIL_INJECT_NO_OWNER)
-        *owner = (hk_owner_t){3U, 7U};
-    if(fixture->fail == FAIL_INJECT_NO_OWNER ||
-       fixture->fail == FAIL_INJECT_WITH_OWNER)
+    if(fixture->fail == FAIL_PREPARE ||
+       fixture->fail == FAIL_PREPARE_PARTIAL)
         return HK_ERR_NOT_DECLARED;
     return HK_OK;
 }
 
-static hk_result_t fake_owner_cleanup(
+static hk_result_t fake_cleanup(
     void *user,
-    hk_owner_t owner,
     hk_deadline_t deadline)
 {
     fixture_t *fixture = user;
 
     trace('O');
-    fixture->owner_cleanup_calls++;
-    fixture->owner_deadline = deadline;
+    fixture->cleanup_calls++;
+    fixture->cleanup_deadline = deadline;
     if(hk_app_runtime_state(fixture->runtime) != HK_APP_RUNTIME_STOPPING ||
-       hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_OWNER_CLEANUP ||
-       owner.slot != 3U || owner.generation != 7U ||
-       (fixture->fail != FAIL_INJECT_WITH_OWNER && s_state[0] != 0x5aU))
-        return HK_ERR_WRONG_OWNER;
-    return fixture->fail == FAIL_OWNER_CLEANUP ? HK_ERR_IO : HK_OK;
+       hk_app_runtime_stage(fixture->runtime) != HK_APP_STAGE_SCOPE_CLEANUP ||
+       (fixture->fail != FAIL_PREPARE_PARTIAL && fixture->fail != FAIL_PREPARE && s_state[0] != 0x5aU))
+        return HK_ERR_INTERNAL;
+    return fixture->fail == FAIL_CLEANUP ? HK_ERR_IO : HK_OK;
 }
 
 static hk_result_t fake_deadline(
@@ -328,12 +273,8 @@ static hk_result_t fake_deadline(
 static int reset_fixture(fixture_t *fixture, hk_app_runtime_t *runtime)
 {
     static const hk_app_runtime_ops_t ops_template = {
-        .resolve_capability = fake_resolve_capability,
-        .resolve_service = fake_resolve_service,
-        .owner_open = fake_owner_open,
-        .acquire_capability = fake_acquire_capability,
-        .acquire_service = fake_acquire_service,
-        .owner_cleanup = fake_owner_cleanup,
+        .prepare = fake_prepare,
+        .cleanup = fake_cleanup,
         .deadline_after_us = fake_deadline,
     };
     hk_app_runtime_ops_t ops = ops_template;
@@ -375,11 +316,11 @@ static int check_normal_lifecycle(void)
     CHECK(hk_app_runtime_stop(&runtime, HK_APP_STOP_BACK) == HK_OK);
     CHECK(strcmp(fixture.trace, "ISETREDXO") == 0);
     CHECK(fixture.deadline_calls == 1U);
-    CHECK(fixture.owner_cleanup_calls == 1U);
+    CHECK(fixture.cleanup_calls == 1U);
     CHECK(fixture.stop_calls == 1U);
     CHECK(fixture.observed_reason == HK_APP_STOP_BACK);
     CHECK(fixture.stop_deadline.at_us == UINT64_C(987654321));
-    CHECK(fixture.owner_deadline.at_us == fixture.stop_deadline.at_us);
+    CHECK(fixture.cleanup_deadline.at_us == fixture.stop_deadline.at_us);
     CHECK(hk_app_runtime_validate_token(&runtime, fixture.token) ==
           HK_ERR_STALE_HANDLE);
     CHECK(hk_app_context_teardown_deadline(
@@ -416,11 +357,11 @@ static int check_launch_faults(void)
         hk_result_t expected;
         const char *trace;
         uint32_t stop_calls;
-        uint32_t owner_calls;
+        uint32_t cleanup_calls;
         uint32_t deadline_calls;
     } cases[] = {
-        {FAIL_INJECT_NO_OWNER, HK_ERR_NOT_DECLARED, "I", 0U, 0U, 0U},
-        {FAIL_INJECT_WITH_OWNER, HK_ERR_NOT_DECLARED, "IDO", 0U, 1U, 1U},
+        {FAIL_PREPARE, HK_ERR_NOT_DECLARED, "IDO", 0U, 1U, 1U},
+        {FAIL_PREPARE_PARTIAL, HK_ERR_NOT_DECLARED, "IDO", 0U, 1U, 1U},
         {FAIL_START, HK_ERR_IO, "ISDXO", 1U, 1U, 1U},
         {PENDING_START, HK_ERR_INVALID_STATE, "ISDXO", 1U, 1U, 1U},
     };
@@ -436,7 +377,7 @@ static int check_launch_faults(void)
         CHECK(hk_app_runtime_launch(&runtime, &app) == cases[index].expected);
         CHECK(strcmp(fixture.trace, cases[index].trace) == 0);
         CHECK(fixture.stop_calls == cases[index].stop_calls);
-        CHECK(fixture.owner_cleanup_calls == cases[index].owner_calls);
+        CHECK(fixture.cleanup_calls == cases[index].cleanup_calls);
         CHECK(fixture.deadline_calls == cases[index].deadline_calls);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
     }
@@ -476,7 +417,7 @@ static int check_running_faults(void)
         CHECK(fixture.close_reason == HK_APP_STOP_CALLBACK_FAILED);
         CHECK(fixture.observed_reason == HK_APP_STOP_CALLBACK_FAILED);
         CHECK(fixture.stop_calls == 1U);
-        CHECK(fixture.owner_cleanup_calls == 1U && fixture.deadline_calls == 1U);
+        CHECK(fixture.cleanup_calls == 1U && fixture.deadline_calls == 1U);
         CHECK(hk_app_runtime_first_error(&runtime) == HK_ERR_IO);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
     }
@@ -487,7 +428,7 @@ static int check_teardown_faults_and_reentrancy(void)
 {
     static const fail_point_t failures[] = {
         FAIL_DEADLINE, FAIL_INVALID_DEADLINE, FAIL_STOP,
-        FAIL_OWNER_CLEANUP,
+        FAIL_CLEANUP,
     };
 
     for(uint32_t index = 0U; index < sizeof(failures) / sizeof(failures[0]); index++)
@@ -504,13 +445,13 @@ static int check_teardown_faults_and_reentrancy(void)
                                                         HK_ERR_IO));
         CHECK(fixture.deadline_calls == 1U);
         CHECK(fixture.stop_calls == 1U);
-        CHECK(fixture.owner_cleanup_calls == 1U);
+        CHECK(fixture.cleanup_calls == 1U);
         CHECK(hk_app_runtime_state(&runtime) == HK_APP_RUNTIME_INACTIVE);
         if(failures[index] == FAIL_DEADLINE ||
            failures[index] == FAIL_INVALID_DEADLINE)
         {
             CHECK(fixture.stop_deadline.at_us == 0U);
-            CHECK(fixture.owner_deadline.at_us == 0U);
+            CHECK(fixture.cleanup_deadline.at_us == 0U);
         }
     }
 
@@ -674,24 +615,20 @@ static hk_result_t benchmark_stop(const hk_app_context_t *ctx)
     return HK_OK;
 }
 
-static hk_result_t benchmark_owner_open(
+static hk_result_t benchmark_prepare(
     void *user,
-    const hk_app_t *descriptor,
-    hk_owner_t *owner)
+    const hk_app_t *descriptor)
 {
     (void)user;
     (void)descriptor;
-    *owner = (hk_owner_t){1U, 1U};
     return HK_OK;
 }
 
-static hk_result_t benchmark_owner_cleanup(
+static hk_result_t benchmark_cleanup(
     void *user,
-    hk_owner_t owner,
     hk_deadline_t deadline)
 {
     (void)user;
-    (void)owner;
     (void)deadline;
     return HK_OK;
 }
@@ -722,12 +659,8 @@ static int check_lifecycle_latency(
         .stop = benchmark_stop,
     };
     const hk_app_runtime_ops_t ops = {
-        .resolve_capability = fake_resolve_capability,
-        .resolve_service = fake_resolve_service,
-        .owner_open = benchmark_owner_open,
-        .acquire_capability = fake_acquire_capability,
-        .acquire_service = fake_acquire_service,
-        .owner_cleanup = benchmark_owner_cleanup,
+        .prepare = benchmark_prepare,
+        .cleanup = benchmark_cleanup,
         .deadline_after_us = benchmark_deadline,
     };
     hk_app_runtime_t runtime;

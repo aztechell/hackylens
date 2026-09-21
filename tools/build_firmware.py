@@ -27,7 +27,7 @@ from firmware_attestation import (
 )
 from gen_board import write_board_config
 import app_composition
-import gen_capability_inventory as capability_inventory
+import service_bindings
 
 WORKSPACE = ROOT.parent
 LOCAL_DEPS = ROOT / "_deps"
@@ -71,19 +71,8 @@ if set(APP_MODULES) != ATTESTED_FULL_APP_IDS:
         "build app registry does not match firmware-attestation full composition"
     )
 
-def _app_capability_requirements() -> dict[str, capability_inventory.Requirements]:
-    return capability_inventory.requirements_from_manifest_model(
-        APP_MANIFEST_MODEL, set(APP_MODULES)
-    )
-
-
 def load_app_requirements() -> dict[str, set[str]]:
-    """Compatibility view of manifest-declared legacy build requirements."""
-
-    return {
-        app: set(value.legacy)
-        for app, value in _app_capability_requirements().items()
-    }
+    return {name: set(app["requires"]) for name, app in APP_MANIFESTS.items()}
 
 
 def apps_requiring_legacy(requirement: str) -> frozenset[str]:
@@ -96,25 +85,16 @@ def apps_requiring_legacy(requirement: str) -> frozenset[str]:
 CAMERA_APP_IDS = apps_requiring_legacy("camera")
 
 
-def compose_capabilities(
+def select_services(
     board: Board,
     disabled_apps: set[str],
     required_apps: set[str],
     disabled_capabilities: set[str],
-    *,
-    allow_required_consumer_exclusion: bool = False,
-) -> capability_inventory.Composition:
+) -> service_bindings.Selection:
     try:
-        return capability_inventory.compose(
-            board,
-            set(APP_MODULES),
-            disabled_apps,
-            required_apps,
-            disabled_capabilities,
-            allow_required_consumer_exclusion=allow_required_consumer_exclusion,
-            app_requirements=_app_capability_requirements(),
-        )
-    except capability_inventory.CapabilityError as exc:
+        return service_bindings.select(board, disabled_apps, required_apps,
+                                       disabled_capabilities, model=APP_MANIFEST_MODEL)
+    except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
 
@@ -122,7 +102,7 @@ def compose_apps(board: Board, disabled_apps: set[str],
                  required_apps: set[str]) -> tuple[set[str], list[dict[str, object]]]:
     """Compatibility tuple for callers that only need app exclusions."""
 
-    composition = compose_capabilities(
+    composition = select_services(
         board, disabled_apps, required_apps, set()
     )
     return set(composition.disabled_apps), list(composition.exclusions)
@@ -555,19 +535,19 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
 def stage_platform_sources(
     stage: Path,
     disabled_apps: set[str],
-    capability_composition: capability_inventory.Composition,
+    service_selection: service_bindings.Selection,
 ) -> None:
     camera_feature_enabled = bool(CAMERA_APP_IDS - disabled_apps)
     micropython_feature_enabled = "micropython" not in disabled_apps
     provider_sources = {
-        Path(item.provider_source) for item in capability_inventory.load_catalog()
+        Path(item.provider_source) for item in service_bindings.BINDINGS
     }
     selected_provider_sources = {
-        Path(item.provider_source) for item in capability_composition.capabilities
+        Path(item.provider_source) for item in service_selection.bindings
     }
     platform = ROOT / "platforms" / "k210"
     for path in platform.rglob("*"):
-        if not path.is_file() or path.name == "capabilities.toml":
+        if not path.is_file():
             continue
         rel = path.relative_to(ROOT)
         if rel in provider_sources and rel not in selected_provider_sources:
@@ -624,15 +604,15 @@ def stage_target(sdk: Path, target_name: str, board: Board,
                   micropython_package: Path | None = None,
                   littlefs: Path | None = None,
                   wdt_fault_injection: bool = False,
-                  capability_composition: capability_inventory.Composition | None = None) -> Path:
+                  service_selection: service_bindings.Selection | None = None) -> Path:
     target = TARGETS[target_name]
     stage = sdk / "src" / str(target["project"])
     if stage.exists():
         shutil.rmtree(stage)
     stage.mkdir(parents=True, exist_ok=True)
 
-    if capability_composition is None:
-        capability_composition = compose_capabilities(
+    if service_selection is None:
+        service_selection = select_services(
             board, disabled_apps, set(), set()
         )
 
@@ -647,7 +627,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         app_composition.BUILD_REGISTRY_ROOT,
         stage / "firmware" / "generated" / "app_registry",
     )
-    stage_platform_sources(stage, disabled_apps, capability_composition)
+    stage_platform_sources(stage, disabled_apps, service_selection)
     stage_board_port(stage, board)
 
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
@@ -668,7 +648,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         for name in ("lfs.c", "lfs.h", "lfs_util.c", "lfs_util.h"):
             shutil.copy2(littlefs / name, stage / name)
 
-    capability_inventory.write_generated_c(capability_composition, stage)
+    service_bindings.write_generated_c(service_selection, stage)
     write_config(stage, disabled_apps, wdt_fault_injection)
     write_project_cmake(stage, micropython_package, board, disabled_apps)
     return stage
@@ -676,7 +656,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
 
 def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
                  disabled_apps: set[str], exclusions: list[dict[str, object]],
-                 capability_composition: capability_inventory.Composition,
+                 service_selection: service_bindings.Selection,
                  wdt_fault_injection: bool = False) -> Path:
     target = TARGETS[name]
     project = str(target["project"])
@@ -703,7 +683,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
             )
     stage = stage_target(
         sdk, name, board, disabled_apps, micropython_package, littlefs,
-        wdt_fault_injection, capability_composition,
+        wdt_fault_injection, service_selection,
     )
     print(f"[STAGE] {stage}")
 
@@ -766,13 +746,13 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
         target=name,
         disabled_apps=disabled_apps,
         exclusions=exclusions,
-        disabled_capabilities=set(capability_composition.disabled_capabilities),
+        disabled_capabilities=set(service_selection.disabled_capabilities),
         capabilities_sha256=capabilities_sha256,
         wdt_fault_injection=wdt_fault_injection,
     )
     if wdt_fault_injection:
         print("[DANGER] isolated test image kept under build/; dist/ was not touched")
-    elif disabled_apps or capability_composition.disabled_capabilities:
+    elif disabled_apps or service_selection.disabled_capabilities:
         print(
             "[BUILD] feature-modified image kept under build/; qualified dist/ "
             "artifacts were not replaced"
@@ -815,7 +795,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--disable-capability",
         action="append",
         default=[],
-        choices=sorted(item.id for item in capability_inventory.load_catalog()),
+        choices=sorted("hackylens.cap." + item.name for item in service_bindings.BINDINGS),
         help=(
             "Diagnostic-only capability exclusion. Can be repeated and always "
             "makes a runtime build non-release-qualified."
@@ -839,22 +819,17 @@ def main(argv: list[str] | None = None) -> int:
     except ContractError as exc:
         print(f"[ERR] {exc}", file=sys.stderr)
         return 2
-    composition = compose_capabilities(
+    composition = select_services(
         board,
         set(args.disable_app),
         set(args.require_app),
         set(args.disable_capability),
-        allow_required_consumer_exclusion=bool(args.disable_capability),
     )
-    capability_inventory.write_artifacts(
+    service_bindings.write_artifacts(
         composition, ROOT / "build" / board.id
     )
     for exclusion in composition.exclusions:
         print(json.dumps({"event": "app-excluded", **exclusion}, sort_keys=True))
-    for exclusion in composition.required_consumer_exclusions:
-        print(json.dumps(
-            {"event": "required-consumer-excluded", **exclusion}, sort_keys=True
-        ))
     for fallback in composition.optional_fallbacks:
         print(json.dumps({"event": "optional-fallback", **fallback}, sort_keys=True))
     if args.target == "conformance":

@@ -99,7 +99,6 @@ class SettingsAppTests(unittest.TestCase):
                     str(ROOT / "tests" / "lights_normative_fake_backend.c"),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "surface.c"),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "switch.c"),
-                    str(ROOT / "firmware" / "src" / "capabilities" / "capability_core.c"),
                     str(ROOT / "firmware" / "src" / "capabilities" / "time.c"),
                     str(ROOT / "firmware" / "src" / "capabilities" / "input.c"),
                     str(ROOT / "firmware" / "src" / "capabilities" / "input_state.c"),

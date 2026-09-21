@@ -61,15 +61,16 @@ Native feature apps       MicroPython scripts
 - Drivers реализуют устройства и wire protocols, не знают feature apps.
 - Services владеют общими hardware operations и необходимыми resource sessions.
 - Runtime выполняет lifecycle, dispatch, переключение и cleanup одного foreground
-  app. Минимальный v2 lifecycle — `start/event/render/stop`; legacy adapter
-  сохраняется только до завершения миграции.
+  app. Lifecycle — `start/event/render/stop`; legacy adapter удалён в S7.
 - Apps содержат feature logic и UI, не получают board pins, HAL, private
   driver/provider headers или raw SD access.
 - Python bindings вызывают те же production services, сохраняя необходимые
   правила lifetime, форматов, ошибок, deadline и отмены.
 
-Сегодня часть доступа реализована через Capability API и broker. Переход к
-прямым typed services выполняется по S8; эта схема не объявляет его завершённым.
+Time, Input, Lights, Display и External Link используют прямые typed bindings.
+Общие broker/owner tables и capability inventory generator удалены. Проверки
+сборок и аппаратная qualification фиксируются отдельно в S8; удаление кода
+само по себе не означает завершённую приёмку.
 
 ## Как добавлять и упрощать функциональность
 

@@ -547,14 +547,6 @@ void settings_lights_restore(uint32_t channels)
         g_cleanup_events[g_cleanup_event_count++] = 3U;
     }
 }
-hk_owner_t capability_client_consumer_owner(const char *consumer_id)
-{
-    hk_owner_t owner = {1U, 1U};
-
-    if(consumer_id && strstr(consumer_id, "rgb"))
-        owner.slot = 2U;
-    return owner;
-}
 uint32_t hk_input_state(void) { return 0x0aU; }
 
 struct hk_display_service { uint8_t unused; };

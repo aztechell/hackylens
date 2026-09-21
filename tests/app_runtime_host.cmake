@@ -7,7 +7,6 @@ set(HK_APP_RUNTIME_HOST_SOURCES
     "${HACKYLENS_SOURCE_DIR}/firmware/src/app_runtime/runtime.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/app_runtime/surface.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/app_runtime/switch.c"
-    "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/capability_core.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/time.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/lights.c"
     "${HACKYLENS_SOURCE_DIR}/firmware/src/capabilities/display.c"
