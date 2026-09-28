@@ -5,9 +5,13 @@
 #include <hackylens/capability/external_link.h>
 #include <hackylens/capability/lights.h>
 
+#include "hk_config.h"
 #include "../app_runtime/surface_private.h"
+#include "../services/settings_lights.h"
 #include "../ui/display_binding.h"
+#if HK_ENABLE_CAMERA_FEATURE
 #include "../services/camera_light.h"
+#endif
 
 typedef struct
 {
@@ -19,11 +23,28 @@ typedef struct
     uint8_t initialized;
     uint8_t display_batch_active;
     uint8_t display_surface_active;
+    uint32_t claimed_lights_channels;
 } app_runtime_integration_t;
 
 static app_runtime_integration_t s_integration;
 
 static hk_result_t render_abort(void *user);
+
+static hk_result_t claim_lights(
+    void *user, const hk_lights_service_t *service,
+    uint32_t channels, hk_lights_t *session)
+{
+    app_runtime_integration_t *integration = user;
+    hk_result_t result;
+
+    settings_lights_suspend(channels);
+    result = hk_lights_open(service, channels, session);
+    if(result == HK_OK)
+        integration->claimed_lights_channels |= channels;
+    else
+        settings_lights_restore(channels);
+    return result;
+}
 
 static hk_result_t prepare(void *user, const hk_app_t *app)
 {
@@ -42,7 +63,16 @@ static hk_result_t prepare(void *user, const hk_app_t *app)
 static hk_result_t cleanup(void *user, hk_deadline_t deadline)
 {
     app_runtime_integration_t *integration = user;
-    hk_result_t result = camera_light_retire(deadline);
+    hk_result_t result = HK_OK;
+
+#if HK_ENABLE_CAMERA_FEATURE
+    result = camera_light_retire(deadline);
+#else
+    (void)deadline;
+#endif
+
+    settings_lights_restore(integration->claimed_lights_channels);
+    integration->claimed_lights_channels = 0U;
 
     hk_ui_display_unbind();
     integration->display = NULL;
@@ -288,6 +318,7 @@ hk_result_t app_runtime_integration_initialize(void)
         .external_link = hk_external_link_service(),
         .prepare = prepare,
         .cleanup = cleanup,
+        .claim_lights = claim_lights,
         .deadline_after_us = deadline_after_us,
     };
     result = hk_app_switch_init(

@@ -540,7 +540,12 @@ hk_result_t hk_app_context_lights(
         return HK_ERR_INVALID_STATE;
     for(unsigned i = 0U; i < 3U; ++i)
         if(!runtime->lights[i].service) {
-            result = hk_lights_open(runtime->ops.lights, channels, &runtime->lights[i]);
+            if(runtime->ops.claim_lights)
+                result = runtime->ops.claim_lights(runtime->ops.user,
+                    runtime->ops.lights, channels, &runtime->lights[i]);
+            else
+                result = hk_lights_open(runtime->ops.lights, channels,
+                    &runtime->lights[i]);
             if(result == HK_OK)
                 *session = &runtime->lights[i];
             return result;

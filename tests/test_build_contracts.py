@@ -352,7 +352,9 @@ class BuildContractsTest(unittest.TestCase):
         start = runtime.split(
             "uint8_t micropython_runtime_start", 1
         )[1].split("uint8_t micropython_runtime_request_stop", 1)[0]
-        self.assertLess(start.index("if(g_ticket)"), start.index("micropython_capability_bridge_prepare"))
+        busy_guard = start.index("if(micropython_state_active(shared->state) || g_ticket)")
+        self.assertLess(busy_guard, start.index("if(!source || !length"))
+        self.assertLess(busy_guard, start.index("micropython_capability_bridge_prepare"))
 
         poll = runtime.split(
             "void micropython_runtime_poll(void)", 1

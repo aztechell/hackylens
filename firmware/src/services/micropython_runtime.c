@@ -1,6 +1,7 @@
 #include "micropython_runtime.h"
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "../core/hk_screen.h"
@@ -174,26 +175,14 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
     uint64_t now;
 
     micropython_runtime_poll();
+    /* A rejected request must never alter the active worker's shared result.
+       This also protects the terminal-to-executor completion handoff. */
+    if(micropython_state_active(shared->state) || g_ticket)
+        return 0U;
     if(!source || !length || length > MICROPYTHON_RUNTIME_SOURCE_MAX)
     {
         shared->exit_reason = MICROPYTHON_EXIT_INVALID_SOURCE;
         shared->state = MICROPYTHON_RUNTIME_ERROR;
-        return 0U;
-    }
-    if(shared->state == MICROPYTHON_RUNTIME_STARTING ||
-       shared->state == MICROPYTHON_RUNTIME_RUNNING ||
-       shared->state == MICROPYTHON_RUNTIME_STOPPING)
-    {
-        shared->exit_reason = MICROPYTHON_EXIT_BUSY;
-        return 0U;
-    }
-    /* The worker publishes its terminal state before core 1 publishes the
-       executor completion ticket.  Do not overwrite g_ticket or reset the
-       capability bridge during that bounded handoff window; the next poll
-       performs cleanup first. */
-    if(g_ticket)
-    {
-        shared->exit_reason = MICROPYTHON_EXIT_BUSY;
         return 0U;
     }
     if(!core1_executor_init())

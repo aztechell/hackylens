@@ -16,6 +16,7 @@
 
 #define LINK_RESULT_HEADER_SIZE 10U
 #define LINK_ITEM_WIRE_SIZE 16U
+#define UART_RX_STAGING_BYTES 32U
 
 static external_link_transport_t g_transport = EXTERNAL_LINK_UART;
 typedef union
@@ -25,6 +26,9 @@ typedef union
 } external_link_uart_storage_t;
 
 static external_link_uart_storage_t g_uart_storage;
+static uint8_t g_uart_rx_staging[UART_RX_STAGING_BYTES];
+static uint32_t g_uart_rx_count;
+static uint32_t g_uart_rx_cursor;
 static hk_external_link_t g_link;
 static hk_external_link_op_t g_uart_operation;
 static uint16_t g_uart_response_length;
@@ -194,6 +198,9 @@ static void service_cancel_uart(void)
     g_uart_operation = HK_EXTERNAL_LINK_OP_NONE;
     g_uart_response_length = 0U;
     g_uart_response_not_before = 0U;
+    g_uart_rx_count = 0U;
+    g_uart_rx_cursor = 0U;
+    hk_link_stream_reset(&g_uart_storage.parser);
 }
 
 void external_link_service_init(external_link_transport_t transport)
@@ -205,7 +212,6 @@ void external_link_service_init(external_link_transport_t transport)
     g_uart_response_not_before = 0U;
     g_uart_baud = settings_external_link_uart_baud();
     g_suspended = 0U;
-    hk_link_stream_reset(&g_uart_storage.parser);
     external_link_service_set_transport(transport);
 }
 
@@ -216,7 +222,6 @@ void external_link_service_set_transport(external_link_transport_t transport)
     g_transport = transport == EXTERNAL_LINK_I2C ?
         EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
     service_cancel_uart();
-    hk_link_stream_reset(&g_uart_storage.parser);
     if(g_suspended)
         return;
     if(service_acquire() != HK_OK ||
@@ -240,7 +245,7 @@ void external_link_service_set_uart_baud(uint32_t baud)
     if(baud != 9600U && baud != 115200U && baud != 1000000U)
         baud = 115200U;
     g_uart_baud = baud;
-    hk_link_stream_reset(&g_uart_storage.parser);
+    service_cancel_uart();
     if(g_transport == EXTERNAL_LINK_UART && !g_suspended &&
        (g_link.service != NULL))
         (void)service_configure();
@@ -285,12 +290,7 @@ void external_link_service_tick(void)
         return;
     if(g_transport == EXTERNAL_LINK_UART)
     {
-        uint8_t data[32];
-        hk_buffer_view_t view = {
-            data, sizeof(data), 0U, HK_BUFFER_ACCESS_WRITABLE,
-        };
         hk_link_message_t message;
-        uint32_t count = 0U;
 
         if(g_uart_operation.generation != 0U)
         {
@@ -339,23 +339,32 @@ void external_link_service_tick(void)
             }
             return;
         }
-        result = hk_external_link_uart_read(
-            &g_link, &view, &count);
-        if(result != HK_OK)
+        if(g_uart_rx_cursor == g_uart_rx_count)
         {
-            g_bad_frames++;
-            return;
+            hk_buffer_view_t view = {
+                g_uart_rx_staging, sizeof(g_uart_rx_staging), 0U,
+                HK_BUFFER_ACCESS_WRITABLE,
+            };
+            g_uart_rx_cursor = 0U;
+            g_uart_rx_count = 0U;
+            result = hk_external_link_uart_read(
+                &g_link, &view, &g_uart_rx_count);
+            if(result != HK_OK)
+            {
+                g_bad_frames++;
+                return;
+            }
+            g_rx_bytes += g_uart_rx_count;
         }
-        g_rx_bytes += count;
-        for(uint32_t i = 0U; i < count; i++)
+        while(g_uart_rx_cursor < g_uart_rx_count)
         {
             if(hk_link_stream_feed(
-                   &g_uart_storage.parser, data[i], &message))
+                   &g_uart_storage.parser,
+                   g_uart_rx_staging[g_uart_rx_cursor++], &message))
             {
                 handle_uart_message(&message);
-                /* One borrowed response buffer backs the asynchronous write.
-                 * Leave any later frame in the hardware FIFO until that
-                 * response reaches a terminal state. */
+                /* The remaining bytes stay staged until the borrowed response
+                 * buffer is released by the asynchronous write. */
                 break;
             }
         }

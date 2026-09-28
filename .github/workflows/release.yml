@@ -101,6 +101,20 @@ jobs:
           Invoke-NativeChecked python tools/check_firmware_symbols.py build/huskylens-sen0305/sdk-full/hackylens_full --expect absent
           Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
 
+      - name: Build reduced camera compositions
+        shell: pwsh
+        run: |
+          function Invoke-NativeChecked {
+            & $args[0] $args[1..($args.Count - 1)]
+            if ($LASTEXITCODE -ne 0) {
+              throw "native command failed ($LASTEXITCODE): $($args -join ' ')"
+            }
+          }
+          Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython --disable-app camera --disable-app face-detect --disable-app apriltag --disable-app object-detect
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
+          Invoke-NativeChecked python tools/build_firmware.py full --board huskylens-sen0305 --disable-app micropython --disable-app camera --disable-app qr-camera --disable-app face-detect --disable-app apriltag --disable-app object-detect
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
+
       - name: Build full firmware and verify feature symbols
         shell: pwsh
         run: |

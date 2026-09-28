@@ -1,0 +1,20 @@
+{
+  "micropython_normal": "mode=normal rejected=0 final_state=4 exit_reason=1 cleanups=1 cleanup_while_executor_busy=0",
+  "micropython_busy": "mode=busy rejected=1 final_state=0 exit_reason=5 cleanups=1 cleanup_while_executor_busy=0",
+  "micropython_invalid": "mode=invalid rejected=1 final_state=0 exit_reason=6 cleanups=1 cleanup_while_executor_busy=1",
+  "surface_mode": "clear=0 lock_after_clear=0 aborted_batches=1 poll=-10",
+  "uart_sequential": "[LINK] UART1 115200 IO34/IO35\n\ncoalesced=0 unread=0 HKLINKINFO mode=UART pins=IO34/IO35 uart=115200 i2c=0x32 bytes=20 rx=2 tx=2 bad=0",
+  "uart_coalesced": "[LINK] UART1 115200 IO34/IO35\n\ncoalesced=1 unread=0 HKLINKINFO mode=UART pins=IO34/IO35 uart=115200 i2c=0x32 bytes=20 rx=1 tx=1 bad=0",
+  "native_lights": "native_with_boot_settings=-6 after_private_suspend=0 expected_busy=-6",
+  "camera_lease": "old_lease=1 current_lease=1 before=3 after_stale_release=0 leased=3 free=0",
+  "qr-only-camera-consumer": {
+    "compiler_exit": 1,
+    "camera_service_header_staged": false,
+    "diagnostic": "C:\\Users\\aztec\\Projects\\HUSKY-REVERSE\\hackylens\\build\\audit-2026-09-22\\qr-only-camera-consumer\\firmware\\src\\apps\\qr_camera\\qr_camera_app.c:1:10: fatal error: ../../services/camera_light.h: No such file or directory"
+  },
+  "no-camera": {
+    "compiler_exit": 1,
+    "camera_service_header_staged": false,
+    "diagnostic": "C:\\Users\\aztec\\Projects\\HUSKY-REVERSE\\hackylens\\build\\audit-2026-09-22\\no-camera\\firmware\\src\\runtime\\app_runtime_integration.c:10:10: fatal error: ../services/camera_light.h: No such file or directory"
+  }
+}

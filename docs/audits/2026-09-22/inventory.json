@@ -1,0 +1,518 @@
+{
+  "commit": "f3edcbda1b0b8002da245f9623c67021274e833d",
+  "source_files": 455,
+  "resolved_include_occurrences": 1159,
+  "layers": {
+    "adapter": {
+      "files": 2,
+      "lines": 1040
+    },
+    "app": {
+      "files": 188,
+      "lines": 16386
+    },
+    "app-runtime": {
+      "files": 6,
+      "lines": 1515
+    },
+    "asset": {
+      "files": 4,
+      "lines": 23897
+    },
+    "board": {
+      "files": 2,
+      "lines": 144
+    },
+    "capability-implementation": {
+      "files": 13,
+      "lines": 2893
+    },
+    "config": {
+      "files": 12,
+      "lines": 158
+    },
+    "controller": {
+      "files": 18,
+      "lines": 1446
+    },
+    "core": {
+      "files": 28,
+      "lines": 1125
+    },
+    "driver": {
+      "files": 15,
+      "lines": 1329
+    },
+    "platform-hal": {
+      "files": 22,
+      "lines": 1557
+    },
+    "platform-startup": {
+      "files": 2,
+      "lines": 31
+    },
+    "public-capability": {
+      "files": 11,
+      "lines": 1596
+    },
+    "runtime": {
+      "files": 8,
+      "lines": 769
+    },
+    "sdk": {
+      "files": 3,
+      "lines": 244
+    },
+    "service": {
+      "files": 68,
+      "lines": 6627
+    },
+    "storage": {
+      "files": 38,
+      "lines": 3778
+    },
+    "ui": {
+      "files": 15,
+      "lines": 1412
+    }
+  },
+  "interlayer_include_occurrences": {
+    "adapter -> capability-implementation": 1,
+    "adapter -> config": 1,
+    "adapter -> public-capability": 6,
+    "adapter -> service": 3,
+    "app -> adapter": 1,
+    "app -> config": 31,
+    "app -> controller": 15,
+    "app -> core": 77,
+    "app -> public-capability": 7,
+    "app -> sdk": 24,
+    "app -> service": 70,
+    "app -> storage": 41,
+    "app -> ui": 23,
+    "app-runtime -> core": 1,
+    "app-runtime -> sdk": 2,
+    "capability-implementation -> driver": 3,
+    "capability-implementation -> platform-hal": 5,
+    "capability-implementation -> public-capability": 12,
+    "capability-implementation -> service": 1,
+    "capability-implementation -> ui": 1,
+    "config -> public-capability": 1,
+    "controller -> adapter": 1,
+    "controller -> config": 7,
+    "controller -> core": 33,
+    "controller -> driver": 1,
+    "controller -> public-capability": 1,
+    "controller -> service": 27,
+    "controller -> storage": 1,
+    "controller -> ui": 8,
+    "core -> config": 4,
+    "core -> platform-hal": 1,
+    "core -> sdk": 1,
+    "driver -> config": 1,
+    "driver -> core": 4,
+    "driver -> public-capability": 2,
+    "driver -> service": 1,
+    "platform-hal -> core": 1,
+    "platform-startup -> core": 1,
+    "platform-startup -> driver": 1,
+    "platform-startup -> platform-hal": 1,
+    "public-capability -> capability-implementation": 6,
+    "runtime -> app-runtime": 2,
+    "runtime -> controller": 6,
+    "runtime -> core": 9,
+    "runtime -> platform-startup": 1,
+    "runtime -> public-capability": 3,
+    "runtime -> service": 6,
+    "runtime -> storage": 1,
+    "runtime -> ui": 3,
+    "sdk -> public-capability": 5,
+    "service -> adapter": 1,
+    "service -> config": 14,
+    "service -> core": 34,
+    "service -> driver": 6,
+    "service -> public-capability": 5,
+    "service -> storage": 10,
+    "storage -> config": 23,
+    "storage -> core": 17,
+    "storage -> driver": 2,
+    "ui -> config": 10,
+    "ui -> core": 3,
+    "ui -> public-capability": 2
+  },
+  "apps": [
+    {
+      "id": "apriltag",
+      "translation_units": 6,
+      "requires": [
+        "camera",
+        "display",
+        "input",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 5
+    },
+    {
+      "id": "buttons",
+      "translation_units": 3,
+      "requires": [
+        "display",
+        "input"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 20000,
+        "render_budget_us": 500000
+      },
+      "render": "buttons_render",
+      "autostart": 7
+    },
+    {
+      "id": "camera",
+      "translation_units": 12,
+      "requires": [
+        "camera",
+        "display",
+        "input",
+        "sd-card",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 2
+    },
+    {
+      "id": "face-detect",
+      "translation_units": 4,
+      "requires": [
+        "camera",
+        "display",
+        "input",
+        "sd-card"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 4
+    },
+    {
+      "id": "files",
+      "translation_units": 18,
+      "requires": [
+        "display",
+        "input",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 6
+    },
+    {
+      "id": "micropython",
+      "translation_units": 3,
+      "requires": [
+        "display",
+        "external-link",
+        "input",
+        "internal-flash",
+        "lights",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 5000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 10
+    },
+    {
+      "id": "object-detect",
+      "translation_units": 8,
+      "requires": [
+        "camera",
+        "display",
+        "input",
+        "sd-card",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 1000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 9
+    },
+    {
+      "id": "pong",
+      "translation_units": 3,
+      "requires": [
+        "display",
+        "input",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 20000,
+        "render_budget_us": 500000
+      },
+      "render": "pong_render",
+      "autostart": 8
+    },
+    {
+      "id": "qr-camera",
+      "translation_units": 13,
+      "requires": [
+        "display",
+        "input",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 3000000,
+        "render_budget_us": 500000
+      },
+      "render": "NULL",
+      "autostart": 3
+    },
+    {
+      "id": "settings",
+      "translation_units": 4,
+      "requires": [
+        "display",
+        "input"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 20000,
+        "render_budget_us": 500000
+      },
+      "render": "settings_render",
+      "autostart": 0
+    },
+    {
+      "id": "sleep",
+      "translation_units": 3,
+      "requires": [
+        "display",
+        "input",
+        "time"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 20000,
+        "render_budget_us": 500000
+      },
+      "render": "sleep_render",
+      "autostart": 0
+    },
+    {
+      "id": "terminal",
+      "translation_units": 4,
+      "requires": [
+        "display",
+        "input"
+      ],
+      "optional": [],
+      "limits": {
+        "static_ram_bytes": 1048576,
+        "stack_bytes": 16384,
+        "state_bytes": 1024,
+        "tick_interval_us": 20000,
+        "tick_budget_us": 20000,
+        "render_budget_us": 500000
+      },
+      "render": "terminal_render",
+      "autostart": 1
+    }
+  ],
+  "largest_static_objects": [
+    {
+      "name": "g_camera_slots",
+      "bytes": 1228800,
+      "address": "000000008029bb80"
+    },
+    {
+      "name": "g_png_comp",
+      "bytes": 524288,
+      "address": "000000008018c170"
+    },
+    {
+      "name": "g_camera_ai_input",
+      "bytes": 230720,
+      "address": "0000000080262f00"
+    },
+    {
+      "name": "s_shadow",
+      "bytes": 153600,
+      "address": "000000008023d340"
+    },
+    {
+      "name": "g_heap",
+      "bytes": 131072,
+      "address": "00000000803d90a0"
+    },
+    {
+      "name": "g_shared_storage",
+      "bytes": 69696,
+      "address": "00000000803f90c0"
+    },
+    {
+      "name": "g_program_source",
+      "bytes": 65536,
+      "address": "00000000803c9098"
+    },
+    {
+      "name": "g_huff_lit_table",
+      "bytes": 65536,
+      "address": "000000008021c170"
+    },
+    {
+      "name": "g_huff_dist_table",
+      "bytes": 65536,
+      "address": "000000008020c170"
+    },
+    {
+      "name": "g_workspace",
+      "bytes": 33952,
+      "address": "000000008022d540"
+    },
+    {
+      "name": "reculock",
+      "bytes": 24576,
+      "address": "000000008040c490"
+    },
+    {
+      "name": "g_luma",
+      "bytes": 19200,
+      "address": "000000008017d780"
+    },
+    {
+      "name": "g_lines",
+      "bytes": 12544,
+      "address": "000000008023a1d0"
+    },
+    {
+      "name": "s_data.4199",
+      "bytes": 8920,
+      "address": "0000000080237158"
+    },
+    {
+      "name": "ds.2884",
+      "bytes": 8912,
+      "address": "0000000080179e00"
+    },
+    {
+      "name": "g_lzw_prefix",
+      "bytes": 8192,
+      "address": "0000000080188170"
+    },
+    {
+      "name": "g_files",
+      "bytes": 7680,
+      "address": "0000000080183ac0"
+    },
+    {
+      "name": "g_photo_row",
+      "bytes": 4800,
+      "address": "00000000801869a8"
+    },
+    {
+      "name": "g_lzw_suffix",
+      "bytes": 4096,
+      "address": "000000008018b170"
+    },
+    {
+      "name": "g_lzw_stack",
+      "bytes": 4096,
+      "address": "000000008018a170"
+    },
+    {
+      "name": "s_code.4198",
+      "bytes": 3956,
+      "address": "00000000802361e0"
+    },
+    {
+      "name": "flipped.2888",
+      "bytes": 3956,
+      "address": "000000008017c0d0"
+    },
+    {
+      "name": "g_session",
+      "bytes": 3320,
+      "address": "00000000803c7f80"
+    },
+    {
+      "name": "plic_instance",
+      "bytes": 2112,
+      "address": "0000000080412680"
+    },
+    {
+      "name": "__malloc_av_",
+      "bytes": 2064,
+      "address": "0000000080177130"
+    }
+  ]
+}

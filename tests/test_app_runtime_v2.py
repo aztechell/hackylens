@@ -43,17 +43,24 @@ class AppRuntimeV2Tests(unittest.TestCase):
         source_name: str,
         extra_sources: tuple[str, ...] = (),
         extra_includes: tuple[Path, ...] = (),
+        config_definitions: tuple[str, ...] = (),
     ) -> subprocess.CompletedProcess[str]:
         if source_name in ("app_runtime_v2_harness.c", "app_runtime_mixed_harness.c", "app_runtime_grants_harness.c"):
             extra_sources += ("firmware/src/capabilities/display.c", "tests/capability_fake_display.c")
             extra_includes += (ROOT / "tests",)
-        if source_name != "app_runtime_production_harness.c":
+        if source_name not in ("app_runtime_production_harness.c", "app_runtime_lights_harness.c"):
             extra_sources += ("tests/capability_fake_external_link.c",)
             extra_includes += (ROOT / "tests",)
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-app-runtime-") as temp:
-            executable = Path(temp) / (
+            temp_path = Path(temp)
+            if config_definitions:
+                (temp_path / "hk_config.h").write_text(
+                    "\n".join(f"#define {item}" for item in config_definitions) + "\n",
+                    encoding="utf-8",
+                )
+            executable = temp_path / (
                 "app_runtime.exe" if os.name == "nt" else "app_runtime"
             )
             subprocess.run(
@@ -68,6 +75,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
                     f"-I{ROOT / 'firmware' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'src'}",
                     f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
+                    f"-I{temp_path}",
                     *(f"-I{path}" for path in extra_includes),
                     str(ROOT / "tests" / source_name),
                     str(ROOT / "firmware" / "src" / "app_runtime" / "runtime.c"),
@@ -132,8 +140,41 @@ class AppRuntimeV2Tests(unittest.TestCase):
                 "firmware/src/runtime/hk_main.c",
             ),
             (ROOT / "firmware" / "assets",),
+            ("HK_ENABLE_CAMERA_FEATURE 1",),
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
+
+    def test_camera_free_firmware_production_integration_harness(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_production_harness.c",
+            (
+                "firmware/src/app_runtime/surface.c",
+                "firmware/src/app_runtime/switch.c",
+                "firmware/src/runtime/app_runtime_integration.c",
+                "firmware/src/runtime/hk_main.c",
+            ),
+            (ROOT / "firmware" / "assets",),
+            ("HK_ENABLE_CAMERA_FEATURE 0",),
+        )
+        self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
+
+    def test_production_lights_claims_restore_settings_ownership(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_lights_harness.c",
+            (
+                "firmware/src/app_runtime/surface.c",
+                "firmware/src/app_runtime/switch.c",
+                "firmware/src/runtime/app_runtime_integration.c",
+                "firmware/src/runtime/hk_main.c",
+                "firmware/src/services/settings_lights_apply.c",
+            ),
+            (ROOT / "firmware" / "assets",),
+            ("HK_ENABLE_CAMERA_FEATURE 1",),
+        )
+        self.assertEqual(
+            result.stdout,
+            "APP_RUNTIME_LIGHTS_OK channels=3 duplicate=1 restore=1 failure=1\n",
+        )
 
     def test_scope_hooks_stay_private(self) -> None:
         private_header = (

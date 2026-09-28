@@ -6,7 +6,12 @@
 
 #include "../firmware/src/capabilities/lights_provider.h"
 
-typedef struct { uint64_t now_us; uint32_t effect_count, active_mask, safe_off_mask; } fake_lights_t;
+typedef struct {
+    uint64_t now_us;
+    uint32_t effect_count, active_mask, safe_off_mask;
+    uint16_t backlight, illumination, red, green, blue;
+    uint8_t fail_next_info;
+} fake_lights_t;
 static fake_lights_t s_fake;
 static hk_lights_state_t s_state;
 static void fake_safe_off(uint32_t channels)
@@ -28,6 +33,11 @@ static hk_result_t fake_info(void *context, hk_lights_info_t *info)
     (void)context;
     if(!info)
         return HK_ERR_INVALID_ARGUMENT;
+    if(s_fake.fail_next_info)
+    {
+        s_fake.fail_next_info = 0U;
+        return HK_ERR_BUSY;
+    }
     *info = (hk_lights_info_t){
         sizeof(*info), HK_LIGHTS_INFO_VERSION, HK_LIGHTS_CHANNEL_ALL,
         HK_LIGHTS_LEVEL_MAX, 0U,
@@ -54,6 +64,10 @@ static hk_result_t fake_level(
     if(channel != HK_LIGHTS_CHANNEL_BACKLIGHT &&
        channel != HK_LIGHTS_CHANNEL_ILLUMINATION)
         return HK_ERR_INVALID_ARGUMENT;
+    if(channel == HK_LIGHTS_CHANNEL_BACKLIGHT)
+        s_fake.backlight = level;
+    else
+        s_fake.illumination = level;
     if(level != 0U)
         s_fake.active_mask |= channel;
     else
@@ -77,6 +91,9 @@ static hk_result_t fake_rgb(
         s_fake.active_mask |= HK_LIGHTS_CHANNEL_RGB;
     else
         s_fake.active_mask &= ~HK_LIGHTS_CHANNEL_RGB;
+    s_fake.red = red;
+    s_fake.green = green;
+    s_fake.blue = blue;
     s_fake.effect_count++;
     return HK_OK;
 }
@@ -119,4 +136,22 @@ uint32_t lights_normative_backend_active_mask(void)
 uint32_t lights_normative_backend_safe_off_mask(void)
 {
     return s_fake.safe_off_mask;
+}
+
+uint16_t lights_normative_backend_level(uint32_t channel)
+{
+    return channel == HK_LIGHTS_CHANNEL_BACKLIGHT ? s_fake.backlight :
+        channel == HK_LIGHTS_CHANNEL_ILLUMINATION ? s_fake.illumination : 0U;
+}
+
+void lights_normative_backend_rgb(uint16_t *red, uint16_t *green, uint16_t *blue)
+{
+    *red = s_fake.red;
+    *green = s_fake.green;
+    *blue = s_fake.blue;
+}
+
+void lights_normative_backend_fail_next_info(void)
+{
+    s_fake.fail_next_info = 1U;
 }

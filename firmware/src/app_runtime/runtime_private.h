@@ -46,6 +46,9 @@ typedef hk_result_t (*hk_app_runtime_prepare_fn)(
     void *user, const hk_app_t *descriptor);
 typedef hk_result_t (*hk_app_runtime_cleanup_fn)(
     void *user, hk_deadline_t deadline);
+typedef hk_result_t (*hk_app_runtime_claim_lights_fn)(
+    void *user, const hk_lights_service_t *service,
+    uint32_t channels, hk_lights_t *session);
 typedef hk_result_t (*hk_app_runtime_deadline_after_fn)(
     void *user,
     uint64_t duration_us,
@@ -61,6 +64,7 @@ typedef struct
     const hk_external_link_service_t *external_link;
     hk_app_runtime_prepare_fn prepare;
     hk_app_runtime_cleanup_fn cleanup;
+    hk_app_runtime_claim_lights_fn claim_lights;
     hk_app_runtime_deadline_after_fn deadline_after_us;
 } hk_app_runtime_ops_t;
 

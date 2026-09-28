@@ -20,6 +20,9 @@ EXPECTED_APPS = {
     "object-detect", "files", "buttons", "pong", "settings", "sleep",
     "micropython",
 }
+CAMERA_APPS = {
+    "camera", "qr-camera", "face-detect", "apriltag", "object-detect",
+}
 
 
 class AppCompositionTests(unittest.TestCase):
@@ -57,6 +60,8 @@ class AppCompositionTests(unittest.TestCase):
     def test_legacy_build_constraints_are_manifest_services_only(self) -> None:
         requirements = build_firmware.load_app_requirements()
         self.assertTrue({"camera", "sd-card"} <= requirements["camera"])
+        self.assertIn("camera", requirements["qr-camera"])
+        self.assertIn("qr-camera", build_firmware.CAMERA_APP_IDS)
         self.assertTrue({"internal-flash", "lights", "external-link"} <= requirements["micropython"])
         self.assertFalse((ROOT / "firmware" / "app_requirements.toml").exists())
         for app in app_composition.load_model()["apps"]:
@@ -131,6 +136,54 @@ class AppCompositionTests(unittest.TestCase):
             )
             self.assertTrue(
                 (stage / "firmware" / "src" / "apps" / "camera" / "camera_app.c").is_file()
+            )
+
+    def test_qr_only_camera_consumer_keeps_camera_feature_sources(self) -> None:
+        disabled = CAMERA_APPS - {"qr-camera"}
+        board = build_firmware.load_board("huskylens-sen0305")
+        selection = build_firmware.select_services(board, disabled, set(), set())
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            build_firmware.stage_firmware_sources(stage, disabled)
+            build_firmware.stage_platform_sources(stage, disabled, selection)
+            self.assertTrue(
+                (stage / "firmware" / "src" / "apps" / "qr_camera" /
+                 "qr_camera_app.c").is_file()
+            )
+            self.assertTrue(
+                (stage / "firmware" / "src" / "services" /
+                 "camera_light.h").is_file()
+            )
+            self.assertTrue(
+                (stage / "firmware" / "src" / "drivers" /
+                 "ov2640_sensor.c").is_file()
+            )
+            self.assertTrue(
+                (stage / "platforms" / "k210" / "hal" / "hal_dvp.c").is_file()
+            )
+
+    def test_no_camera_apps_remove_camera_feature_sources(self) -> None:
+        disabled = set(CAMERA_APPS)
+        board = build_firmware.load_board("huskylens-sen0305")
+        selection = build_firmware.select_services(board, disabled, set(), set())
+        with tempfile.TemporaryDirectory() as directory:
+            stage = Path(directory)
+            build_firmware.stage_firmware_sources(stage, disabled)
+            build_firmware.stage_platform_sources(stage, disabled, selection)
+            self.assertTrue(
+                (stage / "firmware" / "src" / "runtime" /
+                 "app_runtime_integration.c").is_file()
+            )
+            self.assertFalse(
+                (stage / "firmware" / "src" / "services" /
+                 "camera_light.h").exists()
+            )
+            self.assertFalse(
+                (stage / "firmware" / "src" / "drivers" /
+                 "ov2640_sensor.c").exists()
+            )
+            self.assertFalse(
+                (stage / "platforms" / "k210" / "hal" / "hal_dvp.c").exists()
             )
 
     def test_registry_generation_is_path_independent(self) -> None:

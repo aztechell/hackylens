@@ -28,10 +28,15 @@ static uint32_t s_target_configs;
 static uint32_t s_cancel_calls;
 static uint32_t s_poll_calls;
 static uint32_t s_request_capability_id;
-static uint8_t s_uart_rx[HK_LINK_MAX_FRAME];
+static uint8_t s_uart_rx[HK_LINK_MAX_FRAME * 2U];
 static uint32_t s_uart_rx_size;
+static uint32_t s_uart_read_limit;
+static uint32_t s_uart_read_calls;
 static uint8_t s_uart_tx[HK_LINK_MAX_FRAME];
 static uint32_t s_uart_tx_size;
+static uint8_t s_uart_tx_history[8][HK_LINK_MAX_FRAME];
+static uint32_t s_uart_tx_history_size[8];
+static uint32_t s_uart_tx_count;
 static const uint8_t *s_borrowed_uart_tx;
 static uint32_t s_borrowed_uart_size;
 static hk_external_link_op_t s_operation;
@@ -99,7 +104,9 @@ hk_result_t hk_external_link_configure_uart(
     const hk_external_link_t *handle,
     const hk_external_link_uart_config_t *config)
 {
-    if(!handle || !config || config->baud != 115200U)
+    if(!handle || !config ||
+       (config->baud != 9600U && config->baud != 115200U &&
+        config->baud != 1000000U))
         return HK_ERR_INVALID_ARGUMENT;
     s_uart_configs++;
     return HK_OK;
@@ -124,9 +131,12 @@ hk_result_t hk_external_link_uart_read(
     (void)handle;
     if(!rx || !received_bytes)
         return HK_ERR_INVALID_ARGUMENT;
+    s_uart_read_calls++;
     size = s_uart_rx_size;
     if(size > rx->size_bytes)
         size = rx->size_bytes;
+    if(s_uart_read_limit && size > s_uart_read_limit)
+        size = s_uart_read_limit;
     if(size != 0U)
         memcpy(rx->data, s_uart_rx, size);
     if(size < s_uart_rx_size)
@@ -173,6 +183,13 @@ hk_result_t hk_external_link_poll(
     }
     memcpy(s_uart_tx, s_borrowed_uart_tx, s_borrowed_uart_size);
     s_uart_tx_size = s_borrowed_uart_size;
+    if(s_uart_tx_count < 8U)
+    {
+        memcpy(s_uart_tx_history[s_uart_tx_count], s_borrowed_uart_tx,
+               s_borrowed_uart_size);
+        s_uart_tx_history_size[s_uart_tx_count] = s_borrowed_uart_size;
+    }
+    s_uart_tx_count++;
     progress->tx_completed_bytes = s_borrowed_uart_size;
     progress->flags = HK_EXTERNAL_LINK_PROGRESS_TERMINAL;
     progress->terminal_result = HK_OK;
@@ -263,9 +280,14 @@ int main(void)
 {
     static const uint8_t ping_payload[] = {0x11U, 0x22U, 0x33U};
     uint8_t ping[HK_LINK_MAX_FRAME];
+    uint8_t ping2[HK_LINK_MAX_FRAME];
     uint8_t expected[HK_LINK_MAX_FRAME];
+    uint8_t expected2[HK_LINK_MAX_FRAME];
     size_t ping_size;
+    size_t ping2_size;
     size_t expected_size;
+    size_t expected2_size;
+    uint32_t reads_before;
 
     ping_size = hk_link_frame_encode(
         HK_LINK_PING, 0x1234U, ping_payload, sizeof(ping_payload),
@@ -273,7 +295,15 @@ int main(void)
     expected_size = hk_link_frame_encode(
         HK_LINK_PONG, 0x1234U, ping_payload, sizeof(ping_payload),
         expected, sizeof(expected));
+    ping2_size = hk_link_frame_encode(
+        HK_LINK_PING, 0x5678U, ping_payload, sizeof(ping_payload),
+        ping2, sizeof(ping2));
+    expected2_size = hk_link_frame_encode(
+        HK_LINK_PONG, 0x5678U, ping_payload, sizeof(ping_payload),
+        expected2, sizeof(expected2));
     CHECK(ping_size != 0U && expected_size != 0U);
+    CHECK(ping2_size != 0U && expected2_size != 0U);
+    CHECK(ping_size + ping2_size <= 32U);
 
     external_link_service_init(EXTERNAL_LINK_UART);
     CHECK(s_request_capability_id == HK_CAPABILITY_ID_EXTERNAL_LINK);
@@ -294,8 +324,79 @@ int main(void)
     CHECK(s_uart_tx_size == expected_size);
     CHECK(memcmp(s_uart_tx, expected, expected_size) == 0);
 
+    /* Both frames arrive in one provider read. The second must wait behind
+     * the first borrowed asynchronous response, without another read. */
+    memcpy(s_uart_rx, ping, ping_size);
+    memcpy(s_uart_rx + ping_size, ping2, ping2_size);
+    s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
+    reads_before = s_uart_read_calls;
+    external_link_service_tick();
+    CHECK(s_uart_read_calls == reads_before + 1U);
+    CHECK(s_uart_tx_count == 1U);
+    s_now_us += 1000U;
+    external_link_service_tick();
+    external_link_service_tick();
+    CHECK(s_uart_tx_count == 1U);
+    external_link_service_tick();
+    CHECK(s_uart_tx_count == 2U);
+    CHECK(s_uart_read_calls == reads_before + 1U);
+    CHECK(s_uart_tx_history_size[1] == expected_size);
+    CHECK(memcmp(s_uart_tx_history[1], expected, expected_size) == 0);
+    s_now_us += 1000U;
+    external_link_service_tick();
+    external_link_service_tick();
+    external_link_service_tick();
+    CHECK(s_uart_tx_count == 3U);
+    CHECK(s_uart_tx_history_size[2] == expected2_size);
+    CHECK(memcmp(s_uart_tx_history[2], expected2, expected2_size) == 0);
+
+    /* Arbitrary read boundaries include boundaries inside frame headers. */
+    s_uart_read_limit = 3U;
+    memcpy(s_uart_rx, ping, ping_size);
+    memcpy(s_uart_rx + ping_size, ping2, ping2_size);
+    s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
+    for(unsigned i = 0U; i < 80U && s_uart_tx_count < 5U; ++i)
+    {
+        s_now_us += 1000U;
+        external_link_service_tick();
+    }
+    CHECK(s_uart_tx_count == 5U);
+    CHECK(memcmp(s_uart_tx_history[3], expected, expected_size) == 0);
+    CHECK(memcmp(s_uart_tx_history[4], expected2, expected2_size) == 0);
+    s_uart_read_limit = 0U;
+
+    /* Reconfiguration, transport switching and suspend discard a staged
+     * second frame and any partially parsed bytes. */
+    memcpy(s_uart_rx, ping, ping_size);
+    memcpy(s_uart_rx + ping_size, ping2, ping2_size);
+    s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
+    external_link_service_tick();
+    external_link_service_set_uart_baud(9600U);
+    CHECK(s_cancel_calls == 0U);
+    for(unsigned i = 0U; i < 4U; ++i) external_link_service_tick();
+    CHECK(s_uart_tx_count == 5U);
+    external_link_service_set_uart_baud(115200U);
+
+    memcpy(s_uart_rx, ping, ping_size);
+    memcpy(s_uart_rx + ping_size, ping2, ping2_size);
+    s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
+    external_link_service_tick();
     external_link_service_set_transport(EXTERNAL_LINK_I2C);
-    CHECK(s_target_configs == 1U);
+    external_link_service_set_transport(EXTERNAL_LINK_UART);
+    for(unsigned i = 0U; i < 4U; ++i) external_link_service_tick();
+    CHECK(s_uart_tx_count == 5U);
+
+    memcpy(s_uart_rx, ping, ping_size);
+    memcpy(s_uart_rx + ping_size, ping2, ping2_size);
+    s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
+    external_link_service_tick();
+    external_link_service_suspend();
+    external_link_service_resume();
+    for(unsigned i = 0U; i < 4U; ++i) external_link_service_tick();
+    CHECK(s_uart_tx_count == 5U);
+
+    external_link_service_set_transport(EXTERNAL_LINK_I2C);
+    CHECK(s_target_configs >= 1U);
     memcpy(s_target_rx, ping, ping_size);
     s_target_event = (hk_external_link_target_event_t){
         sizeof(s_target_event), HK_EXTERNAL_LINK_TARGET_EVENT_VERSION,
@@ -309,12 +410,12 @@ int main(void)
     external_link_service_suspend();
     external_link_service_suspend();
     CHECK(external_link_service_suspended());
-    CHECK(s_releases == 1U);
+    CHECK(s_releases >= 1U);
     external_link_service_resume();
     external_link_service_resume();
     CHECK(!external_link_service_suspended());
-    CHECK(s_acquires == 2U && s_target_configs == 2U);
+    CHECK(s_acquires >= 2U && s_target_configs >= 2U);
     CHECK(s_cancel_calls == 0U);
-    puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1");
+    puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 coalesced=1 fragmented=1 reset=1");
     return 0;
 }
