@@ -100,6 +100,7 @@ mp_obj_t mp_call_function_0(mp_obj_t module)
         CHECK(micropython_runtime_start(NULL, 0U, 1U) == 0U);
         CHECK(micropython_runtime_start("x",
             MICROPYTHON_RUNTIME_SOURCE_MAX + 1U, 1U) == 0U);
+        micropython_runtime_poll();
         micropython_runtime_get_status(&after);
         CHECK(memcmp(&before, &after, sizeof(before)) == 0);
         CHECK(s_cleanup_count + 1U == s_prepare_count);
@@ -142,6 +143,7 @@ int main(void)
     CHECK(before.run_id == 1U && before.source_bytes == 1U);
     CHECK(micropython_runtime_start("B", 1U, 1000U) == 0U);
     CHECK(micropython_runtime_start(NULL, 0U, 1000U) == 0U);
+    micropython_runtime_poll();
     micropython_runtime_get_status(&after);
     CHECK(memcmp(&before, &after, sizeof(before)) == 0);
     CHECK(s_cleanup_count == 0U && s_prepare_count == 1U);
@@ -164,6 +166,7 @@ int main(void)
     CHECK(before.run_id == 2U && before.output_pending == 0U);
     CHECK(micropython_runtime_start("D", 1U, 1000U) == 0U);
     CHECK(micropython_runtime_start(NULL, 0U, 1000U) == 0U);
+    micropython_runtime_poll();
     micropython_runtime_get_status(&after);
     CHECK(memcmp(&before, &after, sizeof(before)) == 0);
     CHECK(s_cleanup_count == 1U && s_prepare_count == 2U);

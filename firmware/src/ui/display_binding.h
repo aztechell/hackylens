@@ -47,6 +47,9 @@ void hk_ui_display_draw_glyph_at(
 void hk_ui_display_draw_text_at(
     uint16_t x, uint16_t y, const char *text,
     uint16_t foreground, uint16_t background);
+void hk_ui_display_draw_text_clipped_at(
+    uint16_t x, uint16_t y, uint16_t width, const char *text,
+    uint16_t foreground, uint16_t background);
 void hk_ui_display_draw_text_centered(
     uint16_t y, const char *text,
     uint16_t foreground, uint16_t background);

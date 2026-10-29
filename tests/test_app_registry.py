@@ -225,12 +225,12 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
             micropython=True
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=11 menu=11", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
             micropython=False
         ))
 
@@ -353,13 +353,13 @@ int main(void)
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "files", "buttons", "pong", "settings",
-            "sleep", "micropython",
+            "sleep", "power-off", "micropython",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
-            "sleep": 0,
+            "sleep": 0, "power-off": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",

@@ -3,8 +3,12 @@
 
 #include <hackylens/capability/display.h>
 
+#ifndef HK_FAKE_DISPLAY_WIDTH
 #define HK_FAKE_DISPLAY_WIDTH 16U
+#endif
+#ifndef HK_FAKE_DISPLAY_HEIGHT
 #define HK_FAKE_DISPLAY_HEIGHT 12U
+#endif
 #define HK_FAKE_DISPLAY_MAX_COMMANDS 8U
 #define HK_FAKE_DISPLAY_MAX_TEXT_BYTES 32U
 #define HK_FAKE_DISPLAY_MAX_DIRTY_RECTS 4U

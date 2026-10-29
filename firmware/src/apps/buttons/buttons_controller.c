@@ -42,6 +42,10 @@ void buttons_controller_handle_input(
     if(!state || !event)
         return;
     changed = event->changed & HK_INPUT_BUTTON_ALL;
+    if((state->view.pulse_buttons & HK_INPUT_BUTTON_BACK) &&
+       (event->pressed & HK_INPUT_BUTTON_BACK) &&
+       !(state->ignore_until_released & HK_INPUT_BUTTON_BACK))
+        state->exit_armed = 1U;
     for(index = 0U; index < 4U; index++)
     {
         uint32_t mask = s_button_masks[index];
@@ -113,7 +117,17 @@ void buttons_controller_tick(buttons_state_t *state, uint32_t buttons)
             state->exit_armed = 1U;
     }
     else if(!state->exit_armed)
-        state->exit_ticks = 0U;
+    {
+        if(state->view.state == HK_INPUT_BUTTON_BACK)
+        {
+            if(state->exit_ticks < BUTTONS_BACK_EXIT_TICKS)
+                state->exit_ticks++;
+            if(state->exit_ticks == BUTTONS_BACK_EXIT_TICKS)
+                state->exit_armed = 1U;
+        }
+        else
+            state->exit_ticks = 0U;
+    }
     if(state->exit_armed &&
        !(state->view.state & (HK_INPUT_BUTTON_OK | HK_INPUT_BUTTON_BACK)))
         state->close_requested = 1U;

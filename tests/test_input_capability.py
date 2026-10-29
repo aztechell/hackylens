@@ -123,7 +123,7 @@ class InputCapabilityTests(unittest.TestCase):
 
     def test_composition_requires_input_and_cube_stays_absent(self) -> None:
         runtime_board = board_contract.load_board("huskylens-sen0305")
-        cube = board_contract.load_board("sipeed-maix-cube")
+        cube = board_contract.load_board("k210-conformance", root=ROOT / "tests" / "fixtures")
         runtime = generator.select(runtime_board, set(), set(), set())
         conformance = generator.select(cube, set(), set(), set())
 

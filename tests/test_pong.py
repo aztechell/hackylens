@@ -68,6 +68,8 @@ class PongHostTests(unittest.TestCase):
                     compiler,
                     "-std=c11",
                     "-O2",
+                    "-DHK_FAKE_DISPLAY_WIDTH=240U",
+                    "-DHK_FAKE_DISPLAY_HEIGHT=240U",
                     "-Wall",
                     "-Wextra",
                     "-Werror",

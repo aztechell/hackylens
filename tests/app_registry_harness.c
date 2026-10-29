@@ -288,6 +288,14 @@ const hk_app_v2_entry_t sleep_v2_entry = {
     .render = dummy_sleep_render,
     .stop = dummy_sleep_stop,
 };
+const hk_app_v2_entry_t power_off_v2_entry = {
+    .state_storage = s_sleep_v2_storage,
+    .state_capacity_bytes = sizeof(s_sleep_v2_storage),
+    .start = dummy_sleep_start,
+    .event = dummy_sleep_event,
+    .render = dummy_sleep_render,
+    .stop = dummy_sleep_stop,
+};
 static uint8_t s_terminal_v2_storage[16];
 static hk_result_t dummy_terminal_start(const hk_app_context_t *ctx)
 {
@@ -339,14 +347,14 @@ int main(void)
     const hk_app_t *sleep;
 
 #if HK_ENABLE_APP_MICROPYTHON
-    CHECK(g_hk_generated_app_count == 12U);
-    CHECK(g_menu_item_count == 12U);
-    CHECK(strcmp(g_menu_items[11]->id, "micropython") == 0);
+    CHECK(g_hk_generated_app_count == 13U);
+    CHECK(g_menu_item_count == 13U);
+    CHECK(strcmp(g_menu_items[12]->id, "micropython") == 0);
     CHECK(hk_app_for_autostart_id(10U) == app_by_id("micropython"));
 #else
-    CHECK(g_hk_generated_app_count == 11U);
-    CHECK(g_menu_item_count == 11U);
-    CHECK(strcmp(g_menu_items[10]->id, "sleep") == 0);
+    CHECK(g_hk_generated_app_count == 12U);
+    CHECK(g_menu_item_count == 12U);
+    CHECK(strcmp(g_menu_items[11]->id, "power-off") == 0);
     CHECK(hk_app_for_autostart_id(10U) == NULL);
 #endif
     CHECK(hk_app_autostart_id_is_persistable(HK_AUTOSTART_OFF) == 1U);
@@ -397,3 +405,6 @@ int main(void)
            g_hk_generated_app_count, g_menu_item_count);
     return 0;
 }
+
+void power_off_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{ sleep_draw_icon(x, y, color, bg); }

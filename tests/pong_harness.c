@@ -89,7 +89,7 @@ static hk_result_t stub_blit(
 
 static void init_surface(void)
 {
-    static const hk_display_info_t info = {
+    const hk_display_info_t info = {
         sizeof(hk_display_info_t), HK_DISPLAY_INFO_VERSION,
         PONG_DISPLAY_WIDTH, PONG_DISPLAY_HEIGHT,
         HK_DISPLAY_FORMAT_RGB565_BE, HK_DISPLAY_PLANE_BASE,
@@ -315,6 +315,23 @@ int main(void)
     test_frame_rate_independence();
     test_dirty_rendering();
     test_single_present_for_full_and_maximal_frames();
+    pong_display_width = 240U;
+    pong_display_height = 240U;
+    init_surface();
+    {
+        pong_state_t state = {0};
+        pong_controller_reset(&state, 0U);
+        for(unsigned step = 1U; step <= 200U; ++step)
+            pong_controller_tick(&state, HK_INPUT_BUTTON_RIGHT,
+                                 step * PONG_FIXED_STEP_US);
+        assert(state.player_x + PONG_PADDLE_W < 240);
+        assert(state.ball_x + PONG_BALL_SIZE <= 240);
+        reset_lcd_log();
+        assert(pong_view_render_initial(
+                   &g_surface, pong_controller_view_state(&state)) == HK_OK);
+        for(unsigned index = 0U; index < g_fill_call_count; ++index)
+            assert(g_fill_calls[index].x + g_fill_calls[index].w <= 240U);
+    }
     puts("PONG_HOST_OK fixed_step=20ms dirty_regions=bounded presents=1");
     return 0;
 }

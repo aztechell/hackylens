@@ -38,7 +38,7 @@ class BoardDescriptorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.runtime = board_contract.load_board("huskylens-sen0305")
-        cls.cube = board_contract.load_board("sipeed-maix-cube")
+        cls.cube = board_contract.load_board("k210-conformance", root=ROOT / "tests" / "fixtures")
 
     def validate(self, data: dict) -> None:
         board_contract.validate_board_data(data)
@@ -253,7 +253,7 @@ class BoardDescriptorTests(unittest.TestCase):
         with self.assertRaisesRegex(board_contract.ContractError, "exactly match"):
             self.validate(moved)
 
-    def test_cube_has_no_external_link_services(self) -> None:
+    def test_conformance_fixture_has_no_external_link_services(self) -> None:
         self.assertNotIn("external-uart", self.cube.present_kinds())
         self.assertNotIn("external-i2c", self.cube.present_kinds())
         self.assertEqual(self.cube.driver_supported_kinds(), {"processor"})
@@ -313,7 +313,7 @@ class BoardDescriptorTests(unittest.TestCase):
         with self.assertRaisesRegex(board_contract.ContractError, "unknown field"):
             self.validate(unknown)
 
-    def test_cube_layout_is_conservative_and_not_runtime_storage(self) -> None:
+    def test_conformance_layout_is_not_runtime_storage(self) -> None:
         self.assertEqual(
             [(p["name"], p["offset"], p["size"], p["runtime_writable"])
              for p in self.cube.partitions],
@@ -328,9 +328,20 @@ class BoardCompositionAndCliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.runtime = board_contract.load_board("huskylens-sen0305")
-        cls.cube = board_contract.load_board("sipeed-maix-cube")
+        cls.cube = board_contract.load_board("k210-conformance", root=ROOT / "tests" / "fixtures")
 
     def run_tool(self, tool: str, *args: str) -> subprocess.CompletedProcess[str]:
+        if "k210-conformance" in args:
+            module = __import__(Path(tool).stem)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with mock.patch.object(module, "load_board", return_value=self.cube), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                try:
+                    code = module.main(list(args))
+                except SystemExit as exc:
+                    code = exc.code if isinstance(exc.code, int) else 2
+                    if isinstance(exc.code, str):
+                        print(exc.code, file=sys.stderr)
+            return subprocess.CompletedProcess([tool, *args], code, stdout.getvalue(), stderr.getvalue())
         return subprocess.run(
             [sys.executable, str(TOOLS / tool), *args],
             cwd=ROOT,
@@ -353,9 +364,9 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         checker = self.run_tool("check_board_ports.py")
         self.assertEqual(checker.returncode, 2)
 
-    def test_cube_compile_conformance_succeeds(self) -> None:
+    def test_fixture_compile_conformance_succeeds(self) -> None:
         result = self.run_tool(
-            "check_board_ports.py", "--board", "sipeed-maix-cube", "--compile"
+            "check_board_ports.py", "--board", "k210-conformance", "--compile"
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("passed for 1 board", result.stdout)
@@ -363,15 +374,15 @@ class BoardCompositionAndCliTests(unittest.TestCase):
         self.assertIn('#include "board_config.h"', harness)
         self.assertIn("&hk_board_ops", harness)
 
-    def test_cube_full_package_image_and_flash_fail_early(self) -> None:
+    def test_conformance_full_package_image_and_flash_fail_early(self) -> None:
         full = self.run_tool(
-            "build_firmware.py", "full", "--board", "sipeed-maix-cube"
+            "build_firmware.py", "full", "--board", "k210-conformance"
         )
         self.assertEqual(full.returncode, 2)
         self.assertIn("conformance-only", full.stderr)
 
         package = self.run_tool(
-            "package_release.py", "--board", "sipeed-maix-cube"
+            "package_release.py", "--board", "k210-conformance"
         )
         self.assertNotEqual(package.returncode, 0)
         self.assertIn("not releaseable", package.stderr)
@@ -380,13 +391,13 @@ class BoardCompositionAndCliTests(unittest.TestCase):
             image = Path(directory) / "cube.bin"
             image.write_bytes(b"cube")
             artifact = self.run_tool(
-                "make_image.py", str(image), "--board", "sipeed-maix-cube"
+                "make_image.py", str(image), "--board", "k210-conformance"
             )
             self.assertEqual(artifact.returncode, 2)
             self.assertIn("conformance-only", artifact.stderr)
             flash = self.run_tool(
                 "hkflash.py", "flash", str(image),
-                "--board", "sipeed-maix-cube", "--port", "TEST",
+                "--board", "k210-conformance", "--port", "TEST",
             )
             self.assertNotEqual(flash.returncode, 0)
             self.assertIn("programming.supported=false", flash.stderr)

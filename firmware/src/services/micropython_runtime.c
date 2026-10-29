@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "../core/hk_screen.h"
+#include "../core/shared_buffer.h"
 #include "core1_executor.h"
 #include "../adapters/micropython/micropython_capability_bridge.h"
 #include "hal_time.h"
@@ -53,11 +54,7 @@ static uint32_t g_ticket;
 
 static micropython_shared_t *micropython_shared(void)
 {
-    uintptr_t address = (uintptr_t)&g_shared_storage;
-
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (micropython_shared_t *)address;
+    return (micropython_shared_t *)hk_shared_buffer_uncached(&g_shared_storage);
 }
 
 static micropython_shared_t *micropython_shared_init(void)

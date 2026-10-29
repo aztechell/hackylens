@@ -20,7 +20,7 @@ void autostart_controller_start(void)
     hk_autostart_id_t id = settings_autostart_id();
     const hk_app_t *app;
 
-    if(buttons_read_pressed_mask() & BUTTON_BACK)
+    if(buttons_boot_override_pressed())
     {
         printf("[BOOT] autostart suppressed by BACK\r\n");
         shell_show_menu();

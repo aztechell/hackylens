@@ -1,11 +1,10 @@
 schema = 1
 id = "sipeed-maix-cube"
 platform = "kendryte-k210"
-support = "conformance"
+support = "runtime"
 releaseable = false
-# Compile-conformance only. Present hardware is not driver-supported.
-available = ["processor"]
-present = [
+runtime_profile = "hackylens-cube"
+available = [
   "processor",
   "internal-flash",
   "display",
@@ -13,11 +12,267 @@ present = [
   "buttons",
   "lights",
   "sd-card",
+  "external-uart",
+  "external-i2c",
 ]
+
+[[routes]]
+id = "lcd-backlight"
+macro = "IO_LCD_BL"
+pin = 17
+function = "timer0-toggle1"
+peripheral = "timer0"
+
+[[routes]]
+id = "lcd-dc"
+macro = "IO_LCD_DC_OR_AUX"
+pin = 38
+function = "gpiohs15"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "lcd-chip-select"
+macro = "IO_LCD_CS"
+pin = 36
+function = "spi0-ss3"
+peripheral = "spi0"
+
+[[routes]]
+id = "lcd-clock"
+macro = "IO_LCD_SCLK"
+pin = 39
+function = "spi0-sclk"
+peripheral = "spi0"
+
+[[routes]]
+id = "lcd-reset"
+macro = "IO_LCD_RST"
+pin = 37
+function = "gpiohs14"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "illumination"
+macro = "IO_LED_ILLUM"
+pin = 32
+function = "timer2-toggle4"
+peripheral = "timer2"
+
+[[routes]]
+id = "rgb-red"
+macro = "IO_RGB_PWM0"
+pin = 13
+function = "timer2-toggle1"
+peripheral = "timer2"
+
+[[routes]]
+id = "rgb-green"
+macro = "IO_RGB_PWM1"
+pin = 12
+function = "timer2-toggle2"
+peripheral = "timer2"
+
+[[routes]]
+id = "rgb-blue"
+macro = "IO_RGB_PWM2"
+pin = 14
+function = "timer2-toggle3"
+peripheral = "timer2"
+
+[[routes]]
+id = "button-left"
+macro = "IO_BTN_LEFT"
+pin = 11
+function = "gpiohs2"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "button-ok"
+macro = "IO_BTN_OK"
+pin = 10
+function = "gpiohs3"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "button-right"
+macro = "IO_BTN_RIGHT"
+pin = 16
+function = "gpiohs4"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "camera-pclk"
+macro = "IO_CAM_PCLK"
+pin = 47
+function = "cmos-pclk"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-xclk"
+macro = "IO_CAM_XCLK"
+pin = 46
+function = "cmos-xclk"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-href"
+macro = "IO_CAM_HREF"
+pin = 45
+function = "cmos-href"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-pwdn"
+macro = "IO_CAM_PWDN"
+pin = 44
+function = "cmos-pwdn"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-vsync"
+macro = "IO_CAM_VSYNC"
+pin = 43
+function = "cmos-vsync"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-reset"
+macro = "IO_CAM_RST"
+pin = 42
+function = "cmos-rst"
+peripheral = "dvp"
+
+[[routes]]
+id = "camera-sccb-clock"
+macro = "IO_CAM_SCCB_SCLK"
+pin = 41
+function = "i2c2-sclk"
+peripheral = "i2c2"
+
+[[routes]]
+id = "camera-sccb-data"
+macro = "IO_CAM_SCCB_SDA"
+pin = 40
+function = "i2c2-sda"
+peripheral = "i2c2"
+
+[[routes]]
+id = "sd-clock"
+macro = "IO_SD_SCLK"
+pin = 27
+function = "spi1-sclk"
+peripheral = "spi1"
+
+[[routes]]
+id = "sd-data0"
+macro = "IO_SD_D0"
+pin = 28
+function = "spi1-d0"
+peripheral = "spi1"
+
+[[routes]]
+id = "sd-data1"
+macro = "IO_SD_D1"
+pin = 26
+function = "spi1-d1"
+peripheral = "spi1"
+
+[[routes]]
+id = "sd-chip-select"
+macro = "IO_SD_CS"
+pin = 29
+function = "gpiohs6"
+peripheral = "gpiohs"
+
+[[routes]]
+id = "external-uart-rx"
+macro = "IO_EXTERNAL_UART_R"
+pin = 24
+function = "uart1-rx"
+peripheral = "uart1"
+runtime_mux_group = "grove-four-pin-mode"
+
+[[routes]]
+id = "external-uart-tx"
+macro = "IO_EXTERNAL_UART_T"
+pin = 25
+function = "uart1-tx"
+peripheral = "uart1"
+runtime_mux_group = "grove-four-pin-mode"
+
+[[routes]]
+id = "external-i2c-clock"
+macro = "IO_EXTERNAL_I2C_R"
+pin = 24
+function = "i2c0-sclk"
+peripheral = "i2c0"
+runtime_mux_group = "grove-four-pin-mode"
+
+[[routes]]
+id = "external-i2c-data"
+macro = "IO_EXTERNAL_I2C_T"
+pin = 25
+function = "i2c0-sda"
+peripheral = "i2c0"
+runtime_mux_group = "grove-four-pin-mode"
+
+# Maix Cube 2757: Sipeed MaixPy-v1 cube.config.json and Maix-Cube-2757 schematic.
+# LCD D[7:0] uses K210's fixed shared SPI0/DVP octal data path.
+[[routes]]
+id = "pmic-clock"
+macro = "IO_PMIC_SCL"
+pin = 30
+function = "i2c1-sclk"
+peripheral = "i2c1"
+
+[[routes]]
+id = "pmic-data"
+macro = "IO_PMIC_SDA"
+pin = 31
+function = "i2c1-sda"
+peripheral = "i2c1"
+
+[drivers]
+display = "st7789-octal"
+camera = "ov7740"
+input = "three-way"
+power = "axp173"
+lights = "cube"
 
 [defaults]
 lcd_width = 240
 lcd_height = 240
+lcd_spi = 0
+lcd_chip_select = 3
+# Cube's parallel WR bus uses the conservative Sipeed example clock.
+lcd_spi_hz = 15000000
+gpiohs_lcd_reset = 14
+gpiohs_lcd_dc = 15
+gpiohs_button_left = 2
+gpiohs_button_ok = 3
+gpiohs_button_right = 4
+gpiohs_sd_chip_select = 6
+sd_spi = 1
+sd_chip_select = 3
+flash_spi = 3
+flash_chip_select = 0
+led_pwm_device = 2
+led_pwm_channel = 3
+rgb_pwm_device = 2
+rgb_pwm_channel0 = 0
+rgb_pwm_channel1 = 1
+rgb_pwm_channel2 = 2
+screen_pwm_device = 0
+screen_pwm_channel = 0
+pwm_frequency_hz = 20000
+# Cube uses I2C2 with the OV7740 seven-bit address.
+camera_sccb_address = 0x21
+camera_xclk_hz = 22000000
+camera_sccb_hz = 100000
+camera_max_width = 640
+camera_max_height = 480
+# Camera mounting relative to the UI requires a 90-degree clockwise preview.
+camera_preview_rotate = 1
 
 [flash]
 address_bytes = 3
@@ -29,20 +284,47 @@ program_size = 0x00000100
 [[partitions]]
 name = "firmware"
 offset = 0x00000000
-size = 0x00800000
+size = 0x007FE000
 required_capacity = 0x01000000
 runtime_writable = false
 
 [[partitions]]
-name = "reserved"
+name = "settings_0"
+offset = 0x007FE000
+size = 0x00001000
+required_capacity = 0x01000000
+runtime_writable = true
+
+[[partitions]]
+name = "settings_1"
+offset = 0x007FF000
+size = 0x00001000
+required_capacity = 0x01000000
+runtime_writable = true
+
+[[partitions]]
+name = "legacy_reserved"
 offset = 0x00800000
-size = 0x00800000
+size = 0x00470000
 required_capacity = 0x01000000
 runtime_writable = false
 
+[[partitions]]
+name = "userfs"
+offset = 0x00C70000
+size = 0x00390000
+required_capacity = 0x01000000
+runtime_writable = true
+
 [programming]
-supported = false
+supported = true
 reset_profile = "manual"
+isp_stub = "isp_stub/isp_prog_huskylens.bin"
+flash_type = "spi0"
+flash_mode = "dio"
+boot_baud = 115200
+flash_baud = 1500000
+reset_attempts = 1
 
 [programming.usb_detection]
 mode = "explicit-port"

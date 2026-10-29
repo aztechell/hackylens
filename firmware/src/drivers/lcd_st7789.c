@@ -12,6 +12,16 @@ static uint8_t s_shadow[LCD_W * LCD_H * 2U]
     __attribute__((aligned(4), section(".bss")));
 static uint8_t s_pixel_stream_active;
 
+static void set_phase(uint32_t frame_bits, uint8_t is_command)
+{
+#if HK_BOARD_LCD_PARALLEL8
+    hal_spi_parallel8_phase(LCD_SPI, frame_bits, is_command);
+#else
+    (void)is_command;
+    hal_spi_fifo_set_frame_bits(LCD_SPI, frame_bits);
+#endif
+}
+
 static uint64_t transport_deadline(hk_deadline_t deadline)
 {
     return deadline.at_us == 0U ? UINT64_MAX : deadline.at_us;
@@ -43,7 +53,7 @@ static uint8_t send_until(
 
 static uint8_t command_until(uint8_t command, hk_deadline_t deadline)
 {
-    hal_spi_fifo_set_frame_bits(LCD_SPI, 8U);
+    set_phase(8U, 1U);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 0U);
     return send_until(&command, 1U, deadline);
 }
@@ -51,7 +61,7 @@ static uint8_t command_until(uint8_t command, hk_deadline_t deadline)
 static uint8_t data_until(
     const uint8_t *data, size_t size_bytes, hk_deadline_t deadline)
 {
-    hal_spi_fifo_set_frame_bits(LCD_SPI, 8U);
+    set_phase(8U, 0U);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1U);
     return send_until(data, size_bytes, deadline);
 }
@@ -73,24 +83,52 @@ static void data_u8(uint8_t value)
 
 static void reset_panel(void)
 {
+#if HK_BOARD_LCD_PARALLEL8
+    hal_gpiohs_write(GPIOHS_LCD_RST, 0U);
+    hal_sleep_ms(50U);
+    hal_gpiohs_write(GPIOHS_LCD_RST, 1U);
+    hal_sleep_ms(50U);
+#else
     hal_gpiohs_write(GPIOHS_LCD_RST, 1U);
     hal_sleep_ms(1U);
     hal_gpiohs_write(GPIOHS_LCD_RST, 0U);
     hal_sleep_ms(1U);
     hal_gpiohs_write(GPIOHS_LCD_RST, 1U);
     hal_sleep_ms(125U);
+#endif
 }
 
 void lcd_st7789_transport_prepare(void)
 {
     hal_pwm_init(SCREEN_BL_PWM_DEVICE);
+#if HK_BOARD_LCD_PARALLEL8
+    hal_spi_parallel8_phase(LCD_SPI, 8U, 0U);
+#else
     hal_spi_init(LCD_SPI, 32U);
+#endif
     printf("[LCD] spi original-ish clk=%u\r\n",
            hal_spi_set_clock(LCD_SPI, LCD_SPI_HZ));
 }
 
 void lcd_st7789_transport_init(void)
 {
+#if HK_BOARD_LCD_PARALLEL8
+    /* Sipeed's Cube ST7789V sequence, rotation 2 (MADCTL=0x60), no RAM
+     * offset. Unlike the serial SEN0305 panel it uses 16-bit 0x55 format. */
+    reset_panel();
+    command(0x01U);
+    hal_sleep_ms(50U);
+    command(0x11U);
+    hal_sleep_ms(120U);
+    command(0x3AU); data_u8(0x55U);
+    hal_sleep_ms(10U);
+    command(0x36U); data_u8(0x60U);
+    command(0x21U);
+    hal_sleep_ms(10U);
+    command(0x13U);
+    hal_sleep_ms(10U);
+    command(0x29U);
+#else
     static const uint8_t gamma_p[] = {
         0xD0, 0x05, 0x0A, 0x09, 0x08, 0x05, 0x2E,
         0x44, 0x45, 0x0F, 0x17, 0x16, 0x2B, 0x33,
@@ -119,6 +157,7 @@ void lcd_st7789_transport_init(void)
     command(0xE0); data(gamma_p, sizeof(gamma_p));
     command(0xE1); data(gamma_n, sizeof(gamma_n));
     command(0x29);
+#endif
 }
 
 hk_result_t lcd_st7789_transport_begin(
@@ -152,7 +191,7 @@ hk_result_t lcd_st7789_transport_begin(
     if(!data_until(coordinates, sizeof(coordinates), deadline) ||
        !command_until(0x2CU, deadline))
         return transfer_failure(deadline);
-    hal_spi_fifo_set_frame_bits(LCD_SPI, 16U);
+    set_phase(16U, 0U);
     hal_gpiohs_write(GPIOHS_LCD_DC_OR_AUX, 1U);
     if(!hal_spi_fifo_tx_begin_until(
            LCD_SPI, LCD_CS, transport_deadline(deadline)))

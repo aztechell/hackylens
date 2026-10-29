@@ -117,6 +117,9 @@ PUBLIC_MUTABLE_EXTERN_RE = re.compile(
     r"^\s*extern\s+(?!const\b)(?!.*\()\S.*\s+\**[A-Za-z_]\w*"
     r"(?:\s*\[[^\]]*\])?\s*;"
 )
+K210_CACHED_SRAM_LITERAL_RE = re.compile(
+    r"\b0x(?:80000000|80600000)[uUlL]*\b", re.IGNORECASE
+)
 
 FEATURES = {
     "terminal": ("terminal", "terminal_app.h"),
@@ -986,6 +989,12 @@ def service_source_failures() -> list[str]:
             failures.append(f"{path_rel}: source has no explicit layer classification")
             continue
         source = path.read_text(encoding="utf-8")
+        if not path_rel.startswith("platforms/k210/hal/"):
+            for number, line in enumerate(source.splitlines(), 1):
+                if K210_CACHED_SRAM_LITERAL_RE.search(line):
+                    failures.append(
+                        f"{path_rel}:{number}: K210 shared-buffer address outside HAL"
+                    )
         graph[path_rel] = []
         if layer in {"app", "adapter"}:
             for number in nonliteral_include_lines(source):

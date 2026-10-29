@@ -1,0 +1,7 @@
+id = "power-off"
+name = "POWER OFF"
+entry = "power_off_v2_entry"
+sources = ["power_off_app.c"]
+requires = ["display", "input", "time", "power"]
+menu_order = 12
+tick_ms = 20

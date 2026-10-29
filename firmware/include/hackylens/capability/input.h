@@ -37,7 +37,9 @@ typedef struct
     uint32_t sample_interval_us;
     uint32_t debounce_interval_us;
     uint16_t event_capacity;
-    uint16_t reserved;
+    /* Buttons delivered as finite press/release pulses, without physical hold.
+     * Applications must offer a single-press alternative to hold-only actions. */
+    uint16_t pulse_buttons;
 } hk_input_info_t;
 
 typedef struct

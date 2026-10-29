@@ -89,13 +89,19 @@ hk_result_t buttons_view_render(
         uint16_t color = (state->repeat_error & mask) ?
             BUTTONS_COLOR_WHITE : BUTTONS_COLOR_GREEN;
 
-        snprintf(
-            line, sizeof(line), "%-5s %s P:%02u R:%02u %-6s",
-            s_button_names[index],
-            (state->state & mask) ? "DN" : "UP",
-            (unsigned)state->pressed_count[index],
-            (unsigned)state->released_count[index],
-            buttons_view_status(state, mask));
+        if(info.width < 320U)
+            snprintf(line, sizeof(line), "%s %u/%u %s", s_button_names[index],
+                     (unsigned)state->pressed_count[index],
+                     (unsigned)state->released_count[index],
+                     buttons_view_status(state, mask));
+        else
+            snprintf(
+                line, sizeof(line), "%-5s %s P:%02u R:%02u %-6s",
+                s_button_names[index],
+                (state->state & mask) ? "DN" : "UP",
+                (unsigned)state->pressed_count[index],
+                (unsigned)state->released_count[index],
+                buttons_view_status(state, mask));
         result = draw_text(
             surface, 12, BUTTONS_ROW0_Y + index * BUTTONS_ROW_H,
             info.width - 24U, 20U, line, color);
@@ -112,6 +118,8 @@ hk_result_t buttons_view_render(
     if(result != HK_OK)
         return result;
     return draw_text(
-        surface, 12, 207, info.width - 24U, 16U, "HOLD OK+BACK 1S TO EXIT",
+        surface, 12, 207, info.width - 24U, 16U,
+        (state->pulse_buttons & HK_INPUT_BUTTON_BACK) ? "BACK: EXIT" :
+        (info.width < 320U ? "BACK 2S: EXIT" : "HOLD BACK 2S TO EXIT"),
         BUTTONS_COLOR_GREEN);
 }

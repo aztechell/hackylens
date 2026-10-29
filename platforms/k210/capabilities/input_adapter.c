@@ -6,12 +6,44 @@
 
 #include "../hal/hal_time.h"
 
+#if defined(__has_include)
+#if __has_include("board_config.h")
+#include "board_config.h"
+#endif
+#endif
+#ifndef HK_BOARD_INPUT_PROFILE_CUBE
+#define HK_BOARD_INPUT_PROFILE_CUBE 0
+#endif
+
+#if HK_BOARD_INPUT_PROFILE_CUBE
+#include "../../../firmware/src/drivers/axp173.h"
+/* PMIC reports a short-press edge rather than a physical GPIO level. */
+#define CUBE_BACK_PULSE_US (HK_INPUT_DEBOUNCE_INTERVAL_US + 4U * HK_INPUT_SAMPLE_INTERVAL_US)
+#endif
+
 typedef struct
 {
     hk_input_state_t state;
+#if HK_BOARD_INPUT_PROFILE_CUBE
+    uint64_t power_back_until_us;
+#endif
 } k210_input_state_t;
 
 static k210_input_state_t s_input;
+
+#if HK_BOARD_INPUT_PROFILE_CUBE
+static uint32_t cube_logical_buttons(
+    k210_input_state_t *input, uint64_t now, uint32_t raw)
+{
+    uint32_t logical = raw & (HK_INPUT_BUTTON_LEFT | HK_INPUT_BUTTON_RIGHT |
+                              HK_INPUT_BUTTON_OK);
+    if(axp173_poll_back_press(now))
+        input->power_back_until_us = now + CUBE_BACK_PULSE_US;
+    if(now < input->power_back_until_us)
+        logical |= HK_INPUT_BUTTON_BACK;
+    return logical;
+}
+#endif
 
 static hk_result_t k210_input_service(k210_input_state_t *input)
 {
@@ -23,8 +55,13 @@ static hk_result_t k210_input_service(k210_input_state_t *input)
     now = hal_time_us();
     if(input->state.initialized && now < input->state.next_sample_us)
         return HK_OK;
-    result = hk_input_state_sample(
-        &input->state, now, buttons_read_pressed_mask());
+    {
+        uint32_t raw = buttons_read_pressed_mask();
+#if HK_BOARD_INPUT_PROFILE_CUBE
+        raw = cube_logical_buttons(input, now, raw);
+#endif
+        result = hk_input_state_sample(&input->state, now, raw);
+    }
     return result == HK_PENDING ? HK_OK : result;
 }
 
@@ -48,7 +85,12 @@ static hk_result_t k210_input_get_info(
     *info = (hk_input_info_t){
         sizeof(hk_input_info_t), HK_INPUT_INFO_VERSION,
         HK_INPUT_BUTTON_ALL, HK_INPUT_SAMPLE_INTERVAL_US,
-        HK_INPUT_DEBOUNCE_INTERVAL_US, HK_INPUT_EVENT_CAPACITY, 0U,
+        HK_INPUT_DEBOUNCE_INTERVAL_US, HK_INPUT_EVENT_CAPACITY,
+#if HK_BOARD_INPUT_PROFILE_CUBE
+        HK_INPUT_BUTTON_BACK,
+#else
+        0U,
+#endif
     };
     return HK_OK;
 }

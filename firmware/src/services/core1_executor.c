@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "../core/shared_buffer.h"
 #include "hal_core.h"
 #include "hal_time.h"
 
@@ -27,11 +28,7 @@ static uint8_t g_control_initialized;
 
 static core1_executor_control_t *core1_executor_control(void)
 {
-    uintptr_t address = (uintptr_t)&g_control_storage;
-
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (core1_executor_control_t *)address;
+    return (core1_executor_control_t *)hk_shared_buffer_uncached(&g_control_storage);
 }
 
 static core1_executor_control_t *core1_executor_control_init(void)

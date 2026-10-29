@@ -5,6 +5,9 @@
 #include <stdint.h>
 
 void hal_spi_init(uint8_t device, uint32_t frame_bits);
+/* ST7789 8080 bus carried by SPI0's octal data path. Every lane carries one
+ * parallel data bit. Command/data phases have distinct instruction lengths. */
+void hal_spi_parallel8_phase(uint8_t device, uint32_t frame_bits, uint8_t command);
 uint32_t hal_spi_set_clock(uint8_t device, uint32_t hz);
 void hal_spi0_enable_dvp_data(void);
 void hal_spi_standard_init(uint8_t device, uint32_t hz);

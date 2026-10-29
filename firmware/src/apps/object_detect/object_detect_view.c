@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../config/camera_config.h"
 #include "../../config/display_config.h"
 #include "../../ui/display_binding.h"
 #include "object_detect_labels.h"
@@ -26,6 +27,7 @@ void object_detect_view_compose_results(
         count = OBJECT_DETECT_RESULT_MAX;
     frame.width = width;
     frame.height = height;
+    frame.rotate = CAMERA_PREVIEW_ROTATE;
 
     for(uint8_t index = 0U; index < count; index++)
     {
@@ -40,24 +42,27 @@ void object_detect_view_compose_results(
         uint16_t label_width;
         uint16_t label_x;
         uint16_t label_y;
+        camera_view_rect_t mapped;
         uint16_t color =
             g_class_colors[result->class_id %
                            (sizeof(g_class_colors) / sizeof(g_class_colors[0]))];
 
+        if(!camera_view_map_rect(&frame, &rect, &mapped))
+            continue;
         camera_view_compose_rects(present, &frame, &rect, 1U, color);
         snprintf(label, sizeof(label), "%s %u%%",
                  object_detect_label(result->class_id),
                  (unsigned)((result->confidence + 5U) / 10U));
         label_width = (uint16_t)(strlen(label) * HACKYLENS_FONT_W);
-        label_x = result->x > 0 ? (uint16_t)result->x : 0U;
-        label_y = result->y > 0 ? (uint16_t)result->y : 0U;
-        if(label_width > width)
-            label_width = width;
-        if(label_x + label_width > width)
-            label_x = width > label_width ? width - label_width : 0U;
-        if(label_y + HACKYLENS_FONT_H > height)
-            label_y = height > HACKYLENS_FONT_H ?
-                      height - HACKYLENS_FONT_H : 0U;
+        label_x = (uint16_t)mapped.x;
+        label_y = (uint16_t)mapped.y;
+        if(label_width > present->width)
+            label_width = present->width;
+        if(label_x + label_width > present->width)
+            label_x = present->width > label_width ? present->width - label_width : 0;
+        if(label_y + HACKYLENS_FONT_H > present->height)
+            label_y = present->height > HACKYLENS_FONT_H ?
+                      present->height - HACKYLENS_FONT_H : 0;
         camera_view_compose_text_at(present, label_x, label_y, label,
                                     color, COLOR_BLACK);
     }

@@ -52,6 +52,7 @@ static hk_result_t buttons_start(const hk_app_context_t *ctx)
     const char *app_id = NULL;
     uint32_t generation = 0U;
     uint32_t buttons = 0U;
+    hk_input_info_t input_info;
     const hk_input_t *input = NULL;
     hk_result_t result = buttons_state_from(ctx, &state);
 
@@ -65,6 +66,9 @@ static hk_result_t buttons_start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
     buttons_controller_reset(state, buttons);
     state->input = input;
+    if(hk_input_get_info(input, &input_info) != HK_OK)
+        return HK_ERR_INTERNAL;
+    state->view.pulse_buttons = input_info.pulse_buttons;
     printf("[SHELL] screen BUTTONS\r\n");
     return HK_OK;
 }

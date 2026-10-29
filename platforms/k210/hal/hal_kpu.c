@@ -26,7 +26,6 @@ static void hal_kpu_prepare(void)
        PLL1 to 400 MHz before enabling the accelerator.  Leaving PLL1 at its
        boot value starts the DMA transfer but leaves KPU calculation pending. */
     sysctl_pll_set_freq(SYSCTL_PLL1, 400000000UL);
-    dmac_init();
     sysctl_clock_enable(SYSCTL_CLOCK_AI);
     prepared = 1;
 }

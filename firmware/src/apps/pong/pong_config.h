@@ -1,8 +1,14 @@
 #ifndef PONG_CONFIG_H
 #define PONG_CONFIG_H
 
-#define PONG_DISPLAY_WIDTH 320
-#define PONG_DISPLAY_HEIGHT 240
+#include <stdint.h>
+
+/* This app has one active instance. Geometry comes from its public display
+ * session, so the controller and renderer share the same physical bounds. */
+extern uint16_t pong_display_width;
+extern uint16_t pong_display_height;
+#define PONG_DISPLAY_WIDTH pong_display_width
+#define PONG_DISPLAY_HEIGHT pong_display_height
 #define PONG_MENU_BAR_H 30
 #define PONG_MENU_LINE 2
 #define PONG_COLOR_BLACK 0x0000

@@ -81,6 +81,8 @@ static hk_result_t pong_start(const hk_app_context_t *ctx)
     uint32_t generation = 0U;
     const hk_time_t *time = NULL;
     const hk_input_t *input = NULL;
+    hk_display_t *display = NULL;
+    hk_display_info_t display_info;
     uint64_t now_us = 0U;
     hk_result_t result = pong_state_from(ctx, &state);
 
@@ -94,6 +96,17 @@ static hk_result_t pong_start(const hk_app_context_t *ctx)
         return HK_ERR_INTERNAL;
     state->time = time;
     state->input = input;
+    result = hk_app_context_display(ctx, HK_DISPLAY_PLANE_BASE, &display);
+    if(result != HK_OK)
+        return result;
+    result = hk_display_get_info(display, &display_info);
+    if(result != HK_OK)
+        return result;
+    if(display_info.width < 160U || display_info.height < 160U ||
+       display_info.width > 640U || display_info.height > 480U)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    pong_display_width = (uint16_t)display_info.width;
+    pong_display_height = (uint16_t)display_info.height;
     pong_controller_reset(state, now_us);
     printf("[SHELL] screen PONG\r\n");
     return HK_OK;

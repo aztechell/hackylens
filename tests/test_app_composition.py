@@ -18,7 +18,7 @@ import build_firmware
 EXPECTED_APPS = {
     "terminal", "camera", "qr-camera", "face-detect", "apriltag",
     "object-detect", "files", "buttons", "pong", "settings", "sleep",
-    "micropython",
+    "micropython", "power-off",
 }
 CAMERA_APPS = {
     "camera", "qr-camera", "face-detect", "apriltag", "object-detect",

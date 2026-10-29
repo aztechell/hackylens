@@ -88,6 +88,28 @@ int main(void)
         (state.view.repeat_error & HK_INPUT_BUTTON_LEFT) != 0U,
         "duplicate press while down must be reported");
 
+    buttons_controller_reset(&state, 0U);
+    event = make_event(HK_INPUT_BUTTON_BACK, HK_INPUT_BUTTON_BACK, HK_INPUT_BUTTON_BACK);
+    buttons_controller_handle_input(&state, &event);
+    for(tick = 0U; tick < BUTTONS_BACK_EXIT_TICKS - 1U; tick++)
+        buttons_controller_tick(&state, HK_INPUT_BUTTON_BACK);
+    check(!state.exit_armed, "single BACK needs the full two-second hold");
+    buttons_controller_tick(&state, HK_INPUT_BUTTON_BACK);
+    check(state.exit_armed && !state.close_requested, "single BACK exit waits for release");
+    event = make_event(0U, 0U, HK_INPUT_BUTTON_BACK);
+    buttons_controller_handle_input(&state, &event);
+    check(state.close_requested, "held BACK alone must provide a reachable Cube exit");
+
+    buttons_controller_reset(&state, 0U);
+    state.view.pulse_buttons = HK_INPUT_BUTTON_BACK;
+    event = make_event(HK_INPUT_BUTTON_BACK, HK_INPUT_BUTTON_BACK, HK_INPUT_BUTTON_BACK);
+    buttons_controller_handle_input(&state, &event);
+    check(state.exit_armed && !state.close_requested,
+          "pulse BACK arms exit without a fake physical hold");
+    event = make_event(0U, 0U, HK_INPUT_BUTTON_BACK);
+    buttons_controller_handle_input(&state, &event);
+    check(state.close_requested, "pulse BACK closes the test on release");
+
     if(g_failures)
         return 1;
     puts("BUTTONS_CONTROLLER_OK press_release=1 hold=1 repeat=1 back=1");

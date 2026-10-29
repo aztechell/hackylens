@@ -21,7 +21,8 @@ and `hkflash` treat that file as the only board source of truth.
 
 The schema-1 support invariants are:
 
-- `support=runtime` requires `runtime_profile = "hackylens-full"`;
+- `support=runtime` requires an allowlisted `runtime_profile`:
+  `hackylens-full` or `hackylens-cube`;
 - `support=conformance` forbids `runtime_profile` and requires
   `releaseable=false`;
 - `releaseable=true` requires `support=runtime`;
@@ -40,12 +41,14 @@ IDs and MUST NOT be exposed as runtime-discovery surfaces.
 Each route independently identifies a physical `pin`, FPIOA `function`, and
 `peripheral` instance. Route macros are bound to exact signal functions so
 descriptors cannot swap LCD, camera, or SD roles. Pins and functions MUST be
-unique except for the one SEN0305 external-connector mux below. Multiple
+unique except for the external-connector muxes below. Multiple
 different functions belonging to one peripheral instance are valid.
 
-`runtime_mux_group` is one narrowly scoped preservation exception for the
-existing SEN0305 external connector, whose UART and I2C modes already remap the
-same two pins at runtime. The exact group name and complete macro/function/pin/
+`runtime_mux_group` is a narrowly scoped exception for the SEN0305 external
+connector (`external-four-pin-mode`, pins 34/35) and Cube Grove connector
+(`grove-four-pin-mode`, pins 24/25). Their UART and I2C modes remap the same two
+pins through the existing exclusive External Link service. The exact group
+name and complete macro/function/pin/
 peripheral set are allowlisted; descriptors cannot invent, move, shrink, or
 extend an exception. Every mode is still modeled as explicit routes and
 collision-checked. This private metadata is not a general runtime-routing,
@@ -54,6 +57,22 @@ switching, arbitration, capability, or discovery API.
 The Board Port Contract introduces no runtime route switching or arbitration
 API. Firmware builds generate one private `build/generated/board_config.h`
 from `board.toml`. That header is build-local and is not a tracked source.
+
+The optional private `[drivers]` table selects the exact driver tuple belonging
+to the runtime profile. Omitting it retains the original SEN0305 tuple. Cube
+explicitly selects the ST7789 octal transport, OV7740, three-way input,
+AXP173 management bus and inverted Cube light outputs. Its display has no
+FPIOA MOSI route: the LCD octal data bus is the fixed K210 SPI0/DVP path.
+Its logical BACK is synthesized from the center key, so no fourth button route
+or default is permitted. PMIC I2C1 pins 30/31 are independent of Grove I2C0.
+Driver and UI configuration is generated at build time; apps never select a
+board or access these routes directly.
+
+The required runtime default `camera_preview_rotate` selects camera mounting
+correction for the preview: `0` keeps sensor orientation and `1` rotates it
+90 degrees clockwise. Preview overlays use the same transform and viewport;
+capture dimensions and sensor/AI coordinates are unchanged. Cube selects `1`,
+SEN0305 selects `0`.
 
 ## Board operations
 
@@ -76,6 +95,10 @@ size, address, sidecar, or identity validation.
 When `programming.supported=false`, flash commands fail before serial access.
 Stub, flash, baud, and retry defaults are forbidden, and USB detection is
 `explicit-port`.
+
+Supported programming with `reset_profile="manual"` may omit `reboot_profile`;
+then no DTR/RTS reboot fallback is installed. Cube requires an explicit serial
+port and manual boot entry until reset wiring has been physically qualified.
 
 ## Architecture boundaries and composition
 
@@ -102,7 +125,8 @@ app composition, the SHA-256 of the build-time service selection report,
 diagnostic exclusions, board-driven exclusions, and fault-injection state. The
 attestation is build metadata, not a public contract or runtime discovery
 surface. Only an unmodified `full` target with the complete `hackylens-full`
-composition is `release_qualified`; feature-disabled and fault-injection builds
+composition on a board with `releaseable=true` is `release_qualified`;
+experimental-board, feature-disabled and fault-injection builds
 cannot be relabelled as full artifacts. Standalone image creation and release
 packaging require and revalidate the canonical attestation against the exact
 input bytes and requested board/profile.
@@ -119,5 +143,10 @@ accepted only with
 `--allow-missing-sidecar`, after selected-board address and size checks. The
 override never accepts an existing mismatch or an oversized image.
 
-The `sipeed-maix-cube` layout and BSP are conformance evidence only. They are
-not a runtime-qualified storage contract or evidence of hardware independence.
+The `sipeed-maix-cube` port is an experimental full runtime with all twelve apps,
+not yet physically accepted. Its exact-16-MiB layout includes settings slots
+and userfs; runtime flash identification must match that capacity before writes.
+Its image, flasher sidecar and non-release build attestation stay under
+`build/sipeed-maix-cube/`; release packaging remains forbidden until acceptance.
+The compile-only negative board lives under
+`tests/fixtures/boards/k210-conformance/` and retains conformance safety checks.

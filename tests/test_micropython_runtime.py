@@ -34,6 +34,8 @@ class MicroPythonRuntimeTests(unittest.TestCase):
                     f"-I{temp_path}",
                     str(ROOT / "tests" / "micropython_runtime_harness.c"),
                     str(ROOT / "firmware" / "src" / "services" / "micropython_runtime.c"),
+                    str(ROOT / "firmware" / "src" / "core" / "shared_buffer.c"),
+                    str(ROOT / "tests" / "hal_shared_buffer_fake.c"),
                     "-o", str(executable),
                 ],
                 check=True, cwd=ROOT,

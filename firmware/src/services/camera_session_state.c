@@ -10,7 +10,7 @@
 
 #include "camera_capture.h"
 #include "camera_session.h"
-#include "../drivers/ov2640_sensor.h"
+#include "../drivers/camera_sensor.h"
 
 static uint8_t g_camera_initialized;
 static uint8_t g_camera_ever_initialized;
@@ -201,7 +201,7 @@ uint8_t camera_service_toggle_colorbar(void)
 {
     g_camera_colorbar_enabled = g_camera_colorbar_enabled ? 0 : 1;
     if(g_camera_ready)
-        ov2640_apply_colorbar(g_camera_colorbar_enabled);
+        camera_sensor_apply_colorbar(g_camera_colorbar_enabled);
     return g_camera_colorbar_enabled;
 }
 

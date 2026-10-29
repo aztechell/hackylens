@@ -5,6 +5,7 @@
 
 void settings_storage_init(void);
 void settings_storage_save_now(void);
+uint8_t settings_storage_flush(void);
 void settings_storage_tick(void);
 void settings_mark_dirty(uint8_t immediate);
 

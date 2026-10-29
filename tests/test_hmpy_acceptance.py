@@ -318,6 +318,10 @@ class HmpyAcceptanceTests(unittest.TestCase):
         args = parser().parse_args(["--port", "FAKE", "--timeout", "2.0"])
         self.assertEqual(args.timeout, 2.0)
         self.assertGreater(args.connect_timeout, 5.0)
+        self.assertEqual(args.expected_board, "huskylens-sen0305")
+        cube_args = parser().parse_args([
+            "--port", "FAKE", "--expected-board", "sipeed-maix-cube"])
+        self.assertEqual(cube_args.expected_board, "sipeed-maix-cube")
 
         config = self.config(Path("unused.json"), connect_timeout=0.0)
         with self.assertRaises(AcceptanceError):

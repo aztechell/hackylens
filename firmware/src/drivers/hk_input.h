@@ -5,5 +5,6 @@
 
 /* Immediate active-low hardware sample used during boot before debouncing. */
 uint32_t buttons_read_pressed_mask(void);
+uint8_t buttons_boot_override_pressed(void);
 
 #endif

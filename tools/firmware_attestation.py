@@ -128,7 +128,8 @@ def build_document(
         disabled_apps, exclusions, disabled_capabilities, wdt_fault_injection
     )
     release_qualified = (
-        target == "full"
+        board.releaseable
+        and target == "full"
         and profile == FULL_BUILD_PROFILE
         and enabled_apps == FULL_APP_IDS
         and not exclusions
@@ -268,7 +269,8 @@ def validate_document(
         document["wdt_fault_injection"]
     )
     expected_release = (
-        document["target"] == "full"
+        board.releaseable
+        and document["target"] == "full"
         and expected_profile == FULL_BUILD_PROFILE
         and set(enabled) == FULL_APP_IDS
         and not exclusions

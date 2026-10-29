@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -26,6 +27,7 @@ from firmware_attestation import (
     write as write_build_attestation,
 )
 from gen_board import write_board_config
+from firmware_sidecar import write as write_flash_sidecar
 import app_composition
 import service_bindings
 
@@ -109,6 +111,10 @@ def compose_apps(board: Board, disabled_apps: set[str],
 
 
 CAMERA_FEATURE_SOURCE_MODULES = {
+    Path("firmware/src/drivers/camera_sensor.c"),
+    Path("firmware/src/drivers/camera_sensor.h"),
+    Path("firmware/src/drivers/ov7740_sensor.c"),
+    Path("firmware/src/drivers/ov7740_sensor.h"),
     Path("firmware/src/controllers/camera_runtime_controller.c"),
     Path("firmware/src/controllers/camera_runtime_controller.h"),
     Path("firmware/src/controllers/debug_camera_controller.c"),
@@ -454,6 +460,38 @@ def write_reproducible_path_map(path: Path, sdk: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
+def validate_raw_boot_entry(elf: Path) -> None:
+    """K210 ROM jumps to the raw image base; it cannot honor ELF e_entry."""
+    data = elf.read_bytes()
+    if data[:6] != b"\x7fELF\x02\x01":
+        raise RuntimeError("raw boot requires a little-endian ELF64 image")
+    header = struct.unpack_from("<16sHHIQQQIHHHHHH", data)
+    entry, phoff, shoff = header[4:7]
+    loads = []
+    for index in range(header[10]):
+        segment = struct.unpack_from("<IIQQQQQQ", data, phoff + index * header[9])
+        if segment[0] == 1 and segment[5]:
+            loads.append(segment[4])
+    sections = [struct.unpack_from("<IIQQQQIIQQ", data, shoff + i * header[11])
+                for i in range(header[12])]
+    starts = []
+    for section in sections:
+        if section[1] != 2:
+            continue
+        strings = sections[section[6]]
+        names = data[strings[4]:strings[4] + strings[5]]
+        for offset in range(section[4], section[4] + section[5], section[9]):
+            name, _, _, _, value, _ = struct.unpack_from("<IBBHQQ", data, offset)
+            if names[name:].split(b"\0", 1)[0] == b"_start":
+                starts.append(value)
+    base = min(loads) if loads else None
+    if base != 0x80000000 or entry != base or starts != [base]:
+        raise RuntimeError(
+            f"unsafe K210 raw boot layout: base={base!r} entry=0x{entry:x} "
+            f"_start={starts}; reset entry must be first at 0x80000000"
+        )
+
+
 def reject_embedded_host_paths(artifact: Path, roots: list[Path]) -> None:
     """Reject a release input that still embeds a local source/build prefix."""
     content = artifact.read_bytes().lower()
@@ -485,7 +523,8 @@ def copy_tree_files(src: Path, dst: Path) -> None:
             shutil.copy2(path, out)
 
 
-def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
+def stage_firmware_sources(stage: Path, disabled_apps: set[str],
+                           board: Board | None = None) -> None:
     disabled_dirs = {APP_SOURCE_DIRS[app] for app in disabled_apps}
     enabled_app_sources = set().union(*(
         APP_SOURCE_FILES[app]
@@ -502,6 +541,13 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str]) -> None:
         if not path.is_file():
             continue
         rel = path.relative_to(ROOT)
+        drivers = board.drivers if board is not None else {}
+        if rel.parent == Path("firmware/src/drivers"):
+            if path.stem in {"ov2640_sensor", "ov7740_sensor"} and drivers:
+                if path.stem != drivers["camera"] + "_sensor":
+                    continue
+            if path.stem == "axp173" and drivers.get("power", "none") != "axp173":
+                continue
         if rel.suffix in {".inc", ".toml"}:
             continue
         if any(rel.is_relative_to(disabled_dir) for disabled_dir in disabled_dirs):
@@ -550,6 +596,8 @@ def stage_platform_sources(
         if not path.is_file():
             continue
         rel = path.relative_to(ROOT)
+        if path.stem == "hal_power" and service_selection.board.drivers["power"] != "axp173":
+            continue
         if rel in provider_sources and rel not in selected_provider_sources:
             print(f"[SKIP] excluded capability provider source {rel}")
             continue
@@ -617,7 +665,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         )
 
     shutil.copy2(Path(target["target_source"]), stage / "main.c")
-    stage_firmware_sources(stage, disabled_apps)
+    stage_firmware_sources(stage, disabled_apps, board)
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
     copy_tree_files(ROOT / "sdk" / "include", stage / "sdk" / "include")
     app_composition.write_registry(
@@ -720,6 +768,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     built_elf = build_dir / project
     if not built_elf.is_file() or built_elf.stat().st_size == 0:
         raise RuntimeError(f"build did not produce a non-empty ELF: {built_elf}")
+    validate_raw_boot_entry(built_elf)
     reject_embedded_host_paths(built, [ROOT, sdk])
     reject_embedded_host_paths(built_elf, [ROOT, sdk])
     flash = board.flash
@@ -757,6 +806,9 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
             "[BUILD] feature-modified image kept under build/; qualified dist/ "
             "artifacts were not replaced"
         )
+    elif not board.releaseable:
+        write_flash_sidecar(out_image.with_suffix(".json"), out_image, board)
+        print("[BUILD] experimental runtime image and flash sidecar kept under build/; physical acceptance is pending")
     else:
         run([sys.executable, str(ROOT / "tools" / "make_image.py"),
              str(out_image), "--board", board.id,

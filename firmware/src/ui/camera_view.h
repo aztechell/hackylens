@@ -8,7 +8,7 @@ typedef struct
     volatile uint16_t *pixels;
     uint16_t width;
     uint16_t height;
-    uint8_t rotate;
+    uint8_t rotate; /* 1: 90 degrees clockwise; 0: sensor orientation. */
     uint8_t fps_overlay;
     uint8_t light_overlay;
     char fps_text[16];
@@ -33,6 +33,10 @@ typedef struct
 } camera_view_present_t;
 
 uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_present_t *present);
+/* Map sensor coordinates into the same rotated/scaled viewport as the frame. */
+uint8_t camera_view_map_rect(const camera_view_frame_t *frame,
+                             const camera_view_rect_t *source,
+                             camera_view_rect_t *mapped);
 void camera_view_compose_rects(camera_view_present_t *present,
                                const camera_view_frame_t *frame,
                                const camera_view_rect_t *rects,

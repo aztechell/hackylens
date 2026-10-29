@@ -37,14 +37,16 @@ void menu_draw_chrome(const char *title)
     hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
     hk_ui_display_draw_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, MENU_LINE, COLOR_TERM_GREEN);
     hk_ui_display_fill_rect(0, MENU_BAR_H - MENU_LINE, HK_DISPLAY_REQUIRED_WIDTH, MENU_LINE, COLOR_TERM_GREEN);
+#if HK_DISPLAY_REQUIRED_WIDTH >= 320
     hk_ui_display_draw_text_at(4, 3, "<o>", COLOR_TERM_GREEN, COLOR_BLACK);
+#endif
     hk_ui_display_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
     topbar_draw_sd_status();
 }
 
 void menu_draw_title(const char *title)
 {
-    const uint16_t title_x = 52U;
+    const uint16_t title_x = HK_DISPLAY_REQUIRED_WIDTH >= 320 ? 52U : 2U;
     const uint16_t sd_status_x = HK_DISPLAY_REQUIRED_WIDTH - 23U;
 
     hk_ui_display_fill_rect(
@@ -72,6 +74,21 @@ void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
 
     if(draw_icon)
         draw_icon(x, y, fg, bg);
+}
+
+void menu_draw_page(uint8_t page, uint8_t pages)
+{
+    if(pages <= 1U)
+        return;
+    for(uint8_t index = 0U; index < pages; index++)
+    {
+        uint16_t x = (HK_DISPLAY_REQUIRED_WIDTH - pages * 12U) / 2U + index * 12U;
+        hk_ui_display_draw_rect(x, HK_DISPLAY_REQUIRED_HEIGHT - 10U,
+                                8U, 4U, 1U, COLOR_TERM_GREEN);
+        if(index == page)
+            hk_ui_display_fill_rect(x, HK_DISPLAY_REQUIRED_HEIGHT - 10U,
+                                    8U, 4U, COLOR_TERM_GREEN);
+    }
 }
 
 void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -130,6 +147,11 @@ void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_fill_rect(x + 28, y + 6, 4, 14, color);
     hk_ui_display_fill_rect(x + 22, y + 44, 16, 2, color);
     hk_ui_display_fill_rect(x + 18, y + 49, 24, 2, color);
+}
+
+void power_off_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    sleep_draw_icon(x, y, color, bg);
 }
 
 void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)

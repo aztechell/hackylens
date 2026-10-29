@@ -5,6 +5,9 @@
 
 #include "pong_config.h"
 
+uint16_t pong_display_width = 320U;
+uint16_t pong_display_height = 240U;
+
 pong_view_state_t pong_controller_view_state(const pong_state_t *state)
 {
     pong_view_state_t view = {0};

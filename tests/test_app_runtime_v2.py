@@ -48,7 +48,7 @@ class AppRuntimeV2Tests(unittest.TestCase):
         if source_name in ("app_runtime_v2_harness.c", "app_runtime_mixed_harness.c", "app_runtime_grants_harness.c"):
             extra_sources += ("firmware/src/capabilities/display.c", "tests/capability_fake_display.c")
             extra_includes += (ROOT / "tests",)
-        if source_name not in ("app_runtime_production_harness.c", "app_runtime_lights_harness.c"):
+        if source_name not in ("app_runtime_production_harness.c", "app_runtime_lights_harness.c", "app_runtime_display_harness.c"):
             extra_sources += ("tests/capability_fake_external_link.c",)
             extra_includes += (ROOT / "tests",)
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
@@ -157,6 +157,20 @@ class AppRuntimeV2Tests(unittest.TestCase):
             ("HK_ENABLE_CAMERA_FEATURE 0",),
         )
         self.assertEqual(result.stdout, "APP_RUNTIME_PRODUCTION_OK\n")
+
+    def test_production_display_draw_and_direct_surface_modes(self) -> None:
+        result = self.compile_and_run_harness(
+            "app_runtime_display_harness.c",
+            (
+                "firmware/src/app_runtime/surface.c",
+                "firmware/src/app_runtime/switch.c",
+                "firmware/src/runtime/app_runtime_integration.c",
+                "firmware/src/runtime/hk_main.c",
+            ),
+            (ROOT / "firmware" / "assets",),
+            ("HK_ENABLE_CAMERA_FEATURE 1",),
+        )
+        self.assertIn("APP_RUNTIME_DISPLAY_OK\n", result.stdout)
 
     def test_production_lights_claims_restore_settings_ownership(self) -> None:
         result = self.compile_and_run_harness(

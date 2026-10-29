@@ -261,6 +261,7 @@ camera_xclk_hz = 40000000
 camera_sccb_hz = 100000
 camera_max_width = 640
 camera_max_height = 480
+camera_preview_rotate = 0
 
 [flash]
 address_bytes = 3

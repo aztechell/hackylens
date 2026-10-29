@@ -183,9 +183,13 @@ and OBJECT data remain unchanged.
 
 ## Supported hardware and current qualification
 
-SEN0305 is the physically accepted runtime port. Maix Cube is descriptor/BSP
-compile conformance only: its full runtime, packaging and flashing are not
-qualified. Even a future second K210 port would not establish portability
+SEN0305 is the physically accepted runtime port. Maix Cube has an experimental
+`hackylens-cube` full runtime port with native 240x240 UI, an octal ST7789
+transport, OV7740 sensor, three-way input, Cube lights and Grove External Link.
+It remains `releaseable=false` until physical acceptance; release packaging
+is forbidden. The exact 16-MiB layout gates persistence and userfs on JEDEC
+capacity identification. See [Cube bring-up](MAIX_CUBE.md) for controls and
+acceptance details. A second K210 port does not establish portability
 across arbitrary MCU families. Every build explicitly selects a board; its
 `board.toml` owns wiring, defaults, flash layout and programming metadata.
 

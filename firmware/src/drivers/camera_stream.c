@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include "../core/shared_buffer.h"
 #include "../services/frame_pool.h"
 #include "hal_dvp.h"
 
@@ -40,10 +41,7 @@ static void *g_convert_hook_context;
 
 static uint16_t *camera_stream_slot_uncached(uint8_t index)
 {
-    uintptr_t addr = (uintptr_t)frame_pool_camera_slot(index);
-    if(addr >= 0x80000000UL && addr < 0x80600000UL)
-        addr -= 0x40000000UL;
-    return (uint16_t *)addr;
+    return (uint16_t *)hk_shared_buffer_uncached(frame_pool_camera_slot(index));
 }
 
 static int8_t camera_stream_capture_candidate(void)
@@ -129,7 +127,6 @@ uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst)
     g_sync_pending = 1;
     g_capture_slot = -1;
     g_next_sequence = 0;
-    g_next_lease_id = 0;
     g_irq_start_count = 0;
     g_irq_finish_count = 0;
     g_convert_count = 0;
@@ -212,7 +209,7 @@ uint8_t camera_stream_acquire_latest(camera_stream_frame_t *frame)
            (newest < 0 || g_slots[i].sequence > g_slots[(uint8_t)newest].sequence))
             newest = (int8_t)i;
     }
-    if(newest < 0)
+    if(newest < 0 || g_next_lease_id == UINT32_MAX)
     {
         hal_dvp_irq_unmask();
         return 0;
@@ -226,8 +223,6 @@ uint8_t camera_stream_acquire_latest(camera_stream_frame_t *frame)
         }
     }
     lease_id = ++g_next_lease_id;
-    if(lease_id == 0)
-        lease_id = ++g_next_lease_id;
     g_slots[(uint8_t)newest].lease_id = lease_id;
     g_slots[(uint8_t)newest].state = CAMERA_SLOT_LEASED;
     __sync_synchronize();

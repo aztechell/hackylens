@@ -24,6 +24,7 @@ paths = [
   "firmware/src/capabilities/input.c",
   "firmware/src/capabilities/lights.c",
   "firmware/src/capabilities/time.c",
+  "firmware/src/capabilities/power.c",
 ]
 
 [[layers]]

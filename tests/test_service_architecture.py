@@ -19,6 +19,18 @@ import gen_board
 
 
 class ServiceArchitectureGuardTests(unittest.TestCase):
+    def test_k210_shared_buffer_constants_are_confined_to_hal(self) -> None:
+        policy = check_arch.load_layer_policy()
+        for path in check_arch.repository_source_files(policy):
+            relative = check_arch.repository_relative(path)
+            if relative.startswith("platforms/k210/hal/"):
+                continue
+            self.assertNotRegex(
+                path.read_text(encoding="utf-8"),
+                check_arch.K210_CACHED_SRAM_LITERAL_RE,
+                relative,
+            )
+
     def test_explicit_policy_classifies_every_production_source(self) -> None:
         policy = check_arch.load_layer_policy()
         unclassified = [

@@ -149,7 +149,7 @@ class LightsCapabilityTests(unittest.TestCase):
 
     def test_composition_and_all_consumers_share_the_provider(self) -> None:
         runtime_board = board_contract.load_board("huskylens-sen0305")
-        cube = board_contract.load_board("sipeed-maix-cube")
+        cube = board_contract.load_board("k210-conformance", root=ROOT / "tests" / "fixtures")
         runtime = generator.select(runtime_board, set(), set(), set())
         conformance = generator.select(cube, set(), set(), set())
 

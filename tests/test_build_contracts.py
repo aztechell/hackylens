@@ -2,6 +2,7 @@ import importlib.util
 import datetime
 from pathlib import Path
 import shutil
+import struct
 import tempfile
 import unittest
 from unittest import mock
@@ -378,6 +379,35 @@ class BuildContractsTest(unittest.TestCase):
             ).date().isoformat(),
             "2026-04-06",
         )
+
+
+class RawBootEntryTests(unittest.TestCase):
+    def check_layout(self, entry, start):
+        data = bytearray(512)
+        struct.pack_into('<16sHHIQQQIHHHHHH', data, 0,
+                         b'\x7fELF\x02\x01' + bytes(10), 2, 243, 1, entry,
+                         64, 128, 0, 64, 56, 1, 64, 3, 0)
+        struct.pack_into('<IIQQQQQQ', data, 64, 1, 5, 0, 0x80000000,
+                         0x80000000, 512, 512, 8)
+        struct.pack_into('<IIQQQQIIQQ', data, 192, 0, 3, 0, 0, 320, 8, 0, 0, 1, 0)
+        struct.pack_into('<IIQQQQIIQQ', data, 256, 0, 2, 0, 0, 336, 24, 1, 0, 8, 24)
+        data[320:328] = b'\0_start\0'
+        struct.pack_into('<IBBHQQ', data, 336, 1, 0, 0, 0, start, 0)
+        with tempfile.TemporaryDirectory() as directory:
+            elf = Path(directory) / 'fixture.elf'
+            elf.write_bytes(data)
+            BUILD_FIRMWARE.validate_raw_boot_entry(elf)
+
+    def test_reset_entry_at_raw_image_base(self):
+        self.check_layout(0x80000000, 0x80000000)
+
+    def test_c_function_preceding_reset_entry_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, 'unsafe K210 raw boot layout'):
+            self.check_layout(0x80000068, 0x80000068)
+
+    def test_entry_header_cannot_hide_displaced_start_symbol(self):
+        with self.assertRaisesRegex(RuntimeError, 'unsafe K210 raw boot layout'):
+            self.check_layout(0x80000000, 0x80000068)
 
 
 if __name__ == "__main__":

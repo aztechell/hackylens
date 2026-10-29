@@ -48,6 +48,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'config'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
+                f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
                 str(ROOT / "tests" / "micropython_bindings_harness.c"),
                 str(
                     ROOT
@@ -57,6 +58,8 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                     / "micropython"
                     / "micropython_capability_bridge.c"
                 ),
+                str(ROOT / "firmware" / "src" / "core" / "shared_buffer.c"),
+                str(ROOT / "tests" / "hal_shared_buffer_fake.c"),
                 "-o",
                 str(executable),
             ]

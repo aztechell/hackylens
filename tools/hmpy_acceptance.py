@@ -1009,6 +1009,8 @@ def parser() -> argparse.ArgumentParser:
         help="seconds to retry the line handshake while the board boots",
     )
     result.add_argument("--expected-version", default=default_version())
+    result.add_argument("--expected-board", default=EXPECTED_BOARD,
+                        help="required board identity reported by HMPY HELLO")
     result.add_argument("--workflow", action="store_true", help="run reversible storage/runtime tests")
     result.add_argument("--lease-reconnect", action="store_true", help="drop a live session and recover after lease expiry")
     result.add_argument("--format-userfs", action="store_true", help="DESTRUCTIVE: format userfs before tests")
@@ -1035,6 +1037,7 @@ def main(argv: list[str] | None = None) -> int:
         timeout=args.timeout,
         connect_timeout=args.connect_timeout,
         expected_version=args.expected_version,
+        expected_board=args.expected_board,
         workflow=args.workflow,
         lease_reconnect=args.lease_reconnect,
         format_userfs=args.format_userfs,

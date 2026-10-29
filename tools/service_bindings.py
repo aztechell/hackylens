@@ -32,6 +32,7 @@ BINDINGS = (
     Binding('display', ('display',), ('lcd-backlight', 'lcd-dc', 'lcd-chip-select', 'lcd-clock', 'lcd-reset', 'lcd-mosi'), 'hk_display_service_t'),
     Binding('external-link', ('external-uart', 'external-i2c'), ('external-uart-rx', 'external-uart-tx', 'external-i2c-clock', 'external-i2c-data'), 'hk_external_link_service_t'),
     Binding('lights', ('lights',), ('lcd-backlight', 'illumination', 'rgb-red', 'rgb-green', 'rgb-blue'), 'hk_lights_service_t'),
+    Binding('power', ('processor',), (), 'hk_power_t'),
  )
 
 @dataclass(frozen=True)
@@ -63,11 +64,19 @@ def select(board: Board, disabled_apps: set[str], required_apps: set[str],
     routes = {item["id"] for item in board.selected_routes()}
     bindings, absences = [], []
     for item in BINDINGS:
+        if item.name == "power" and board.drivers["power"] != "axp173":
+            absences.append({"id": "power", "code": "driver-unsupported", "detail": ["power"]})
+            continue
+        required_routes = set(item.routes)
+        if item.name == "input" and board.drivers["input"] == "three-way":
+            required_routes.remove("button-back")
+        if item.name == "display" and board.drivers["display"] == "st7789-octal":
+            required_routes.remove("lcd-mosi")
         reasons = [
             ("provider-excluded", ["disabled-by-build"] if item.name in disabled else []),
             ("resource-absent", sorted(set(item.resources) - present)),
             ("driver-unsupported", sorted(set(item.resources) - supported)),
-            ("route-unavailable", sorted(set(item.routes) - routes)),
+            ("route-unavailable", sorted(required_routes - routes)),
         ]
         failure = next(((code, detail) for code, detail in reasons if detail), None)
         if failure:

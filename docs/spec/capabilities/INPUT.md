@@ -62,7 +62,12 @@ raw bounce.
 Apps receive the same pointer through `hk_app_context_input(ctx, &input)`;
 callback-context validation remains in the runtime. No generic lease is created.
 
-- `hk_input_get_info(input, info)` reports supported bits and sample/debounce limits.
+- `hk_input_get_info(input, info)` reports supported bits, sample/debounce limits,
+  and `pulse_buttons` (a logical-button mask in the former 16-bit reserved slot;
+  structure size is unchanged). A pulse-only button exposes accepted press/release
+  edges, without a physical held level. Apps must offer a single-press alternative
+  to actions that otherwise require holding such a button. Other providers return
+  zero for this mask.
 - `hk_input_get_state(input, state)` samples and returns stable state without
   consuming events. FILES also uses this between GIF rows to preserve short taps.
 - `hk_input_cursor_open(input, cursor)` starts a caller-owned reader after the

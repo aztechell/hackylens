@@ -12,7 +12,7 @@
 
 #include "settings_lights.h"
 #include "../core/hk_camera_sizes.h"
-#include "../drivers/ov2640_sensor.h"
+#include "../drivers/camera_sensor.h"
 #include "hal_dvp.h"
 #include "hal_time.h"
 #include "camera_capture.h"
@@ -102,29 +102,29 @@ uint8_t camera_service_start(void)
     printf("%s safe size=%s\r\n", camera_log_prefix(), camera_size_label(requested));
 
     camera_active_size_set(requested);
-    camera_session_set_preview_rotate(0);
+    camera_session_set_preview_rotate(CAMERA_PREVIEW_ROTATE);
     width = camera_session_width();
     height = camera_session_height();
 
-    ov2640_init_bus(&actual_xclk, &actual_sccb);
+    camera_sensor_init_bus(&actual_xclk, &actual_sccb);
     printf("%s xclk=%u sccb=%u\r\n", camera_log_prefix(), actual_xclk, actual_sccb);
 
-    ov2640_probe_id(&mid, &pid);
+    camera_sensor_probe_id(&mid, &pid);
     camera_service_note_probe_result(mid, pid);
     printf("%s sccb addr=0x%02X mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), CAMERA_SCCB_ADDR, mid, pid);
 
-    if(mid != 0x7FA2 || pid != 0x2642)
+    if(!camera_sensor_matches_id(mid, pid))
     {
         printf("%s sensor probe retry\r\n", camera_log_prefix());
-        ov2640_init_bus(&actual_xclk, &actual_sccb);
+        camera_sensor_init_bus(&actual_xclk, &actual_sccb);
         printf("%s xclk_retry=%u sccb=%u\r\n", camera_log_prefix(), actual_xclk, actual_sccb);
         hal_sleep_ms(20);
-        ov2640_probe_id(&mid, &pid);
+        camera_sensor_probe_id(&mid, &pid);
         camera_service_note_probe_result(mid, pid);
         printf("%s sccb retry addr=0x%02X mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), CAMERA_SCCB_ADDR, mid, pid);
     }
 
-    if(mid != 0x7FA2 || pid != 0x2642)
+    if(!camera_sensor_matches_id(mid, pid))
     {
         printf("%s sensor probe failed mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), mid, pid);
         camera_session_set_fail_reason("NO SENSOR ID");
@@ -132,12 +132,12 @@ uint8_t camera_service_start(void)
         return 0;
     }
 
-    printf("%s sensor OV2640\r\n", camera_log_prefix());
+    printf("%s sensor %s\r\n", camera_log_prefix(), camera_sensor_name());
     camera_session_set_fail_reason("NONE");
-    ov2640_apply_init_table();
-    ov2640_apply_common_tuning();
-    ov2640_apply_output_size(width, height);
-    ov2640_apply_colorbar(camera_session_colorbar_enabled());
+    camera_sensor_apply_init_table();
+    camera_sensor_apply_common_tuning();
+    camera_sensor_apply_output_size(width, height);
+    camera_sensor_apply_colorbar(camera_session_colorbar_enabled());
 
     if((width % 32U) == 0)
     {

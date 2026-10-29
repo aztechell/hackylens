@@ -15,17 +15,17 @@ class ServiceBindingTests(unittest.TestCase):
         runtime = bindings.select(load_board("huskylens-sen0305"), set(), set(), set())
         self.assertEqual({item.name for item in runtime.bindings},
                          {"time", "input", "lights", "display", "external-link"})
-        self.assertFalse(runtime.disabled_apps)
-        cube = bindings.select(load_board("sipeed-maix-cube"), set(), set(), set())
+        self.assertEqual(runtime.disabled_apps, frozenset({"power-off"}))
+        cube = bindings.select(load_board("k210-conformance", root=ROOT / "tests" / "fixtures"), set(), set(), set())
         self.assertEqual([item.name for item in cube.bindings], ["time"])
         self.assertEqual(cube.disabled_apps,
                          frozenset(app_composition.app_map(app_composition.load_model())))
         with self.assertRaisesRegex(ValueError, "required app"):
-            bindings.select(load_board("sipeed-maix-cube"), set(), {"camera"}, set())
+            bindings.select(load_board("k210-conformance", root=ROOT / "tests" / "fixtures"), set(), {"camera"}, set())
 
     def test_excluded_binding_cannot_be_satisfied_by_present_resource(self):
         selection = bindings.select(load_board("huskylens-sen0305"), set(), set(), {"display"})
-        self.assertEqual(len(selection.disabled_apps), 12)
+        self.assertEqual(len(selection.disabled_apps), 13)
         self.assertIn("hk_display_binding = {0}", bindings.generated_c(selection))
         with self.assertRaisesRegex(ValueError, "Time"):
             bindings.select(load_board("huskylens-sen0305"), set(), set(), {"time"})
@@ -40,7 +40,7 @@ class ServiceBindingTests(unittest.TestCase):
         self.assertEqual(selection.absences[0]["code"], "route-unavailable")
 
     def test_evidence_and_absent_bindings_are_deterministic(self):
-        selection = bindings.select(load_board("sipeed-maix-cube"), set(), set(), set())
+        selection = bindings.select(load_board("k210-conformance", root=ROOT / "tests" / "fixtures"), set(), set(), set())
         with tempfile.TemporaryDirectory() as directory:
             paths = bindings.write_artifacts(selection, Path(directory))
             first = [p.read_bytes() for p in paths]
@@ -49,7 +49,7 @@ class ServiceBindingTests(unittest.TestCase):
         source = bindings.generated_c(selection)
         self.assertNotIn("inventory", source)
         self.assertNotIn("grant", source)
-        self.assertEqual(source.count(" = {0};"), 4)
+        self.assertEqual(source.count(" = {0};"), 5)
 
 if __name__ == "__main__":
     unittest.main()

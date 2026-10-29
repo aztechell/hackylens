@@ -7,7 +7,7 @@
 #include "camera_persist_settings.h"
 #include "camera_status.h"
 
-#include "../drivers/ov2640_sensor.h"
+#include "../drivers/camera_sensor.h"
 #include "hal_dvp.h"
 #include "camera_fps.h"
 
@@ -49,10 +49,10 @@ void camera_debug_format_probe(char *line, size_t line_size, const char *screen)
     uint16_t pid;
     uint8_t ok;
 
-    ov2640_init_bus(&actual_xclk, &actual_sccb);
-    ov2640_probe_id(&mid, &pid);
+    camera_sensor_init_bus(&actual_xclk, &actual_sccb);
+    camera_sensor_probe_id(&mid, &pid);
     camera_service_note_probe_result(mid, pid);
-    ok = (mid == 0x7FA2 && pid == 0x2642) ? 1 : 0;
+    ok = camera_sensor_matches_id(mid, pid);
     snprintf(line, line_size,
              "HKCAMPROBE screen=%s xclk=%u sccb=%u mid=0x%04X pid=0x%04X ok=%u\r\n",
              screen,
@@ -94,11 +94,11 @@ void camera_debug_format_dvp(char *line, size_t line_size, const char *screen)
 
 void camera_debug_select_reg_bank(uint8_t bank)
 {
-    ov2640_write_reg(0xFF, bank);
+    camera_sensor_select_bank(bank);
 }
 
 uint8_t camera_debug_read_reg(uint8_t bank, uint8_t reg)
 {
     camera_debug_select_reg_bank(bank);
-    return ov2640_read_reg(reg);
+    return camera_sensor_read_reg(reg);
 }

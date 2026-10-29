@@ -41,8 +41,22 @@ static void menu_draw_title_if_ready(const char *title)
 
 static void menu_draw_registry_item(uint8_t index)
 {
-    if(s_menu_view.draw_item_at)
-        s_menu_view.draw_item_at(index, g_menu_items[index], (uint8_t)(index == s_menu_index));
+    if(s_menu_view.draw_item_at &&
+       index / MENU_PAGE_ITEMS == s_menu_index / MENU_PAGE_ITEMS)
+        s_menu_view.draw_item_at(index % MENU_PAGE_ITEMS, g_menu_items[index],
+                                (uint8_t)(index == s_menu_index));
+}
+
+static void menu_draw_selection(uint8_t previous)
+{
+    if(previous / MENU_PAGE_ITEMS != s_menu_index / MENU_PAGE_ITEMS)
+    {
+        menu_render();
+        return;
+    }
+    menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
+    menu_draw_registry_item(previous);
+    menu_draw_registry_item(s_menu_index);
 }
 
 uint8_t hk_menu_index_get(void)
@@ -61,6 +75,9 @@ void menu_render(void)
     menu_draw_chrome_if_ready(g_menu_items[s_menu_index]->title);
     for(uint8_t index = 0; index < MENU_ITEM_COUNT; index++)
         menu_draw_registry_item(index);
+    if(s_menu_view.draw_page)
+        s_menu_view.draw_page(s_menu_index / MENU_PAGE_ITEMS,
+            (MENU_ITEM_COUNT + MENU_PAGE_ITEMS - 1U) / MENU_PAGE_ITEMS);
 }
 
 void shell_show_menu_reason(hk_app_stop_reason_t reason)
@@ -137,9 +154,7 @@ void menu_select_delta(int8_t delta)
 
     if(previous != s_menu_index)
     {
-        menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
-        menu_draw_registry_item(previous);
-        menu_draw_registry_item(s_menu_index);
+        menu_draw_selection(previous);
     }
     printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
 }
@@ -153,9 +168,7 @@ void menu_select_vertical(void)
     s_menu_index = (uint8_t)((s_menu_index + MENU_GRID_COLS) % MENU_ITEM_COUNT);
     if(previous != s_menu_index)
     {
-        menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
-        menu_draw_registry_item(previous);
-        menu_draw_registry_item(s_menu_index);
+        menu_draw_selection(previous);
     }
     printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
 }

@@ -62,3 +62,10 @@ void settings_storage_tick(void)
     }
     settings_storage_save_now();
 }
+
+uint8_t settings_storage_flush(void)
+{
+    if(g_settings_dirty)
+        settings_storage_save_now();
+    return (uint8_t)!g_settings_dirty;
+}

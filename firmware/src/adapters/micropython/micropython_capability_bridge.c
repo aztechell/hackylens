@@ -12,6 +12,7 @@
 
 #include "../../capabilities/display_stage_private.h"
 #include "../../config/display_config.h"
+#include "../../core/shared_buffer.h"
 #include "../../services/external_link_service.h"
 #include "../../services/micropython_runtime.h"
 #include "../../services/settings_lights.h"
@@ -99,11 +100,7 @@ static uint8_t g_display_owned;
 
 static micropython_binding_control_t *binding_control(void)
 {
-    uintptr_t address = (uintptr_t)&g_control_storage;
-
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (micropython_binding_control_t *)address;
+    return (micropython_binding_control_t *)hk_shared_buffer_uncached(&g_control_storage);
 }
 
 static uint8_t binding_request_cancelled(

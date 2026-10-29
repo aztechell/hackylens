@@ -6,10 +6,12 @@
 #include <hackylens/app.h>
 
 #define BUTTONS_HOLD_TICKS 50U
+#define BUTTONS_BACK_EXIT_TICKS (2U * BUTTONS_HOLD_TICKS)
 
 typedef struct
 {
     uint32_t state;
+    uint32_t pulse_buttons;
     uint32_t hold_passed;
     uint32_t passed;
     uint32_t repeat_error;

@@ -10,6 +10,7 @@
 #include "tag36h11.h"
 
 #include "../../services/core1_executor.h"
+#include "../../core/shared_buffer.h"
 #include "apriltag_config.h"
 
 typedef enum
@@ -101,11 +102,7 @@ static void apriltag_time_sleep_us(uint64_t duration_us)
 
 static void *shared_uncached(void *pointer)
 {
-    uintptr_t address = (uintptr_t)pointer;
-
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (void *)address;
+    return hk_shared_buffer_uncached(pointer);
 }
 
 static uint8_t *shared_luma(void)

@@ -21,11 +21,19 @@ VID_RE = re.compile(r"^[0-9A-F]{4}$")
 PARTITION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 PLATFORM_ID = "kendryte-k210"
 RUNTIME_PROFILE = "hackylens-full"
+RUNTIME_PROFILES = {RUNTIME_PROFILE, "hackylens-cube"}
+DRIVER_FIELDS = {"display", "camera", "input", "power", "lights"}
+DRIVER_PROFILES = {
+    "hackylens-full": {"display": "st7789-serial", "camera": "ov2640",
+                       "input": "four-buttons", "power": "none", "lights": "pwm"},
+    "hackylens-cube": {"display": "st7789-octal", "camera": "ov7740",
+                       "input": "three-way", "power": "axp173", "lights": "cube"},
+}
 
 ROOT_FIELDS = {
     "schema", "id", "platform", "support", "releaseable",
     "runtime_profile", "available", "present", "routes", "defaults",
-    "flash", "partitions", "programming",
+    "flash", "partitions", "programming", "drivers",
 }
 ROUTE_FIELDS = {
     "id", "macro", "pin", "function", "peripheral", "runtime_mux_group",
@@ -52,7 +60,7 @@ DEFAULT_FIELDS = {
     "rgb_pwm_device", "rgb_pwm_channel0", "rgb_pwm_channel1",
     "rgb_pwm_channel2", "screen_pwm_device", "screen_pwm_channel",
     "pwm_frequency_hz", "camera_sccb_address", "camera_xclk_hz",
-    "camera_sccb_hz", "camera_max_width", "camera_max_height",
+    "camera_sccb_hz", "camera_max_width", "camera_max_height", "camera_preview_rotate",
 }
 GPIOHS_DEFAULT_ROUTES = {
     "gpiohs_lcd_reset": "IO_LCD_RST",
@@ -101,6 +109,7 @@ DEFAULT_RANGES = {
     "camera_sccb_hz": (1, 1_000_000),
     "camera_max_width": (1, 640),
     "camera_max_height": (1, 480),
+    "camera_preview_rotate": (0, 1),
 }
 PWM_DEFAULT_ROUTES = (
     ("led_pwm_device", "led_pwm_channel", "IO_LED_ILLUM"),
@@ -134,6 +143,10 @@ USB_DETECTION_MODES = {"vid-any", "explicit-port"}
 FLASH_TYPES = {"spi0"}
 FLASH_MODES = {"qio", "dio"}
 FPIOA_FUNCTIONS = {
+    "i2c2-sclk": ("i2c2", "FUNC_I2C2_SCLK"),
+    "i2c2-sda": ("i2c2", "FUNC_I2C2_SDA"),
+    "i2c1-sclk": ("i2c1", "FUNC_I2C1_SCLK"),
+    "i2c1-sda": ("i2c1", "FUNC_I2C1_SDA"),
     "timer0-toggle1": ("timer0", "FUNC_TIMER0_TOGGLE1"),
     "timer2-toggle1": ("timer2", "FUNC_TIMER2_TOGGLE1"),
     "timer2-toggle2": ("timer2", "FUNC_TIMER2_TOGGLE2"),
@@ -166,6 +179,8 @@ FPIOA_FUNCTIONS = {
     "i2c0-sda": ("i2c0", "FUNC_I2C0_SDA"),
 }
 ROUTE_ROLES = {
+    "IO_PMIC_SCL": ("i2c1-sclk", "i2c1"),
+    "IO_PMIC_SDA": ("i2c1-sda", "i2c1"),
     "IO_LCD_BL": ("timer0-toggle1", "timer0"),
     "IO_LCD_DC_OR_AUX": ("gpiohs15", "gpiohs"),
     "IO_LCD_CS": ("spi0-ss3", "spi0"),
@@ -203,6 +218,12 @@ LEGACY_RUNTIME_MUX = {
         ("IO_EXTERNAL_UART_T", "uart1-tx", 35, "uart1"),
         ("IO_EXTERNAL_I2C_R", "i2c0-sclk", 34, "i2c0"),
         ("IO_EXTERNAL_I2C_T", "i2c0-sda", 35, "i2c0"),
+    }),
+    "grove-four-pin-mode": frozenset({
+        ("IO_EXTERNAL_UART_R", "uart1-rx", 24, "uart1"),
+        ("IO_EXTERNAL_UART_T", "uart1-tx", 25, "uart1"),
+        ("IO_EXTERNAL_I2C_R", "i2c0-sclk", 24, "i2c0"),
+        ("IO_EXTERNAL_I2C_T", "i2c0-sda", 25, "i2c0"),
     }),
 }
 
@@ -315,6 +336,11 @@ class Board:
     def programming(self) -> dict[str, Any]:
         return self.data["programming"]
 
+    @property
+    def drivers(self) -> dict[str, str]:
+        return dict(self.data.get("drivers", DRIVER_PROFILES.get(
+            self.runtime_profile or "", DRIVER_PROFILES[RUNTIME_PROFILE])))
+
     def present_kinds(self) -> set[str]:
         if "present" in self.data:
             return set(self.data["present"])
@@ -358,7 +384,7 @@ def _validate_services(data: dict[str, Any]) -> None:
         missing = sorted(RUNTIME_REQUIRED_SERVICES - set(available))
         if missing:
             raise ContractError(
-                f"runtime_profile {RUNTIME_PROFILE!r}: missing available service(s): "
+                f"runtime_profile {data.get('runtime_profile')!r}: missing available service(s): "
                 + ", ".join(missing)
             )
 
@@ -395,6 +421,8 @@ def _validate_routes(data: dict[str, Any]) -> None:
         role = ROUTE_ROLES.get(macro)
         if role is None:
             raise ContractError(f"{field}.macro: unknown route role {macro!r}")
+        if data.get("runtime_profile") == "hackylens-cube" and macro in {"IO_CAM_SCCB_SCLK", "IO_CAM_SCCB_SDA"}:
+            role = ("i2c2-sclk" if macro.endswith("SCLK") else "i2c2-sda", "i2c2")
         if role != (function, peripheral):
             raise ContractError(
                 f"{field}: route role {macro!r} requires function "
@@ -496,12 +524,14 @@ def _validate_programming(data: dict[str, Any], board_dir: Path | None) -> None:
                 "programming.usb_detection.mode: unsupported ports require explicit-port"
             )
         return
-    missing = sorted(hardware_defaults - set(programming))
+    required_hardware_defaults = hardware_defaults - ({"reboot_profile"} if reset == "manual" else set())
+    missing = sorted(required_hardware_defaults - set(programming))
     if missing:
         raise ContractError("programming: missing required field(s): " + ", ".join(missing))
-    reboot = _string(programming["reboot_profile"], "programming.reboot_profile")
-    if reboot not in REBOOT_PROFILES:
-        raise ContractError(f"programming.reboot_profile: unknown profile {reboot!r}")
+    if "reboot_profile" in programming:
+        reboot = _string(programming["reboot_profile"], "programming.reboot_profile")
+        if reboot not in REBOOT_PROFILES:
+            raise ContractError(f"programming.reboot_profile: unknown profile {reboot!r}")
     stub = _string(programming["isp_stub"], "programming.isp_stub")
     stub_path = Path(stub)
     if stub_path.is_absolute() or ".." in stub_path.parts:
@@ -532,7 +562,10 @@ def _validate_defaults(data: dict[str, Any]) -> None:
         if name in defaults and defaults[name] != expected:
             raise ContractError(f"defaults.{name}: K210 requires {expected}")
     if data["support"] == "runtime":
-        missing_defaults = sorted(DEFAULT_FIELDS - set(defaults))
+        required_defaults = DEFAULT_FIELDS
+        if data.get("runtime_profile") == "hackylens-cube":
+            required_defaults = DEFAULT_FIELDS - {"gpiohs_button_back"}
+        missing_defaults = sorted(required_defaults - set(defaults))
         if missing_defaults:
             raise ContractError(
                 "defaults: runtime board is missing: " + ", ".join(missing_defaults)
@@ -672,10 +705,18 @@ def validate_board_data(data: dict[str, Any], *, board_dir: Path | None = None) 
     releaseable = _boolean(data.get("releaseable"), "releaseable")
     profile = data.get("runtime_profile")
     if support == "runtime":
-        if profile != RUNTIME_PROFILE:
-            raise ContractError("runtime_profile: runtime board requires hackylens-full")
+        if profile not in RUNTIME_PROFILES:
+            raise ContractError("runtime_profile: runtime board requires a known runtime profile")
+        drivers = data.get("drivers", DRIVER_PROFILES[RUNTIME_PROFILE])
+        if not isinstance(drivers, dict):
+            raise ContractError("drivers: expected table")
+        _strict(drivers, DRIVER_FIELDS, "drivers")
+        if drivers != DRIVER_PROFILES[profile]:
+            raise ContractError("drivers: must exactly match the selected runtime profile")
     elif profile is not None:
         raise ContractError("runtime_profile: forbidden for conformance board")
+    elif "drivers" in data:
+        raise ContractError("drivers: forbidden for conformance board")
     if releaseable and support != "runtime":
         raise ContractError("releaseable: true requires support=runtime")
     _validate_services(data)

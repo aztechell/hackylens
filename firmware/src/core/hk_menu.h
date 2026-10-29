@@ -8,6 +8,7 @@ typedef struct
     void (*draw_chrome)(const char *title);
     void (*draw_title)(const char *title);
     void (*draw_item_at)(uint8_t index, const hk_app_t *app, uint8_t selected);
+    void (*draw_page)(uint8_t page, uint8_t pages);
 } hk_menu_view_t;
 
 void menu_view_set(const hk_menu_view_t *view);

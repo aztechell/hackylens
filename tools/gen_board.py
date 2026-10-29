@@ -50,6 +50,7 @@ DEFAULT_MACROS = {
     "camera_sccb_hz": "CAMERA_SCCB_HZ",
     "camera_max_width": "CAMERA_MAX_W",
     "camera_max_height": "CAMERA_MAX_H",
+    "camera_preview_rotate": "CAMERA_PREVIEW_ROTATE",
 }
 
 
@@ -66,6 +67,13 @@ def render_board_config(board: Board) -> str:
         f'#define HK_BOARD_SUPPORT "{board.support}"',
         f"#define HK_BOARD_RELEASEABLE {1 if board.releaseable else 0}U",
         f'#define HK_BOARD_RUNTIME_PROFILE "{profile}"',
+        f"#define HK_BOARD_LCD_PARALLEL8 {int(board.drivers['display'] == 'st7789-octal')}U",
+        f"#define HK_BOARD_CAMERA_OV7740 {int(board.drivers['camera'] == 'ov7740')}U",
+        f"#define HK_BOARD_POWER_AXP173 {int(board.drivers['power'] == 'axp173')}U",
+        f"#define HK_BOARD_INPUT_PROFILE_CUBE {int(board.drivers['input'] == 'three-way')}U",
+        f"#define HK_BOARD_LIGHTS_CUBE {int(board.drivers['lights'] == 'cube')}U",
+        f"#define HK_BOARD_UI_WIDTH {board.data.get('defaults', {}).get('lcd_width', 320)}U",
+        f"#define HK_BOARD_UI_HEIGHT {board.data.get('defaults', {}).get('lcd_height', 240)}U",
         "",
     ]
     for route in board.selected_routes():

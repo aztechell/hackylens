@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
+#include "../core/shared_buffer.h"
 #include "../drivers/camera_stream.h"
 #include "hal_dvp.h"
 
@@ -31,11 +32,7 @@ static volatile uint32_t g_sequence;
 
 static uint8_t *camera_ai_uncached(void)
 {
-    uintptr_t address = (uintptr_t)g_camera_ai_input;
-
-    if(address >= 0x80000000UL && address < 0x80600000UL)
-        address -= 0x40000000UL;
-    return (uint8_t *)address;
+    return (uint8_t *)hk_shared_buffer_uncached(g_camera_ai_input);
 }
 
 static void camera_ai_convert_start(void *context)

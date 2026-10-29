@@ -18,6 +18,7 @@ static const hk_menu_view_t g_menu_view = {
     .draw_chrome = menu_draw_chrome,
     .draw_title = menu_draw_title,
     .draw_item_at = menu_draw_item_at,
+    .draw_page = menu_draw_page,
 };
 
 static void boot_log_banner(void)

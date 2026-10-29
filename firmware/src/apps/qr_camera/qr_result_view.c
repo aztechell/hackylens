@@ -16,8 +16,12 @@ void qr_result_view_draw_status(const char *status)
 static void qr_result_view_draw_actions(void)
 {
     hk_ui_display_fill_rect(0, QR_RESULT_ACTION_Y, HK_DISPLAY_REQUIRED_WIDTH, HACKYLENS_FONT_H, COLOR_BLACK);
-    hk_ui_display_draw_text_at(22, QR_RESULT_ACTION_Y, "OK:SAVE", COLOR_TERM_GREEN, COLOR_BLACK);
-    hk_ui_display_draw_text_at(166, QR_RESULT_ACTION_Y, "BACK:CLOSE", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_at(HK_DISPLAY_REQUIRED_WIDTH < 320 ? 8 : 22,
+                              QR_RESULT_ACTION_Y, "OK:SAVE", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_at(HK_DISPLAY_REQUIRED_WIDTH < 320 ? 120 : 166,
+                              QR_RESULT_ACTION_Y,
+                              HK_DISPLAY_REQUIRED_WIDTH < 320 ? "BACK:X" : "BACK:CLOSE",
+                              COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
 static void qr_result_view_draw_page_hint(uint16_t scroll_line, uint16_t max_scroll)

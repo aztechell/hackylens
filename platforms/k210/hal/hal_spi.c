@@ -7,10 +7,20 @@
 #include <sysctl.h>
 
 #include "hal_time.h"
+#include "board_config.h"
+#if HK_BOARD_LCD_PARALLEL8
+#include <dmac.h>
+#include "hal_shared_buffer.h"
+/* DMA0 belongs to the Cube display; KPU uses DMA5. One complete LCD
+ * transaction is queued before starting, as in the MaixPy DMA transport. */
+static uint32_t s_parallel_words[LCD_W * LCD_H] __attribute__((aligned(64)));
+static size_t s_parallel_count;
+#endif
 
 #define HAL_SPI_FIFO_TIMEOUT_US 500000ULL
 
 static uint8_t s_fifo_tx_active_mask;
+static uint8_t s_fifo_tx_pending_select[4];
 
 static uint64_t deadline_to_cpu_cycles(uint64_t deadline_us)
 {
@@ -71,6 +81,23 @@ static volatile spi_t *hal_spi_regs(uint8_t device)
 void hal_spi_init(uint8_t device, uint32_t frame_bits)
 {
     spi_init((spi_device_num_t)device, SPI_WORK_MODE_0, SPI_FF_STANDARD, frame_bits, 0);
+}
+
+void hal_spi_parallel8_phase(uint8_t device, uint32_t frame_bits, uint8_t command)
+{
+    volatile spi_t *controller = hal_spi_regs(device);
+    uint32_t divider;
+    if(!controller)
+        return;
+    divider = controller->baudr;
+    spi_init((spi_device_num_t)device, SPI_WORK_MODE_0,
+             SPI_FF_OCTAL, frame_bits, 0);
+    spi_init_non_standard((spi_device_num_t)device,
+                          command ? 8U : 0U,
+                          command ? 0U : frame_bits,
+                          0U, SPI_AITM_AS_FRAME_FORMAT);
+    if(divider != 0U)
+        controller->baudr = divider;
 }
 
 uint32_t hal_spi_set_clock(uint8_t device, uint32_t hz)
@@ -157,6 +184,7 @@ void hal_spi_fifo_config(uint8_t device, uint32_t hz, uint8_t chip_select)
     while(spi->rxflr)
         (void)spi->dr[0];
     spi->ssienr = 1;
+    s_fifo_tx_pending_select[device] = 0U;
     fifo_tx_set_active(device, 0U);
 }
 
@@ -173,7 +201,8 @@ void hal_spi_fifo_set_frame_bits(uint8_t device, uint32_t bits)
     volatile spi_t *spi = hal_spi_regs(device);
     if(!spi || bits == 0)
         return;
-    spi->ctrlr0 = ((bits - 1U) << 16) | (spi->ctrlr0 & 0x1FU);
+    spi->ctrlr0 = ((bits - 1U) << 16) |
+                  (spi->ctrlr0 & ~(31U << 16));
 }
 
 uint8_t hal_spi_fifo_send_bytes_until(uint8_t device, uint8_t chip_select,
@@ -205,9 +234,25 @@ uint8_t hal_spi_fifo_tx_begin_until(
     hal_spi_fifo_set_tmod_tx(device);
     while(spi->rxflr)
         (void)spi->dr[0];
-    spi->ser = 1U << chip_select;
+    /* Octal data is staged until end, then sent as one DMA transaction. */
+    s_fifo_tx_pending_select[device] =
+        device == 0U && ((spi->ctrlr0 >> 21) & 3U) == SPI_FF_OCTAL
+            ? (uint8_t)(1U << chip_select) : 0U;
+#if HK_BOARD_LCD_PARALLEL8
+    /* A timed-out DMA must be idle before its staging memory can be reused. */
+    if(s_fifo_tx_pending_select[device] && !dmac_is_idle(DMAC_CHANNEL0))
+    {
+        s_fifo_tx_pending_select[device] = 0U;
+        return 0U;
+    }
+#endif
+    spi->ser = s_fifo_tx_pending_select[device] ? 0U : 1U << chip_select;
     spi->ssienr = 1U;
     fifo_tx_set_active(device, 1U);
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device])
+        s_parallel_count = 0U;
+#endif
     return 1U;
 }
 
@@ -223,6 +268,21 @@ uint8_t hal_spi_fifo_tx_write_until(
        !fifo_tx_active(device) || (len && !data))
         return 0U;
 
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device])
+    {
+        uint32_t *words = hal_shared_buffer_uncached(s_parallel_words);
+        if(len > LCD_W * LCD_H - s_parallel_count ||
+           cpu_cycle_deadline_reached(deadline_cycles))
+        {
+            hal_spi_fifo_tx_abort(device);
+            return 0U;
+        }
+        while(i < len)
+            words[s_parallel_count++] = data[i++];
+        return 1U;
+    }
+#endif
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
@@ -253,6 +313,24 @@ uint8_t hal_spi_fifo_tx_write_u16be_until(
     if(!spi || device >= 4U || !fifo_tx_active(device) ||
        (len && !data) || (len & 1U))
         return 0U;
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device])
+    {
+        uint32_t *words = hal_shared_buffer_uncached(s_parallel_words);
+        if((len / 2U) > LCD_W * LCD_H - s_parallel_count ||
+           cpu_cycle_deadline_reached(deadline_cycles))
+        {
+            hal_spi_fifo_tx_abort(device);
+            return 0U;
+        }
+        while(i < len)
+        {
+            words[s_parallel_count++] = ((uint32_t)data[i] << 8) | data[i + 1U];
+            i += 2U;
+        }
+        return 1U;
+    }
+#endif
     while(i < len)
     {
         size_t fifo_len = 32U - spi->txflr;
@@ -282,6 +360,28 @@ uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us)
     if(!spi || device >= 4U || !fifo_tx_active(device))
         return 0U;
 
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device] && s_parallel_count)
+    {
+        /* Exclusive DMA0 is idle before the SDK configuration helper, whose
+         * internal disable/idle check therefore cannot wait for a transfer. */
+        if(!dmac_is_idle(DMAC_CHANNEL0) || hal_time_us() >= deadline_us)
+            goto timeout;
+        spi->dmacr = 2U;
+        sysctl_dma_select(SYSCTL_DMA_CHANNEL_0, SYSCTL_DMA_SELECT_SSI0_TX_REQ);
+        __sync_synchronize();
+        dmac_set_single_mode(DMAC_CHANNEL0,
+            hal_shared_buffer_uncached(s_parallel_words), (void *)&spi->dr[0],
+            DMAC_ADDR_INCREMENT, DMAC_ADDR_NOCHANGE,
+            DMAC_MSIZE_4, DMAC_TRANS_WIDTH_32, s_parallel_count);
+        spi->ser = s_fifo_tx_pending_select[device];
+        while(!dmac_is_idle(DMAC_CHANNEL0))
+        {
+            if(hal_time_us() >= deadline_us)
+                goto timeout;
+        }
+    }
+#endif
     while((spi->sr & 0x05U) != 0x04U)
     {
         if(hal_time_us() >= deadline_us)
@@ -291,6 +391,11 @@ uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us)
         goto timeout;
     spi->ser = 0;
     spi->ssienr = 0;
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device])
+        spi->dmacr = 0U;
+#endif
+    s_fifo_tx_pending_select[device] = 0U;
     fifo_tx_set_active(device, 0U);
     return 1U;
 
@@ -305,8 +410,17 @@ void hal_spi_fifo_tx_abort(uint8_t device)
 
     if(!spi || device >= 4U)
         return;
+#if HK_BOARD_LCD_PARALLEL8
+    if(s_fifo_tx_pending_select[device])
+    {
+        spi->dmacr = 0U;
+        dmac_channel_disable(DMAC_CHANNEL0);
+        s_parallel_count = 0U;
+    }
+#endif
     spi->ser = 0U;
     spi->ssienr = 0U;
+    s_fifo_tx_pending_select[device] = 0U;
     fifo_tx_set_active(device, 0U);
 }
 

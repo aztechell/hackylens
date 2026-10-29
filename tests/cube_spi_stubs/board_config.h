@@ -1,0 +1,3 @@
+#define HK_BOARD_LCD_PARALLEL8 1U
+#define LCD_W 240U
+#define LCD_H 240U

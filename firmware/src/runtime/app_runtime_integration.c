@@ -22,6 +22,7 @@ typedef struct
     hk_display_surface_t locked_surface;
     uint8_t initialized;
     uint8_t display_batch_active;
+    uint8_t display_batch_has_draw;
     uint8_t display_surface_active;
     uint32_t claimed_lights_channels;
 } app_runtime_integration_t;
@@ -77,6 +78,7 @@ static hk_result_t cleanup(void *user, hk_deadline_t deadline)
     hk_ui_display_unbind();
     integration->display = NULL;
     integration->display_batch_active = 0U;
+    integration->display_batch_has_draw = 0U;
     integration->display_surface_active = 0U;
     integration->locked_surface = (hk_display_surface_t){0};
     return result;
@@ -125,11 +127,14 @@ static hk_result_t surface_invalidate(
 static hk_result_t surface_clear(void *user, uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+    hk_result_t result;
 
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
-    return hk_display_clear(
-        integration->display, rgb565);
+    result = hk_display_clear(integration->display, rgb565);
+    if(result == HK_OK)
+        integration->display_batch_has_draw = 1U;
+    return result;
 }
 
 static hk_result_t surface_fill_rect(
@@ -138,11 +143,14 @@ static hk_result_t surface_fill_rect(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+    hk_result_t result;
 
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
-    return hk_display_fill_rect(
-        integration->display, rect, rgb565);
+    result = hk_display_fill_rect(integration->display, rect, rgb565);
+    if(result == HK_OK)
+        integration->display_batch_has_draw = 1U;
+    return result;
 }
 
 static hk_result_t surface_stroke_rect(
@@ -151,11 +159,14 @@ static hk_result_t surface_stroke_rect(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+    hk_result_t result;
 
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
-    return hk_display_stroke_rect(
-        integration->display, rect, rgb565);
+    result = hk_display_stroke_rect(integration->display, rect, rgb565);
+    if(result == HK_OK)
+        integration->display_batch_has_draw = 1U;
+    return result;
 }
 
 static hk_result_t surface_text(
@@ -166,11 +177,14 @@ static hk_result_t surface_text(
     uint16_t rgb565)
 {
     app_runtime_integration_t *integration = user;
+    hk_result_t result;
 
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
-    return hk_display_text(
-        integration->display, bounds, utf8, size_bytes, rgb565);
+    result = hk_display_text(integration->display, bounds, utf8, size_bytes, rgb565);
+    if(result == HK_OK)
+        integration->display_batch_has_draw = 1U;
+    return result;
 }
 
 static hk_result_t surface_blit(
@@ -180,11 +194,15 @@ static hk_result_t surface_blit(
     uint32_t pixel_format)
 {
     app_runtime_integration_t *integration = user;
+    hk_result_t result;
 
     if(integration->display_surface_active)
         return HK_ERR_INVALID_STATE;
-    return hk_display_blit(
+    result = hk_display_blit(
         integration->display, destination, pixels, pixel_format);
+    if(result == HK_OK)
+        integration->display_batch_has_draw = 1U;
+    return result;
 }
 
 static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
@@ -199,6 +217,8 @@ static hk_result_t surface_lock(void *user, hk_display_surface_t *pixels)
         *pixels = integration->locked_surface;
         return HK_OK;
     }
+    if(integration->display_batch_has_draw)
+        return HK_ERR_INVALID_STATE;
     if(integration->display_batch_active)
     {
         result = hk_display_abort(
@@ -243,6 +263,9 @@ static hk_result_t render_begin(
     if(result != HK_OK)
         return result;
     integration->display_batch_active = 1U;
+    integration->display_batch_has_draw = 0U;
+    integration->display_surface_active = 0U;
+    integration->locked_surface = (hk_display_surface_t){0};
     {
         hk_app_surface_ops_t bound_ops = surface_ops;
         hk_result_t init_result;
@@ -266,6 +289,7 @@ static hk_result_t render_present(void *user, hk_deadline_t deadline)
     if(result == HK_OK)
     {
         integration->display_batch_active = 0U;
+        integration->display_batch_has_draw = 0U;
         integration->display_surface_active = 0U;
         integration->locked_surface = (hk_display_surface_t){0};
     }
@@ -279,12 +303,16 @@ static hk_result_t render_abort(void *user)
 
     if(!integration->display_batch_active &&
        !integration->display_surface_active)
+    {
+        integration->display_batch_has_draw = 0U;
         return HK_OK;
+    }
     result = hk_display_abort(
         integration->display);
     if(result == HK_OK)
     {
         integration->display_batch_active = 0U;
+        integration->display_batch_has_draw = 0U;
         integration->display_surface_active = 0U;
         integration->locked_surface = (hk_display_surface_t){0};
     }

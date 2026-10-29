@@ -303,18 +303,20 @@ static uint32_t utf8_next(const char **text)
     return codepoint;
 }
 
-void hk_ui_display_draw_text_at(
-    uint16_t x, uint16_t y, const char *text,
+void hk_ui_display_draw_text_clipped_at(
+    uint16_t x, uint16_t y, uint16_t width, const char *text,
     uint16_t foreground, uint16_t background)
 {
     hk_display_surface_t surface;
     uint16_t start = x;
+    uint32_t right = (uint32_t)x + width;
     hk_display_rect_t dirty;
 
     if(!text || y + HACKYLENS_FONT_H > HK_UI_DISPLAY_HEIGHT ||
        surface_acquire(&surface) != HK_OK)
         return;
-    while(*text && x + HACKYLENS_FONT_W <= HK_UI_DISPLAY_WIDTH)
+    while(*text && x + HACKYLENS_FONT_W <= HK_UI_DISPLAY_WIDTH &&
+          x + HACKYLENS_FONT_W <= right)
     {
         surface_glyph(&surface, x, y, utf8_next(&text),
                       foreground, background);
@@ -325,6 +327,14 @@ void hk_ui_display_draw_text_at(
         (void)hk_display_abort(s_display);
     else
         (void)surface_present(&dirty);
+}
+
+void hk_ui_display_draw_text_at(
+    uint16_t x, uint16_t y, const char *text,
+    uint16_t foreground, uint16_t background)
+{
+    hk_ui_display_draw_text_clipped_at(
+        x, y, HK_UI_DISPLAY_WIDTH, text, foreground, background);
 }
 
 static uint16_t glyph_count(const char *text)
@@ -351,21 +361,39 @@ void hk_ui_display_draw_text_centered(
 void hk_ui_display_draw_boot_logo(void)
 {
     hk_display_surface_t surface;
+    uint32_t logo_w = HK_UI_DISPLAY_WIDTH;
+    uint32_t logo_h = HK_UI_DISPLAY_HEIGHT;
+    uint32_t logo_x0;
+    uint32_t logo_y0;
     hk_display_rect_t screen = {
         0, 0, HK_UI_DISPLAY_WIDTH, HK_UI_DISPLAY_HEIGHT,
     };
 
     if(surface_acquire(&surface) != HK_OK)
         return;
+    if((uint32_t)HACKYLENS_BOOT_LOGO_W * logo_h >
+       (uint32_t)HACKYLENS_BOOT_LOGO_H * logo_w)
+        logo_h = HACKYLENS_BOOT_LOGO_H * logo_w / HACKYLENS_BOOT_LOGO_W;
+    else
+        logo_w = HACKYLENS_BOOT_LOGO_W * logo_h / HACKYLENS_BOOT_LOGO_H;
+    logo_x0 = (HK_UI_DISPLAY_WIDTH - logo_w) / 2U;
+    logo_y0 = (HK_UI_DISPLAY_HEIGHT - logo_h) / 2U;
     for(uint16_t y = 0U; y < HK_UI_DISPLAY_HEIGHT; y++)
     {
         uint8_t *row = (uint8_t *)surface.pixels.data +
             (uint32_t)y * surface.pixels.stride_bytes;
         for(uint16_t x = 0U; x < HK_UI_DISPLAY_WIDTH; x++)
         {
-            uint8_t bit = g_hackylens_boot_logo_1bpp[
-                y * HACKYLENS_BOOT_LOGO_ROW_BYTES + x / 8U] &
-                (uint8_t)(0x80U >> (x & 7U));
+            uint8_t bit = 0U;
+            if(x >= logo_x0 && x < logo_x0 + logo_w &&
+               y >= logo_y0 && y < logo_y0 + logo_h)
+            {
+                uint32_t logo_y = (y - logo_y0) * HACKYLENS_BOOT_LOGO_H / logo_h;
+                uint32_t logo_x = (x - logo_x0) * HACKYLENS_BOOT_LOGO_W / logo_w;
+                bit = g_hackylens_boot_logo_1bpp[
+                    logo_y * HACKYLENS_BOOT_LOGO_ROW_BYTES + logo_x / 8U] &
+                    (uint8_t)(0x80U >> (logo_x & 7U));
+            }
             uint16_t color = bit ? COLOR_TERM_GREEN : COLOR_BLACK;
             row[x * 2U] = (uint8_t)(color >> 8);
             row[x * 2U + 1U] = (uint8_t)color;

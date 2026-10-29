@@ -29,6 +29,8 @@ typedef struct
     uint8_t input_sent;
     uint8_t wakeup_sent;
     uint8_t batch_active;
+    uint8_t surface_active;
+    uint8_t fail_next_clear;
     uint32_t input_acquire_count;
     uint32_t input_state_count;
     uint32_t input_event_count;
@@ -267,7 +269,8 @@ hk_result_t hk_display_get_info(
 hk_result_t hk_display_begin_batch(
     const hk_display_t *handle)
 {
-    if(!handle || handle != s_display_claim || handle != s_bound_display || s_fixture.batch_active)
+    if(!handle || handle != s_display_claim || handle != s_bound_display ||
+       s_fixture.batch_active || s_fixture.surface_active)
         return HK_ERR_INVALID_STATE;
     s_fixture.batch_active = 1U;
     s_fixture.display_begin_count++;
@@ -292,6 +295,11 @@ hk_result_t hk_display_clear(
     (void)rgb565;
     if(!handle || !s_fixture.batch_active)
         return HK_ERR_INVALID_STATE;
+    if(s_fixture.fail_next_clear)
+    {
+        s_fixture.fail_next_clear = 0U;
+        return HK_ERR_LIMIT;
+    }
     s_fixture.display_clear_count++;
     return HK_OK;
 }
@@ -349,10 +357,11 @@ hk_result_t hk_display_present(
     const hk_cancel_t *cancel)
 {
     (void)cancel;
-    if(!handle || !s_fixture.batch_active ||
+    if(!handle || (!s_fixture.batch_active && !s_fixture.surface_active) ||
        deadline.at_us == UINT64_MAX)
         return HK_ERR_INVALID_STATE;
     s_fixture.batch_active = 0U;
+    s_fixture.surface_active = 0U;
     s_fixture.display_present_count++;
     return HK_OK;
 }
@@ -362,9 +371,10 @@ hk_result_t hk_display_abort(
 {
     if(!handle)
         return HK_ERR_INVALID_ARGUMENT;
-    if(s_fixture.batch_active)
+    if(s_fixture.batch_active || s_fixture.surface_active)
     {
         s_fixture.batch_active = 0U;
+        s_fixture.surface_active = 0U;
         s_fixture.display_abort_count++;
     }
     return HK_OK;
@@ -383,6 +393,7 @@ hk_result_t hk_display_surface_acquire(
         s_fixture.batch_active = 0U;
         s_fixture.display_abort_count++;
     }
+    s_fixture.surface_active = 1U;
     *surface = (hk_display_surface_t){
         sizeof(*surface), HK_DISPLAY_SURFACE_VERSION,
         {
