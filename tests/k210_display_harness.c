@@ -7,7 +7,9 @@
 #include "display_normative_suite.h"
 #include "lcd_st7789_transport.h"
 
+#ifndef TEST_WIDTH
 #define TEST_WIDTH 320U
+#endif
 #define TEST_HEIGHT 240U
 #define TEST_FRAME_BYTES (TEST_WIDTH * TEST_HEIGHT * 2U)
 

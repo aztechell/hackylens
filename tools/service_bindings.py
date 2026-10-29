@@ -64,9 +64,6 @@ def select(board: Board, disabled_apps: set[str], required_apps: set[str],
     routes = {item["id"] for item in board.selected_routes()}
     bindings, absences = [], []
     for item in BINDINGS:
-        if item.name == "power" and board.drivers["power"] != "axp173":
-            absences.append({"id": "power", "code": "driver-unsupported", "detail": ["power"]})
-            continue
         required_routes = set(item.routes)
         if item.name == "input" and board.drivers["input"] == "three-way":
             required_routes.remove("button-back")

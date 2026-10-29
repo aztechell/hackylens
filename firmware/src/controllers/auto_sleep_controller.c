@@ -11,6 +11,13 @@
 #include "../services/settings_service.h"
 
 static uint8_t s_sleep_session_active;
+static uint8_t s_auto_request;
+uint8_t auto_sleep_take_request(void)
+{
+    uint8_t requested = s_auto_request;
+    s_auto_request = 0U;
+    return requested;
+}
 
 void sleep_session_set_active(uint8_t active)
 {
@@ -38,7 +45,7 @@ static const hk_app_t *sleep_find_app(void)
     {
         const hk_app_t *app = g_menu_items[index];
 
-        if(app && app->id && strcmp(app->id, "sleep") == 0)
+        if(app && app->id && strcmp(app->id, "power") == 0)
             return app;
     }
     return NULL;
@@ -68,5 +75,7 @@ void auto_sleep_controller_tick(const hk_input_snapshot_t *input)
     if(!app)
         return;
     printf("[SLEEP] auto after %u min\r\n", auto_sleep_minutes);
+    s_auto_request = 1U;
     (void)shell_open_app(app, input);
+    s_auto_request = 0U;
 }

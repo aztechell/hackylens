@@ -157,15 +157,15 @@ class LightsCapabilityTests(unittest.TestCase):
             [item.name for item in runtime.bindings],
             ["time", "input",
              "display", "external-link",
-             "lights"],
+             "lights", "power"],
         )
         self.assertEqual(
             [item.name for item in conformance.bindings],
-            ["time"],
+            ["time", "power"],
         )
         disabled = generator.select(runtime_board, set(), set(), {"lights"})
         self.assertIn("micropython", disabled.disabled_apps)
-        for app in ("camera", "face-detect", "apriltag", "object-detect", "qr-camera", "settings", "sleep"):
+        for app in ("camera", "face-detect", "apriltag", "object-detect", "qr-camera", "settings", "power"):
             self.assertNotIn(app, disabled.disabled_apps)
 
 

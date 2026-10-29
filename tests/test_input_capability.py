@@ -131,11 +131,11 @@ class InputCapabilityTests(unittest.TestCase):
             [item.name for item in runtime.bindings],
             ["time", "input",
              "display", "external-link",
-             "lights"],
+             "lights", "power"],
         )
         self.assertEqual(
             [item.name for item in conformance.bindings],
-            ["time"],
+            ["time", "power"],
         )
         # Link the actual generated absent binding with the portable API.
         with tempfile.TemporaryDirectory(prefix="hackylens-input-absent-") as temp:

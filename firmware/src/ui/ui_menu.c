@@ -1,4 +1,5 @@
 #include "hk_ui.h"
+#include "hackylens_power_icons_1bpp.h"
 
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
@@ -149,9 +150,22 @@ void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_ui_display_fill_rect(x + 18, y + 49, 24, 2, color);
 }
 
-void power_off_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+void power_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    sleep_draw_icon(x, y, color, bg);
+    hk_ui_display_surface_t surface;
+    hk_ui_display_rect_t region = {x+6U,y+6U,48U,48U};
+    unsigned px, py;
+    if(!hk_ui_display_frame_acquire(&surface)) return;
+    if((unsigned)x+54U>surface.width || (unsigned)y+54U>surface.height) {
+        hk_ui_display_frame_cancel(surface.lease_id);
+        return;
+    }
+    for(py=0;py<48U;py++) for(px=0;px<48U;px++) {
+        uint16_t pixel = hk_power_icon_pixel(HK_POWER_ICON_OFF,px,py) ? color : bg;
+        uint8_t *out=surface.rgb565_be+(y+6U+py)*surface.stride_bytes+(x+6U+px)*2U;
+        out[0]=(uint8_t)(pixel>>8); out[1]=(uint8_t)pixel;
+    }
+    (void)hk_ui_display_frame_present_regions(surface.lease_id,&region,1U);
 }
 
 void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)

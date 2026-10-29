@@ -225,12 +225,12 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
             micropython=True
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=11 menu=11", self.compile_profile(
             micropython=False
         ))
 
@@ -346,20 +346,20 @@ int main(void)
         for token in (".capabilities", ".services", "hk_app_capability_request_t", "hk_app_service_request_t"):
             self.assertNotIn(token, source)
         apps = {app["id"]: app for app in self.model["apps"]}
-        for name in ("settings", "sleep", "files", "qr-camera"):
+        for name in ("settings", "power", "files", "qr-camera"):
             self.assertNotIn("lights", apps[name]["requires"])
 
     def test_current_legacy_menu_autostart_debug_and_tick_parity(self) -> None:
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "files", "buttons", "pong", "settings",
-            "sleep", "power-off", "micropython",
+            "power", "micropython",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
-            "sleep": 0, "power-off": 0,
+            "power": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",

@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -17,7 +18,7 @@ static uint32_t g_binding_count;
 static uint32_t g_sleep_count;
 
 static const hk_app_t s_sleep_app = {
-    .id = "sleep",
+    .id = "power",
     .title = "SLEEP",
 };
 const hk_app_t *const g_menu_items[] = { &s_sleep_app };
@@ -75,8 +76,10 @@ void hk_screen_set(screen_t screen)
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
     (void)input;
-    if(!app || !app->id || strcmp(app->id, "sleep") != 0)
+    if(!app || !app->id || strcmp(app->id, "power") != 0)
         return 0U;
+    assert(auto_sleep_take_request() == 1U);
+    assert(auto_sleep_take_request() == 0U);
     g_screen = SCREEN_APP;
     g_sleep_count++;
     return 1U;

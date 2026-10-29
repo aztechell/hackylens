@@ -14,10 +14,10 @@ class ServiceBindingTests(unittest.TestCase):
     def test_board_selection_and_required_app_failure(self):
         runtime = bindings.select(load_board("huskylens-sen0305"), set(), set(), set())
         self.assertEqual({item.name for item in runtime.bindings},
-                         {"time", "input", "lights", "display", "external-link"})
-        self.assertEqual(runtime.disabled_apps, frozenset({"power-off"}))
+                         {"time", "input", "lights", "display", "external-link", "power"})
+        self.assertEqual(runtime.disabled_apps, frozenset())
         cube = bindings.select(load_board("k210-conformance", root=ROOT / "tests" / "fixtures"), set(), set(), set())
-        self.assertEqual([item.name for item in cube.bindings], ["time"])
+        self.assertEqual([item.name for item in cube.bindings], ["time", "power"])
         self.assertEqual(cube.disabled_apps,
                          frozenset(app_composition.app_map(app_composition.load_model())))
         with self.assertRaisesRegex(ValueError, "required app"):
@@ -25,7 +25,7 @@ class ServiceBindingTests(unittest.TestCase):
 
     def test_excluded_binding_cannot_be_satisfied_by_present_resource(self):
         selection = bindings.select(load_board("huskylens-sen0305"), set(), set(), {"display"})
-        self.assertEqual(len(selection.disabled_apps), 13)
+        self.assertEqual(len(selection.disabled_apps), 12)
         self.assertIn("hk_display_binding = {0}", bindings.generated_c(selection))
         with self.assertRaisesRegex(ValueError, "Time"):
             bindings.select(load_board("huskylens-sen0305"), set(), set(), {"time"})
@@ -49,7 +49,7 @@ class ServiceBindingTests(unittest.TestCase):
         source = bindings.generated_c(selection)
         self.assertNotIn("inventory", source)
         self.assertNotIn("grant", source)
-        self.assertEqual(source.count(" = {0};"), 5)
+        self.assertEqual(source.count(" = {0};"), 4)
 
 if __name__ == "__main__":
     unittest.main()

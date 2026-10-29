@@ -4,5 +4,6 @@
 #include <hackylens/app.h>
 
 extern const hk_app_v2_entry_t sleep_v2_entry;
+extern const hk_app_v2_entry_t power_v2_entry;
 
 #endif

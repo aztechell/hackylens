@@ -15,6 +15,30 @@ static uint16_t g_fill_color;
 static uint8_t g_fill_count;
 static uint8_t g_centered_count;
 
+/* Menu icon drawing is linked but is not part of this title-only fixture. */
+uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
+{
+    (void)surface;
+    assert(0 && "title rendering must not acquire an icon framebuffer");
+    return 0U;
+}
+
+uint8_t hk_ui_display_frame_present_regions(
+    uint32_t lease_id, const hk_ui_display_rect_t *regions, uint16_t count)
+{
+    (void)lease_id;
+    (void)regions;
+    (void)count;
+    assert(0 && "title rendering must not present an icon framebuffer");
+    return 0U;
+}
+
+void hk_ui_display_frame_cancel(uint32_t lease_id)
+{
+    (void)lease_id;
+    assert(0 && "title rendering must not cancel an icon framebuffer");
+}
+
 void hk_ui_display_fill_rect(uint16_t x, uint16_t y,
                              uint16_t w, uint16_t h, uint16_t color)
 {

@@ -329,3 +329,57 @@ installed image. The user confirmed POW short/long BACK and POWER OFF
 cancel/confirmed shutdown. SD, AI models, external UART/I2C loopback, all light
 channels, physical MicroPython STOP/WDT recovery and cold-start persistence
 still need hardware acceptance. The board remains non-releaseable.
+
+## Unified POWER candidate (2026-10-29)
+
+The current candidate replaces the two menu entries with one POWER app, leaving
+12 apps. Three equally spaced icons show SLEEP, POWER OFF and RESTART. LEFT/RIGHT
+selects; one fresh OK immediately executes SLEEP, POWER OFF or RESTART, with no
+additional confirmation. POW/BACK closes the selector.
+Held menu OK cannot execute an action. Any new button press wakes sleep. Automatic
+sleep enters the sleep session directly, without stopping at the selector.
+
+Both destructive actions stop MicroPython, flush settings and unmount userfs before
+the hardware command. RESTART uses the SoC soft reset, without a PMIC shutdown or
+watchdog-recovery marker. SEN retains SLEEP and RESTART; POWER OFF is visibly disabled
+because that board has no controlled power cut. Existing POW/BACK policy is unchanged.
+
+Cube rendering-fix candidate: 1,555,448 bytes, SHA-256
+`93b76a598979f2fb672d06c6dbfd64a0c27290399097bfea6f2aa91e2a26174c`.
+Both board builds and the production UI render at 240/320 pixels passed. Hardware
+acceptance of this unified POWER candidate is pending; the 13-app evidence above
+belongs to the earlier separate POWER OFF implementation, not this candidate.
+
+The first unified candidate (`5735dc91...`) booted with the 12-app menu but
+POWER immediately returned to the menu with `HK_ERR_LIMIT` (-14). Its compact
+font queued one fill command per pixel, exceeding the K210 batch limit of 32.
+The rendering fix borrows the public RGB565BE surface before drawing, writes
+pixels within that lease and marks the full frame dirty for presentation. The
+regression harness links the real public surface and K210 provider, reproduces
+the rejected 33rd command, then checks successful POWER rendering/presentation
+for all three selections at 240 and 320 pixels. Only LCD transport is simulated;
+`build/power-real-240.png` and `power-real-320.png` come from its panel output.
+Hardware acceptance of the rendering-fix candidate remains pending.
+
+## POWER visual refresh and single-press actions (2026-10-29)
+
+The refreshed selector uses shared 48x48 monochrome glyphs: a curved crescent,
+standard power symbol and circular restart arrow. The same power glyph is used
+by the main menu. The icon/label group is centered below the header at both
+240x240 and 320x240. Permanent navigation and BACK hints have been removed;
+only waiting, error or unsupported-operation status is shown when applicable.
+
+One fresh OK immediately executes the selected action; no second confirmation
+is required. Launch-held OK is still ignored until released and pressed again.
+Tests cover single-press OFF/RESTART, held-key suppression, sleep/wake, failure
+recovery and shutdown preparation. Both full board builds, architecture checks
+and all 250 host tests (174 subtests) passed.
+
+The Cube image was installed through the current automatic reset profile on
+COM15, then started with a normal-boot reset. Size: 1,556,856 bytes; SHA-256:
+`eeeadf759dad104e07deb4c09e635b26a60db2f55c7093d531a8bbc93182d859`.
+`build/cube-power-visual-runtime-boot.log` records successful menu startup;
+`build/cube-power-visual-open-final.log` records successful POWER launch.
+The actual framebuffer screenshot `screenshots/cube-power-visual.bmp` confirms
+the refreshed screen remains open without the former rendering-limit failure.
+Fresh physical OFF/RESTART acceptance for this revision is not yet recorded.
