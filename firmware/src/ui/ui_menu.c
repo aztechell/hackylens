@@ -1,5 +1,5 @@
 #include "hk_ui.h"
-#include "hackylens_power_icons_1bpp.h"
+#include "menu_icons.h"
 
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
@@ -94,51 +94,22 @@ void menu_draw_page(uint8_t page, uint8_t pages)
 
 void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_draw_rect(x + 13, y + 12, 14, 14, 2, color);
-    hk_ui_display_draw_rect(x + 33, y + 12, 14, 14, 2, color);
-    hk_ui_display_draw_rect(x + 13, y + 34, 14, 14, 2, color);
-    hk_ui_display_draw_rect(x + 33, y + 34, 14, 14, 2, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_buttons);
 }
 
 void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_fill_rect(x + 8, y + 10, 4, 40, color);
-    hk_ui_display_fill_rect(x + 48, y + 10, 4, 40, color);
-    hk_ui_display_fill_rect(x + 27, y + 27, 6, 6, color);
-    hk_ui_display_fill_rect(x + 18, y + 16, 2, 2, color);
-    hk_ui_display_fill_rect(x + 40, y + 42, 2, 2, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_pong);
 }
 
 void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_draw_rect(x + 8U, y + 12U, 44U, 36U, 2U, color);
-    hk_ui_display_fill_rect(x + 10U, y + 18U, 40U, 2U, color);
-    hk_ui_display_fill_rect(x + 15U, y + 26U, 2U, 2U, color);
-    hk_ui_display_fill_rect(x + 17U, y + 28U, 2U, 2U, color);
-    hk_ui_display_fill_rect(x + 15U, y + 30U, 2U, 2U, color);
-    hk_ui_display_fill_rect(x + 24U, y + 31U, 10U, 2U, color);
-    hk_ui_display_fill_rect(x + 38U, y + 29U, 3U, 7U, color);
-    hk_ui_display_fill_rect(x + 15U, y + 39U, 26U, 2U, color);
-    hk_ui_display_fill_rect(x + 15U, y + 43U, 18U, 2U, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_terminal);
 }
 
 void settings_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_fill_rect(x + 27, y + 7, 6, 9, color);
-    hk_ui_display_fill_rect(x + 27, y + 44, 6, 9, color);
-    hk_ui_display_fill_rect(x + 7, y + 27, 9, 6, color);
-    hk_ui_display_fill_rect(x + 44, y + 27, 9, 6, color);
-    hk_ui_display_fill_rect(x + 14, y + 14, 7, 7, color);
-    hk_ui_display_fill_rect(x + 39, y + 14, 7, 7, color);
-    hk_ui_display_fill_rect(x + 14, y + 39, 7, 7, color);
-    hk_ui_display_fill_rect(x + 39, y + 39, 7, 7, color);
-    hk_ui_display_draw_rect(x + 18, y + 18, 24, 24, 3, color);
-    hk_ui_display_draw_rect(x + 24, y + 24, 12, 12, 2, color);
-    hk_ui_display_fill_rect(x + 28, y + 28, 4, 4, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_settings);
 }
 
 void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -152,47 +123,15 @@ void sleep_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 
 void power_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    hk_ui_display_surface_t surface;
-    hk_ui_display_rect_t region = {x+6U,y+6U,48U,48U};
-    unsigned px, py;
-    if(!hk_ui_display_frame_acquire(&surface)) return;
-    if((unsigned)x+54U>surface.width || (unsigned)y+54U>surface.height) {
-        hk_ui_display_frame_cancel(surface.lease_id);
-        return;
-    }
-    for(py=0;py<48U;py++) for(px=0;px<48U;px++) {
-        uint16_t pixel = hk_power_icon_pixel(HK_POWER_ICON_OFF,px,py) ? color : bg;
-        uint8_t *out=surface.rgb565_be+(y+6U+py)*surface.stride_bytes+(x+6U+px)*2U;
-        out[0]=(uint8_t)(pixel>>8); out[1]=(uint8_t)pixel;
-    }
-    (void)hk_ui_display_frame_present_regions(surface.lease_id,&region,1U);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_power);
 }
 
 void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_fill_rect(x + 20, y + 8, 20, 2, color);
-    hk_ui_display_fill_rect(x + 18, y + 12, 2, 38, color);
-    hk_ui_display_fill_rect(x + 42, y + 14, 2, 36, color);
-    hk_ui_display_fill_rect(x + 20, y + 50, 22, 2, color);
-    hk_ui_display_fill_rect(x + 38, y + 8, 2, 8, color);
-    hk_ui_display_fill_rect(x + 40, y + 14, 4, 2, color);
-    hk_ui_display_fill_rect(x + 23, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 29, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 35, y + 15, 4, 8, color);
-    hk_ui_display_fill_rect(x + 24, y + 39, 14, 2, color);
-    hk_ui_display_fill_rect(x + 24, y + 44, 10, 2, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_files);
 }
 
 void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_draw_rect(x + 8, y + 14, 44, 32, 2, color);
-    hk_ui_display_fill_rect(x + 18, y + 8, 18, 6, color);
-    hk_ui_display_draw_rect(x + 14, y + 20, 10, 10, 2, color);
-    hk_ui_display_draw_rect(x + 36, y + 20, 10, 10, 2, color);
-    hk_ui_display_draw_rect(x + 14, y + 34, 10, 10, 2, color);
-    hk_ui_display_fill_rect(x + 30, y + 34, 4, 4, color);
-    hk_ui_display_fill_rect(x + 38, y + 36, 8, 2, color);
-    hk_ui_display_fill_rect(x + 30, y + 42, 12, 2, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_qr_camera);
 }

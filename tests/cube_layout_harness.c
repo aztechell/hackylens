@@ -35,6 +35,8 @@ uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
 { *surface = (hk_ui_display_surface_t){screen, 240, 240, 480, 1}; return 1; }
 void hk_ui_display_frame_cancel(uint32_t id) { (void)id; }
 uint8_t hk_ui_display_frame_present(uint32_t id) { return id == 1; }
+uint8_t hk_ui_display_frame_present_regions(uint32_t id, const hk_ui_display_rect_t *regions, uint16_t count)
+{ (void)id; (void)regions; (void)count; assert(0 && "layout fixture does not draw launcher icons"); return 0; }
 void hk_ui_display_fill_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t c)
 { (void)x; (void)y; (void)w; (void)h; (void)c; }
 void hk_ui_display_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t t, uint16_t c)

@@ -404,3 +404,19 @@ OV7740 `0x7FA2/0x7742`, a ready 320x240 stream, 178 captured frames and zero
 timeouts, with failure `NONE`. The user confirmed correct full-screen camera
 output after installation. The preserved image and matching metadata are in
 `build/camera-cover/sipeed-maix-cube/`.
+
+## Thin launcher icon acceptance (2026-10-30)
+
+The user-approved V2 icon set was installed on COM15: 1,558,520 bytes,
+SHA-256 `2646a8ff8181551926e3dd1802382afc8a884cef2772d1c8d4bd0e7220031bff`.
+Both board builds, the architecture check, and 22 targeted host tests passed.
+The image adds 1,408 bytes relative to the preceding camera-cover build.
+
+`build/menu-icons-flash.log` records successful programming, settings loaded
+from slot 1 (sequence 6, schema v5), and menu startup with all twelve apps.
+Runtime HKPING returned HKPONG. The actual framebuffer captures
+`screenshots/cube-icons-v2-live.bmp` and `screenshots/cube-icons-v2-page-2.bmp`
+match all twelve approved icon tiles pixel-for-pixel, including selection
+frames. The separate Sleep/Off/Restart artwork inside POWER is unchanged.
+This verifies programming and the launcher refresh; the board remains
+non-releaseable pending its other physical acceptance checks.

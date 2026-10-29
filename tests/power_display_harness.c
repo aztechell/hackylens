@@ -11,6 +11,7 @@
 #include <assert.h>
 #include "../firmware/src/ui/display_binding.h"
 #include "../firmware/assets/hackylens_power_icons_1bpp.h"
+#include "../firmware/assets/hackylens_menu_icons_1bpp.h"
 void power_draw_icon(uint16_t x,uint16_t y,uint16_t c,uint16_t bg);
 static hk_result_t action_result=HK_PENDING;
 
@@ -101,14 +102,14 @@ int main(void) {
         hk_ui_display_draw_rect(tile_x,tile_y,60,60,2,0x07e0);
         power_draw_icon(tile_x,tile_y,0x07e0,0);save_panel("menu-icon");
         for(y=0;y<48;y++) for(x=0;x<48;x++)
-            assert(fixture_panel_pixel(tile_x+6+x,tile_y+6+y)==(hk_power_icon_pixel(HK_POWER_ICON_OFF,x,y)?0x07e0:0));
+            assert(fixture_panel_pixel(tile_x+6+x,tile_y+6+y)==(((hk_menu_icon_power[y*6U+x/8U] >> (7U-(x&7U))) & 1U)?0x07e0:0));
         hk_ui_display_fill_rect(tile_x,tile_y,60,60,0x07e0);
         hk_ui_display_draw_rect(tile_x+4,tile_y+4,52,52,2,0);
         power_draw_icon(tile_x,tile_y,0,0x07e0);save_panel("menu-selected");
         for(y=0;y<48;y++) for(x=0;x<48;x++)
-            assert(fixture_panel_pixel(tile_x+6+x,tile_y+6+y)==(hk_power_icon_pixel(HK_POWER_ICON_OFF,x,y)?0:0x07e0));
+            assert(fixture_panel_pixel(tile_x+6+x,tile_y+6+y)==(((hk_menu_icon_power[y*6U+x/8U] >> (7U-(x&7U))) & 1U)?0:0x07e0));
     }
     hk_ui_display_unbind();
     assert(hk_display_close(&power_display,(hk_deadline_t){500000})==HK_OK);
-    puts("POWER_REAL_DISPLAY_OK queue-limit-reproduced centered selections single-press wait error shared-menu-icon");return 0;
+    puts("POWER_REAL_DISPLAY_OK queue-limit-reproduced centered selections single-press wait error thin-menu-icon");return 0;
 }

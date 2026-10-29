@@ -6,6 +6,7 @@
 #include "../../config/display_config.h"
 #include "../../core/hk_string.h"
 #include "../../ui/display_binding.h"
+#include "../../ui/menu_icons.h"
 #include "../../ui/hk_ui.h"
 
 #define PY_INFO_Y 30U
@@ -470,9 +471,5 @@ void micropython_view_render(
 void micropython_view_draw_icon(uint16_t x, uint16_t y,
                                 uint16_t color, uint16_t background)
 {
-    (void)background;
-    hk_ui_display_draw_rect(x + 9U, y + 10U, 42U, 40U, 2U, color);
-    hk_ui_display_draw_text_at(x + 16U, y + 22U, "PY", color, COLOR_BLACK);
-    hk_ui_display_fill_rect(x + 12U, y + 13U, 7U, 3U, color);
-    hk_ui_display_fill_rect(x + 41U, y + 44U, 7U, 3U, color);
+    hk_menu_icon_draw(x, y, color, background, hk_menu_icon_micropython);
 }

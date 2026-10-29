@@ -1,0 +1,20 @@
+{
+  "description": "Approved thinner launcher icons, review V2",
+  "width": 48,
+  "height": 48,
+  "format": "1bpp, MSB first, 6 bytes per row",
+  "sha256": {
+    "terminal": "16bee75bd985cc6f576b2c5d815fb433a1fcf7b9764bc8e4289eaa3a8c6a6f69",
+    "camera": "ffbd3a18bb6ef3e6801274c96dd28707e6dbb9953bb0afb29377c27e8bfa45a1",
+    "qr-camera": "c22c3cb19e2e2df8820fdeb2d89d47a1e6a99732f9f53686010a384da61a675a",
+    "face-detect": "9c52f9c0f3c2bdd88f54d05243852490e752971527af04e6eeac4fbe47fad7d8",
+    "apriltag": "5e953158b79b90f383328be36386a588874a1848565eb6ec5229eec3b713f483",
+    "object-detect": "1ba6be55530eebf3c7beb5dcf9b9f36bf96bdf0070cdd25ccfbbbce36448e4e1",
+    "files": "ffcf2f07d4a8d932e9a302b4f07cea1cc78a304b1501be85201e61aec9068fbd",
+    "buttons": "cd04c7711f041dffe44d326446bbfda6d8840d2964e6252c720bc639a0f47256",
+    "pong": "10e3fa8b957d34a0d77dc258a829860ca05ebc317664b998ea0abd6a18ff9520",
+    "settings": "2f4e710243e0e7e3b14bf33df360b61816198e588db2a6b00594a5e811d5baeb",
+    "power": "4f3fda3b29bdd943b21708cabbc87a98a4d5341decb50ef9c377db2b8f572805",
+    "micropython": "649a04ea294c64c69baa311dc10c657956dfaf37df178b569beb00cc5ae6a4fb"
+  }
+}
