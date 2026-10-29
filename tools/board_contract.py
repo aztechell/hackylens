@@ -137,8 +137,8 @@ PREPARE_CALLBACKS = {
     "external-uart": "external_uart_prepare",
     "external-i2c": "external_i2c_prepare",
 }
-RESET_PROFILES = {"huskylens-uploader", "manual"}
-REBOOT_PROFILES = {"uploader-normal"}
+RESET_PROFILES = {"huskylens-uploader", "sipeed-goe", "manual"}
+REBOOT_PROFILES = {"uploader-normal", "sipeed-goe-normal"}
 USB_DETECTION_MODES = {"vid-any", "explicit-port"}
 FLASH_TYPES = {"spi0"}
 FLASH_MODES = {"qio", "dio"}

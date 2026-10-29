@@ -98,7 +98,10 @@ Stub, flash, baud, and retry defaults are forbidden, and USB detection is
 
 Supported programming with `reset_profile="manual"` may omit `reboot_profile`;
 then no DTR/RTS reboot fallback is installed. Cube requires an explicit serial
-port and manual boot entry until reset wiring has been physically qualified.
+port and selects `sipeed-goe` / `sipeed-goe-normal`, matching the official Sipeed
+Cube profile's 100-ms DTR/RTS phases. Automatic BootROM entry and return to the
+installed runtime were physically checked on COM11; `--manual` remains an
+explicit recovery override.
 
 ## Architecture boundaries and composition
 

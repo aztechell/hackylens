@@ -318,13 +318,14 @@ runtime_writable = true
 
 [programming]
 supported = true
-reset_profile = "manual"
+reset_profile = "sipeed-goe"
+reboot_profile = "sipeed-goe-normal"
 isp_stub = "isp_stub/isp_prog_huskylens.bin"
 flash_type = "spi0"
 flash_mode = "dio"
 boot_baud = 115200
 flash_baud = 1500000
-reset_attempts = 1
+reset_attempts = 15
 
 [programming.usb_detection]
 mode = "explicit-port"

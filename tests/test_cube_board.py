@@ -92,10 +92,17 @@ class CubeBoardTests(unittest.TestCase):
         args = hkflash.build_parser().parse_args([
             "flash", "cube.bin", "--board", self.board.id, "--port", "TEST"])
         hkflash.apply_board_configuration(args)
-        self.assertTrue(args.manual)
+        self.assertFalse(args.manual)
         self.assertEqual(args.usb_detection_mode, "explicit-port")
-        self.assertIsNone(args.reset_connector)
-        self.assertIsNone(args.reboot_fallback_handler)
+        self.assertEqual(args.reset_profile, "sipeed-goe")
+        self.assertEqual(args.reset_attempts, 15)
+        self.assertIs(args.reset_connector, hkflash.connect_bootrom_sipeed_goe)
+        self.assertIs(args.reboot_fallback_handler, hkflash.reset_to_boot_sipeed_goe)
+
+        manual = hkflash.build_parser().parse_args([
+            "flash", "cube.bin", "--board", self.board.id, "--port", "TEST", "--manual"])
+        hkflash.apply_board_configuration(manual)
+        self.assertTrue(manual.manual)
 
     def test_experimental_image_has_sidecar_but_cannot_claim_release_acceptance(self):
         with tempfile.TemporaryDirectory() as directory:

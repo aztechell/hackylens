@@ -74,10 +74,12 @@ are rejected unless the flash capacity matches the descriptor. Preserve the
 original full flash before the first install; MicroPython userfs formatting
 continues to require its explicit existing confirmation command.
 
-Cube programming uses an explicit identified COM port and manual bootloader
-entry. Automatic reset and reboot fallback pulses are not selected by this
-descriptor. Flash writes must wait until the connected board identity and
-backup have been verified.
+Cube programming uses an explicit identified COM port and Sipeed's `goE`
+automatic bootloader entry: the `sipeed-goe` profile uses the official DTR/RTS
+sequence with 100-ms phases and up to fifteen attempts. The
+`sipeed-goe-normal` profile returns the board to normal boot. `--manual` remains
+available for recovery. Flash writes must wait until the connected board
+identity and backup have been verified.
 
 Stock MaixPy backups can be read without programming flash:
 
@@ -159,13 +161,48 @@ rehash is still required. Keep the default 115200 baud for stock firmware.
   heap. The supplied object20 model plus KPU main buffer consume 1,396,340 bytes
   (354,956 bytes remain before other allocations); AI runtime acceptance is
   still required. Face model plus KPU main buffer consume 433,776 bytes.
-- Neither of the two standard KFlash RTS/DTR entry sequences produced a
-  BootROM response on COM11. Stock MaixPy remained accessible afterward;
-  keep manual entry selected. Once BOOT/NEXT is held during RST, use:
+- Initial tests on stock MaixPy did not obtain a BootROM response with the two
+  tested RTS/DTR sequences. Manual entry was selected at that time. This
+  observation is superseded for the installed HackyLens runtime by the
+  controlled comparison below; its original cause has not been established.
+  Normal programming now uses automatic entry:
 
 ```powershell
-python tools\hkflash.py flash --board sipeed-maix-cube --port COM11 --manual --flash-baud 115200 build\sipeed-maix-cube\hackylens-full.bin
+python tools\hkflash.py flash --board sipeed-maix-cube --port COM11 --flash-baud 115200 build\sipeed-maix-cube\hackylens-full.bin
 ```
+
+For manual recovery, add `--manual` and hold BOOT/NEXT while pressing RST.
+
+## Automatic BootROM entry comparison (2026-10-29)
+
+Sipeed's [GUI board table](https://github.com/sipeed/kflash_gui/blob/8985f23626f332897ff28e4b41d5e1ad7dd852ce/kflash_gui_data/boards_info.json#L44)
+maps Cube to `goE`. Its [loader implementation](https://github.com/sipeed/kflash.py/blob/550828c768b16ef329695d3f5eace3f6bcf14af2/kflash.py#L1649)
+selects `reset_to_isp_kd233`, with three 100-ms phases. Our previous generic
+kd233 helper used identical control-line levels and a byte-identical BootROM
+NOP request, but 10-ms phases. The Cube descriptor selected `manual` and thus
+never called that helper during a normal flash command.
+
+Controlled hardware comparison on COM11 started every individual case with a
+fresh runtime `HKPING` / `HKPONG`, then applied a reset and required the exact
+successful BootROM response `C0 C2 E0 C0`. Every case ended with a normal reset
+and another `HKPONG` before the next case. Both the 10-ms helper and the exact
+official 100-ms method passed twice. Therefore the 10-ms timing was not a
+reproduced cause of failure on this installed runtime. Evidence:
+`build/cube-bootrom-entry-controlled.json`.
+
+After selecting `sipeed-goe` in the descriptor, three additional cycles passed
+through the real `cmd_flash` path with automatic entry on its first attempt.
+Every cycle verified runtime before entry and after recovery. A serial write
+allowlist permitted only BootROM NOP and HKPING; execution stopped before the
+first SRAM upload. Flash and SRAM were not written. Evidence:
+`build/cube-bootrom-flashing-path.json`.
+
+The forced manual configuration was the confirmed reason ordinary invocations
+required buttons. The historical stock-MaixPy failure has not been reproduced
+under stock firmware and must not be attributed to timing, bridge hardware,
+or GPIO configuration without a separate controlled test. This acceptance
+covers BootROM entry and return to the installed runtime, not flash programming
+at 1.5 Mbaud or the remaining board acceptance criteria.
 
 ## Physical acceptance still required
 

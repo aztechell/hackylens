@@ -199,6 +199,25 @@ def reset_to_boot_uploader(ser, pulse: float = 0.01) -> None:
     time.sleep(pulse)
 
 
+def reset_to_isp_sipeed_goe(ser) -> None:
+    # Sipeed kflash_gui maps Cube to goE; its BootROM entry uses kd233
+    # levels with 100-ms phases (sipeed/kflash.py, commit 550828c768b1).
+    reset_to_isp_kd233(ser, pulse=0.1)
+
+
+def reset_to_boot_sipeed_goe(ser) -> None:
+    # Match Sipeed's reset_to_boot_maixgo, including control-line order.
+    ser.dtr = False
+    ser.rts = False
+    time.sleep(0.1)
+    ser.rts = False
+    ser.dtr = True
+    time.sleep(0.1)
+    ser.rts = False
+    ser.dtr = False
+    time.sleep(0.1)
+
+
 def pulse_auto_reset(args: argparse.Namespace, ser) -> None:
     if not args.auto_reset:
         return
@@ -831,12 +850,29 @@ def connect_bootrom_uploader(isp: K210Isp, ser, attempts: int = 15) -> None:
     raise ProtocolError(f"uploader-compatible ISP entry failed: {last_error}")
 
 
+def connect_bootrom_sipeed_goe(isp: K210Isp, ser, attempts: int = 15) -> None:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        print(f"[FLASH] ISP entry attempt {attempt}/{attempts}: Sipeed goE reset")
+        clear_serial_buffers(ser)
+        reset_to_isp_sipeed_goe(ser)
+        try:
+            isp.bootrom_greeting(retries=1, timeout=0.5)
+            print("[FLASH] BootROM detected via Sipeed goE reset")
+            return
+        except Exception as exc:
+            last_error = exc
+    raise ProtocolError(f"Sipeed goE ISP entry failed: {last_error}")
+
+
 RESET_PROFILE_CONNECTORS = {
     "huskylens-uploader": connect_bootrom_uploader,
+    "sipeed-goe": connect_bootrom_sipeed_goe,
 }
 
 REBOOT_PROFILE_HANDLERS = {
     "uploader-normal": reset_to_boot_uploader,
+    "sipeed-goe-normal": reset_to_boot_sipeed_goe,
 }
 
 
