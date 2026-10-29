@@ -49,6 +49,13 @@ generic broker, owner/grant/lease tables and inventory generator are removed.
 Build-time service selection checks board resources/routes and app requirements;
 absent optional services have null accessors.
 
+Power has an immutable binding with explicit OFF/RESTART feature bits. The native
+POWER app uses that public capability; the K210 provider performs bounded shutdown
+preparation before AXP173 power-off or SoC reset. Preparation stops MicroPython,
+flushes settings and unmounts userfs; failures prevent the hardware action.
+Cube supports both operations, while SEN0305 exposes RESTART only. Sleep retains
+its existing brightness/session lifecycle above the hardware provider.
+
 Runtime prepares BASE before app start. Failed preparation and failed stop both
 reach cleanup. Teardown creates one absolute deadline and passes it unchanged
 to every scoped retirement, attempts all cleanup, retains the first error and
@@ -127,7 +134,7 @@ consumer's command/text budget.
 All twelve menu applications are self-contained modules: `apps/terminal/`,
 `apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`,
 `apps/object_detect/`, `apps/micropython/`, `apps/files/`, `apps/buttons/`,
-`apps/pong/`, `apps/settings/`, and `apps/sleep/`. Each owns its app entry point,
+`apps/pong/`, `apps/settings/`, and POWER in `apps/sleep/`. Each owns its app entry point,
 controller, view, icon, feature configuration, and feature-specific
 state/services. The only public header of a module is its `*_app.h`, and the app
 implementation owns its typed lifecycle entry. Generated registry code uses typed
@@ -150,7 +157,18 @@ do not include feature headers or select features with conditionals.
 
 CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
 
-FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and SLEEP likewise own their controllers and views; the shared auto-sleep controller observes input activity without polling inactive apps.
+FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and POWER likewise own their lifecycle and presentation.
+
+POWER replaces the separate SLEEP and POWER OFF menu entries. Its manifest ID is
+`power`; the existing `apps/sleep/` directory retains ownership of the complete
+module. LEFT/RIGHT selects SLEEP, POWER OFF or RESTART; one fresh OK executes the
+selected action, without an additional confirmation. An OK held while opening
+POWER cannot trigger an action until released and pressed again. BACK closes the
+selector. Automatic sleep opens POWER directly in sleep mode, and a new button
+press wakes it. The shared auto-sleep controller observes inactivity without
+polling inactive apps. The selector draws through the public borrowed Display
+surface, avoiding per-pixel queued commands and their fixed-capacity limit.
+Its power glyph is shared with the main menu as a neutral bitmap asset.
 
 FACE DETECT owns its YOLO detector adapter, view, icon, and debug command. The feature supplies a constant model descriptor and keeps all face-specific output decoding, while generic aligned storage, KPU ownership, DVP frame handoff, output validation, timing, and deferred unload belong to shared services. Its model remains `/hackylens.kmodels/detect.kmodel` on the SD card and is not embedded in firmware flash.
 
@@ -193,7 +211,11 @@ acceptance details. A second K210 port does not establish portability
 across arbitrary MCU families. Every build explicitly selects a board; its
 `board.toml` owns wiring, defaults, flash layout and programming metadata.
 
-Accepted firmware `8527aab` is installed on COM10. Full raw image is 1,545,272 B;
+### Earlier SEN0305 qualification
+
+The following measurements describe the previously accepted firmware, not the
+current Cube/POWER revision. Firmware `8527aab` was accepted on COM10. Full raw
+image was 1,545,272 B;
 static RAM (`data + bss`) is 2,893,216 B. The MicroPython-disabled raw image is
 1,353,528 B. Full raw SHA-256 is
 `811be8cdc6ea18b66fa1d657e1c3850de568ae1e58c76a8408b1306e22bbf18b`.
@@ -236,9 +258,14 @@ Git history; current budgets remain executable in `tools/check_resources.py`.
 
 ### Current validation workflow
 
-The documentation/tooling cleanup leaves the accepted firmware source unchanged.
-The current host suite has 218 tests; removed cases checked retired historical
-phase schemas and provenance, not the surviving service behavior. Normal-push CI
+Current firmware includes the Cube hardware port and unified POWER module; the
+earlier qualification above does not automatically qualify these changes.
+The host suite covers architecture boundaries, board/service/app composition,
+capability contracts, lifecycle cleanup, image metadata and the production K210
+rendering path. Run `python -m pytest tests -q` for the current test count and
+results, and `python tools/check_arch.py` for the layer/dependency guard. Current
+Cube bring-up and hardware coverage are recorded in [MAIX_CUBE.md](MAIX_CUBE.md).
+Normal-push CI
 builds full SEN0305 and MicroPython-disabled images and checks their architecture
 and resource limits. `tools/package_release.py --board huskylens-sen0305` validates
 image/sidecar/attestation identity and creates the release package locally; it
