@@ -4,16 +4,22 @@
 
 #include "../config/display_config.h"
 
-#include "hk_ui.h"
 #include "../ui/display_binding.h"
 
 static uint16_t g_camera_map_x[HK_DISPLAY_REQUIRED_WIDTH];
 static uint16_t g_camera_map_y[HK_DISPLAY_REQUIRED_HEIGHT];
-static uint16_t g_camera_map_logical_w;
-static uint16_t g_camera_map_logical_h;
-static uint16_t g_camera_map_dst_w;
-static uint16_t g_camera_map_dst_h;
+static image_viewport_t g_camera_map_viewport;
 static uint8_t g_camera_map_valid;
+
+static uint8_t camera_view_viewport(const camera_view_frame_t *frame,
+                                    image_viewport_t *viewport)
+{
+    uint16_t logical_w = frame->rotate ? frame->height : frame->width;
+    uint16_t logical_h = frame->rotate ? frame->width : frame->height;
+    return image_viewport_calculate(logical_w, logical_h,
+                                    HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT,
+                                    frame->fit, viewport);
+}
 
 static inline void camera_view_write_pixel(uint8_t *dst, uint16_t color)
 {
@@ -23,15 +29,17 @@ static inline void camera_view_write_pixel(uint8_t *dst, uint16_t color)
 
 static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
                                           hk_ui_display_surface_t *surface,
-                                          uint16_t dst_x,
-                                          uint16_t dst_y,
-                                          uint16_t dst_w,
-                                          uint16_t dst_h)
+                                          const image_viewport_t *viewport)
 {
     uint16_t x_step;
     uint16_t y_step;
+    uint16_t dst_w = viewport->dst_w;
+    uint16_t dst_h = viewport->dst_h;
 
-    if(frame->rotate || dst_x != 0 || dst_y != 0 || dst_w != HK_DISPLAY_REQUIRED_WIDTH || dst_h != HK_DISPLAY_REQUIRED_HEIGHT)
+    if(frame->rotate || viewport->src_x || viewport->src_y ||
+       viewport->src_w != frame->width || viewport->src_h != frame->height ||
+       viewport->dst_x || viewport->dst_y ||
+       dst_w != HK_DISPLAY_REQUIRED_WIDTH || dst_h != HK_DISPLAY_REQUIRED_HEIGHT)
         return 0;
     if(frame->width == dst_w * 2U && frame->height == dst_h * 2U)
     {
@@ -68,39 +76,22 @@ static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
     return 1;
 }
 
-static void camera_view_prepare_maps(uint16_t logical_w, uint16_t logical_h, uint16_t dst_w, uint16_t dst_h)
+static void camera_view_prepare_maps(const image_viewport_t *viewport)
 {
     if(g_camera_map_valid &&
-       g_camera_map_logical_w == logical_w && g_camera_map_logical_h == logical_h &&
-       g_camera_map_dst_w == dst_w && g_camera_map_dst_h == dst_h)
+       g_camera_map_viewport.src_x == viewport->src_x &&
+       g_camera_map_viewport.src_y == viewport->src_y &&
+       g_camera_map_viewport.src_w == viewport->src_w &&
+       g_camera_map_viewport.src_h == viewport->src_h &&
+       g_camera_map_viewport.dst_w == viewport->dst_w &&
+       g_camera_map_viewport.dst_h == viewport->dst_h)
         return;
 
-    for(uint16_t x = 0; x < dst_w; x++)
-    {
-        if(logical_w == dst_w * 2U)
-            g_camera_map_x[x] = x * 2U;
-        else if(logical_w == dst_w)
-            g_camera_map_x[x] = x;
-        else if(logical_w * 2U == dst_w)
-            g_camera_map_x[x] = x / 2U;
-        else
-            g_camera_map_x[x] = (uint16_t)((uint32_t)x * logical_w / dst_w);
-    }
-    for(uint16_t y = 0; y < dst_h; y++)
-    {
-        if(logical_h == dst_h * 2U)
-            g_camera_map_y[y] = y * 2U;
-        else if(logical_h == dst_h)
-            g_camera_map_y[y] = y;
-        else if(logical_h * 2U == dst_h)
-            g_camera_map_y[y] = y / 2U;
-        else
-            g_camera_map_y[y] = (uint16_t)((uint32_t)y * logical_h / dst_h);
-    }
-    g_camera_map_logical_w = logical_w;
-    g_camera_map_logical_h = logical_h;
-    g_camera_map_dst_w = dst_w;
-    g_camera_map_dst_h = dst_h;
+    for(uint16_t x = 0; x < viewport->dst_w; x++)
+        g_camera_map_x[x] = viewport->src_x + (uint32_t)x * viewport->src_w / viewport->dst_w;
+    for(uint16_t y = 0; y < viewport->dst_h; y++)
+        g_camera_map_y[y] = viewport->src_y + (uint32_t)y * viewport->src_h / viewport->dst_h;
+    g_camera_map_viewport = *viewport;
     g_camera_map_valid = 1;
 }
 
@@ -163,12 +154,7 @@ static uint16_t camera_view_overlay_width(const char *text)
 uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_present_t *present)
 {
     hk_ui_display_surface_t surface;
-    uint16_t logical_w;
-    uint16_t logical_h;
-    uint16_t dst_x;
-    uint16_t dst_y;
-    uint16_t dst_w;
-    uint16_t dst_h;
+    image_viewport_t viewport;
 
     if(present)
         memset(present, 0, sizeof(*present));
@@ -177,26 +163,25 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
     if(!hk_ui_display_frame_acquire(&surface))
         return 0;
 
-    logical_w = frame->rotate ? frame->height : frame->width;
-    logical_h = frame->rotate ? frame->width : frame->height;
-    image_fit_viewport(logical_w, logical_h, &dst_x, &dst_y, &dst_w, &dst_h);
-    if(dst_w == 0 || dst_h == 0 || dst_x + dst_w > surface.width || dst_y + dst_h > surface.height)
+    if(!camera_view_viewport(frame, &viewport) ||
+       viewport.dst_x + viewport.dst_w > surface.width ||
+       viewport.dst_y + viewport.dst_h > surface.height)
     {
         hk_ui_display_frame_cancel(surface.lease_id);
         return 0;
     }
 
     memset(surface.rgb565_be, 0, (uint32_t)surface.stride_bytes * surface.height);
-    if(!camera_view_compose_direct(frame, &surface, dst_x, dst_y, dst_w, dst_h))
+    if(!camera_view_compose_direct(frame, &surface, &viewport))
     {
-        camera_view_prepare_maps(logical_w, logical_h, dst_w, dst_h);
-        for(uint16_t y = 0; y < dst_h; y++)
+        camera_view_prepare_maps(&viewport);
+        for(uint16_t y = 0; y < viewport.dst_h; y++)
         {
             uint16_t logical_y = g_camera_map_y[y];
             uint8_t *dst = surface.rgb565_be +
-                (uint32_t)(dst_y + y) * surface.stride_bytes + dst_x * 2U;
+                (uint32_t)(viewport.dst_y + y) * surface.stride_bytes + viewport.dst_x * 2U;
 
-            for(uint16_t x = 0; x < dst_w; x++)
+            for(uint16_t x = 0; x < viewport.dst_w; x++)
             {
                 uint16_t logical_x = g_camera_map_x[x];
                 uint32_t src_x;
@@ -299,13 +284,7 @@ uint8_t camera_view_map_rect(const camera_view_frame_t *frame,
                              const camera_view_rect_t *source,
                              camera_view_rect_t *mapped)
 {
-    uint16_t logical_w;
-    uint16_t logical_h;
-    uint16_t dst_x;
-    uint16_t dst_y;
-    uint16_t dst_w;
-    uint16_t dst_h;
-
+    image_viewport_t viewport;
     int32_t x0;
     int32_t y0;
     int32_t x1;
@@ -324,9 +303,8 @@ uint8_t camera_view_map_rect(const camera_view_frame_t *frame,
     if(y1 > frame->height) y1 = frame->height;
     if(x1 <= x0 || y1 <= y0)
         return 0;
-    logical_w = frame->rotate ? frame->height : frame->width;
-    logical_h = frame->rotate ? frame->width : frame->height;
-    image_fit_viewport(logical_w, logical_h, &dst_x, &dst_y, &dst_w, &dst_h);
+    if(!camera_view_viewport(frame, &viewport))
+        return 0;
     if(frame->rotate)
     {
         int32_t rotated_x0 = frame->height - y1;
@@ -336,10 +314,16 @@ uint8_t camera_view_map_rect(const camera_view_frame_t *frame,
         x0 = rotated_x0;
         x1 = rotated_x1;
     }
-    mapped->x = (int16_t)(dst_x + (uint32_t)x0 * dst_w / logical_w);
-    mapped->y = (int16_t)(dst_y + (uint32_t)y0 * dst_h / logical_h);
-    mapped->w = (int16_t)(((uint32_t)(x1 - x0) * dst_w + logical_w - 1U) / logical_w);
-    mapped->h = (int16_t)(((uint32_t)(y1 - y0) * dst_h + logical_h - 1U) / logical_h);
+    if(x0 < viewport.src_x) x0 = viewport.src_x;
+    if(y0 < viewport.src_y) y0 = viewport.src_y;
+    if(x1 > viewport.src_x + viewport.src_w) x1 = viewport.src_x + viewport.src_w;
+    if(y1 > viewport.src_y + viewport.src_h) y1 = viewport.src_y + viewport.src_h;
+    if(x1 <= x0 || y1 <= y0)
+        return 0;
+    mapped->x = (int16_t)(viewport.dst_x + (uint32_t)(x0 - viewport.src_x) * viewport.dst_w / viewport.src_w);
+    mapped->y = (int16_t)(viewport.dst_y + (uint32_t)(y0 - viewport.src_y) * viewport.dst_h / viewport.src_h);
+    mapped->w = (int16_t)(((uint32_t)(x1 - x0) * viewport.dst_w + viewport.src_w - 1U) / viewport.src_w);
+    mapped->h = (int16_t)(((uint32_t)(y1 - y0) * viewport.dst_h + viewport.src_h - 1U) / viewport.src_h);
     return 1;
 }
 

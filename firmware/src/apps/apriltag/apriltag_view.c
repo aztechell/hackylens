@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../../config/camera_config.h"
+#include "../../config/camera_layout.h"
 #include "../../config/display_config.h"
 #include "../../ui/display_binding.h"
 #include "../../ui/camera_view.h"
@@ -34,6 +35,7 @@ void apriltag_view_compose_results(camera_view_present_t *present,
     view.width = width;
     view.height = height;
     view.rotate = CAMERA_PREVIEW_ROTATE;
+    view.fit = CAMERA_PREVIEW_FIT;
     for(uint8_t i = 0U; i < count; i++)
         camera_view_compose_rects(present, &view, &rects[i], 1U,
                                   selected && selected[i] ? APRILTAG_SELECTED_COLOR : COLOR_TERM_GREEN);

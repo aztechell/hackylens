@@ -78,6 +78,7 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     view_frame.width = service_frame.width;
     view_frame.height = service_frame.height;
     view_frame.rotate = service_frame.rotate;
+    view_frame.fit = CAMERA_PREVIEW_FIT;
     view_frame.fps_overlay = camera_session_preferences_fps_enabled();
     view_frame.light_overlay = camera_service_light_overlay_enabled();
     camera_service_format_fps_overlay(view_frame.fps_text, sizeof(view_frame.fps_text));

@@ -31,11 +31,17 @@ separate I2C1 instance. Use 3.3-V logic and the documented connector supply;
 external controller/target and UART behavior require physical loopback/bus
 acceptance.
 
-Capture and AI processing retain 320x240 input. The 240x240 UI presents the
-complete camera image rotated 90 degrees clockwise in a centered 180x240
-viewport, with proportional overlay mapping. The private board default
-`camera_preview_rotate = 1` selects this mounting correction for every camera
-session; capture, saved photos and AI coordinates retain sensor orientation.
+Capture and AI processing retain 320x240 input. The live camera preview rotates
+90 degrees clockwise, then fills the 240x240 display without changing the
+scene's proportions. The shared camera presentation policy selects `cover`:
+the centered 240x240 portion of the rotated 240x320 image is visible, with 40
+pixels outside the display at both the top and bottom. Detection boxes and
+labels use the same crop and scale; entirely hidden detections are omitted.
+The private board default `camera_preview_rotate = 1` selects the mounting
+correction. Capture, saved photos and AI coordinates retain sensor orientation
+and the full frame; the file viewer continues to show entire images with
+`contain`. Viewport math lives in the board-independent `core/image_viewport`;
+the choice of preview fitting mode lives in `config/camera_layout.h`.
 The menu uses a 3x3 grid, two pages and page indicators. SEN0305 keeps its 4x3
 menu and original 320x240 geometry.
 Pong obtains its field dimensions through the public display capability;
@@ -383,3 +389,18 @@ COM15, then started with a normal-boot reset. Size: 1,556,856 bytes; SHA-256:
 The actual framebuffer screenshot `screenshots/cube-power-visual.bmp` confirms
 the refreshed screen remains open without the former rendering-limit failure.
 Fresh physical OFF/RESTART acceptance for this revision is not yet recorded.
+
+## Camera preview cover acceptance (2026-10-30)
+
+The `cover` preview image was installed on COM15: 1,557,112 bytes, SHA-256
+`a5ecef110f82d5c70a377d92f2e15788c5b079aa12120b17b110961e715a002b`.
+Both board builds, architecture/documentation checks and all 250 host tests
+passed. Tests cover centered fitting/cropping, three capture resolutions,
+clockwise rotation, overlay clipping and the file viewer's full-image mode.
+
+`build/cube-camera-cover-flash.log` records completed programming and menu
+startup with persisted settings. `build/cube-camera-cover-camera.log` records
+OV7740 `0x7FA2/0x7742`, a ready 320x240 stream, 178 captured frames and zero
+timeouts, with failure `NONE`. The user confirmed correct full-screen camera
+output after installation. The preserved image and matching metadata are in
+`build/camera-cover/sipeed-maix-cube/`.

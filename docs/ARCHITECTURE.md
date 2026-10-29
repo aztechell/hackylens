@@ -89,6 +89,17 @@ they do not require another ADR, evidence schema or governance checker.
 - `storage` encodes and persists data. `storage/screenshot_bmp.c` only encodes BMP using a supplied `screenshot_pixel_source_t`; it never accesses the LCD or UART.
 - `ui` renders views through the typed Display session; raw LCD transport stays below its provider.
 
+`core/image_viewport.*` calculates a centered source crop and destination area
+from explicit dimensions and a `contain` or `cover` mode, without board or
+display dependencies. The camera's presentation policy in
+`config/camera_layout.h` selects `cover`: preserve proportions and fill the
+display. `ui/camera_view` applies board mounting rotation first, then uses the
+same viewport for cached pixel sampling, detection boxes and label positions.
+Detections outside the visible crop are omitted and intersecting boxes are
+clipped. Capture, AI and stored-photo coordinates retain the full sensor frame.
+The file viewer uses the existing `ui/image_fit` adapter with `contain`, so a
+saved image remains entirely visible.
+
 Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol and CRC. `services/screenshot_source.c` supplies the LCD shadow source, `storage/screenshot_bmp.c` encodes bytes, and `services/debug_screenshot_stream.c` sends them through `services/debug_console_service.c`.
 
 `tools/check_arch.py` guards include boundaries, forbidden compatibility headers, SDK-token placement, include cycles, and feature-module ownership.

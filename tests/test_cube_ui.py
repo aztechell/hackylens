@@ -44,12 +44,20 @@ class CubeUiTests(unittest.TestCase):
         output = self.compile_and_run("layout", [
             "tests/cube_layout_harness.c", "firmware/src/ui/camera_view.c",
             "firmware/src/ui/image_fit.c", "firmware/src/core/hk_menu.c",
+            "firmware/src/core/image_viewport.c",
             "firmware/src/apps/apriltag/apriltag_view.c",
             "firmware/src/apps/face_detect/face_detect_view.c",
             "firmware/src/apps/object_detect/object_detect_view.c",
             "firmware/src/apps/object_detect/object_detect_labels.c",
         ])
         self.assertIn("CUBE_LAYOUT_OK", output)
+
+    def test_viewport_modes_are_independent_of_board_geometry(self):
+        output = self.compile_and_run("viewport", [
+            "tests/image_viewport_harness.c", "firmware/src/core/image_viewport.c",
+            "firmware/src/ui/image_fit.c",
+        ])
+        self.assertIn("IMAGE_VIEWPORT_OK", output)
 
     def test_camera_restarts_apply_mounting_rotation_and_keep_capture_dimensions(self):
         for board_id, rotate in (("sipeed-maix-cube", "1"), ("huskylens-sen0305", "0")):

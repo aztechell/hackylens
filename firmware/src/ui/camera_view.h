@@ -2,6 +2,7 @@
 #define CAMERA_VIEW_H
 
 #include <stdint.h>
+#include "../core/image_viewport.h"
 
 typedef struct
 {
@@ -9,6 +10,7 @@ typedef struct
     uint16_t width;
     uint16_t height;
     uint8_t rotate; /* 1: 90 degrees clockwise; 0: sensor orientation. */
+    image_viewport_mode_t fit;
     uint8_t fps_overlay;
     uint8_t light_overlay;
     char fps_text[16];

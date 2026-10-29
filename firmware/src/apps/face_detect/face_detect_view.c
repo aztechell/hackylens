@@ -1,6 +1,7 @@
 #include "face_detect_view.h"
 
 #include "../../config/camera_config.h"
+#include "../../config/camera_layout.h"
 #include "../../config/display_config.h"
 #include "../../ui/display_binding.h"
 #include "../../ui/camera_view.h"
@@ -23,6 +24,7 @@ void face_detect_view_draw_boxes(uint16_t width, uint16_t height,
     view.width = width;
     view.height = height;
     view.rotate = CAMERA_PREVIEW_ROTATE;
+    view.fit = CAMERA_PREVIEW_FIT;
     camera_view_draw_rects(&view, rects, count, COLOR_TERM_GREEN);
 }
 

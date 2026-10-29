@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../../config/camera_config.h"
+#include "../../config/camera_layout.h"
 #include "../../config/display_config.h"
 #include "../../ui/display_binding.h"
 #include "object_detect_labels.h"
@@ -28,6 +29,7 @@ void object_detect_view_compose_results(
     frame.width = width;
     frame.height = height;
     frame.rotate = CAMERA_PREVIEW_ROTATE;
+    frame.fit = CAMERA_PREVIEW_FIT;
 
     for(uint8_t index = 0U; index < count; index++)
     {
