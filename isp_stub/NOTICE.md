@@ -22,8 +22,9 @@ its own pin routing, active-low backlight and parallel SPI0/DVP DMA transport.
 Both builds and native host tests passed. Cube SRAM startup and full firmware
 write/reboot were checked on COM15. The BSP enables the DMA clock and accepts
 normal source/destination completion flags; only DMA error flags disable
-rendering. Physical progress display and HuskyLens flashing regression remain
-separate hardware acceptance steps.
+rendering. On 2026-10-30, the user confirmed the waiting screen and increasing
+percentages/filling progress bar during firmware programming at 460800 baud.
+HuskyLens flashing regression remains a separate hardware acceptance step.
 
 The protocol, SLIP implementation, and flash driver derive from
 `loboris/ktool` commit `0345aa90d9b3830641373fb4e3ce4edf45d0a46f`.
