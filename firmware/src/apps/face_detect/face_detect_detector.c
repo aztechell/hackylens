@@ -34,6 +34,10 @@ static face_detect_load_result_t g_result = FACE_DETECT_LOAD_FORMAT;
 static face_candidate_t g_candidates[FACE_CANDIDATE_MAX];
 static face_detect_box_t g_boxes[FACE_DETECT_BOX_MAX];
 static uint8_t g_box_count;
+static uint16_t g_max_probability_x1000;
+static uint8_t g_input_min[3];
+static uint8_t g_input_max[3];
+static uint16_t g_input_mean_x10[3];
 static const ai_model_descriptor_t g_model_descriptor = {
     .id = "face-detect",
     .directory_path = "/hackylens.kmodels",
@@ -109,6 +113,7 @@ static void decode_output(const float *output, size_t bytes)
 
     g_candidates_count = 0;
     g_box_count = 0;
+    g_max_probability_x1000 = 0;
     if(!output || bytes != FACE_OUTPUT_BYTES)
         return;
     for(uint32_t anchor = 0; anchor < FACE_ANCHORS; anchor++)
@@ -118,6 +123,9 @@ static void decode_output(const float *output, size_t bytes)
         {
             float p = sigmoidf_fast(output[base + FACE_GRID_CELLS * 4U + cell]);
             face_candidate_t *candidate;
+            uint16_t probability = (uint16_t)(p * 1000.0f);
+            if(probability > g_max_probability_x1000)
+                g_max_probability_x1000 = probability;
             if(p < FACE_THRESHOLD || g_candidates_count >= FACE_CANDIDATE_MAX)
                 continue;
             candidate = &g_candidates[g_candidates_count++];
@@ -171,6 +179,14 @@ static void decode_output(const float *output, size_t bytes)
             }
         }
     }
+    uint8_t mapped_count = 0;
+    for(uint8_t i = 0; i < g_box_count; i++)
+    {
+        face_detect_box_t box = g_boxes[i];
+        if(camera_ai_input_map_rect(&g_runtime, &box.x, &box.y, &box.w, &box.h))
+            g_boxes[mapped_count++] = box;
+    }
+    g_box_count = mapped_count;
 }
 
 static void finish_inference(void)
@@ -192,6 +208,10 @@ static void reset_detection_state(void)
 {
     g_candidates_count = 0;
     g_box_count = 0;
+    g_max_probability_x1000 = 0;
+    memset(g_input_min, 0, sizeof(g_input_min));
+    memset(g_input_max, 0, sizeof(g_input_max));
+    memset(g_input_mean_x10, 0, sizeof(g_input_mean_x10));
     memset(g_candidates, 0, sizeof(g_candidates));
     memset(g_boxes, 0, sizeof(g_boxes));
 }
@@ -317,6 +337,24 @@ void face_detect_detector_process_frame(void)
     if(!camera_ai_input_take(&g_runtime, &sequence))
         return;
     (void)sequence;
+    if((g_runtime.run_count & 31U) == 0U)
+    {
+        for(uint8_t plane = 0; plane < 3U; plane++)
+        {
+            uint32_t sum = 0;
+            uint8_t minimum = 255U, maximum = 0U;
+            for(uint32_t index = 0; index < FACE_PIXELS; index++)
+            {
+                uint8_t value = input[(uint32_t)plane * FACE_PIXELS + index];
+                sum += value;
+                if(value < minimum) minimum = value;
+                if(value > maximum) maximum = value;
+            }
+            g_input_min[plane] = minimum;
+            g_input_max[plane] = maximum;
+            g_input_mean_x10[plane] = (uint16_t)((sum * 10U) / FACE_PIXELS);
+        }
+    }
     if(g_runtime.run_count == 0U)
         printf("[FACE] kpu start input=%08X bytes=%u\r\n",
                (unsigned)(uintptr_t)input, (unsigned)g_runtime.input_dma_bytes);
@@ -345,9 +383,13 @@ const char *face_detect_detector_error_label(face_detect_load_result_t result)
 
 void face_detect_detector_format_info(char *line, size_t line_size)
 {
-    snprintf(line, line_size, "HKFACEINFO state=%s error=%s size=%u KPU-V3 320x240 grid=20x15x30 us=%u candidates=%u boxes=%u\r\n",
+    snprintf(line, line_size, "HKFACEINFO state=%s error=%s size=%u KPU-V3 320x240 grid=20x15x30 us=%u candidates=%u boxes=%u max_p_x1000=%u input_rgb_x10=%u-%u/%u,%u-%u/%u,%u-%u/%u runs=%u\r\n",
              ai_model_runtime_state_label(g_runtime.state),
              face_detect_detector_error_label(g_result), (unsigned)g_runtime.model_size,
              (unsigned)g_runtime.last_inference_us, (unsigned)g_candidates_count,
-             (unsigned)g_box_count);
+             (unsigned)g_box_count, (unsigned)g_max_probability_x1000,
+             g_input_min[0], g_input_max[0], g_input_mean_x10[0],
+             g_input_min[1], g_input_max[1], g_input_mean_x10[1],
+             g_input_min[2], g_input_max[2], g_input_mean_x10[2],
+             (unsigned)g_runtime.run_count);
 }

@@ -116,9 +116,7 @@ class BoardDescriptorTests(unittest.TestCase):
             "sd_chip_select": 4,
             "led_pwm_device": 3,
             "rgb_pwm_channel1": 4,
-            "camera_sccb_address": 0x80,
             "lcd_spi_hz": 0,
-            "camera_sccb_hz": 0,
             "camera_xclk_hz": 0xFFFFFFFF,
             "camera_max_width": 641,
         }
@@ -860,7 +858,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             output = temporary / "dist" / f"hackylens-full-{self.board.id}.bin"
             metadata = json.loads(output.with_suffix(".json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["schema"], 1)
-            self.assertEqual(metadata["firmware_version"], "0.4.0")
+            self.assertEqual(metadata["firmware_version"], firmware_sidecar.current_firmware_version())
             self.assertEqual(metadata["board_id"], self.board.id)
             self.assertEqual(metadata["platform_id"], self.board.platform)
             self.assertEqual(metadata["board_contract_version"], "0.1.0")
@@ -990,7 +988,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
                     "--out-dir", str(release),
                 ])
             self.assertEqual(result, 0)
-            stem = f"hackylens-{self.board.id}-v0.4.0"
+            stem = f"hackylens-{self.board.id}-v{firmware_sidecar.current_firmware_version()}"
             release_image = release / f"{stem}.bin"
             release_sidecar = release / f"{stem}.json"
             release_manifest = release / f"{stem}-release.json"

@@ -22,12 +22,12 @@ static void camera_capture_wait_reset(void)
     g_camera_wait_started_us = hal_time_us();
 }
 
-uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst)
+uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst, camera_input_format_t input_format)
 {
     camera_capture_reset_session();
     camera_capture_reset_counters();
     camera_capture_wait_reset();
-    return camera_stream_start(width, height, burst);
+    return camera_stream_start(width, height, burst, input_format);
 }
 
 void camera_capture_reset_flow(void)
@@ -196,4 +196,9 @@ void camera_capture_resume_preview(void)
 const uint16_t *camera_capture_snapshot_pixels(void)
 {
     return (const uint16_t *)g_snapshot_frame.pixels;
+}
+
+uint8_t camera_capture_control_available(void)
+{
+    return !g_snapshot_frame.lease_id && !camera_stream_has_leases();
 }

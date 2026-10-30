@@ -23,6 +23,7 @@ void camera_session_set_preview_rotate(uint8_t rotate);
 void camera_session_set_fail_reason(const char *reason);
 void camera_session_mark_started(void);
 void camera_session_mark_stopped(void);
+void camera_session_suspend_control(void);
 void camera_session_sensor_id(uint16_t *mid, uint16_t *pid);
 
 #endif

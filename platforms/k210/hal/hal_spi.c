@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include <encoding.h>
 #include <platform.h>
 #include <spi.h>
 #include <sysctl.h>
@@ -18,6 +19,7 @@ static size_t s_parallel_count;
 #endif
 
 #define HAL_SPI_FIFO_TIMEOUT_US 500000ULL
+#define HAL_SPI_STANDARD_MAX_TIMEOUT_US 2000U
 
 static uint8_t s_fifo_tx_active_mask;
 static uint8_t s_fifo_tx_pending_select[4];
@@ -125,26 +127,71 @@ void hal_spi_standard_send_segments(uint8_t device, uint8_t chip_select,
                                     const uint8_t *first, size_t first_len,
                                     const uint8_t *second, size_t second_len)
 {
+    (void)hal_spi_standard_send_segments_checked(device, chip_select, first, first_len,
+        second, second_len, HAL_SPI_STANDARD_MAX_TIMEOUT_US);
+}
+
+/* A KPU interrupt may execute software layers for longer than the flash TX
+ * FIFO can cover. Keep the short wire exchange uninterrupted, not the flash's
+ * subsequent millisecond program/erase busy interval. Never enable IRQs that
+ * were disabled on entry (and never alter the mie source-enable register). */
+static unsigned long standard_irq_save(void)
+{
+    unsigned long state = clear_csr(mstatus, MSTATUS_MIE);
+    __sync_synchronize();
+    return state;
+}
+
+static void standard_irq_restore(unsigned long state)
+{
+    __sync_synchronize();
+    if(state & MSTATUS_MIE)
+        (void)set_csr(mstatus, MSTATUS_MIE);
+}
+
+static uint8_t standard_8bit(volatile spi_t *spi, uint8_t device)
+{
+    return spi && ((spi->ctrlr0 >> (device == 3U ? 0U : 16U)) & 31U) == 7U &&
+        ((spi->ctrlr0 >> (device == 3U ? 22U : 21U)) & 3U) == SPI_FF_STANDARD;
+}
+
+uint8_t hal_spi_standard_send_segments_checked(uint8_t device, uint8_t chip_select,
+    const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
+    uint32_t timeout_us)
+{
     volatile spi_t *spi = hal_spi_regs(device);
     uint32_t tmod_offset;
     size_t first_pos = 0U;
     size_t second_pos = 0U;
+    unsigned long irq_state;
+    uint64_t deadline_us;
+    uint8_t success = 0U;
 
-    if(!spi || chip_select >= 4U ||
+    if(!standard_8bit(spi, device) || chip_select >= 4U ||
        (first_len && !first) || (second_len && !second) ||
-       (!first_len && !second_len))
-        return;
+       (!first_len && !second_len) || first_len > 260U ||
+       second_len > 260U - first_len || !timeout_us ||
+       timeout_us > HAL_SPI_STANDARD_MAX_TIMEOUT_US)
+        return 0U;
 
+    irq_state = standard_irq_save();
+    /* Start the wire budget after masking: a KPU ISR before this point must
+     * not turn a healthy controller into an already-expired transaction. */
+    deadline_us = hal_time_us() + timeout_us;
     tmod_offset = device == 3U ? 10U : 8U;
     spi->ssienr = 0U;
+    spi->ser = 0U;
+    spi->dmacr = 0U;
     spi->ctrlr0 = (spi->ctrlr0 & ~(3U << tmod_offset)) |
                   ((uint32_t)SPI_TMOD_TRANS << tmod_offset);
-    spi->ser = 1U << chip_select;
     spi->ssienr = 1U;
 
     while(first_pos < first_len || second_pos < second_len)
     {
-        size_t room = 32U - spi->txflr;
+        size_t room;
+        if(hal_time_us() >= deadline_us)
+            goto done;
+        room = spi->txflr < 32U ? 32U - spi->txflr : 0U;
 
         while(room && first_pos < first_len)
         {
@@ -156,17 +203,80 @@ void hal_spi_standard_send_segments(uint8_t device, uint8_t chip_select,
             spi->dr[0] = second[second_pos++];
             room--;
         }
+        /* Prefill before selecting the chip, including command and payload. */
+        spi->ser = 1U << chip_select;
     }
 
     while((spi->sr & 0x05U) != 0x04U)
-        ;
+        if(hal_time_us() >= deadline_us)
+            goto done;
+    success = hal_time_us() < deadline_us;
+done:
     spi->ser = 0U;
     spi->ssienr = 0U;
+    standard_irq_restore(irq_state);
+    return success;
 }
 
 void hal_spi_standard_receive(uint8_t device, uint8_t chip_select, const uint8_t *cmd, size_t cmd_len, uint8_t *data, size_t data_len)
 {
     spi_receive_data_standard((spi_device_num_t)device, (spi_chip_select_t)chip_select, cmd, cmd_len, data, data_len);
+}
+
+uint8_t hal_spi_standard_receive_checked(uint8_t device, uint8_t chip_select,
+    const uint8_t *cmd, size_t cmd_len, uint8_t *data, size_t data_len,
+    uint32_t timeout_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+    unsigned long irq_state;
+    uint64_t deadline_us;
+    uint8_t success = 0U;
+    size_t sent = 0U, received = 0U;
+    uint32_t tmod_offset = device == 3U ? 10U : 8U;
+
+    if(!standard_8bit(spi, device) || chip_select >= 4U || !data || !data_len ||
+       data_len > 256U || cmd_len > 32U || (cmd_len && !cmd) ||
+       !timeout_us || timeout_us > HAL_SPI_STANDARD_MAX_TIMEOUT_US)
+        return 0U;
+    irq_state = standard_irq_save();
+    deadline_us = hal_time_us() + timeout_us;
+    spi->ssienr = 0U;
+    spi->ser = 0U;
+    spi->dmacr = 0U;
+    spi->ctrlr0 = (spi->ctrlr0 & ~(3U << tmod_offset)) |
+        ((uint32_t)(cmd_len ? SPI_TMOD_EEROM : SPI_TMOD_RECV) << tmod_offset);
+    spi->ctrlr1 = (uint32_t)data_len - 1U;
+    spi->ssienr = 1U;
+    while(sent < cmd_len)
+    {
+        if(hal_time_us() >= deadline_us)
+            goto done;
+        if(spi->txflr < 32U)
+            spi->dr[0] = cmd[sent++];
+    }
+    if(!cmd_len)
+        spi->dr[0] = 0xFFU;
+    spi->ser = 1U << chip_select;
+    while(received < data_len)
+    {
+        size_t available;
+        if(hal_time_us() >= deadline_us)
+            goto done;
+        available = spi->rxflr;
+        if(available > data_len - received)
+            available = data_len - received;
+        while(available--)
+            data[received++] = (uint8_t)spi->dr[0];
+    }
+    while((spi->sr & 0x05U) != 0x04U)
+        if(hal_time_us() >= deadline_us)
+            goto done;
+    success = hal_time_us() < deadline_us;
+done:
+    spi->ser = 0U;
+    spi->ssienr = 0U;
+    standard_irq_restore(irq_state);
+    return success;
 }
 
 void hal_spi_fifo_config(uint8_t device, uint32_t hz, uint8_t chip_select)

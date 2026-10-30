@@ -4,6 +4,8 @@
 #include "hal_spi.h"
 
 spi_t cube_spi_registers[4];
+unsigned long spi_test_mstatus;
+unsigned long spi_test_mhartid;
 static unsigned instruction_bits;
 static unsigned address_bits;
 static unsigned transfer_mode;

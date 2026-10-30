@@ -2,6 +2,7 @@
 #define CAMERA_CAPTURE_H
 
 #include <stdint.h>
+#include "../core/camera_types.h"
 
 typedef struct
 {
@@ -26,7 +27,7 @@ typedef struct
     uint32_t sequence;
 } camera_capture_frame_t;
 
-uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst);
+uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst, camera_input_format_t input_format);
 void camera_capture_reset_session(void);
 void camera_capture_reset_counters(void);
 void camera_capture_reset_flow(void);
@@ -38,6 +39,7 @@ uint8_t camera_capture_consume_timeout(void);
 uint8_t camera_capture_acquire(camera_capture_frame_t *frame);
 void camera_capture_release(uint32_t lease_id);
 uint8_t camera_capture_snapshot(uint16_t width, uint16_t height, uint32_t wait_ms, const char *log_prefix);
+uint8_t camera_capture_control_available(void);
 void camera_capture_pause(void);
 void camera_capture_snapshot_done(uint8_t resume_preview);
 void camera_capture_resume_preview(void);

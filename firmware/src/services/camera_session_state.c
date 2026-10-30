@@ -201,7 +201,15 @@ uint8_t camera_service_toggle_colorbar(void)
 {
     g_camera_colorbar_enabled = g_camera_colorbar_enabled ? 0 : 1;
     if(g_camera_ready)
-        camera_sensor_apply_colorbar(g_camera_colorbar_enabled);
+    {
+        camera_capture_pause();
+        if(camera_sensor_apply_colorbar(g_camera_colorbar_enabled) != HK_OK)
+        {
+            camera_session_set_ready(0);
+            camera_session_set_fail_reason("SENSOR CONFIG");
+        }
+        else if(!g_camera_frozen) camera_capture_resume_preview();
+    }
     return g_camera_colorbar_enabled;
 }
 

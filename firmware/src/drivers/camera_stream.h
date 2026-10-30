@@ -2,6 +2,7 @@
 #define CAMERA_STREAM_H
 
 #include <stdint.h>
+#include "../core/camera_types.h"
 
 typedef enum
 {
@@ -39,8 +40,9 @@ typedef void (*camera_stream_convert_start_hook_t)(void *context);
 typedef void (*camera_stream_convert_finish_hook_t)(uint32_t sequence,
                                                     void *context);
 
-uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst);
+uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst, camera_input_format_t input_format);
 void camera_stream_stop(void);
+uint8_t camera_stream_has_leases(void);
 void camera_stream_pause(void);
 void camera_stream_resume(void);
 uint8_t camera_stream_acquire_latest(camera_stream_frame_t *frame);

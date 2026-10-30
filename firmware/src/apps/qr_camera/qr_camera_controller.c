@@ -49,6 +49,7 @@ void qr_camera_controller_exit(qr_camera_state_t *state)
     qr_result_close_window();
     qr_result_reset();
     camera_stop();
+    qr_service_exit();
     camera_service_clear_mode();
     s_session_active = 0U;
     s_result_needs_paint = 0U;

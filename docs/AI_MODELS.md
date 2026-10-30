@@ -27,12 +27,25 @@ lease, validates the descriptor, manifest, model identity, and output sizes,
 runs asynchronous inference, and completes deferred unload. The shared layer
 does not know about cameras, labels, boxes, or a particular detector.
 
-FACE and OBJECT share `services/camera_ai_input.*`. It arms the planar DVP
-output only at a camera frame boundary, freezes it on that frame's finish, and
-keeps the input immutable until KPU completion. OBJECT decodes the completed
+FACE and OBJECT share `services/camera_ai_input.*`. For an unrotated RGB565
+sensor it arms planar DVP output at a camera frame boundary and freezes it on
+that frame's finish. For YUV422 input, K210's AI output provides only luminance
+Y, as specified in the [K210 datasheet](https://kendryte-download.canaan-creative.com/developer/k210/HDK/kendryte_K210_datasheet_en.pdf).
+The service instead converts the existing leased RGB565 preview into RGB888
+planes in the main loop, applies the board's mounting rotation and centers the
+complete image with black margins. It takes no additional frame-pool lease or
+full-frame allocation. Both paths keep the shared planar input immutable until
+KPU completion. Detection rectangles are mapped back from model coordinates to
+sensor coordinates before publication, so the existing preview rotation and
+overlay mapping remain consistent. OBJECT decodes the completed
 float output on core 0: the K210 cores have non-coherent caches, so passing the
 SDK's CPU-dequantized tensor to core 1 would require an unnecessary extra
 coherency protocol.
+
+QR destroys its decoder and image workspaces on exit so they cannot prevent a
+following OBJECT model allocation. Model load failures log the failing stage
+and SD path; `HKFACEINFO` also reports RGB input statistics and maximum model
+confidence to distinguish valid inference from an unsuitable image.
 
 ## Included consumers
 

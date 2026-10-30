@@ -32,7 +32,7 @@ jobs:
           key: hackylens-windows-${{ hashFiles('tools/bootstrap_deps.py') }}
 
       - name: Install Python dependencies
-        run: python -m pip install pyserial
+        run: python -m pip install pyserial pytest
 
       - name: Bootstrap pinned dependencies
         run: python tools/bootstrap_deps.py
@@ -86,6 +86,7 @@ jobs:
           Invoke-NativeChecked python tools/check_board_ports.py --all
           Invoke-NativeChecked python tools/check_env.py
           Invoke-NativeChecked python tools/run_tests.py
+          Invoke-NativeChecked python -m pytest tests/test_camera_bus.py
 
       - name: Build firmware without MicroPython and verify isolation
         shell: pwsh
@@ -130,6 +131,19 @@ jobs:
           Invoke-NativeChecked python tools/check_app_composition.py --verify-build huskylens-sen0305
           Invoke-NativeChecked python tools/check_resources.py
 
+      - name: Build full Maix Cube firmware
+        shell: pwsh
+        run: |
+          function Invoke-NativeChecked {
+            & $args[0] $args[1..($args.Count - 1)]
+            if ($LASTEXITCODE -ne 0) {
+              throw "native command failed ($LASTEXITCODE): $($args -join ' ')"
+            }
+          }
+          Invoke-NativeChecked python tools/build_firmware.py full --board sipeed-maix-cube
+          Invoke-NativeChecked python tools/check_firmware_symbols.py build/sipeed-maix-cube/sdk-full/hackylens_full --expect present
+          Invoke-NativeChecked python tools/check_app_composition.py --verify-build sipeed-maix-cube
+
       - name: Package release
         if: github.event_name == 'push' && github.ref_type == 'tag'
         shell: pwsh
@@ -140,7 +154,7 @@ jobs:
               throw "native command failed ($LASTEXITCODE): $($args -join ' ')"
             }
           }
-          Invoke-NativeChecked python tools/package_release.py --board huskylens-sen0305 --tag "${{ github.ref_name }}"
+          Invoke-NativeChecked python tools/package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag "${{ github.ref_name }}"
 
       - name: Upload release payload
         if: github.event_name == 'push' && github.ref_type == 'tag'
@@ -161,6 +175,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - uses: actions/download-artifact@v4
         with:
           name: hackylens-${{ github.ref_name }}
@@ -170,4 +188,15 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" dist/release/* --verify-tag --generate-notes --title "HackyLens ${{ github.ref_name }}"
+        run: |
+          $payload = @(python tools/package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag "${{ github.ref_name }}" --verify-only)
+          if ($LASTEXITCODE -ne 0) { throw "release payload validation failed" }
+          $notes = "docs/releases/${{ github.ref_name }}.md"
+          $releaseArgs = @("release", "create", "${{ github.ref_name }}") + $payload + @("--verify-tag", "--title", "HackyLens ${{ github.ref_name }}")
+          if (Test-Path -LiteralPath $notes) {
+            $releaseArgs += @("--notes-file", $notes)
+          } else {
+            $releaseArgs += "--generate-notes"
+          }
+          & gh @releaseArgs
+          if ($LASTEXITCODE -ne 0) { throw "GitHub release creation failed" }

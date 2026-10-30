@@ -11,7 +11,7 @@
 
 uint8_t face_detect_handle_debug_command(const char *cmd)
 {
-    char line[192];
+    char line[320];
 
     if(!str_eq_ci(cmd, "HKFACEINFO"))
         return 0;

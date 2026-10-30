@@ -17,6 +17,16 @@ void hal_spi_standard_send_segments(uint8_t device, uint8_t chip_select,
                                     const uint8_t *first, size_t first_len,
                                     const uint8_t *second, size_t second_len);
 void hal_spi_standard_receive(uint8_t device, uint8_t chip_select, const uint8_t *cmd, size_t cmd_len, uint8_t *data, size_t data_len);
+/* Internal boot-flash transport.  Eight-bit PIO exchanges preserve the incoming
+ * interrupt state. The wire budget (1..2000 us) begins after masking IRQs.
+ * TX is limited to 260 bytes and RX to 256 bytes; flash busy polling belongs
+ * outside these transactions. */
+uint8_t hal_spi_standard_send_segments_checked(uint8_t device, uint8_t chip_select,
+    const uint8_t *first, size_t first_len, const uint8_t *second, size_t second_len,
+    uint32_t timeout_us);
+uint8_t hal_spi_standard_receive_checked(uint8_t device, uint8_t chip_select,
+    const uint8_t *cmd, size_t cmd_len, uint8_t *data, size_t data_len,
+    uint32_t timeout_us);
 void hal_spi_fifo_config(uint8_t device, uint32_t hz, uint8_t chip_select);
 void hal_spi_fifo_set_tmod_tx(uint8_t device);
 void hal_spi_fifo_set_frame_bits(uint8_t device, uint32_t bits);

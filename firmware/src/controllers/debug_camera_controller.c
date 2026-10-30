@@ -13,6 +13,7 @@
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "../services/camera_debug.h"
+#include "../services/camera_capture.h"
 #include "../services/debug_console_service.h"
 
 static void debug_uart_send_text(const char *text)
@@ -60,19 +61,36 @@ static void debug_uart_send_camera_regs(void)
     static const uint8_t sens_regs[] = {0x03, 0x04, 0x11, 0x12, 0x13, 0x14, 0x17, 0x18, 0x19, 0x1A, 0x24, 0x25, 0x26, 0x32, 0x39};
     char line[40];
 
+    if(!camera_capture_control_available())
+    {
+        debug_uart_send_text("HKCAMREGS ERR BUSY\r\n");
+        return;
+    }
+    camera_capture_pause();
     debug_uart_send_text("HKCAMREGS BEGIN\r\n");
     for(size_t i = 0; i < sizeof(bank0_regs); i++)
     {
-        snprintf(line, sizeof(line), "HKCAMREG BANK0 %02X %02X\r\n", bank0_regs[i], camera_debug_read_reg(0x00, bank0_regs[i]));
+        uint8_t value;
+        hk_result_t result = camera_debug_read_reg(0x00, bank0_regs[i], &value);
+        if(result == HK_OK)
+            snprintf(line, sizeof(line), "HKCAMREG BANK0 %02X %02X\r\n", bank0_regs[i], value);
+        else
+            snprintf(line, sizeof(line), "HKCAMREG BANK0 %02X ERR %d\r\n", bank0_regs[i], (int)result);
         debug_uart_send_text(line);
     }
     for(size_t i = 0; i < sizeof(sens_regs); i++)
     {
-        snprintf(line, sizeof(line), "HKCAMREG SENS %02X %02X\r\n", sens_regs[i], camera_debug_read_reg(0x01, sens_regs[i]));
+        uint8_t value;
+        hk_result_t result = camera_debug_read_reg(0x01, sens_regs[i], &value);
+        if(result == HK_OK)
+            snprintf(line, sizeof(line), "HKCAMREG SENS %02X %02X\r\n", sens_regs[i], value);
+        else
+            snprintf(line, sizeof(line), "HKCAMREG SENS %02X ERR %d\r\n", sens_regs[i], (int)result);
         debug_uart_send_text(line);
     }
     camera_debug_select_reg_bank(0x00);
     debug_uart_send_text("HKCAMREGS END\r\n");
+    if(camera_service_capture_ready()) camera_capture_resume_preview();
 }
 
 static void debug_uart_send_camera_frame(void)

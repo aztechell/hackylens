@@ -112,8 +112,9 @@ static void camera_stream_on_event(hal_dvp_event_t event, uint32_t status, void 
     g_convert_count++;
 }
 
-uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst)
+uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst, camera_input_format_t input_format)
 {
+    if(input_format != CAMERA_INPUT_RGB565 && input_format != CAMERA_INPUT_YUV422) return 0;
     camera_stream_stop();
     if(!frame_pool_camera_reserve())
         return 0;
@@ -137,7 +138,7 @@ uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst)
     hal_dvp_config_rgb565(width,
                           height,
                           (uint32_t)(uintptr_t)camera_stream_slot_uncached(0),
-                          burst);
+                          burst, input_format);
     g_running = 1;
     if(!hal_dvp_irq_start(camera_stream_on_event, NULL))
     {
@@ -346,4 +347,14 @@ void camera_stream_clear_convert_hooks(void *context)
     }
     if(g_running)
         hal_dvp_irq_unmask();
+}
+
+uint8_t camera_stream_has_leases(void)
+{
+    uint8_t found = 0;
+    hal_dvp_irq_mask();
+    for(uint8_t i = 0; i < FRAME_POOL_CAMERA_SLOT_COUNT; ++i)
+        if(g_slots[i].state == CAMERA_SLOT_LEASED) found = 1;
+    hal_dvp_irq_unmask();
+    return found;
 }

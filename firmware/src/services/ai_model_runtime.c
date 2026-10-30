@@ -1,5 +1,6 @@
 #include "ai_model_runtime.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "hal_kpu.h"
@@ -203,7 +204,11 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
                                     &runtime->model, &runtime->model_size,
                                     &runtime->model_crc32);
     if(storage != AI_MODEL_STORAGE_OK)
+    {
+        printf("[AI] load stage=model path=%s storage=%u\r\n",
+               descriptor->model_path, (unsigned)storage);
         return fail_load(runtime, storage_result(storage));
+    }
     if(descriptor->expected_model_crc32 &&
        runtime->model_crc32 != descriptor->expected_model_crc32)
         return fail_load(runtime, AI_MODEL_RESULT_FORMAT);
@@ -214,7 +219,11 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
         if(storage != AI_MODEL_STORAGE_OK)
         {
             if(descriptor->manifest_required || storage != AI_MODEL_STORAGE_FILE)
+            {
+                printf("[AI] load stage=manifest path=%s storage=%u\r\n",
+                       descriptor->manifest_path, (unsigned)storage);
                 return fail_load(runtime, storage_result(storage));
+            }
         }
         else if(!manifest_matches(descriptor, &manifest, runtime->model_size,
                                   runtime->model_crc32))
@@ -225,7 +234,11 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
         storage = ai_model_storage_validate_labels(descriptor->labels_path,
                                                    descriptor->label_count);
         if(storage != AI_MODEL_STORAGE_OK)
+        {
+            printf("[AI] load stage=labels path=%s storage=%u\r\n",
+                   descriptor->labels_path, (unsigned)storage);
             return fail_load(runtime, storage_result(storage));
+        }
     }
 
     load_result = hal_kpu_model_load(runtime->model, runtime->model_size,

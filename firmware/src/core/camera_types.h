@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+typedef enum { CAMERA_INPUT_RGB565, CAMERA_INPUT_YUV422 } camera_input_format_t;
+
 typedef enum
 {
     CAMERA_SIZE_160X120 = 0,

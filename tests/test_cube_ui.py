@@ -65,6 +65,7 @@ class CubeUiTests(unittest.TestCase):
                 output = self.compile_and_run("orientation", [
                     "tests/camera_orientation_harness.c",
                     "firmware/src/services/camera_session.c",
+                    "firmware/src/services/camera_debug.c",
                     "firmware/src/services/camera_session_state.c",
                     "firmware/src/services/camera_frame_access.c",
                     "firmware/src/core/hk_camera_sizes.c",

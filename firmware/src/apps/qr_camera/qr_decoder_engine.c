@@ -5,7 +5,7 @@
 #include "qr_config.h"
 #include "qr_luma.h"
 #include "qr_result.h"
-#include "qr_camera_firmware.h"
+#include "quirc.h"
 
 static struct quirc *g_qr_decoder;
 static uint8_t g_qr_decoder_ready;
@@ -26,6 +26,17 @@ void qr_decoder_engine_reset_session(void)
     g_qr_luma_min = 0;
     g_qr_luma_avg = 0;
     g_qr_luma_max = 0;
+}
+
+void qr_decoder_engine_close(void)
+{
+    if(g_qr_decoder)
+        quirc_destroy(g_qr_decoder);
+    g_qr_decoder = NULL;
+    g_qr_decoder_ready = 0;
+    g_qr_decoder_w = 0;
+    g_qr_decoder_h = 0;
+    qr_decoder_engine_reset_session();
 }
 
 void qr_decoder_engine_stats(qr_engine_stats_t *stats)

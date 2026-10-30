@@ -32,19 +32,15 @@ uint64_t hal_time_us(void) { return now_us; }
 void hal_sleep_ms(uint32_t ms) { now_us += (uint64_t)ms * 1000U; }
 void hal_dvp_init_bus(uint8_t divider) { assert(divider == 8U); }
 uint32_t hal_dvp_set_xclk_rate(uint32_t hz) { return hz; }
-uint32_t hal_dvp_set_sccb_rate(uint32_t hz) { return hz; }
-void hal_dvp_sccb_write(uint8_t address, uint8_t reg, uint8_t value)
+hk_result_t hal_camera_bus_init(hal_camera_bus_info_t *info, uint64_t deadline)
+{ assert(deadline > now_us); *info = (hal_camera_bus_info_t){100000, 0x21, 0, 0}; return HK_OK; }
+hk_result_t hal_camera_bus_write8(uint8_t reg, uint8_t value, uint64_t deadline)
 {
-    assert(address == CAMERA_SCCB_ADDR);
-    registers[reg] = value;
-    written[reg] = 1U;
-    ++writes;
+    assert(deadline > now_us);
+    registers[reg] = value; written[reg] = 1U; ++writes; return HK_OK;
 }
-uint8_t hal_dvp_sccb_read(uint8_t address, uint8_t reg)
-{
-    assert(address == CAMERA_SCCB_ADDR);
-    return registers[reg];
-}
+hk_result_t hal_camera_bus_read8(uint8_t reg, uint8_t *out, uint64_t deadline)
+{ assert(deadline > now_us); *out = registers[reg]; return HK_OK; }
 void hal_pwm_init(uint8_t device) { assert(device < 3U); }
 void hal_pwm_set(uint8_t device, uint8_t channel, double frequency, double value)
 {
@@ -131,7 +127,7 @@ int main(void)
     registers[0x0AU] = 0x77U;
     registers[0x0BU] = 0x42U;
     camera_sensor_init_bus(&xclk, &sccb);
-    assert(prepares == 1U && xclk == 22000000U && sccb == CAMERA_SCCB_HZ);
+    assert(prepares == 1U && xclk == 22000000U && sccb == CAMERA_CONTROL_CLOCK_HZ);
     camera_sensor_probe_id(&mid, &pid);
     assert(camera_sensor_matches_id(mid, pid));
     assert(!camera_sensor_matches_id(mid, 0x2642U));

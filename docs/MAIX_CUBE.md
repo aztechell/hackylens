@@ -1,9 +1,11 @@
-# Maix Cube experimental runtime
+# Maix Cube runtime
 
 The `sipeed-maix-cube` board selects the `hackylens-cube` runtime profile with
 all twelve native apps, including the embedded MicroPython app. This is
-HackyLens firmware, not a MaixPy firmware build. Physical acceptance is pending;
-the descriptor remains `releaseable=false`.
+HackyLens firmware, not a MaixPy firmware build. The board is enabled for
+release starting with 0.5.0. The dated records below distinguish physical
+checks from software checks; external UART/I2C exchange was explicitly waived
+by the user and is not recorded as physically verified.
 
 ## Hardware and composition
 
@@ -67,11 +69,12 @@ From the repository root on Windows:
 python tools\build_firmware.py full --board sipeed-maix-cube
 ```
 
-The experimental image is `build/sipeed-maix-cube/hackylens-full.bin`, with a
-same-stem `.json` flasher sidecar and `.attestation.json`. Its attestation binds
-the image hash and full app composition but sets `release_qualified=false`.
-The build does not publish it into `dist/`; `package_release.py` rejects it.
-Do not relabel it as a SEN0305 image or bypass identity/layout validation.
+The full image is `build/sipeed-maix-cube/hackylens-full.bin`, with a same-stem
+`.json` flasher sidecar and `.attestation.json`. Its release-qualified full
+composition is also published into `dist/` with the board-specific stem
+`hackylens-full-sipeed-maix-cube`. Qualification requires all apps and the
+correct image hash, board identity and partition layout. Do not relabel it as
+a SEN0305 image or bypass identity/layout validation.
 
 The exact-16-MiB layout retains an 8-MiB firmware/settings region, reserves
 0x00800000-0x00C70000 and places userfs at 0x00C70000-0x01000000. Firmware
@@ -210,15 +213,16 @@ or GPIO configuration without a separate controlled test. This acceptance
 covers BootROM entry and return to the installed runtime, not flash programming
 at 1.5 Mbaud or the remaining board acceptance criteria.
 
-## Physical acceptance still required
+## Physical acceptance checklist
 
 Verify cold power-on after disconnecting USB and cycling the battery/power
 button, power/reboot, LCD orientation/colors, all control gestures, RGB/white LED/
 backlight polarity, OV7740 ID and stable frames, SD insert/remove, persisted
 settings, userfs, all twelve apps, AI models, MicroPython start/STOP/recovery,
 and Grove UART plus I2C controller/target. Host tests and cross-compilation do
-not replace those checks. Keep the board non-releaseable until the evidence is
-recorded.
+not replace those checks. Record performed checks and explicit acceptance
+waivers separately; release qualification does not turn an unperformed
+hardware test into a passing result.
 
 ## Driver references
 
@@ -420,3 +424,173 @@ match all twelve approved icon tiles pixel-for-pixel, including selection
 frames. The separate Sleep/Off/Restart artwork inside POWER is unchanged.
 This verifies programming and the launcher refresh; the board remains
 non-releaseable pending its other physical acceptance checks.
+
+## Camera register transport separation (2026-10-30)
+
+The register backend is now selected by the board's strict `camera_control`
+table, independently of the sensor driver. Cube retains I2C2, seven-bit address
+`0x21` and configured 100 kHz. SEN0305 uses DVP-SCCB, seven-bit address `0x30`
+(converted to `0x60` only inside that backend), and explicit SCL counts `255/255`.
+SEN frequency is reported as unknown, not a claimed 100-kHz measurement. Legacy
+ambiguous address/rate defaults are rejected. The sensor reports RGB565/YUV422
+input explicitly; DVP capture contains no sensor-model branches or register I/O.
+
+Register reads share one absolute 20-ms deadline across both phases. I2C emits
+STOP between phases and reports abort/timeout; SCCB reports completion/timeout
+without inventing NACK detection. A failed operation requires reinitialization.
+Sensor initialization stops on its first bus error. Debug probe/reinit is refused
+while a frame is borrowed; otherwise session-owned retirement preserves lights,
+SD-poll policy and frozen-preview state. SDK clock/reset order, settling delays
+and all sensor register tables were preserved.
+
+Before changing code, binaries, ELF files, camera descriptors and Cube runtime
+diagnostics were saved in `build/camera-control-baseline/049716c/`. The Cube
+baseline was OV7740 `7FA2/7742`, 640x480, about 22.9 fps, no frame timeouts and
+failure `NONE`. The original stock-flash backup remains unchanged.
+
+Validation: 268 host tests and 228 subtests passed, including actual backend
+code with MMIO emulation, first-error sensor sequences, both capture formats,
+deadline/fault recovery, real platform-source architecture rejection and
+probe/session-state preservation. The architecture guard passed. Six builds
+passed: full, no-MicroPython and no-camera compositions for both boards. The
+no-camera builds omit sensor control and DVP capture. Final full artifacts and
+variant attestations are retained in `build/camera-control-candidate/`.
+
+Final Cube full: 1,559,736 bytes; SHA-256
+`14d45802c88cd2c4a6530799beb869c5e02eed2f98053014581d5505100c2793`.
+Final SEN0305 full: 1,557,816 bytes; SHA-256
+`943683c9eaee2e3fe5c76964f1cc0d3491a90012d0ca503e5f428a7d506abdf5`.
+
+Cube was flashed on COM15 and reached the menu with persisted settings. Logs:
+`build/camera-control-final-cube-flash.log`, `-boot.log`, `-camera.log`,
+`-probe-colorbar.log` and `-switches.log` under the same filename prefix.
+The hardware check identified the selected I2C backend and OV7740 `7FA2/7742`,
+retained 640x480 at about 22.9 fps and reproduced DVP configuration `0x1E01430B`
+with zero frame timeouts and failure `NONE`. Probe/reinit during live preview
+resumed frames successfully. Colorbar rendered correctly in the actual
+`screenshots/camera-control-colorbar.bmp` capture and was then disabled.
+CAMERA -> QR (640x480) -> APRILTAG (320x240) -> CAMERA switches passed and the
+device was returned to the menu. These are pipeline checks, not known-target
+QR/tag recognition acceptance. FACE reported no SD; AI inference was not tested
+without the SD/models. The user confirmed a successful Cube cold start: POWER
+OFF, USB disconnected, power-on with POW, then USB reconnected; the normal menu
+appeared.
+
+SEN0305 was subsequently identified on COM10 (CP210x), with OV2640
+`7FA2/2642`, flash JEDEC `EF6018` and a mounted SDHC/FAT32 card. Its pre-flash
+camera diagnostics are in `build/camera-control-baseline/049716c/sen-runtime.log`.
+The final SEN0305 image above was installed; settings slot 0, sequence 179,
+schema v5 and the SD mount were retained. Logs use the
+`build/camera-control-final-sen-` prefix (`flash.log`, `boot.log`,
+`camera-switches.log`, `ai.log` and `ai-reset.log`).
+
+On physical SEN0305 the selected backend reports `dvp-sccb`, address7 `0x30`,
+unknown frequency (`configured_hz=0`) and counts `255/255`. OV2640 retained
+640x480 at about 20.7 fps, matching the pre-flash baseline. Live probe/reinit
+and CAMERA -> QR -> APRILTAG -> CAMERA passed with zero frame timeouts and
+failure `NONE`; the latter also exercised 320x240. The user confirmed normal
+colors and geometry on the physical colorbar screen, also captured in
+`screenshots/camera-control-sen-colorbar.bmp`. Colorbar was then disabled.
+FACE ran its 388,776-byte model with `error=NONE`; after a clean reset OBJECT
+ran its 1,352,588-byte VOC20 model and decoded outputs with `error=NONE`.
+OBJECT -> FACE -> OBJECT also passed. No known recognition targets were used.
+
+An existing memory limitation remains: after the CAMERA/probe -> QR ->
+APRILTAG -> CAMERA -> FACE sequence, OBJECT can fail with `MODEL ALLOC`.
+This was reproduced on the saved pre-refactor SEN0305 image
+`0016baeafe815a5353a5b8cb76aac78d6a8e216cd1701fb20bded7277123ee99`, not
+inferred from the new image alone. Comparison logs use the
+`build/camera-control-sen-baseline-comparison-` prefix. A clean reset restores
+OBJECT operation. The camera-transport refactor does not change QR/model
+memory ownership. The final image was restored successfully after comparison;
+its restoration and menu-boot logs use `build/camera-control-final-sen-restored-`.
+The user also confirmed SEN0305 cold start after complete USB/external-power
+disconnection, with normal menu startup and a working camera; follow-up UART
+diagnostics are in `build/camera-control-final-sen-cold-start.log`. Physical
+160x120 operation was then confirmed by the user on both Cube and SEN0305.
+Together with the recorded 320x240 and 640x480 checks, this covers all three
+supported camera sizes. Cube AI inference remains untested without its
+SD/models, and known-target recognition accuracy was not evaluated.
+
+## Cube AI input and QR memory follow-up (0.5.0, 2026-10-30)
+
+With SD installed, a clean Cube start loaded both pinned models. The reported
+OBJECT model failure was reproduced after QR: `MODEL ALLOC`, not a missing
+model file (`build/cube-ai-old-qr-object.log`). QR now destroys its decoder and
+image workspaces on exit. The same QR -> OBJECT sequence on the corrected image
+loaded the 1,352,588-byte model and completed inference/decode with `error=NONE`
+and zero camera timeouts (`build/cube-ai-fixed-runtime.log`).
+
+The OV7740 remains configured for YUV422. K210 DVP supplies only Y to its AI
+output in this mode, so that output cannot serve the RGB model contract. The
+shared camera-AI adapter now converts the already leased RGB565 preview into
+upright planar RGB888, applying the Cube mounting rotation with centered
+letterboxing. It holds the input unchanged through KPU completion and maps
+model boxes back to sensor coordinates for the existing display/vision path.
+Sensor register tables, the DVP capture configuration and the working LCD path
+are unchanged. Unrotated RGB565 boards retain direct DVP planar capture.
+
+Both full builds passed, as did 271 host tests with 230 subtests and the
+architecture guard. Tests cover actual quirc heap reclamation after resizing,
+partial allocation failure and repeated close/reopen; RGB channel order,
+rotation, letterbox clipping and inverse rectangles; and both input ownership
+paths. Documentation and app-composition checks also passed.
+QR-only compositions with AI/MicroPython omitted also built on both boards;
+the full builds were then restored and reproduced the same SHA-256 values.
+
+Installed Cube image: 1,561,912 bytes, SHA-256
+`565328a0ca96fb7018cbb36efcc2bdea75ac543912cd541e6edd9495584ab562`.
+SEN0305 full: 1,560,056 bytes, SHA-256
+`7cac474496bcb6bb55383076c3346e7e9e9302e0a28cadbd4d64a71156876c62`.
+Programming and menu startup are recorded in `build/cube-ai-fixed-flash.log`
+and `build/cube-ai-fixed-boot.log`. FACE reports populated RGB planes,
+successful repeated inference around 13 ms, and no model/camera errors.
+The user then presented a face and confirmed a visible detection rectangle on
+Cube. Follow-up runtime health is recorded in `build/cube-ai-face-accepted.log`.
+On the user's instruction, no external UART/I2C fixture check will be performed:
+these implemented interfaces remain supported, with actual external exchange
+explicitly unverified. The board's previous `releaseable=false` restriction is
+removed for 0.5.0; identity, layout and full-composition guards remain enforced.
+
+## Release 0.5.0 final I/O acceptance (2026-10-30)
+
+HMPY read-only probing passed during FACE, but the first file upload stalled.
+The same reversible workflow passed from an idle menu and after a normal FACE
+exit. SPI3 flash PIO now uses checked, bounded exchanges of at most 260 TX or
+256 RX bytes, preserving the caller's interrupt state around the short FIFO
+exchange. Its timeout starts after masking interrupts; flash program/erase
+busy polling remains outside that critical section. Transport errors reach
+the flash driver and quarantine further I/O until initialization. LCD DMA and
+the HMPY foreground/reconnect policy are unchanged.
+
+A separate reset issue held PMIC SDA low. Diagnostics captured SCL=1, SDA=0,
+an enabled I2C1 controller, two queued commands and no abort. The bus recovery
+uses up to nine open-drain SCL pulses and STOP, with a 500-us pulse/stretch
+budget and exact GPIO/FPIOA/interrupt-state restoration. Temporary GPIOHS
+channels are selected only when unmapped; existing routes are never displaced.
+Early boot with no free channels fails safely, and a 500-ms PEK setup retry
+recovers once normal board routing has freed a pair. Physical recovery needed
+two pulses on GPIOHS23/22 and verified the POW/BACK policy. The user confirmed
+that POW exited BUTTONS to the menu after recovery. No rail or charger settings
+were changed.
+
+The final Cube repeated QR -> OBJECT -> FACE successfully. The standard HMPY
+upload/read/run/STOP/cleanup workflow then passed directly from active FACE,
+preserving the original userfs files and startup selection. Evidence:
+`build/release-0.5-power-recovered-boot.log`,
+`build/release-0.5-accepted-ai.log`, `build/release-0.5-accepted-hmpy.json`.
+
+Final full images (release-qualified):
+
+- Cube: 1,563,960 bytes, SHA-256
+  `8eeb15d91da7a644ee0b087ccc90363598152080f2d69102c4c8396d38408269`.
+- SEN0305: 1,559,608 bytes, SHA-256
+  `991f6645661736466c916c5611eea4ee1f352267552853bd664575f61c8377af`.
+
+The strict host runner passed 269 tests without skips; the separate camera-bus
+suite passed all ten cases. Architecture and documentation guards passed.
+Additional bus-clear regressions cover channel collisions, later channel
+availability, stuck SDA/SCL, partial remapping, pending-bit cleanup and both
+initial interrupt states. The release contains exactly two complete board ZIPs
+and `SHA256SUMS.txt`; metadata, SD packages and notices remain inside the ZIPs.
+External UART/I2C exchange remains explicitly untested by user decision.

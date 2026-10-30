@@ -15,6 +15,11 @@ uint8_t *camera_ai_input_acquire(const void *owner,
 uint8_t *camera_ai_input_data(const void *owner);
 uint8_t camera_ai_input_attach(const void *owner);
 uint8_t camera_ai_input_take(const void *owner, uint32_t *sequence);
+void camera_ai_input_prepare_preview(const volatile uint16_t *pixels,
+                                     uint16_t width, uint16_t height,
+                                     uint32_t sequence);
+uint8_t camera_ai_input_map_rect(const void *owner, int16_t *x, int16_t *y,
+                                 int16_t *w, int16_t *h);
 void camera_ai_input_arm(const void *owner);
 void camera_ai_input_cancel(const void *owner);
 void camera_ai_input_release(const void *owner);

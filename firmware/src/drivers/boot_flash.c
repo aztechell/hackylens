@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <encoding.h>
 
 #include "board_config.h"
 #include "../internal/hk_board_port.h"
@@ -20,15 +21,14 @@
 #define BOOT_FLASH_ERASE_TIMEOUT_US 3000000UL
 #define BOOT_FLASH_INIT_TIMEOUT_US 3000000UL
 #define BOOT_FLASH_POLL_FAILSAFE 5000000UL
+#define BOOT_FLASH_PIO_TIMEOUT_US 2000ULL
 
 static volatile uint32_t g_boot_flash_lock;
 static boot_flash_info_t g_boot_flash_info;
 
 static uint8_t boot_flash_on_core0(void)
 {
-    unsigned long core_id;
-    asm volatile("csrr %0, mhartid" : "=r"(core_id));
-    return core_id == 0U;
+    return read_csr(mhartid) == 0U;
 }
 
 static void boot_flash_lock(void)
@@ -44,37 +44,46 @@ static void boot_flash_unlock(void)
     __sync_lock_release(&g_boot_flash_lock);
 }
 
-static void boot_flash_cmd(const uint8_t *cmd, size_t cmd_len)
-{
-    hal_spi_standard_send(FLASH_SPI, FLASH_SPI_CS, cmd, cmd_len, NULL, 0);
-}
-
-static uint8_t boot_flash_read_status_unlocked(void)
-{
-    uint8_t cmd = BOOT_FLASH_CMD_READ_STATUS;
-    uint8_t status = 0xFFU;
-    hal_spi_standard_receive(FLASH_SPI, FLASH_SPI_CS, &cmd, 1U, &status, 1U);
-    return status;
-}
-
 static boot_flash_result_t boot_flash_mark_fault(boot_flash_result_t result)
 {
     g_boot_flash_info.faulted = 1U;
     return result;
 }
 
+static boot_flash_result_t boot_flash_cmd(const uint8_t *cmd, size_t cmd_len)
+{
+    if(!hal_spi_standard_send_segments_checked(FLASH_SPI, FLASH_SPI_CS,
+        cmd, cmd_len, NULL, 0U, BOOT_FLASH_PIO_TIMEOUT_US))
+        return boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
+    return BOOT_FLASH_OK;
+}
+
+static boot_flash_result_t boot_flash_read_status_unlocked(uint8_t *status)
+{
+    uint8_t cmd = BOOT_FLASH_CMD_READ_STATUS;
+    if(!hal_spi_standard_receive_checked(FLASH_SPI, FLASH_SPI_CS, &cmd, 1U,
+        status, 1U, BOOT_FLASH_PIO_TIMEOUT_US))
+        return boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
+    return BOOT_FLASH_OK;
+}
+
 static boot_flash_result_t boot_flash_wait_ready_unlocked(uint32_t timeout_us)
 {
     uint64_t started = hal_time_us();
     uint32_t polls = 0U;
+    uint8_t status;
 
-    while(boot_flash_read_status_unlocked() & BOOT_FLASH_STATUS_BUSY)
+    for(;;)
     {
+        boot_flash_result_t result = boot_flash_read_status_unlocked(&status);
+        if(result != BOOT_FLASH_OK)
+            return result;
+        if(!(status & BOOT_FLASH_STATUS_BUSY))
+            return BOOT_FLASH_OK;
         uint64_t now = hal_time_us();
         if(now - started >= timeout_us || ++polls >= BOOT_FLASH_POLL_FAILSAFE)
             return boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
     }
-    return BOOT_FLASH_OK;
 }
 
 static boot_flash_result_t boot_flash_validate_unlocked(uint32_t addr,
@@ -96,8 +105,13 @@ static boot_flash_result_t boot_flash_validate_unlocked(uint32_t addr,
 static boot_flash_result_t boot_flash_write_enable_unlocked(void)
 {
     uint8_t cmd = BOOT_FLASH_CMD_WRITE_ENABLE;
-    boot_flash_cmd(&cmd, 1U);
-    if((boot_flash_read_status_unlocked() & BOOT_FLASH_STATUS_WEL) == 0U)
+    uint8_t status;
+    boot_flash_result_t result = boot_flash_cmd(&cmd, 1U);
+    if(result == BOOT_FLASH_OK)
+        result = boot_flash_read_status_unlocked(&status);
+    if(result != BOOT_FLASH_OK)
+        return result;
+    if((status & BOOT_FLASH_STATUS_WEL) == 0U)
         return boot_flash_mark_fault(BOOT_FLASH_ERROR_WRITE_ENABLE);
     return BOOT_FLASH_OK;
 }
@@ -105,11 +119,15 @@ static boot_flash_result_t boot_flash_write_enable_unlocked(void)
 static boot_flash_result_t boot_flash_finish_write_unlocked(uint32_t timeout_us)
 {
     boot_flash_result_t result = boot_flash_wait_ready_unlocked(timeout_us);
+    uint8_t status;
 
     if(result != BOOT_FLASH_OK)
         return result;
     /* WEL clears when a program/erase instruction has been accepted. */
-    if(boot_flash_read_status_unlocked() & BOOT_FLASH_STATUS_WEL)
+    result = boot_flash_read_status_unlocked(&status);
+    if(result != BOOT_FLASH_OK)
+        return result;
+    if(status & BOOT_FLASH_STATUS_WEL)
         return boot_flash_mark_fault(BOOT_FLASH_ERROR_WRITE_ENABLE);
     return BOOT_FLASH_OK;
 }
@@ -129,8 +147,9 @@ static boot_flash_result_t boot_flash_page_program_unlocked(uint32_t addr,
     result = boot_flash_write_enable_unlocked();
     if(result != BOOT_FLASH_OK)
         return result;
-    hal_spi_standard_send_segments(FLASH_SPI, FLASH_SPI_CS,
-                                   cmd, sizeof(cmd), data, len);
+    if(!hal_spi_standard_send_segments_checked(FLASH_SPI, FLASH_SPI_CS,
+        cmd, sizeof(cmd), data, len, BOOT_FLASH_PIO_TIMEOUT_US))
+        return boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
     return boot_flash_finish_write_unlocked(BOOT_FLASH_PROGRAM_TIMEOUT_US);
 }
 
@@ -149,9 +168,14 @@ boot_flash_result_t boot_flash_init(uint32_t hz)
     boot_flash_lock();
     memset(&g_boot_flash_info, 0, sizeof(g_boot_flash_info));
     hal_spi_standard_init(FLASH_SPI, hz);
-    hal_spi_standard_receive(FLASH_SPI, FLASH_SPI_CS, &cmd, 1U,
-                             g_boot_flash_info.jedec_id,
-                             sizeof(g_boot_flash_info.jedec_id));
+    if(!hal_spi_standard_receive_checked(FLASH_SPI, FLASH_SPI_CS, &cmd, 1U,
+        g_boot_flash_info.jedec_id, sizeof(g_boot_flash_info.jedec_id),
+        BOOT_FLASH_PIO_TIMEOUT_US))
+    {
+        result = boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
+        boot_flash_unlock();
+        return result;
+    }
 
     capacity_log2 = g_boot_flash_info.jedec_id[2];
     if(g_boot_flash_info.jedec_id[0] == 0x00U ||
@@ -197,19 +221,28 @@ boot_flash_result_t boot_flash_read_id(uint8_t id[3])
 boot_flash_result_t boot_flash_read(uint32_t addr, uint8_t *data, size_t len)
 {
     boot_flash_result_t result;
-    uint8_t cmd[4] = {
-        BOOT_FLASH_CMD_READ,
-        (uint8_t)(addr >> 16),
-        (uint8_t)(addr >> 8),
-        (uint8_t)addr,
-    };
+    uint8_t cmd[4];
 
     if(!boot_flash_on_core0())
         return BOOT_FLASH_ERROR_WRONG_CORE;
     boot_flash_lock();
     result = boot_flash_validate_unlocked(addr, data, len);
-    if(result == BOOT_FLASH_OK && len != 0U)
-        hal_spi_standard_receive(FLASH_SPI, FLASH_SPI_CS, cmd, sizeof(cmd), data, len);
+    /* Keep IRQ latency independent of a caller's read size. */
+    while(result == BOOT_FLASH_OK && len != 0U)
+    {
+        size_t chunk = len > HK_FLASH_PROGRAM_SIZE ? HK_FLASH_PROGRAM_SIZE : len;
+        cmd[0] = BOOT_FLASH_CMD_READ;
+        cmd[1] = (uint8_t)(addr >> 16);
+        cmd[2] = (uint8_t)(addr >> 8);
+        cmd[3] = (uint8_t)addr;
+        if(!hal_spi_standard_receive_checked(FLASH_SPI, FLASH_SPI_CS,
+            cmd, sizeof(cmd), data, chunk,
+            BOOT_FLASH_PIO_TIMEOUT_US))
+            result = boot_flash_mark_fault(BOOT_FLASH_ERROR_TIMEOUT);
+        addr += (uint32_t)chunk;
+        data += chunk;
+        len -= chunk;
+    }
     boot_flash_unlock();
     return result;
 }
@@ -234,8 +267,9 @@ boot_flash_result_t boot_flash_sector_erase(uint32_t addr)
         result = boot_flash_write_enable_unlocked();
     if(result == BOOT_FLASH_OK)
     {
-        boot_flash_cmd(cmd, sizeof(cmd));
-        result = boot_flash_finish_write_unlocked(BOOT_FLASH_ERASE_TIMEOUT_US);
+        result = boot_flash_cmd(cmd, sizeof(cmd));
+        if(result == BOOT_FLASH_OK)
+            result = boot_flash_finish_write_unlocked(BOOT_FLASH_ERASE_TIMEOUT_US);
     }
     boot_flash_unlock();
     return result;

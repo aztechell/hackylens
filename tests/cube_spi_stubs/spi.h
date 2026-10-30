@@ -14,6 +14,8 @@ typedef unsigned spi_chip_select_t;
 #define SPI_FF_OCTAL 3U
 #define SPI_AITM_AS_FRAME_FORMAT 2U
 #define SPI_TMOD_TRANS 1U
+#define SPI_TMOD_RECV 2U
+#define SPI_TMOD_EEROM 3U
 extern spi_t cube_spi_registers[4];
 void spi_init(unsigned device, unsigned mode, unsigned format, unsigned bits, unsigned endian);
 void spi_init_non_standard(unsigned device, unsigned instruction, unsigned address,

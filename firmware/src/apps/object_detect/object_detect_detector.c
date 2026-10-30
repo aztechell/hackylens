@@ -192,6 +192,14 @@ static uint8_t finish_inference(void)
     bank->count = object_detect_postprocess(
         (const float *)output, bytes, g_confidence, g_nms,
         &g_workspace, bank->items, &bank->candidate_count, &bank->stats);
+    uint8_t mapped_count = 0;
+    for(uint8_t i = 0; i < bank->count; i++)
+    {
+        object_detect_result_t item = bank->items[i];
+        if(camera_ai_input_map_rect(&g_runtime, &item.x, &item.y, &item.w, &item.h))
+            bank->items[mapped_count++] = item;
+    }
+    bank->count = mapped_count;
     bank->ready_us = object_time_now_us();
     g_last_decode_us = (uint32_t)(bank->ready_us - decode_started_us);
     g_last_pipeline_us = (uint32_t)(bank->ready_us - g_runtime.started_us);

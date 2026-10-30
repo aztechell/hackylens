@@ -4,6 +4,9 @@
 #include <string.h>
 
 #include "../firmware/src/services/camera_session.h"
+#include "../firmware/src/drivers/camera_sensor.h"
+#include "../firmware/src/services/camera_debug.h"
+#include "hal_dvp.h"
 #include "../firmware/src/services/internal/camera_session_state.h"
 #include "../firmware/src/services/camera_frame.h"
 #include "../firmware/src/services/camera_capture.h"
@@ -12,7 +15,19 @@
 static camera_size_t requested_size;
 static uint16_t capture_width, capture_height;
 static uint16_t pixels[1];
-static unsigned released;
+static unsigned released, capture_calls, init_calls, probe_calls, config_calls, light_restores;
+static hk_result_t init_result, probe_result, config_result;
+static uint8_t wrong_id, control_available = 1;
+uint8_t camera_capture_control_available(void) { return control_available; }
+uint32_t camera_fps_current_x10(void) { return 0; }
+uint32_t camera_fps_average_x10(void) { return 0; }
+uint8_t camera_fps_enabled_state(void) { return 0; }
+uint32_t hal_dvp_status(void) { return 0; }
+void hal_dvp_read_regs(hal_dvp_regs_t *regs) { memset(regs, 0, sizeof(*regs)); }
+hk_result_t camera_sensor_select_bank(uint8_t bank) { (void)bank; return config_result; }
+hk_result_t camera_sensor_read_reg(uint8_t reg, uint8_t *out)
+{ (void)reg; if(probe_result != HK_OK) return probe_result; *out = 0xFF; return HK_OK; }
+
 
 camera_size_t camera_service_size(void) { return requested_size; }
 void camera_settings_force_size(camera_size_t size) { requested_size = size; }
@@ -23,7 +38,7 @@ void camera_input_cancel(void) {}
 void camera_service_set_light_active(uint8_t active) { (void)active; }
 void camera_service_set_light_level(uint8_t level) { (void)level; }
 void camera_light_apply(void) {}
-void camera_light_restore_global(void) {}
+void camera_light_restore_global(void) { light_restores++; }
 void camera_service_fps_reset(void) {}
 void camera_fps_mark_stopped(void) {}
 void camera_fps_log_summary(const char *prefix, uint16_t width, uint16_t height)
@@ -31,6 +46,7 @@ void camera_fps_log_summary(const char *prefix, uint16_t width, uint16_t height)
 void camera_capture_reset_session(void) {}
 void camera_capture_reset_flow(void) {}
 void camera_capture_pause(void) {}
+void camera_capture_resume_preview(void) {}
 void camera_capture_status(camera_capture_status_t *status)
 { memset(status, 0, sizeof(*status)); }
 uint8_t camera_capture_have_frame(void) { return 1; }
@@ -40,24 +56,25 @@ uint8_t camera_capture_snapshot(uint16_t width, uint16_t height, uint32_t wait_m
                                 const char *prefix)
 { (void)width; (void)height; (void)wait_ms; (void)prefix; return 1; }
 void camera_capture_snapshot_done(uint8_t resume) { (void)resume; }
-uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst)
-{ capture_width = width; capture_height = height; (void)burst; return 1; }
+uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst, camera_input_format_t input_format)
+{ capture_calls++; capture_width = width; capture_height = height; assert(input_format == CAMERA_INPUT_YUV422); (void)burst; return 1; }
 uint8_t camera_capture_acquire(camera_capture_frame_t *frame)
 { *frame = (camera_capture_frame_t){pixels, 1, 1}; return 1; }
 void camera_capture_release(uint32_t lease_id) { assert(lease_id == 1); released++; }
 const uint16_t *camera_capture_snapshot_pixels(void) { return NULL; }
-void camera_sensor_init_bus(uint32_t *xclk, uint32_t *sccb)
-{ *xclk = 22000000; *sccb = 100000; }
-void camera_sensor_probe_id(uint16_t *mid, uint16_t *pid)
-{ *mid = 0x7fa2; *pid = 0x7742; }
+hk_result_t camera_sensor_init_bus(uint32_t *xclk, uint32_t *sccb)
+{ init_calls++; *xclk = 22000000; *sccb = 100000; return init_result; }
+hk_result_t camera_sensor_probe_id(uint16_t *mid, uint16_t *pid)
+{ probe_calls++; if(probe_result != HK_OK) return probe_result; *mid = 0x7fa2; *pid = wrong_id ? 0xFFFF : 0x7742; return HK_OK; }
 uint8_t camera_sensor_matches_id(uint16_t mid, uint16_t pid)
 { return mid == 0x7fa2 && pid == 0x7742; }
+camera_input_format_t camera_sensor_input_format(void) { return CAMERA_INPUT_YUV422; }
 const char *camera_sensor_name(void) { return "FAKE"; }
-void camera_sensor_apply_init_table(void) {}
-void camera_sensor_apply_common_tuning(void) {}
-void camera_sensor_apply_output_size(uint16_t width, uint16_t height)
-{ (void)width; (void)height; }
-void camera_sensor_apply_colorbar(uint8_t enabled) { (void)enabled; }
+hk_result_t camera_sensor_apply_init_table(void) { config_calls++; return config_result; }
+hk_result_t camera_sensor_apply_common_tuning(void) { return HK_OK; }
+hk_result_t camera_sensor_apply_output_size(uint16_t width, uint16_t height)
+{ (void)width; (void)height; return HK_OK; }
+hk_result_t camera_sensor_apply_colorbar(uint8_t enabled) { (void)enabled; return HK_OK; }
 void hal_sleep_ms(uint32_t ms) { (void)ms; }
 void hal_dvp_output_display(uint8_t enabled) { (void)enabled; }
 void hal_dvp_output_ai(uint8_t enabled) { (void)enabled; }
@@ -93,6 +110,49 @@ int main(int argc, char **argv)
                 camera_service_clear_mode();
             }
     assert(released == 12);
+    /* Transport failure retries once; no ID/config/capture fabricated. */
+    init_calls = probe_calls = capture_calls = config_calls = 0;
+    init_result = HK_ERR_DEADLINE_EXCEEDED;
+    assert(!camera_service_start());
+    assert(init_calls == 2 && probe_calls == 0 && config_calls == 0 && capture_calls == 0);
+    assert(!camera_session_ready() && strcmp(camera_service_fail_reason(), "SENSOR BUS") == 0);
+    init_result = HK_OK; probe_result = HK_ERR_IO;
+    init_calls = probe_calls = 0;
+    assert(!camera_service_start());
+    assert(init_calls == 2 && probe_calls == 2 && capture_calls == 0);
+    probe_result = HK_OK; wrong_id = 1; init_calls = probe_calls = 0;
+    assert(!camera_service_start());
+    assert(init_calls == 2 && probe_calls == 2 && config_calls == 0 && capture_calls == 0);
+    assert(strcmp(camera_service_fail_reason(), "NO SENSOR ID") == 0);
+    wrong_id = 0; config_result = HK_ERR_IO;
+    assert(!camera_service_start());
+    assert(config_calls == 1 && capture_calls == 0 && !camera_session_ready());
+    assert(strcmp(camera_service_fail_reason(), "SENSOR CONFIG") == 0);
+    config_result = HK_OK;
+    camera_service_enter_begin(0, 0);
+    assert(camera_service_start());
+    char line[256];
+    unsigned before_init = init_calls, before_capture = capture_calls, before_lights = light_restores;
+    control_available = 0;
+    camera_debug_format_probe(line, sizeof(line), "CAM");
+    assert(strstr(line, "ERR BUSY") && init_calls == before_init && capture_calls == before_capture);
+    assert(camera_session_ready() && camera_session_blocks_sd_poll());
+    control_available = 1;
+    camera_service_freeze(1);
+    camera_debug_format_probe(line, sizeof(line), "CAM");
+    assert(strstr(line, "ok=1") && camera_session_ready() && !camera_service_capture_ready());
+    assert(camera_session_blocks_sd_poll() && light_restores == before_lights && capture_calls == before_capture + 1);
+    camera_service_freeze(0);
+    camera_debug_format_probe(line, sizeof(line), "CAM");
+    assert(strstr(line, "ok=1") && camera_service_capture_ready() && camera_session_blocks_sd_poll());
+    assert(light_restores == before_lights);
+    uint8_t out = 0xA5;
+    probe_result = HK_ERR_IO;
+    assert(camera_debug_read_reg(0, 0x0A, &out) == HK_ERR_IO && out == 0xA5);
+    before_capture = capture_calls;
+    camera_debug_format_probe(line, sizeof(line), "CAM");
+    assert(strstr(line, "ERR BUS") && !camera_session_ready() && capture_calls == before_capture);
+    assert(camera_session_blocks_sd_poll() && light_restores == before_lights);
     puts("CAMERA_ORIENTATION_OK modes=sizes/qr/ai restarts=12 capture=unchanged");
     return 0;
 }

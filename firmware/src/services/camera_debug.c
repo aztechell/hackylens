@@ -10,6 +10,9 @@
 #include "../drivers/camera_sensor.h"
 #include "hal_dvp.h"
 #include "camera_fps.h"
+#include "camera_capture.h"
+#include "camera_session.h"
+#include "internal/camera_session_state.h"
 
 void camera_debug_format_camera_info(char *line, size_t line_size, const char *screen)
 {
@@ -49,10 +52,32 @@ void camera_debug_format_probe(char *line, size_t line_size, const char *screen)
     uint16_t pid;
     uint8_t ok;
 
-    camera_sensor_init_bus(&actual_xclk, &actual_sccb);
-    camera_sensor_probe_id(&mid, &pid);
+    if(!camera_capture_control_available())
+    {
+        snprintf(line, line_size, "HKCAMPROBE screen=%s ERR BUSY\r\n", screen);
+        return;
+    }
+    uint8_t resume = camera_service_capture_ready();
+    uint8_t restart = camera_session_initialized();
+    /* Reinitialization resets DVP: retire the capture through its session owner. */
+    if(restart) camera_session_suspend_control();
+    hk_result_t result = camera_sensor_init_bus(&actual_xclk, &actual_sccb);
+    if(result == HK_OK) result = camera_sensor_probe_id(&mid, &pid);
+    if(result != HK_OK)
+    {
+        camera_session_set_ready(0);
+        camera_session_set_fail_reason("SENSOR BUS");
+        snprintf(line, line_size, "HKCAMPROBE screen=%s ERR BUS result=%d\r\n", screen, (int)result);
+        return;
+    }
     camera_service_note_probe_result(mid, pid);
     ok = camera_sensor_matches_id(mid, pid);
+    if(restart && !camera_service_start())
+    {
+        snprintf(line, line_size, "HKCAMPROBE screen=%s ERR REINIT\r\n", screen);
+        return;
+    }
+    if(restart && !resume) camera_service_freeze(1);
     snprintf(line, line_size,
              "HKCAMPROBE screen=%s xclk=%u sccb=%u mid=0x%04X pid=0x%04X ok=%u\r\n",
              screen,
@@ -92,13 +117,14 @@ void camera_debug_format_dvp(char *line, size_t line_size, const char *screen)
              status.have_frame);
 }
 
-void camera_debug_select_reg_bank(uint8_t bank)
+hk_result_t camera_debug_select_reg_bank(uint8_t bank)
 {
-    camera_sensor_select_bank(bank);
+    return camera_sensor_select_bank(bank);
 }
 
-uint8_t camera_debug_read_reg(uint8_t bank, uint8_t reg)
+hk_result_t camera_debug_read_reg(uint8_t bank, uint8_t reg, uint8_t *out)
 {
-    camera_debug_select_reg_bank(bank);
-    return camera_sensor_read_reg(reg);
+    hk_result_t result = camera_debug_select_reg_bank(bank);
+    if(result != HK_OK) return result;
+    return camera_sensor_read_reg(reg, out);
 }

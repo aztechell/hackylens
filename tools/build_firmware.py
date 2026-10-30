@@ -123,6 +123,9 @@ CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/drivers/camera_stream.h"),
     Path("firmware/src/drivers/ov2640_sensor.c"),
     Path("firmware/src/drivers/ov2640_sensor.h"),
+    Path("platforms/k210/hal/hal_camera_bus.h"),
+    Path("platforms/k210/hal/hal_camera_bus_dvp.c"),
+    Path("platforms/k210/hal/hal_camera_bus_i2c.c"),
     Path("platforms/k210/hal/hal_dvp.c"),
     Path("platforms/k210/hal/hal_dvp.h"),
 }
@@ -134,6 +137,8 @@ for camera_path in (ROOT / "firmware" / "src" / "ui").glob("camera_*"):
     CAMERA_FEATURE_SOURCE_MODULES.add(camera_path.relative_to(ROOT))
 
 CAMERA_AI_INPUT_SOURCE_MODULES = {
+    Path("firmware/src/core/camera_ai_transform.c"),
+    Path("firmware/src/core/camera_ai_transform.h"),
     Path("firmware/src/services/camera_ai_input.c"),
     Path("firmware/src/services/camera_ai_input.h"),
 }
@@ -596,6 +601,10 @@ def stage_platform_sources(
         if not path.is_file():
             continue
         rel = path.relative_to(ROOT)
+        if path.stem.startswith("hal_camera_bus_"):
+            backend = service_selection.board.data.get("camera_control", {}).get("backend")
+            if path.stem != "hal_camera_bus_" + ("dvp" if backend == "dvp-sccb" else "i2c"):
+                continue
         if path.stem == "hal_power" and service_selection.board.drivers["power"] != "axp173":
             continue
         if rel in provider_sources and rel not in selected_provider_sources:

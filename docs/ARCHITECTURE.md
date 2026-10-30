@@ -66,6 +66,16 @@ where they reject stale work. Persistent settings and MicroPython sessions have
 separate lifetimes; MP resources retire only after worker terminal handoff.
 Camera frame borrows, KPU completion and core1 executor ownership remain explicit.
 
+Camera register control is separate from image capture. Board `camera_control`
+metadata statically selects the private DVP-SCCB or I2C register backend and its
+7-bit address/timing. Sensor drivers own register sequences and input format;
+camera session passes that neutral format through capture/stream to DVP. DVP
+HAL contains no sensor-model selection or register-bus implementation. Register
+operations use a shared absolute deadline across both read phases, propagate
+errors separately from valid byte values, and require reinitialization after
+transport failure. Session-owned probe/reinit retires capture only when no frame
+borrow is outstanding, preserving light, SD-poll and frozen-preview policy.
+
 Cooperative deadlines are not forced preemption of arbitrary C callbacks, and
 fixed buffers are not memory isolation for untrusted native code. New shared
 abstractions should serve a present use case and replace more complexity than
@@ -114,10 +124,14 @@ peripheral operations. None of these shared files knows about a camera, DVP
 capture policy, a feature app, or a particular post-processor.
 
 Camera KPU consumers share one aligned 320x240 planar RGB input through
-`services/camera_ai_input.*`. Neutral conversion hooks in `camera_stream`
-arm the DVP AI output at frame start and freeze it at frame finish. KPU
-therefore receives a complete immutable frame with the exact camera sequence,
-instead of racing the next display capture. `services/core1_executor.*`
+`services/camera_ai_input.*`. For unrotated RGB565 sensors, neutral conversion
+hooks in `camera_stream` arm DVP AI output at frame start and freeze it at frame
+finish. For YUV input or mounting rotation, the main-loop preview adapter uses
+its existing frame lease to prepare upright RGB888 with the pure
+`core/camera_ai_transform` conversion and inverse box mapping. This handles
+K210's luminance-only AI output for YUV without changing sensor or DVP setup.
+Both paths give KPU a complete immutable input with its camera sequence,
+without reserving another frame-pool slot. `services/core1_executor.*`
 similarly owns the one reusable core-1 loop and accepts one bounded job at a
 time; feature modules do not replace each other's core-1 entry point.
 

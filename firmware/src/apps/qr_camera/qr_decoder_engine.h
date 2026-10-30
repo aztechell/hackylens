@@ -30,6 +30,7 @@ typedef struct
 } qr_engine_stats_t;
 
 void qr_decoder_engine_reset_session(void);
+void qr_decoder_engine_close(void);
 qr_engine_result_t qr_decoder_engine_decode(const qr_engine_frame_t *frame, uint8_t force);
 void qr_decoder_engine_stats(qr_engine_stats_t *stats);
 

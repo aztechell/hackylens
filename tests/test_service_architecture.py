@@ -19,6 +19,22 @@ import gen_board
 
 
 class ServiceArchitectureGuardTests(unittest.TestCase):
+    def test_camera_hal_model_guard_runs_on_platform_sources(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="camera-arch-") as temp:
+            source = Path(temp) / "hal_dvp.c"
+            for relative in ("platforms/k210/hal/hal_dvp.c",
+                             "platforms/k210/hal/hal_camera_bus_i2c.c"):
+                source.write_text("#ifdef HK_BOARD_CAMERA_OV7740\n#endif\n", encoding="utf-8")
+                with self.subTest(path=relative), \
+                     mock.patch.object(check_arch, "repository_source_files", return_value=[source]), \
+                     mock.patch.object(check_arch, "repository_relative", return_value=relative):
+                    failures = check_arch.service_source_failures()
+                    self.assertTrue(any("model token" in item for item in failures), failures)
+            self.assertEqual(check_arch.camera_hal_model_failures(
+                "platforms/k210/hal/hal_camera_bus_i2c.c", "CAMERA_CONTROL_ADDRESS_7BIT\n"), [])
+            self.assertEqual(check_arch.camera_hal_model_failures(
+                "firmware/src/drivers/camera_sensor.c", "HK_BOARD_CAMERA_OV7740\n"), [])
+
     def test_k210_shared_buffer_constants_are_confined_to_hal(self) -> None:
         policy = check_arch.load_layer_policy()
         for path in check_arch.repository_source_files(policy):

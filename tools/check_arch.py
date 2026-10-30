@@ -977,6 +977,14 @@ def python_gated_provider_lines(source: str) -> list[int]:
     ]
 
 
+def camera_hal_model_failures(path: str, source: str) -> list[str]:
+    if not path.startswith(("platforms/k210/hal/hal_dvp", "platforms/k210/hal/hal_camera_bus")):
+        return []
+    return [f"{path}:{number}: model token in camera transport/capture HAL"
+            for number, line in enumerate(source.splitlines(), 1)
+            if re.search(r"ov2640|ov7740|HK_BOARD_CAMERA|SENSOR_FN", line, re.IGNORECASE)]
+
+
 def service_source_failures() -> list[str]:
     policy = load_layer_policy()
     failures: list[str] = []
@@ -989,6 +997,7 @@ def service_source_failures() -> list[str]:
             failures.append(f"{path_rel}: source has no explicit layer classification")
             continue
         source = path.read_text(encoding="utf-8")
+        failures.extend(camera_hal_model_failures(path_rel, source))
         if not path_rel.startswith("platforms/k210/hal/"):
             for number, line in enumerate(source.splitlines(), 1):
                 if K210_CACHED_SRAM_LITERAL_RE.search(line):

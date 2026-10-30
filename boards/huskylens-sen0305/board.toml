@@ -256,9 +256,7 @@ rgb_pwm_channel2 = 2
 screen_pwm_device = 0
 screen_pwm_channel = 0
 pwm_frequency_hz = 20000
-camera_sccb_address = 96
 camera_xclk_hz = 40000000
-camera_sccb_hz = 100000
 camera_max_width = 640
 camera_max_height = 480
 camera_preview_rotate = 0
@@ -319,3 +317,9 @@ reset_attempts = 15
 [programming.usb_detection]
 mode = "vid-any"
 vids = ["1A86", "0403", "067B", "10C4"]
+
+[camera_control]
+backend = "dvp-sccb"
+address_7bit = 0x30
+scl_low_count = 255
+scl_high_count = 255

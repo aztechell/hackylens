@@ -45,9 +45,7 @@ DEFAULT_MACROS = {
     "screen_pwm_device": "SCREEN_BL_PWM_DEVICE",
     "screen_pwm_channel": "SCREEN_BL_PWM_CHANNEL",
     "pwm_frequency_hz": "PWM_FREQ_HZ",
-    "camera_sccb_address": "CAMERA_SCCB_ADDR",
     "camera_xclk_hz": "CAMERA_XCLK_HZ",
-    "camera_sccb_hz": "CAMERA_SCCB_HZ",
     "camera_max_width": "CAMERA_MAX_W",
     "camera_max_height": "CAMERA_MAX_H",
     "camera_preview_rotate": "CAMERA_PREVIEW_ROTATE",
@@ -76,6 +74,11 @@ def render_board_config(board: Board) -> str:
         f"#define HK_BOARD_UI_HEIGHT {board.data.get('defaults', {}).get('lcd_height', 240)}U",
         "",
     ]
+    for field, value in board.data.get("camera_control", {}).items():
+        if field == "backend":
+            lines.append(f'#define CAMERA_CONTROL_BACKEND "{value}"')
+        else:
+            lines.append(f"#define CAMERA_CONTROL_{field.upper()} {value}U")
     for route in board.selected_routes():
         lines.append(f"#define {route['macro']} {route['pin']}")
         lines.append(f'#define {route["macro"]}_LABEL "IO{route["pin"]}"')

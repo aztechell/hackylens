@@ -4,8 +4,9 @@
 #include "axp173.h"
 static uint8_t regs[256];
 static unsigned writes, reads;
+static unsigned inits;
 static uint8_t fail_read, fail_write;
-void hal_power_bus_init(void) {}
+void hal_power_bus_init(void) { inits++; }
 uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
 {
     reads++;
@@ -63,6 +64,35 @@ int main(void)
     assert(!axp173_poll_back_press(160000U)); /* Bus-failure backoff. */
     assert(axp173_poll_back_press(240000U)); /* Latched tap survives outage. */
     assert(regs[0x46U] == 0x80U && writes > 0U);
+    /* A transient boot probe failure must not disable POW forever. A latched
+     * event predating successful setup is cleared, not reported as BACK. */
+    fail_read = 1U;
+    assert(!axp173_prepare());
+    previous = reads;
+    assert(!axp173_poll_back_press(1000000U));
+    assert(!axp173_poll_back_press(1499999U) && reads == previous);
+    assert(!axp173_poll_back_press(1500000U));
+    assert(reads > previous);
+    previous = reads;
+    fail_read = 0U;
+    regs[0x46U] |= 3U;
+    assert(!axp173_poll_back_press(1999999U) && reads == previous);
+    assert(!axp173_poll_back_press(2000000U));
+    assert(regs[0x46U] == 0x80U && inits >= 4U);
+    assert(!axp173_poll_back_press(2020000U));
+    regs[0x46U] |= 2U;
+    assert(axp173_poll_back_press(2040000U));
+    assert(!axp173_poll_back_press(2060000U));
+    /* Present PMIC with failed PEK setup follows the same bounded retry. */
+    fail_write = 1U;
+    assert(axp173_prepare());
+    assert(!axp173_poll_back_press(3000000U));
+    fail_write = 0U;
+    regs[0x46U] |= 2U;
+    assert(!axp173_poll_back_press(3500000U));
+    assert(regs[0x46U] == 0x80U);
+    regs[0x46U] |= 1U;
+    assert(axp173_poll_back_press(3520000U));
     regs[0x32U] = 0x46U;
     assert(axp173_power_off());
     assert(regs[0x32U] == 0xC6U);

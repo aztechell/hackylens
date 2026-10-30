@@ -1,4 +1,5 @@
 #include "camera_runtime_controller.h"
+#include "hk_config.h"
 
 #include <stdio.h>
 
@@ -9,6 +10,9 @@
 #include "../core/hk_screen.h"
 #include "hal_time.h"
 #include "../services/camera_frame.h"
+#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_OBJECT_DETECT
+#include "../services/camera_ai_input.h"
+#endif
 #include "../services/camera_input.h"
 #include "../services/camera_light.h"
 #include "../services/camera_session.h"
@@ -71,6 +75,10 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
 
     if(!camera_service_preview_acquire(&service_frame))
         return 0;
+#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_OBJECT_DETECT
+    camera_ai_input_prepare_preview(service_frame.pixels, service_frame.width,
+                                    service_frame.height, service_frame.sequence);
+#endif
     if(consumer)
         consumer(service_frame.pixels, service_frame.width, service_frame.height,
                  service_frame.sequence, consumer_context);

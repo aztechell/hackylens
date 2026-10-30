@@ -29,6 +29,12 @@ void qr_service_enter(void)
     qr_result_reset();
 }
 
+void qr_service_exit(void)
+{
+    /* The decoder's heap must be available to the next camera/AI app. */
+    qr_decoder_engine_close();
+}
+
 static void qr_log_info(uint8_t force)
 {
     qr_engine_stats_t stats;

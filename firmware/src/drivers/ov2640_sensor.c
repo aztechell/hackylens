@@ -2,11 +2,11 @@
 
 #include "../config/camera_config.h"
 
-#include "../internal/hk_board_port.h"
-#include "hal_dvp.h"
+#include "hal_camera_bus.h"
 #include "hal_time.h"
 
 #include <stddef.h>
+#define TRY(call) do { hk_result_t result_ = (call); if(result_ != HK_OK) return result_; } while(0)
 
 typedef struct
 {
@@ -41,40 +41,28 @@ static const ov2640_reg8_t g_ov2640_init_regs[] = {
     {0xE0, 0x00}, {0x00, 0x00},
 };
 
-void ov2640_init_bus(uint32_t *actual_xclk, uint32_t *actual_sccb)
-{
-    hk_board_ops.camera_prepare();
-    hal_dvp_init_bus(8);
-    *actual_xclk = hal_dvp_set_xclk_rate(CAMERA_XCLK_HZ);
-    *actual_sccb = hal_dvp_set_sccb_rate(CAMERA_SCCB_HZ);
-}
 
-void ov2640_write_reg(uint8_t reg, uint8_t value)
+hk_result_t ov2640_write_reg(uint8_t reg, uint8_t value)
 {
-    hal_dvp_sccb_write(CAMERA_SCCB_ADDR, reg, value);
+    return hal_camera_bus_write8(reg, value, hal_time_us() + 20000U);
 }
-
-uint8_t ov2640_read_reg(uint8_t reg)
+hk_result_t ov2640_read_reg(uint8_t reg, uint8_t *out)
 {
-    return hal_dvp_sccb_read(CAMERA_SCCB_ADDR, reg);
+    return hal_camera_bus_read8(reg, out, hal_time_us() + 20000U);
 }
-
-void ov2640_probe_id(uint16_t *mid, uint16_t *pid)
+hk_result_t ov2640_probe_id(uint16_t *mid, uint16_t *pid)
 {
-    ov2640_write_reg(0xFF, 0x01);
-    if(mid)
-    {
-        *mid = ((uint16_t)ov2640_read_reg(0x1C) << 8) |
-               ov2640_read_reg(0x1D);
-    }
-    if(pid)
-    {
-        *pid = ((uint16_t)ov2640_read_reg(0x0A) << 8) |
-               ov2640_read_reg(0x0B);
-    }
+    uint8_t a, b, c, d;
+    TRY(ov2640_write_reg(0xFF, 0x01));
+    TRY(ov2640_read_reg(0x1C, &a));
+    TRY(ov2640_read_reg(0x1D, &b));
+    TRY(ov2640_read_reg(0x0A, &c));
+    TRY(ov2640_read_reg(0x0B, &d));
+    if(mid) *mid = ((uint16_t)a << 8) | b;
+    if(pid) *pid = ((uint16_t)c << 8) | d;
+    return HK_OK;
 }
-
-void ov2640_apply_init_table(void)
+hk_result_t ov2640_apply_init_table(void)
 {
     for(size_t i = 0; i < sizeof(g_ov2640_init_regs) / sizeof(g_ov2640_init_regs[0]); i++)
     {
@@ -84,47 +72,51 @@ void ov2640_apply_init_table(void)
         if(reg == 0x00 && value == 0x00)
             break;
 
-        ov2640_write_reg(reg, value);
+        TRY(ov2640_write_reg(reg, value));
         if(reg == 0x12 && value == 0x80)
             hal_sleep_ms(10);
     }
+    return HK_OK;
 }
 
-void ov2640_apply_common_tuning(void)
+hk_result_t ov2640_apply_common_tuning(void)
 {
-    ov2640_write_reg(0xFF, 0x00);
-    ov2640_write_reg(0x7C, 0x00);
-    ov2640_write_reg(0x7D, 0x02);
-    ov2640_write_reg(0x7C, 0x03);
-    ov2640_write_reg(0x7D, 0x68);
-    ov2640_write_reg(0x7D, 0x68);
+    TRY(ov2640_write_reg(0xFF, 0x00));
+    TRY(ov2640_write_reg(0x7C, 0x00));
+    TRY(ov2640_write_reg(0x7D, 0x02));
+    TRY(ov2640_write_reg(0x7C, 0x03));
+    TRY(ov2640_write_reg(0x7D, 0x68));
+    TRY(ov2640_write_reg(0x7D, 0x68));
+    return HK_OK;
 }
 
-void ov2640_apply_output_size(uint16_t width, uint16_t height)
+hk_result_t ov2640_apply_output_size(uint16_t width, uint16_t height)
 {
     uint16_t zw = width / 4U;
     uint16_t zh = height / 4U;
     uint8_t zhmh = (uint8_t)(((zh >> 8) & 0x01U) << 2);
     zhmh |= (uint8_t)((zw >> 8) & 0x03U);
 
-    ov2640_write_reg(0xFF, 0x00);
-    ov2640_write_reg(0xE0, 0x04);
-    ov2640_write_reg(0x5A, (uint8_t)zw);
-    ov2640_write_reg(0x5B, (uint8_t)zh);
-    ov2640_write_reg(0x5C, zhmh);
-    ov2640_write_reg(0xE0, 0x00);
+    TRY(ov2640_write_reg(0xFF, 0x00));
+    TRY(ov2640_write_reg(0xE0, 0x04));
+    TRY(ov2640_write_reg(0x5A, (uint8_t)zw));
+    TRY(ov2640_write_reg(0x5B, (uint8_t)zh));
+    TRY(ov2640_write_reg(0x5C, zhmh));
+    TRY(ov2640_write_reg(0xE0, 0x00));
+    return HK_OK;
 }
 
-void ov2640_apply_colorbar(uint8_t enabled)
+hk_result_t ov2640_apply_colorbar(uint8_t enabled)
 {
     uint8_t com7;
 
-    ov2640_write_reg(0xFF, 0x01);
-    com7 = ov2640_read_reg(0x12);
+    TRY(ov2640_write_reg(0xFF, 0x01));
+    TRY(ov2640_read_reg(0x12, &com7));
     if(enabled)
         com7 |= 0x02;
     else
         com7 &= (uint8_t)~0x02;
-    ov2640_write_reg(0x12, com7);
-    ov2640_write_reg(0xFF, 0x00);
+    TRY(ov2640_write_reg(0x12, com7));
+    TRY(ov2640_write_reg(0xFF, 0x00));
+    return HK_OK;
 }

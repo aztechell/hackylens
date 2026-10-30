@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from pathlib import Path
 import sys
 import tempfile
@@ -28,7 +29,7 @@ class CubeBoardTests(unittest.TestCase):
         self.assertFalse(selected.disabled_apps)
         self.assertFalse(selected.absences)
         self.assertEqual(self.board.runtime_profile, "hackylens-cube")
-        self.assertFalse(self.board.releaseable)
+        self.assertTrue(self.board.releaseable)
 
     def test_physical_routes_and_driver_choices_are_explicit(self):
         by_macro = {r["macro"]: r for r in self.board.selected_routes()}
@@ -39,9 +40,9 @@ class CubeBoardTests(unittest.TestCase):
         self.assertEqual(by_macro["IO_PMIC_SDA"]["pin"], 31)
         self.assertEqual(by_macro["IO_CAM_SCCB_SCLK"]["pin"], 41)
         self.assertEqual(by_macro["IO_CAM_SCCB_SDA"]["pin"], 40)
-        self.assertEqual(self.board.data["defaults"]["camera_sccb_address"], 0x21)
+        self.assertEqual(self.board.data["camera_control"]["address_7bit"], 0x21)
         self.assertEqual(self.board.data["defaults"]["lcd_spi_hz"], 15_000_000)
-        self.assertEqual(self.board.data["defaults"]["camera_sccb_hz"], 100_000)
+        self.assertEqual(self.board.data["camera_control"]["clock_hz"], 100_000)
         self.assertEqual(by_macro["IO_CAM_SCCB_SCLK"]["function"], "i2c2-sclk")
         self.assertEqual(by_macro["IO_EXTERNAL_I2C_R"]["peripheral"], "i2c0")
         self.assertEqual(by_macro["IO_EXTERNAL_UART_R"]["pin"], 24)
@@ -104,24 +105,34 @@ class CubeBoardTests(unittest.TestCase):
         hkflash.apply_board_configuration(manual)
         self.assertTrue(manual.manual)
 
-    def test_experimental_image_has_sidecar_but_cannot_claim_release_acceptance(self):
+    def test_full_release_image_preserves_identity_and_qualification_guards(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "cube.bin"
-            image.write_bytes(b"exact experimental build bytes")
+            image.write_bytes(b"exact full build bytes")
             document = firmware_attestation.build_document(
                 image, self.board, target="full", disabled_apps=set(), exclusions=[],
                 capabilities_sha256="a" * 64)
-            self.assertFalse(document["release_qualified"])
-            firmware_attestation.validate_document(document, image, self.board)
-            with self.assertRaisesRegex(firmware_attestation.AttestationError, "release"):
-                firmware_attestation.validate_document(
-                    document, image, self.board, require_release_qualified=True)
+            self.assertTrue(document["release_qualified"])
+            firmware_attestation.validate_document(
+                document, image, self.board, require_release_qualified=True)
             sidecar = firmware_sidecar.build_document(image, self.board)
             firmware_sidecar.validate_document(sidecar, image, self.board)
             self.assertEqual(sidecar["runtime_profile"], "hackylens-cube")
-            document["release_qualified"] = True
+            document["release_qualified"] = False
             with self.assertRaises(firmware_attestation.AttestationError):
                 firmware_attestation.validate_document(document, image, self.board)
+
+            pending = replace(self.board, data={**self.board.data, "releaseable": False})
+            document = firmware_attestation.build_document(
+                image, pending, target="full", disabled_apps=set(), exclusions=[],
+                capabilities_sha256="a" * 64)
+            self.assertFalse(document["release_qualified"])
+            with self.assertRaisesRegex(firmware_attestation.AttestationError, "release"):
+                firmware_attestation.validate_document(
+                    document, image, pending, require_release_qualified=True)
+            document["release_qualified"] = True
+            with self.assertRaises(firmware_attestation.AttestationError):
+                firmware_attestation.validate_document(document, image, pending)
 
 
 if __name__ == "__main__":

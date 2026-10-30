@@ -2,7 +2,7 @@ schema = 1
 id = "sipeed-maix-cube"
 platform = "kendryte-k210"
 support = "runtime"
-releaseable = false
+releaseable = true
 runtime_profile = "hackylens-cube"
 available = [
   "processor",
@@ -266,9 +266,7 @@ screen_pwm_device = 0
 screen_pwm_channel = 0
 pwm_frequency_hz = 20000
 # Cube uses I2C2 with the OV7740 seven-bit address.
-camera_sccb_address = 0x21
 camera_xclk_hz = 22000000
-camera_sccb_hz = 100000
 camera_max_width = 640
 camera_max_height = 480
 # Camera mounting relative to the UI requires a 90-degree clockwise preview.
@@ -329,3 +327,9 @@ reset_attempts = 15
 
 [programming.usb_detection]
 mode = "explicit-port"
+
+[camera_control]
+backend = "i2c"
+controller = 2
+address_7bit = 0x21
+clock_hz = 100000

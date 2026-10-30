@@ -63,7 +63,7 @@ to the runtime profile. Omitting it retains the original SEN0305 tuple. Cube
 explicitly selects the ST7789 octal transport, OV7740, three-way input,
 AXP173 management bus and inverted Cube light outputs. Its display has no
 FPIOA MOSI route: the LCD octal data bus is the fixed K210 SPI0/DVP path.
-Its logical BACK is synthesized from the center key, so no fourth button route
+Its logical BACK is synthesized from AXP173 power-key events, so no fourth button route
 or default is permitted. PMIC I2C1 pins 30/31 are independent of Grove I2C0.
 Driver and UI configuration is generated at build time; apps never select a
 board or access these routes directly.
@@ -71,8 +71,33 @@ board or access these routes directly.
 The required runtime default `camera_preview_rotate` selects camera mounting
 correction for the preview: `0` keeps sensor orientation and `1` rotates it
 90 degrees clockwise. Preview overlays use the same transform and viewport;
-capture dimensions and sensor/AI coordinates are unchanged. Cube selects `1`,
-SEN0305 selects `0`.
+capture dimensions and published sensor coordinates are unchanged. The shared
+AI-input adapter applies the same mounting correction to model pixels when
+needed and maps detection rectangles back to sensor coordinates. Cube selects
+`1`, SEN0305 selects `0`.
+
+## Camera register transport
+
+A board with driver-supported camera hardware MUST provide `[camera_control]`.
+Transport selection is independent of `[drivers].camera`; the latter selects
+only the sensor driver. `address_7bit` is always an unshifted address in 1..127.
+The removed defaults `camera_sccb_address` and `camera_sccb_hz` are rejected.
+
+- `backend="dvp-sccb"` requires only `address_7bit`, `scl_low_count` and
+  `scl_high_count` (counts 1..255). SEN0305 uses address `0x30` and `255/255`.
+  Its backend converts the address to the hardware wire representation once.
+  These explicit counts preserve the established SDK initialization; frequency
+  is unknown, not a claimed 100-kHz measurement.
+- `backend="i2c"` requires only `address_7bit`, `controller` and `clock_hz`.
+  Cube uses address `0x21`, controller 2 and configured 100 kHz. This is the
+  requested configuration, not an electrical measurement. Camera routes MUST
+  match that controller, which MUST NOT be routed to another service.
+
+The validator rejects mixed timing modes, absent/mismatched clock/data routes
+and unsupported controller values. The existing runtime profiles retain their
+exact established transport settings. Build staging includes one backend, or
+none when all camera consumers are disabled. Sensor output format belongs to
+the driver and is not a board field.
 
 ## Board operations
 
@@ -146,10 +171,11 @@ accepted only with
 `--allow-missing-sidecar`, after selected-board address and size checks. The
 override never accepts an existing mismatch or an oversized image.
 
-The `sipeed-maix-cube` port is an experimental full runtime with all twelve apps,
-not yet physically accepted. Its exact-16-MiB layout includes settings slots
-and userfs; runtime flash identification must match that capacity before writes.
-Its image, flasher sidecar and non-release build attestation stay under
-`build/sipeed-maix-cube/`; release packaging remains forbidden until acceptance.
+The `sipeed-maix-cube` port is a release-enabled full runtime with all twelve
+apps starting with 0.5.0. Its exact-16-MiB layout includes settings slots and
+userfs; runtime flash identification must match that capacity before writes.
+Full images and release-qualified metadata are published into `dist/` and
+packaged with their own board identity. Physical checks and the user's explicit
+waiver of external UART/I2C exchange are recorded in [Maix Cube](../MAIX_CUBE.md).
 The compile-only negative board lives under
 `tests/fixtures/boards/k210-conformance/` and retains conformance safety checks.

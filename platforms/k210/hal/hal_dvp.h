@@ -2,6 +2,7 @@
 #define HAL_DVP_H
 
 #include <stdint.h>
+#include "../../../firmware/src/core/camera_types.h"
 
 typedef struct
 {
@@ -23,10 +24,7 @@ typedef void (*hal_dvp_event_callback_t)(hal_dvp_event_t event, uint32_t status,
 
 void hal_dvp_init_bus(uint8_t div);
 uint32_t hal_dvp_set_xclk_rate(uint32_t hz);
-uint32_t hal_dvp_set_sccb_rate(uint32_t hz);
-void hal_dvp_sccb_write(uint8_t addr, uint8_t reg, uint8_t value);
-uint8_t hal_dvp_sccb_read(uint8_t addr, uint8_t reg);
-void hal_dvp_config_rgb565(uint16_t width, uint16_t height, uint32_t display_addr, uint8_t burst);
+void hal_dvp_config_rgb565(uint16_t width, uint16_t height, uint32_t display_addr, uint8_t burst, camera_input_format_t input_format);
 void hal_dvp_set_display_addr(uint32_t display_addr);
 void hal_dvp_set_ai_rgb888(uint32_t red_addr, uint32_t green_addr, uint32_t blue_addr);
 void hal_dvp_output_display(uint8_t enabled);

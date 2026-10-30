@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.4.0" src="https://img.shields.io/badge/firmware-v0.4.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.5.0" src="https://img.shields.io/badge/firmware-v0.5.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
@@ -13,7 +13,7 @@
 HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
 
 > [!IMPORTANT]
-> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.5 is a layered K210 reference firmware and MicroPython technology
 > preview. The primary project goal is a lightweight, portable application
 > architecture for robotics hardware: board-independent feature apps, explicit
 > platform capabilities, and a direct path from MicroPython prototypes to native
@@ -108,14 +108,29 @@ canonical build attestation are written to
 `dist\hackylens-full-huskylens-sen0305.json`, and
 `dist\hackylens-full-huskylens-sen0305.attestation.json`. The attestation binds
 the exact image hash to the selected board/profile and complete app composition;
-feature-disabled builds are not release-qualified. Tagged release artifacts use
-the `dist\release\hackylens-huskylens-sen0305-v<version>.*` stem and include a
-separate `-attestation.json` file.
+feature-disabled builds are not release-qualified.
 
 Tagged releases are automated by `.github/workflows/release.yml`. A pushed
-`vX.Y.Z` tag must match `VERSION`; CI builds the full firmware and publishes a
-versioned binary, build attestation, SD-card model bundle, metadata, and SHA-256
-checksums.
+`vX.Y.Z` tag must match `VERSION`; CI builds full firmware for SEN0305 and Maix
+Cube. The release contains exactly two complete board ZIPs,
+`hackylens-huskylens-sen0305-v<version>.zip` and
+`hackylens-sipeed-maix-cube-v<version>.zip`, plus `SHA256SUMS.txt`.
+Each ZIP contains the binary, same-stem flasher JSON, build attestation, release
+manifest, SD-card model ZIP, dependency manifest, third-party notices ZIP, and
+internal SHA-256 checksums. Extract the board ZIP before selecting its `.bin`
+in a flasher; keep its same-stem `.json` alongside it.
+
+After building both full images, create this payload locally with:
+
+```powershell
+python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.5.0
+```
+
+Verified flat packages are staged separately under `build\release-stage\<board>`;
+`dist\release` contains only the two public ZIPs and their checksums. Packaging
+refuses unexpected files in either output. The existing `package_release.py
+--board <board> --out-dir <directory>` interface remains available for flat
+packages. Release notes come from `docs/releases/<tag>.md` when present.
 
 Apps can be excluded by repeating `--disable-app`:
 

@@ -21,10 +21,10 @@
  */
 #include "ov7740_sensor.h"
 #include "../config/camera_config.h"
-#include "../internal/hk_board_port.h"
-#include "hal_dvp.h"
+#include "hal_camera_bus.h"
 #include "hal_time.h"
 #include <stddef.h>
+#define TRY(call) do { hk_result_t result_ = (call); if(result_ != HK_OK) return result_; } while(0)
 
 static const uint8_t default_regs[][2] = {
 	{0x47, 0x02}  ,
@@ -93,72 +93,70 @@ static const uint8_t default_regs[][2] = {
 	{0,0}
 };
 
-static void write_reg(uint8_t reg, uint8_t value)
+static hk_result_t write_reg(uint8_t reg, uint8_t value)
 {
-    hal_dvp_sccb_write(CAMERA_SCCB_ADDR, reg, value);
+    return hal_camera_bus_write8(reg, value, hal_time_us() + 20000U);
 }
-uint8_t ov7740_read_reg(uint8_t reg)
+hk_result_t ov7740_read_reg(uint8_t reg, uint8_t *out)
 {
-    return hal_dvp_sccb_read(CAMERA_SCCB_ADDR, reg);
+    return hal_camera_bus_read8(reg, out, hal_time_us() + 20000U);
 }
-void ov7740_init_bus(uint32_t *actual_xclk, uint32_t *actual_sccb)
+hk_result_t ov7740_probe_id(uint16_t *mid, uint16_t *pid)
 {
-    hk_board_ops.camera_prepare();
-    hal_dvp_init_bus(8U);
-    *actual_xclk = hal_dvp_set_xclk_rate(CAMERA_XCLK_HZ);
-    *actual_sccb = hal_dvp_set_sccb_rate(CAMERA_SCCB_HZ);
-    /* Let the board's reset/power-down sequence settle before SCCB probing. */
-    hal_sleep_ms(20U);
+    uint8_t a, b, c, d;
+    TRY(ov7740_read_reg(0x1C, &a));
+    TRY(ov7740_read_reg(0x1D, &b));
+    TRY(ov7740_read_reg(0x0A, &c));
+    TRY(ov7740_read_reg(0x0B, &d));
+    if(mid) *mid = ((uint16_t)a << 8) | b;
+    if(pid) *pid = ((uint16_t)c << 8) | d;
+    return HK_OK;
 }
-void ov7740_probe_id(uint16_t *mid, uint16_t *pid)
+hk_result_t ov7740_apply_init_table(void)
 {
-    if(mid)
-        *mid = ((uint16_t)ov7740_read_reg(0x1CU) << 8) |
-               ov7740_read_reg(0x1DU);
-    if(pid)
-        *pid = ((uint16_t)ov7740_read_reg(0x0AU) << 8) |
-               ov7740_read_reg(0x0BU);
-}
-void ov7740_apply_init_table(void)
-{
-    write_reg(0x12U, 0x80U);
+    TRY(write_reg(0x12U, 0x80U));
     hal_sleep_ms(10U);
     for(size_t i = 0U; default_regs[i][0] != 0U; ++i)
-        write_reg(default_regs[i][0], default_regs[i][1]);
+        TRY(write_reg(default_regs[i][0], default_regs[i][1]));
     hal_sleep_ms(10U);
+    return HK_OK;
 }
-void ov7740_apply_common_tuning(void)
+hk_result_t ov7740_apply_common_tuning(void)
 {
     /* Cube's camera is mounted inverted. Match the official Cube example's
      * hmirror/vflip and OV7740 horizontal start-point correction. */
-    uint8_t value = ov7740_read_reg(0x0CU);
-    write_reg(0x0CU, value | 0xC0U);
-    value = ov7740_read_reg(0x16U);
-    write_reg(0x16U, (value & 0xEEU) | 0x11U);
+    uint8_t value;
+    TRY(ov7740_read_reg(0x0CU, &value));
+    TRY(write_reg(0x0CU, value | 0xC0U));
+    TRY(ov7740_read_reg(0x16U, &value));
+    TRY(write_reg(0x16U, (value & 0xEEU) | 0x11U));
+    return HK_OK;
 }
-void ov7740_apply_output_size(uint16_t width, uint16_t height)
+hk_result_t ov7740_apply_output_size(uint16_t width, uint16_t height)
 {
     if(width > 320U || height > 240U)
     {
-        write_reg(0x31U, 0xA0U);
-        write_reg(0x32U, 0xF0U);
-        write_reg(0x82U, 0x32U);
+        TRY(write_reg(0x31U, 0xA0U));
+        TRY(write_reg(0x32U, 0xF0U));
+        TRY(write_reg(0x82U, 0x32U));
     }
     else if(width > 160U || height > 120U)
     {
-        write_reg(0x31U, 0x50U);
-        write_reg(0x32U, 0x78U);
-        write_reg(0x82U, 0x3FU);
+        TRY(write_reg(0x31U, 0x50U));
+        TRY(write_reg(0x32U, 0x78U));
+        TRY(write_reg(0x82U, 0x3FU));
     }
     else
     {
-        write_reg(0x31U, 0x28U);
-        write_reg(0x32U, 0x3CU);
-        write_reg(0x82U, 0x3FU);
+        TRY(write_reg(0x31U, 0x28U));
+        TRY(write_reg(0x32U, 0x3CU));
+        TRY(write_reg(0x82U, 0x3FU));
     }
+    return HK_OK;
 }
-void ov7740_apply_colorbar(uint8_t enabled)
+hk_result_t ov7740_apply_colorbar(uint8_t enabled)
 {
-    write_reg(0x38U, 0x07U);
-    write_reg(0x84U, enabled ? 0x02U : 0x00U);
+    TRY(write_reg(0x38U, 0x07U));
+    TRY(write_reg(0x84U, enabled ? 0x02U : 0x00U));
+    return HK_OK;
 }

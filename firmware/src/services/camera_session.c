@@ -106,38 +106,41 @@ uint8_t camera_service_start(void)
     width = camera_session_width();
     height = camera_session_height();
 
-    camera_sensor_init_bus(&actual_xclk, &actual_sccb);
-    printf("%s xclk=%u sccb=%u\r\n", camera_log_prefix(), actual_xclk, actual_sccb);
-
-    camera_sensor_probe_id(&mid, &pid);
-    camera_service_note_probe_result(mid, pid);
-    printf("%s sccb addr=0x%02X mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), CAMERA_SCCB_ADDR, mid, pid);
-
-    if(!camera_sensor_matches_id(mid, pid))
+    hk_result_t result = HK_ERR_IO;
+    mid = pid = 0;
+    for(unsigned attempt = 0; attempt < 2; ++attempt)
     {
-        printf("%s sensor probe retry\r\n", camera_log_prefix());
-        camera_sensor_init_bus(&actual_xclk, &actual_sccb);
-        printf("%s xclk_retry=%u sccb=%u\r\n", camera_log_prefix(), actual_xclk, actual_sccb);
-        hal_sleep_ms(20);
-        camera_sensor_probe_id(&mid, &pid);
-        camera_service_note_probe_result(mid, pid);
-        printf("%s sccb retry addr=0x%02X mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), CAMERA_SCCB_ADDR, mid, pid);
+        result = camera_sensor_init_bus(&actual_xclk, &actual_sccb);
+        printf("%s xclk=%u sccb=%u\r\n", camera_log_prefix(), actual_xclk, actual_sccb);
+        if(attempt) hal_sleep_ms(20U);
+        if(result == HK_OK) result = camera_sensor_probe_id(&mid, &pid);
+        if(result == HK_OK)
+        {
+            camera_service_note_probe_result(mid, pid);
+            printf("%s sccb addr7=0x%02X mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), CAMERA_CONTROL_ADDRESS_7BIT, mid, pid);
+            if(camera_sensor_matches_id(mid, pid)) break;
+        }
+        printf("%s sensor probe attempt=%u result=%d\r\n", camera_log_prefix(), attempt + 1U, (int)result);
     }
-
-    if(!camera_sensor_matches_id(mid, pid))
+    if(result != HK_OK || !camera_sensor_matches_id(mid, pid))
     {
-        printf("%s sensor probe failed mid=0x%04X pid=0x%04X\r\n", camera_log_prefix(), mid, pid);
-        camera_session_set_fail_reason("NO SENSOR ID");
+        camera_session_set_fail_reason(result != HK_OK ? "SENSOR BUS" : "NO SENSOR ID");
         camera_session_set_ready(0);
         return 0;
     }
-
     printf("%s sensor %s\r\n", camera_log_prefix(), camera_sensor_name());
+    result = camera_sensor_apply_init_table();
+    if(result == HK_OK) result = camera_sensor_apply_common_tuning();
+    if(result == HK_OK) result = camera_sensor_apply_output_size(width, height);
+    if(result == HK_OK) result = camera_sensor_apply_colorbar(camera_session_colorbar_enabled());
+    if(result != HK_OK)
+    {
+        printf("%s sensor configuration failed result=%d\r\n", camera_log_prefix(), (int)result);
+        camera_session_set_fail_reason("SENSOR CONFIG");
+        camera_session_set_ready(0);
+        return 0;
+    }
     camera_session_set_fail_reason("NONE");
-    camera_sensor_apply_init_table();
-    camera_sensor_apply_common_tuning();
-    camera_sensor_apply_output_size(width, height);
-    camera_sensor_apply_colorbar(camera_session_colorbar_enabled());
 
     if((width % 32U) == 0)
     {
@@ -147,7 +150,7 @@ uint8_t camera_service_start(void)
     {
         printf("%s dvp burst=0 width=%u\r\n", camera_log_prefix(), width);
     }
-    if(!camera_capture_start(width, height, (width % 32U) == 0))
+    if(!camera_capture_start(width, height, (width % 32U) == 0, camera_sensor_input_format()))
     {
         camera_session_set_fail_reason("DVP IRQ");
         camera_session_set_ready(0);
@@ -213,4 +216,11 @@ void camera_service_resume_from_settings(uint8_t ok_is_down)
 uint8_t camera_session_blocks_sd_poll(void)
 {
     return s_blocks_sd_poll;
+}
+
+void camera_session_suspend_control(void)
+{
+    /* Keep entry policy (lights and SD polling) while retiring DVP/leases. */
+    camera_capture_reset_session();
+    camera_session_mark_stopped();
 }

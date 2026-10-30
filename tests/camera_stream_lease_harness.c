@@ -12,6 +12,7 @@ static hal_dvp_event_callback_t s_callback;
 static void *s_callback_context;
 static uint16_t s_pixels[FRAME_POOL_CAMERA_SLOT_COUNT][8];
 static uint8_t s_reserved;
+static camera_input_format_t s_configured_format;
 
 uint8_t frame_pool_camera_reserve(void)
 {
@@ -30,9 +31,10 @@ uint32_t frame_pool_camera_frame_bytes(void) { return sizeof(s_pixels[0]); }
 
 uint32_t hal_dvp_status(void) { return 0U; }
 void hal_dvp_config_rgb565(uint16_t width, uint16_t height,
-    uint32_t display_addr, uint8_t burst)
+    uint32_t display_addr, uint8_t burst, camera_input_format_t input_format)
 {
     (void)width; (void)height; (void)display_addr; (void)burst;
+    s_configured_format = input_format;
 }
 void hal_dvp_set_display_addr(uint32_t address) { (void)address; }
 void hal_dvp_start_convert(void) {}
@@ -65,13 +67,21 @@ int main(void)
     uint8_t leased_slot = FRAME_POOL_CAMERA_SLOT_COUNT;
     uint8_t ready_slot = FRAME_POOL_CAMERA_SLOT_COUNT;
 
-    CHECK(camera_stream_start(320U, 240U, 1U));
+    CHECK(!camera_stream_start(320U, 240U, 1U, (camera_input_format_t)99));
+    CHECK(!s_reserved);
+    CHECK(camera_stream_start(320U, 240U, 1U, CAMERA_INPUT_YUV422));
+    CHECK(s_configured_format == CAMERA_INPUT_YUV422);
+    camera_stream_stop();
+    CHECK(camera_stream_start(320U, 240U, 1U, CAMERA_INPUT_RGB565));
+    CHECK(s_configured_format == CAMERA_INPUT_RGB565);
     capture_frame();
+    CHECK(!camera_stream_has_leases());
     CHECK(camera_stream_acquire_latest(&old_frame));
+    CHECK(camera_stream_has_leases());
     CHECK(old_frame.lease_id != 0U);
     camera_stream_stop();
 
-    CHECK(camera_stream_start(320U, 240U, 1U));
+    CHECK(camera_stream_start(320U, 240U, 1U, CAMERA_INPUT_RGB565));
     capture_frame();
     CHECK(camera_stream_acquire_latest(&new_frame));
     CHECK(new_frame.lease_id > old_frame.lease_id);
@@ -83,6 +93,7 @@ int main(void)
     CHECK(g_slots[leased_slot].state == CAMERA_SLOT_LEASED);
     CHECK(g_slots[leased_slot].lease_id == new_frame.lease_id);
     camera_stream_release(new_frame.lease_id);
+    CHECK(!camera_stream_has_leases());
     CHECK(g_slots[leased_slot].state == CAMERA_SLOT_FREE);
 
     g_next_lease_id = UINT32_MAX - 1U;
@@ -99,7 +110,7 @@ int main(void)
     CHECK(rejected.lease_id == 77U && rejected.sequence == 88U);
     CHECK(g_slots[ready_slot].state == CAMERA_SLOT_READY);
     camera_stream_stop();
-    CHECK(camera_stream_start(320U, 240U, 1U));
+    CHECK(camera_stream_start(320U, 240U, 1U, CAMERA_INPUT_RGB565));
     capture_frame();
     CHECK(!camera_stream_acquire_latest(&rejected));
     camera_stream_stop();

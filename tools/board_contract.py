@@ -33,7 +33,7 @@ DRIVER_PROFILES = {
 ROOT_FIELDS = {
     "schema", "id", "platform", "support", "releaseable",
     "runtime_profile", "available", "present", "routes", "defaults",
-    "flash", "partitions", "programming", "drivers",
+    "flash", "partitions", "programming", "drivers", "camera_control",
 }
 ROUTE_FIELDS = {
     "id", "macro", "pin", "function", "peripheral", "runtime_mux_group",
@@ -59,8 +59,8 @@ DEFAULT_FIELDS = {
     "flash_chip_select", "led_pwm_device", "led_pwm_channel",
     "rgb_pwm_device", "rgb_pwm_channel0", "rgb_pwm_channel1",
     "rgb_pwm_channel2", "screen_pwm_device", "screen_pwm_channel",
-    "pwm_frequency_hz", "camera_sccb_address", "camera_xclk_hz",
-    "camera_sccb_hz", "camera_max_width", "camera_max_height", "camera_preview_rotate",
+    "pwm_frequency_hz", "camera_xclk_hz",
+    "camera_max_width", "camera_max_height", "camera_preview_rotate",
 }
 GPIOHS_DEFAULT_ROUTES = {
     "gpiohs_lcd_reset": "IO_LCD_RST",
@@ -104,9 +104,7 @@ DEFAULT_RANGES = {
     "screen_pwm_device": (0, 2),
     "screen_pwm_channel": (0, 3),
     "pwm_frequency_hz": (1, 100_000_000),
-    "camera_sccb_address": (1, 0x7F),
     "camera_xclk_hz": (1, 50_000_000),
-    "camera_sccb_hz": (1, 1_000_000),
     "camera_max_width": (1, 640),
     "camera_max_height": (1, 480),
     "camera_preview_rotate": (0, 1),
@@ -360,6 +358,47 @@ class Board:
         }
 
 
+def _validate_camera_control(data: dict[str, Any]) -> None:
+    control = data.get("camera_control")
+    if "camera" not in data.get("available", []):
+        if control is not None:
+            raise ContractError("camera_control: camera service is unavailable")
+        return
+    if not isinstance(control, dict):
+        raise ContractError("camera_control: expected table")
+    backend = control.get("backend")
+    fields = {"backend", "address_7bit"}
+    if backend == "dvp-sccb":
+        fields |= {"scl_low_count", "scl_high_count"}
+    elif backend == "i2c":
+        fields |= {"controller", "clock_hz"}
+    else:
+        raise ContractError("camera_control.backend: expected dvp-sccb or i2c")
+    _strict(control, fields, "camera_control")
+    if set(control) != fields:
+        raise ContractError("camera_control: missing backend fields")
+    _integer(control["address_7bit"], "camera_control.address_7bit", minimum=1, maximum=0x7f)
+    if backend == "dvp-sccb":
+        for name in ("scl_low_count", "scl_high_count"):
+            _integer(control[name], "camera_control." + name, minimum=1, maximum=255)
+    else:
+        _integer(control["controller"], "camera_control.controller", maximum=2)
+        _integer(control["clock_hz"], "camera_control.clock_hz", minimum=1, maximum=1_000_000)
+        controller = control["controller"]
+        for route in data.get("routes", []):
+            if route["macro"] not in {"IO_CAM_SCCB_SCLK", "IO_CAM_SCCB_SDA"} and route["peripheral"] == f"i2c{controller}":
+                raise ContractError("camera_control.controller: resource already routed")
+    required = {"IO_CAM_SCCB_SCLK", "IO_CAM_SCCB_SDA"}
+    if not required <= {r["macro"] for r in data.get("routes", [])}:
+        raise ContractError("camera_control: missing clock/data routes")
+    expected = {
+        "hackylens-full": {"backend": "dvp-sccb", "address_7bit": 0x30, "scl_low_count": 255, "scl_high_count": 255},
+        "hackylens-cube": {"backend": "i2c", "controller": 2, "address_7bit": 0x21, "clock_hz": 100000},
+    }.get(data.get("runtime_profile"))
+    if expected is not None and control != expected:
+        raise ContractError("camera_control: must match selected runtime profile")
+
+
 def _validate_services(data: dict[str, Any]) -> None:
     available = _string_list(data.get("available"), "available")
     unknown = sorted(set(available) - SERVICE_KINDS)
@@ -421,8 +460,9 @@ def _validate_routes(data: dict[str, Any]) -> None:
         role = ROUTE_ROLES.get(macro)
         if role is None:
             raise ContractError(f"{field}.macro: unknown route role {macro!r}")
-        if data.get("runtime_profile") == "hackylens-cube" and macro in {"IO_CAM_SCCB_SCLK", "IO_CAM_SCCB_SDA"}:
-            role = ("i2c2-sclk" if macro.endswith("SCLK") else "i2c2-sda", "i2c2")
+        if macro in {"IO_CAM_SCCB_SCLK", "IO_CAM_SCCB_SDA"} and data.get("camera_control", {}).get("backend") == "i2c":
+            controller = data["camera_control"]["controller"]
+            role = (f"i2c{controller}-sclk" if macro.endswith("SCLK") else f"i2c{controller}-sda", f"i2c{controller}")
         if role != (function, peripheral):
             raise ContractError(
                 f"{field}: route role {macro!r} requires function "
@@ -720,6 +760,7 @@ def validate_board_data(data: dict[str, Any], *, board_dir: Path | None = None) 
     if releaseable and support != "runtime":
         raise ContractError("releaseable: true requires support=runtime")
     _validate_services(data)
+    _validate_camera_control(data)
     _validate_routes(data)
     _validate_defaults(data)
     _validate_flash(data)
