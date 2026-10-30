@@ -216,7 +216,11 @@ There are three ways to install firmware:
 - [HLWF Desktop](https://github.com/aztechell/HLWF-desktop) — an offline Windows x64 flasher with package validation, progress reporting, and recovery support.
 - [HLWF](https://github.com/aztechell/HLWF) — a dependency-free browser uploader built on Web Serial.
 - `tools/hkflash.py` — the repository's Python flashing and debug tool, intended for development workflows.
-- `isp_stub/isp_prog_huskylens.bin` — the bundled display-aware K210 ISP stub used by `hkflash.py` by default.
+- `hkflash.py` selects the bundled display-aware K210 ISP stub from the board
+  descriptor: `isp_stub/isp_prog_huskylens.bin` for SEN0305 or
+  `isp_stub/isp_prog_cube.bin` for Maix Cube. The stub runs independently of the
+  installed firmware; no hardware auto-detection or extra protocol command is
+  required. See [stub provenance and checksums](isp_stub/NOTICE.md).
 
 List detected serial adapters:
 

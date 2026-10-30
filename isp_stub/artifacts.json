@@ -1,0 +1,12 @@
+{
+  "cube": {
+    "file": "isp_prog_cube.bin",
+    "sha256": "4f57b2c924c473fcaf448640083876e78fb06fb831477b82048bd0baf665220a",
+    "size": 18048
+  },
+  "huskylens": {
+    "file": "isp_prog_huskylens.bin",
+    "sha256": "7820a83823e572d84d43b3167b45fdc61df7c7dcff772f917c2d2742a3a4dc0e",
+    "size": 17536
+  }
+}
