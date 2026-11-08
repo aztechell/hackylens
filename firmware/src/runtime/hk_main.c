@@ -128,6 +128,8 @@ int hk_main(void)
             if(sleep_us > HK_INPUT_SAMPLE_INTERVAL_US)
                 sleep_us = HK_INPUT_SAMPLE_INTERVAL_US;
             hal_sleep_ms((uint32_t)((sleep_us + 999U) / 1000U));
+            if(s_hooks.idle_tick)
+                s_hooks.idle_tick();
             continue;
         }
         if(runtime_input_dispatch(&input) != HK_OK)

@@ -10,6 +10,7 @@ int main(void)
         .startup = firmware_startup,
         .debug_tick = debug_uart_tick,
         .system_tick = system_tick_controller_tick,
+        .idle_tick = system_tick_controller_idle,
     };
 
     hk_main_set_hooks(&hooks);

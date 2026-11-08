@@ -70,9 +70,9 @@ static void render_frame(const char *name) {
 int main(void) {
     hk_display_rect_t dot={0,0,1,1}; unsigned i,x,y;
     fixture_reset();assert(hk_display_open(hk_display_service(),HK_DISPLAY_PLANE_BASE,&power_display)==HK_OK);
-    assert(hk_display_get_info(&power_display,&power_info)==HK_OK);assert(power_info.maximum_commands==32);
+    assert(hk_display_get_info(&power_display,&power_info)==HK_OK);assert(power_info.maximum_commands>0);
     assert(hk_display_begin_batch(&power_display)==HK_OK);
-    for(i=0;i<32;i++) assert(hk_display_fill_rect(&power_display,&dot,0x07e0)==HK_OK);
+    for(i=0;i<power_info.maximum_commands;i++) assert(hk_display_fill_rect(&power_display,&dot,0x07e0)==HK_OK);
     assert(hk_display_fill_rect(&power_display,&dot,0x07e0)==HK_ERR_LIMIT);
     assert(hk_display_abort(&power_display)==HK_OK);
     assert(power_v2_entry.start(NULL)==HK_OK);

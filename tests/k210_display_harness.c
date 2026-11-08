@@ -197,7 +197,7 @@ static void test_public_info_ownership_and_capacity(void)
                  "public BASE and OVERLAY ownership must be independent");
     require_true(hk_display_get_info(&base, &info) == HK_OK &&
                  info.width == TEST_WIDTH && info.height == TEST_HEIGHT &&
-                 info.maximum_commands == 32U &&
+                 info.maximum_commands == 256U &&
                  info.transfer_slice_bytes == 128U &&
                  info.maximum_present_duration_us == 500000U,
                  "public info must publish bounded physical limits");

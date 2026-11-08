@@ -13,7 +13,7 @@
 #include "hackylens_font_1bpp.h"
 #include "hal_time.h"
 
-#define K210_DISPLAY_MAX_COMMANDS 32U
+#define K210_DISPLAY_MAX_COMMANDS 256U
 #define K210_DISPLAY_MAX_TEXT_BYTES 1024U
 #define K210_DISPLAY_MAX_DIRTY_RECTS 8U
 #define K210_DISPLAY_TRANSFER_SLICE_BYTES 128U
@@ -542,7 +542,7 @@ static hk_result_t transfer_rect(
     const display_overlay_t *overlay, hk_deadline_t deadline,
     const hk_cancel_t *cancel, uint8_t *progress)
 {
-    uint8_t pixels[K210_DISPLAY_TRANSFER_SLICE_BYTES];
+    uint8_t pixels[LCD_W * 2U];
     hk_result_t result = terminal_result(deadline, cancel);
 
     if(result != HK_OK)
@@ -553,30 +553,36 @@ static hk_result_t transfer_rect(
     for(uint32_t row = 0U; row < rect->height; row++)
     {
         uint16_t y = (uint16_t)((uint32_t)rect->y + row);
-        uint32_t remaining = rect->width;
-        uint16_t x = (uint16_t)rect->x;
+        uint32_t row_bytes = rect->width * 2U;
 
-        while(remaining > 0U)
+        result = terminal_result(deadline, cancel);
+        if(result != HK_OK)
         {
-            uint16_t count = remaining * 2U > sizeof(pixels) ?
-                (uint16_t)(sizeof(pixels) / 2U) : (uint16_t)remaining;
+            lcd_st7789_transport_abort();
+            return result;
+        }
+        render_span(pixels, (uint16_t)rect->x, (uint16_t)rect->width, y,
+                    base_stage, overlay);
+        for(uint32_t offset = 0U; offset < row_bytes;
+            offset += K210_DISPLAY_TRANSFER_SLICE_BYTES)
+        {
+            uint32_t count = row_bytes - offset;
+            if(count > K210_DISPLAY_TRANSFER_SLICE_BYTES)
+                count = K210_DISPLAY_TRANSFER_SLICE_BYTES;
             result = terminal_result(deadline, cancel);
             if(result != HK_OK)
             {
                 lcd_st7789_transport_abort();
                 return result;
             }
-            render_span(pixels, x, count, y, base_stage, overlay);
             result = lcd_st7789_transport_write(
-                pixels, (size_t)count * 2U, deadline, cancel);
+                pixels + offset, count, deadline, cancel);
             if(result != HK_OK)
             {
                 lcd_st7789_transport_abort();
                 return result;
             }
             *progress = 1U;
-            x = (uint16_t)(x + count);
-            remaining -= count;
         }
     }
     result = lcd_st7789_transport_end(deadline, cancel);

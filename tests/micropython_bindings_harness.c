@@ -6,7 +6,7 @@
 #include "micropython_capability_bridge.h"
 #include "display_stage_private.h"
 
-#define LCD_OVERLAY_COMMAND_MAX 32U
+#define LCD_OVERLAY_COMMAND_MAX 256U
 #define LCD_OVERLAY_TEXT_MAX 1024U
 #define LCD_OVERLAY_COMMAND_CLEAR 1U
 #define LCD_OVERLAY_COMMAND_TEXT 2U
@@ -412,6 +412,44 @@ static void test_display_cancel_preserves_stage_for_retry(void)
                  "retry must publish the same staged frame");
 }
 
+static void test_display_rects_rolls_back_invalid_batch(void)
+{
+    uint32_t none[6] = {0U};
+    uint8_t full[MICROPYTHON_BINDING_RECTS_BYTES];
+    uint8_t records[] = {
+        2U, 1U, 9U, 0U, 7U, 0U, 8U, 0U, 0xE0U, 7U,
+        4U, 0U, 3U, 0U, 0U, 0U, 2U, 0U, 0xFFU, 0xFFU,
+    };
+
+    reset_run();
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_RECTS,
+                              none, records, sizeof(records)) ==
+                     MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT,
+                 "a zero-width rectangle must fail the entire call");
+    records[14] = 2U;
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_RECTS,
+                              none, records, sizeof(records)) == MICROPYTHON_BINDING_OK &&
+                 call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
+                              none, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == 2U &&
+                 g_overlay_commands[0].x == 258U &&
+                 g_overlay_commands[0].color == 0x07E0U &&
+                 g_overlay_commands[1].width == 2U,
+                 "a valid retry must present exactly its little-endian rectangles");
+
+    reset_run();
+    for(size_t offset = 0U; offset < sizeof(full);
+        offset += MICROPYTHON_BINDING_RECT_BYTES)
+        memcpy(full + offset, records, MICROPYTHON_BINDING_RECT_BYTES);
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_RECTS,
+                              none, full, sizeof(full)) == MICROPYTHON_BINDING_OK &&
+                 call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
+                              none, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == MICROPYTHON_BINDING_RECTS_MAX &&
+                 g_overlay_commands[MICROPYTHON_BINDING_RECTS_MAX - 1U].color == 0x07E0U,
+                 "one call must carry a complete 256-command frame");
+}
+
 static void test_display_limit_clear_recovery_and_cleanup(void)
 {
     static const uint8_t text[] = {'X'};
@@ -516,11 +554,12 @@ int main(void)
     test_i2c_controller_binding_uses_public_provider();
     test_display_stages_until_present();
     test_display_cancel_preserves_stage_for_retry();
+    test_display_rects_rolls_back_invalid_batch();
     test_display_limit_clear_recovery_and_cleanup();
     micropython_capability_bridge_cleanup();
     test_cleanup_failure_attempts_remaining_channels();
     test_failed_display_retire_invalidates_once();
-    puts("MICROPYTHON_BINDINGS_OK cases=11");
+    puts("MICROPYTHON_BINDINGS_OK cases=12");
     return 0;
 }
 
@@ -552,6 +591,13 @@ uint32_t hk_input_state(void) { return 0x0aU; }
 struct hk_display_service { uint8_t unused; };
 static const hk_display_service_t s_display_binding = {0};
 const hk_display_service_t *hk_display_service(void) { return &s_display_binding; }
+hk_result_t hk_display_get_info(const hk_display_t *handle, hk_display_info_t *info)
+{
+    if(!handle || !info)
+        return HK_ERR_INVALID_ARGUMENT;
+    *info = (hk_display_info_t){.width = 320U, .height = 240U};
+    return HK_OK;
+}
 hk_result_t hk_display_open(const hk_display_service_t *service,
     uint32_t plane, hk_display_t *handle)
 {

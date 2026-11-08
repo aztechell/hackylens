@@ -19,10 +19,17 @@
 #include "../services/micropython_runtime.h"
 #endif
 
-void system_tick_controller_tick(const hk_input_snapshot_t *input)
+void system_tick_controller_idle(void)
 {
 #if HK_ENABLE_APP_MICROPYTHON
     micropython_capability_bridge_tick();
+#endif
+}
+
+void system_tick_controller_tick(const hk_input_snapshot_t *input)
+{
+#if HK_ENABLE_APP_MICROPYTHON
+    system_tick_controller_idle();
     micropython_runtime_poll();
 #endif
     external_link_service_tick();

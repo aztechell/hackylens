@@ -4,5 +4,6 @@
 #include "../core/hk_app.h"
 
 void system_tick_controller_tick(const hk_input_snapshot_t *input);
+void system_tick_controller_idle(void);
 
 #endif

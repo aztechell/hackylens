@@ -41,8 +41,8 @@ stop request and the run deadline at least every 5 ms.
 
 ## Display
 
-The releaseable SEN0305 runtime currently selects a 320 by 240 display through
-descriptor-generated defaults. Colors are unsigned RGB565 values from `0x0000`
+SEN0305 has a 320 by 240 display and Maix Cube has a 240 by 240 display.
+Colors are unsigned RGB565 values from `0x0000`
 through `0xffff`.
 
 | API | Meaning |
@@ -50,6 +50,8 @@ through `0xffff`.
 | `display_clear(color=0)` | fill the complete display |
 | `display_text(x, y, text, foreground=0xffff, background=0)` | draw up to 256 encoded bytes |
 | `display_rect(x, y, width, height, color, filled=False)` | draw an outline or filled rectangle |
+| `display_size()` | return the selected display's `(width, height)` |
+| `display_rects(data, count=None)` | stage up to 256 filled rectangles in one call, within the frame's remaining command capacity |
 | `display_present()` | atomically make the currently staged display list visible |
 
 `display_clear()`, `display_text()`, and `display_rect()` only stage a bounded
@@ -59,6 +61,13 @@ overlay. Coordinates must start on screen; rectangles and text are clipped at
 the right and bottom edges. Invalid dimensions, oversized text, and a command
 or text buffer overflow raise `ValueError`. Script cleanup removes the overlay
 and restores the latest firmware-owned screen.
+
+`display_rects()` takes a `bytes` or `bytearray` with five unsigned 16-bit
+little-endian values per rectangle: `x`, `y`, `width`, `height`, and RGB565
+`color`. With `count`, only the first `count` records are read. An invalid or
+oversized batch leaves the previous staged commands intact. Both rectangle
+functions use the same display clipping rules. A frame can stage up to 256
+commands, including one for `display_clear()` and two per `display_text()`.
 
 ## Illumination and RGB LED
 
@@ -125,6 +134,9 @@ while not hl.button(hl.BUTTON_BACK):
         last_ok = ok
     hl.sleep_ms(20)
 ```
+
+The [full-screen fireplace](../examples/fireplace.py) uses packed rectangles
+to animate on both supported displays.
 
 ## Stop and cleanup contract
 

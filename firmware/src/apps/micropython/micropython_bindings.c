@@ -166,6 +166,42 @@ static mp_obj_t binding_display_rect(size_t count, const mp_obj_t *args)
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
     binding_display_rect_obj, 5, 6, binding_display_rect);
 
+static mp_obj_t binding_display_size(void)
+{
+    uint32_t arguments[6] = {0};
+    uint8_t output[4];
+    mp_obj_t dimensions[2];
+
+    if(binding_call(MICROPYTHON_BINDING_OP_DISPLAY_SIZE, arguments,
+                    NULL, 0U, output, sizeof(output)) != sizeof(output))
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("invalid display size"));
+    dimensions[0] = MP_OBJ_NEW_SMALL_INT(output[0] | (output[1] << 8));
+    dimensions[1] = MP_OBJ_NEW_SMALL_INT(output[2] | (output[3] << 8));
+    return mp_obj_new_tuple(2U, dimensions);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_display_size_obj, binding_display_size);
+
+static mp_obj_t binding_display_rects(size_t count, const mp_obj_t *args)
+{
+    uint32_t arguments[6] = {0};
+    mp_buffer_info_t buffer;
+    size_t length;
+
+    mp_get_buffer_raise(args[0], &buffer, MP_BUFFER_READ);
+    length = buffer.len;
+    if(count == 2U)
+        length = binding_uint(args[1], MICROPYTHON_BINDING_RECTS_MAX) *
+            MICROPYTHON_BINDING_RECT_BYTES;
+    if(length > buffer.len || length > MICROPYTHON_BINDING_RECTS_BYTES ||
+       length % MICROPYTHON_BINDING_RECT_BYTES != 0U)
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid rectangle buffer length"));
+    (void)binding_call(MICROPYTHON_BINDING_OP_DISPLAY_RECTS, arguments,
+                       buffer.buf, length, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
+    binding_display_rects_obj, 1, 2, binding_display_rects);
+
 static mp_obj_t binding_display_present(void)
 {
     uint32_t arguments[6] = {0};
@@ -305,6 +341,8 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_display_clear), MP_ROM_PTR(&binding_display_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_text), MP_ROM_PTR(&binding_display_text_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_rect), MP_ROM_PTR(&binding_display_rect_obj) },
+    { MP_ROM_QSTR(MP_QSTR_display_size), MP_ROM_PTR(&binding_display_size_obj) },
+    { MP_ROM_QSTR(MP_QSTR_display_rects), MP_ROM_PTR(&binding_display_rects_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_present), MP_ROM_PTR(&binding_display_present_obj) },
     { MP_ROM_QSTR(MP_QSTR_led), MP_ROM_PTR(&binding_led_obj) },
     { MP_ROM_QSTR(MP_QSTR_rgb), MP_ROM_PTR(&binding_rgb_obj) },

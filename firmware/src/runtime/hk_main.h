@@ -8,6 +8,7 @@ typedef struct
     void (*startup)(void);
     void (*debug_tick)(void);
     void (*system_tick)(const hk_input_snapshot_t *input);
+    void (*idle_tick)(void);
 } hk_main_hooks_t;
 
 void hk_main_set_hooks(const hk_main_hooks_t *hooks);

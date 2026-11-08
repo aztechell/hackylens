@@ -55,7 +55,7 @@ typedef struct
     volatile uint32_t input_length;
     volatile uint32_t output_length;
     volatile uint32_t result;
-    volatile uint8_t data[MICROPYTHON_BINDING_DATA_MAX];
+    volatile uint8_t data[MICROPYTHON_BINDING_RECTS_BYTES];
 } micropython_binding_control_t;
 
 typedef struct
@@ -392,6 +392,17 @@ static hk_result_t binding_select_i2c(void)
     return HK_OK;
 }
 
+static uint16_t binding_read_le16(const volatile uint8_t *data)
+{
+    return (uint16_t)(data[0] | ((uint16_t)data[1] << 8));
+}
+
+static size_t binding_input_limit(uint32_t operation)
+{
+    return operation == MICROPYTHON_BINDING_OP_DISPLAY_RECTS ?
+        MICROPYTHON_BINDING_RECTS_BYTES : MICROPYTHON_BINDING_DATA_MAX;
+}
+
 static micropython_binding_result_t binding_execute(
     micropython_binding_control_t *control,
     uint32_t ticket, uint32_t run_id)
@@ -403,7 +414,7 @@ static micropython_binding_result_t binding_execute(
     for(uint8_t i = 0U; i < 6U; i++)
         a[i] = control->arguments[i];
     control->output_length = 0U;
-    if(input_length > MICROPYTHON_BINDING_DATA_MAX)
+    if(input_length > binding_input_limit(op))
         return MICROPYTHON_BINDING_ERROR_LIMIT;
     if(binding_request_cancelled(control, ticket, run_id))
         return MICROPYTHON_BINDING_ERROR_TIMEOUT;
@@ -493,6 +504,51 @@ static micropython_binding_result_t binding_execute(
             hk_display_stroke_rect(
                 &g_display, &rect, (uint16_t)a[4]);
         return binding_display_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_DISPLAY_SIZE:
+    {
+        hk_display_info_t info;
+        hk_result_t result;
+
+        if(!g_display_owned || g_display_run_id != run_id)
+            return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        result = hk_display_get_info(&g_display, &info);
+        if(result != HK_OK)
+            return binding_display_result(result);
+        control->data[0] = (uint8_t)info.width;
+        control->data[1] = (uint8_t)(info.width >> 8);
+        control->data[2] = (uint8_t)info.height;
+        control->data[3] = (uint8_t)(info.height >> 8);
+        control->output_length = 4U;
+        return MICROPYTHON_BINDING_OK;
+    }
+    case MICROPYTHON_BINDING_OP_DISPLAY_RECTS:
+    {
+        if(!g_display_owned || g_display_run_id != run_id)
+            return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        if(input_length % MICROPYTHON_BINDING_RECT_BYTES != 0U)
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        binding_display_transaction_begin(ticket, run_id);
+        for(uint32_t offset = 0U; offset < input_length;
+            offset += MICROPYTHON_BINDING_RECT_BYTES)
+        {
+            const volatile uint8_t *record = &control->data[offset];
+            hk_display_rect_t rect = {
+                binding_read_le16(record), binding_read_le16(record + 2),
+                binding_read_le16(record + 4), binding_read_le16(record + 6),
+            };
+            hk_result_t result;
+
+            if((uint32_t)rect.x >= HK_DISPLAY_REQUIRED_WIDTH ||
+               (uint32_t)rect.y >= HK_DISPLAY_REQUIRED_HEIGHT ||
+               !rect.width || !rect.height)
+                return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+            result = hk_display_fill_rect(&g_display, &rect,
+                                          binding_read_le16(record + 8));
+            if(result != HK_OK)
+                return binding_display_result(result);
+        }
+        return MICROPYTHON_BINDING_OK;
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_PRESENT:
     {
@@ -801,7 +857,7 @@ void micropython_capability_bridge_tick(void)
     }
     control->accepted_ticket = ticket;
     __sync_synchronize();
-    if(control->input_length > MICROPYTHON_BINDING_DATA_MAX)
+    if(control->input_length > binding_input_limit(control->operation))
     {
         binding_complete_request(control, ticket,
                                  MICROPYTHON_BINDING_ERROR_LIMIT, 0U);
@@ -889,7 +945,7 @@ micropython_binding_result_t micropython_binding_call(
 
     if(output_length)
         *output_length = 0U;
-    if((input_length && !input) || input_length > MICROPYTHON_BINDING_DATA_MAX ||
+    if((input_length && !input) || input_length > binding_input_limit(operation) ||
        (output_capacity && !output) || !output_length)
         return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
     if(!control->run_active)
