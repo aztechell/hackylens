@@ -152,12 +152,14 @@ board/platform/runtime profile, target, build profile, complete enabled/disabled
 app composition, the SHA-256 of the build-time service selection report,
 diagnostic exclusions, board-driven exclusions, and fault-injection state. The
 attestation is build metadata, not a public contract or runtime discovery
-surface. Only an unmodified `full` target with the complete `hackylens-full`
-composition on a board with `releaseable=true` is `release_qualified`;
-experimental-board, feature-disabled and fault-injection builds
-cannot be relabelled as full artifacts. Standalone image creation and release
-packaging require and revalidate the canonical attestation against the exact
-input bytes and requested board/profile.
+surface. A `release_qualified` image requires a board with `releaseable=true`,
+the `full` target, the `hackylens-full` build profile and the full production
+app set. It also requires zero exclusions, zero disabled capabilities and WDT
+fault injection turned off. These rules apply to `huskylens-sen0305` with
+runtime profile `hackylens-full` and `sipeed-maix-cube` with runtime profile
+`hackylens-cube`. Standalone image creation and release packaging require and
+revalidate the canonical attestation against the exact input bytes and
+requested board/profile.
 
 Board-qualified images carry one schema-1 flasher sidecar with the exact required
 fields `schema`, `firmware_version`, `board_id`, `platform_id`,

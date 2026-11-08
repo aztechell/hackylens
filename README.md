@@ -6,6 +6,7 @@
     <a href="VERSION"><img alt="Firmware version 0.5.0" src="https://img.shields.io/badge/firmware-v0.5.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
+    <a href="docs/MAIX_CUBE.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
   </p>
 </div>
@@ -25,11 +26,20 @@ HackyLens provides a compact on-device environment for camera experiments, QR sc
 
 ## Hardware
 
-Development and hardware testing were performed on the [DFRobot HUSKYLENS SEN0305](https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF). Other HUSKYLENS revisions may differ, so verify the board, flash layout, and pin mapping before using this firmware on another revision.
+HackyLens v0.5.0 ships firmware for two boards tested on hardware.
+
+| Board | Camera | Display |
+| --- | --- | --- |
+| [DFRobot HUSKYLENS SEN0305](https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF) | OV2640 | 320 × 240 |
+| [Sipeed Maix Cube 2757](docs/MAIX_CUBE.md) | OV7740 | 240 × 240 |
+
+Use the firmware package for your board. For other revisions, verify the board,
+flash layout and pin mapping before flashing. See the
+[v0.5.0 release notes](docs/releases/v0.5.0.md) for the hardware checks.
 
 ## Features
 
-- Live OV2640 camera preview with configurable capture and display settings
+- Live camera preview with configurable capture and display settings
 - QR scanning powered by [quirc](https://github.com/dlbeer/quirc)
 - KPU-based face detection
 - KPU Tiny-YOLOv2 object detection with 20 Pascal VOC classes
@@ -57,7 +67,9 @@ These 320 x 240 images were captured directly from a running HUSKYLENS over the 
 ## Included apps
 
 `TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`,
-`MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `SLEEP`
+`MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `POWER`
+
+`POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 
 ## SD models
 

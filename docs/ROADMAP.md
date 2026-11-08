@@ -1,21 +1,23 @@
 # Roadmap
 
-HackyLens targets useful SEN0305 firmware and measurable reuse of application
-logic. The current implementation, acceptance and limitations are in
-[Architecture](ARCHITECTURE.md); interface details are in [technical references](spec/README.md).
+HackyLens targets useful firmware for SEN0305 and Maix Cube and measurable
+reuse of application logic. See [Architecture](ARCHITECTURE.md) for the current
+implementation, hardware checks and limitations, and the
+[technical references](spec/README.md) for interface details.
 
 ## Next product and research work
 
 - Improve SEN0305 features around concrete use cases, including heavy GIF
   playback and input latency where measurements show a bottleneck.
-- Physically qualify a second K210 board with unchanged applications. Record
-  exactly which BSP, service or application changes the port requires; Cube
-  compile conformance alone is not physical portability evidence.
+- Document what the Maix Cube port changed in the BSP, shared services and
+  applications, and which application logic it reused. Use the
+  [Cube hardware log](MAIX_CUBE.md) to tie observations to tested builds.
 - Extend MicroPython only for demanded scenarios through existing shared typed
   services. Camera/KPU/vision are not part of the current Python API.
-- Compare paired Python/native applications on common workloads: behavior,
-  migration effort, flash/RAM, latency distributions and cleanup under failure.
-  Report hardware, toolchain and workload limits alongside results.
+- Run equivalent MicroPython and native C applications on both boards using the
+  same workloads. Compare behavior, migration effort, flash and RAM use,
+  latency distributions and cleanup after failures. Report hardware, toolchain
+  and workload limits alongside results.
 
 Choose the next increment from the actual use case and available hardware.
 A Q1 paper needs a testable claim and comparative evidence; architecture size

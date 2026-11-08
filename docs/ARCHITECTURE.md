@@ -1,8 +1,9 @@
 # Architecture
 
-HackyLens 0.4.0 is modular firmware built from common `firmware/src` layers, the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
+HackyLens 0.5.0 is modular firmware built from common `firmware/src` layers,
+the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
-> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.5 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 This is the current architecture and implementation status. [Roadmap](ROADMAP.md)
@@ -226,22 +227,32 @@ and OBJECT data remain unchanged.
 
 ## Supported hardware and current qualification
 
-SEN0305 is the physically accepted runtime port. Maix Cube has an experimental
-`hackylens-cube` full runtime port with native 240x240 UI, an octal ST7789
-transport, OV7740 sensor, three-way input, Cube lights and Grove External Link.
-It remains `releaseable=false` until physical acceptance; release packaging
-is forbidden. The exact 16-MiB layout gates persistence and userfs on JEDEC
-capacity identification. See [Cube bring-up](MAIX_CUBE.md) for controls and
-acceptance details. A second K210 port does not establish portability
-across arbitrary MCU families. Every build explicitly selects a board; its
-`board.toml` owns wiring, defaults, flash layout and programming metadata.
+HackyLens v0.5.0 ships full builds for HUSKYLENS SEN0305 (`hackylens-full`)
+and Sipeed Maix Cube (`hackylens-cube`), each with all twelve apps and
+embedded MicroPython. Each build explicitly selects a board. Its `board.toml`
+owns wiring, defaults, flash layout and programming metadata. On Cube,
+settings and userfs writes require JEDEC to report exactly 16 MiB of flash.
+
+During v0.5.0 validation, both boards passed cold startup and camera checks
+covering all three capture sizes, colorbar, live probe/reinit and switching
+among CAMERA, QR-CAMERA and APRILTAG. On Cube, a user confirmed a visible
+FACE detection box. OBJECT loaded the VOC20 model and completed inference
+after QR-CAMERA. The final Cube build passed HMPY upload, read, run, STOP
+and cleanup while FACE was active. The user confirmed POW/BACK navigation
+after PMIC bus recovery. See the [v0.5.0 release notes](releases/v0.5.0.md)
+and the [Cube hardware log](MAIX_CUBE.md) for the tested builds and scenarios.
+
+Known-target QR and AprilTag recognition and VOC20 accuracy remain to be
+measured on Cube. The maintainer waived the physical exchange test for Cube's
+Grove UART/I2C. MicroPython has separate acceptance checks for the browser
+workflow, physical BACK during script execution, 1000 run/stop cycles,
+flash endurance and power loss, and [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md).
 
 ### Earlier SEN0305 qualification
 
-The following measurements describe the previously accepted firmware, not the
-current Cube/POWER revision. Firmware `8527aab` was accepted on COM10. Full raw
-image was 1,545,272 B;
-static RAM (`data + bss`) is 2,893,216 B. The MicroPython-disabled raw image is
+Firmware `8527aab` passed hardware checks on SEN0305 (COM10). Its full raw
+image was 1,545,272 B and static RAM (`data + bss`) was 2,893,216 B.
+The MicroPython-disabled raw image is
 1,353,528 B. Full raw SHA-256 is
 `811be8cdc6ea18b66fa1d657e1c3850de568ae1e58c76a8408b1306e22bbf18b`.
 Against accepted S7 `0405a09`, this saves 21,120 B flash and 5,256 B static RAM.
@@ -256,11 +267,9 @@ SETTINGS → MENU switches. CAMERA present was observed near 31 ms; this is a
 smoke observation, not a matched-workload latency distribution. No repeat of
 unaffected accepted checks is needed for documentation/tooling cleanup.
 
-Heavy GIFs can still play below nominal speed; button response may wait for a
-frame to finish. Original-firmware parity, long-run qualification, a physically
-qualified second board, matched Python/native migration experiments and broader
-MicroPython hardware APIs remain product/research work. User UART/I2C acceptance
-is not an instrumented throughput or electrical-characterization dataset.
+Heavy GIFs can still play below nominal speed, and button response may wait for
+a frame to finish. See the [roadmap](ROADMAP.md) for remaining product and
+research work.
 
 A useful Python-to-native experiment separates domain state from hardware,
 implements equivalent behavior through these shared services, then compares
@@ -283,19 +292,11 @@ Git history; current budgets remain executable in `tools/check_resources.py`.
 
 ### Current validation workflow
 
-Current firmware includes the Cube hardware port and unified POWER module; the
-earlier qualification above does not automatically qualify these changes.
 The host suite covers architecture boundaries, board/service/app composition,
 capability contracts, lifecycle cleanup, image metadata and the production K210
 rendering path. Run `python -m pytest tests -q` for the current test count and
-results, and `python tools/check_arch.py` for the layer/dependency guard. Current
-Cube bring-up and hardware coverage are recorded in [MAIX_CUBE.md](MAIX_CUBE.md).
-Normal-push CI
-builds full SEN0305 and MicroPython-disabled images and checks their architecture
-and resource limits. `tools/package_release.py --board huskylens-sen0305` validates
-image/sidecar/attestation identity and creates the release package locally; it
-does not publish a release. Exact source and workflow status are available in Git
-and CI, without another rolling qualification schema. Hardware acceptance above
-carries forward only while the corresponding implementation and image are
-unchanged. Matched original-versus-final latency distributions remain a research
-measurement, not a result inferred from reduced source size.
+results, and `python tools/check_arch.py` for the layer/dependency guard.
+CI builds the full firmware for both boards and checks each app composition.
+It also checks reduced SEN0305 builds. On a release tag, CI validates each
+full image against its board-specific sidecar and attestation, then packages
+one ZIP per board with `tools/package_release_bundles.py`.
