@@ -22,12 +22,14 @@ PARTITION_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 PLATFORM_ID = "kendryte-k210"
 RUNTIME_PROFILE = "hackylens-full"
 RUNTIME_PROFILES = {RUNTIME_PROFILE, "hackylens-cube"}
-DRIVER_FIELDS = {"display", "camera", "input", "power", "lights"}
+DRIVER_FIELDS = {"display", "camera", "input", "power", "lights", "audio", "accelerometer"}
 DRIVER_PROFILES = {
     "hackylens-full": {"display": "st7789-serial", "camera": "ov2640",
-                       "input": "four-buttons", "power": "none", "lights": "pwm"},
+                       "input": "four-buttons", "power": "none", "lights": "pwm",
+                       "audio": "none", "accelerometer": "none"},
     "hackylens-cube": {"display": "st7789-octal", "camera": "ov7740",
-                       "input": "three-way", "power": "axp173", "lights": "cube"},
+                       "input": "three-way", "power": "axp173", "lights": "cube",
+                       "audio": "es8374", "accelerometer": "msa301"},
 }
 
 ROOT_FIELDS = {
@@ -120,11 +122,11 @@ K210_FIXED_DEFAULTS = {
     "flash_spi": 3,
     "flash_chip_select": 0,
 }
-SERVICE_KINDS = {
+RUNTIME_REQUIRED_SERVICES = frozenset({
     "processor", "internal-flash", "display", "camera", "buttons",
     "lights", "sd-card", "external-uart", "external-i2c",
-}
-RUNTIME_REQUIRED_SERVICES = frozenset(SERVICE_KINDS)
+})
+SERVICE_KINDS = RUNTIME_REQUIRED_SERVICES | {"audio", "accelerometer"}
 PREPARE_CALLBACKS = {
     "display": "display_prepare",
     "camera": "camera_prepare",
@@ -141,6 +143,11 @@ USB_DETECTION_MODES = {"vid-any", "explicit-port"}
 FLASH_TYPES = {"spi0"}
 FLASH_MODES = {"qio", "dio"}
 FPIOA_FUNCTIONS = {
+    "i2s0-mclk": ("i2s0", "FUNC_I2S0_MCLK"),
+    "i2s0-sclk": ("i2s0", "FUNC_I2S0_SCLK"),
+    "i2s0-ws": ("i2s0", "FUNC_I2S0_WS"),
+    "i2s0-in-d0": ("i2s0", "FUNC_I2S0_IN_D0"),
+    "i2s0-out-d2": ("i2s0", "FUNC_I2S0_OUT_D2"),
     "i2c2-sclk": ("i2c2", "FUNC_I2C2_SCLK"),
     "i2c2-sda": ("i2c2", "FUNC_I2C2_SDA"),
     "i2c1-sclk": ("i2c1", "FUNC_I2C1_SCLK"),
@@ -176,7 +183,15 @@ FPIOA_FUNCTIONS = {
     "i2c0-sclk": ("i2c0", "FUNC_I2C0_SCLK"),
     "i2c0-sda": ("i2c0", "FUNC_I2C0_SDA"),
 }
+AUDIO_ROUTE_ROLES = {
+    "IO_AUDIO_MCLK": ("i2s0-mclk", "i2s0"),
+    "IO_AUDIO_BCLK": ("i2s0-sclk", "i2s0"),
+    "IO_AUDIO_LRCLK": ("i2s0-ws", "i2s0"),
+    "IO_AUDIO_RX": ("i2s0-in-d0", "i2s0"),
+    "IO_AUDIO_TX": ("i2s0-out-d2", "i2s0"),
+}
 ROUTE_ROLES = {
+    **AUDIO_ROUTE_ROLES,
     "IO_PMIC_SCL": ("i2c1-sclk", "i2c1"),
     "IO_PMIC_SDA": ("i2c1-sda", "i2c1"),
     "IO_LCD_BL": ("timer0-toggle1", "timer0"),
@@ -762,6 +777,16 @@ def validate_board_data(data: dict[str, Any], *, board_dir: Path | None = None) 
     _validate_services(data)
     _validate_camera_control(data)
     _validate_routes(data)
+    audio_routes = {route["macro"] for route in data.get("routes", [])} & AUDIO_ROUTE_ROLES.keys()
+    audio_enabled = support == "runtime" and drivers["audio"] == "es8374"
+    if audio_enabled:
+        if "audio" not in data["available"] or audio_routes != AUDIO_ROUTE_ROLES.keys():
+            raise ContractError("audio: ES8374 requires all five I2S routes and the audio service")
+    elif "audio" in data["available"] or audio_routes:
+        raise ContractError("audio: service and I2S routes require an audio driver")
+    accelerometer_enabled = support == "runtime" and drivers["accelerometer"] == "msa301"
+    if accelerometer_enabled != ("accelerometer" in data["available"]):
+        raise ContractError("accelerometer: service availability must match the MSA301 driver")
     _validate_defaults(data)
     _validate_flash(data)
     _validate_programming(data, board_dir)

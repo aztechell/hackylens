@@ -11,6 +11,10 @@
 #include "../services/sd_service.h"
 #include "auto_sleep_controller.h"
 #include "hk_config.h"
+#if HK_ENABLE_AUDIO_FEATURE
+#include "../services/audio_player.h"
+#include "../services/audio_recordings.h"
+#endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "../services/camera_session.h"
 #endif
@@ -21,6 +25,10 @@
 
 void system_tick_controller_idle(void)
 {
+#if HK_ENABLE_AUDIO_FEATURE
+    audio_recording_tick();
+    audio_player_tick();
+#endif
 #if HK_ENABLE_APP_MICROPYTHON
     micropython_capability_bridge_tick();
 #endif
@@ -28,14 +36,17 @@ void system_tick_controller_idle(void)
 
 void system_tick_controller_tick(const hk_input_snapshot_t *input)
 {
-#if HK_ENABLE_APP_MICROPYTHON
     system_tick_controller_idle();
+#if HK_ENABLE_APP_MICROPYTHON
     micropython_runtime_poll();
 #endif
     external_link_service_tick();
     auto_sleep_controller_tick(input);
     resource_cleanup_poll();
     if(!sleep_session_active()
+#if HK_ENABLE_AUDIO_FEATURE
+       && !audio_recording_view().active && !audio_player_active()
+#endif
 #if HK_ENABLE_CAMERA_FEATURE
        && !camera_session_blocks_sd_poll()
 #endif

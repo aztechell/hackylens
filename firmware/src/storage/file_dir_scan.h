@@ -12,7 +12,11 @@ typedef enum {
 } file_dir_scan_result_t;
 
 typedef uint8_t (*file_dir_index_parser_t)(const char *name, uint32_t *index_out);
+typedef uint8_t (*file_dir_visitor_t)(const fat_file_entry_t *entry,
+                                     const uint8_t short_name[11], void *context);
 
+uint8_t file_dir_scan(uint32_t directory_cluster, file_dir_visitor_t visitor,
+                      void *context);
 file_dir_scan_result_t file_dir_find_directory(uint32_t parent_cluster, const char *long_name, const char *short_name, uint32_t *cluster_out);
 uint8_t file_dir_find_max_file_index(uint32_t dir_cluster, file_dir_index_parser_t parser, uint32_t *max_index_out);
 

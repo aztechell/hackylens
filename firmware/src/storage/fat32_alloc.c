@@ -17,15 +17,23 @@ uint32_t fat_cluster_lba(uint32_t cluster)
 
 uint32_t fat_next_cluster(uint32_t cluster)
 {
+    uint32_t next;
+    return fat_read_next_cluster(cluster, &next) ? next : FAT32_EOC;
+}
+
+uint8_t fat_read_next_cluster(uint32_t cluster, uint32_t *next)
+{
     const fat32_geometry_t *geometry = fat32_geometry();
     uint8_t *sector_data = fat32_sector_scratch();
     uint32_t fat_offset = cluster * 4U;
     uint32_t sector = geometry->fat_begin + fat_offset / SD_BLOCK_SIZE;
     uint16_t offset = (uint16_t)(fat_offset % SD_BLOCK_SIZE);
 
-    if(!sd_card_read_block(sector, sector_data))
-        return FAT32_EOC;
-    return rd32(&sector_data[offset]) & 0x0FFFFFFFUL;
+    if(cluster < 2U || cluster - 2U >= geometry->cluster_count ||
+       !sd_card_read_block(sector, sector_data))
+        return 0U;
+    *next = rd32(&sector_data[offset]) & 0x0FFFFFFFUL;
+    return 1U;
 }
 
 uint8_t fat_write_entry(uint32_t cluster, uint32_t value)
@@ -56,26 +64,49 @@ uint8_t fat_write_entry(uint32_t cluster, uint32_t value)
 
 uint8_t fat_find_free_cluster(uint32_t *cluster_out)
 {
-    const fat32_geometry_t *geometry = fat32_geometry();
-    uint32_t start = geometry->alloc_hint >= 2 ? geometry->alloc_hint : 2;
-    uint32_t max_cluster = geometry->cluster_count + 1U;
+    fat_cluster_search_t search = {0};
+    hk_result_t result;
+    do
+        result = fat_find_free_step(&search, cluster_out);
+    while(result == HK_PENDING);
+    return result == HK_OK;
+}
 
-    for(uint8_t pass = 0; pass < 2; pass++)
+hk_result_t fat_find_free_step(fat_cluster_search_t *search, uint32_t *cluster_out)
+{
+    const fat32_geometry_t *geometry = fat32_geometry();
+    const uint32_t end = geometry->cluster_count + 2U;
+    const uint32_t entries_per_sector = SD_BLOCK_SIZE / 4U;
+    uint8_t *sector = fat32_sector_scratch();
+
+    if(!geometry->cluster_count)
+        return HK_ERR_IO;
+    if(!search->next)
     {
-        uint32_t first = pass == 0 ? start : 2;
-        uint32_t last = pass == 0 ? max_cluster : start - 1U;
-        for(uint32_t cluster = first; cluster <= last; cluster++)
+        search->next = geometry->alloc_hint >= 2U && geometry->alloc_hint < end ?
+            geometry->alloc_hint : 2U;
+        search->remaining = geometry->cluster_count;
+    }
+    if(!search->remaining)
+        return HK_ERR_LIMIT;
+    uint32_t sector_index = search->next / entries_per_sector;
+    if(!sd_card_read_block(geometry->fat_begin + sector_index, sector))
+        return HK_ERR_IO;
+    while(search->remaining && search->next < end &&
+          search->next / entries_per_sector == sector_index)
+    {
+        uint32_t cluster = search->next++;
+        search->remaining--;
+        if(!(rd32(sector + (cluster % entries_per_sector) * 4U) & 0x0fffffffU))
         {
-            if(fat_next_cluster(cluster) == 0)
-            {
-                *cluster_out = cluster;
-                fat32_set_alloc_hint(cluster + 1U);
-                return 1;
-            }
+            *cluster_out = cluster;
+            fat32_set_alloc_hint(cluster + 1U);
+            return HK_OK;
         }
     }
-
-    return 0;
+    if(search->next == end)
+        search->next = 2U;
+    return search->remaining ? HK_PENDING : HK_ERR_LIMIT;
 }
 
 uint8_t fat_alloc_chain(uint32_t count, uint32_t *first_out)

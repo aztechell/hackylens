@@ -18,13 +18,14 @@ static void sd_deselect(void)
     sd_spi_xfer(0xFF);
 }
 
-static uint8_t sd_wait_ready(uint32_t timeout)
+static uint8_t sd_wait_ready(void)
 {
-    while(timeout--)
+    uint64_t deadline = hal_time_us() + SD_WRITE_TIMEOUT_US;
+    do
     {
         if(sd_spi_xfer(0xFF) == 0xFF)
             return 1;
-    }
+    } while(hal_time_us() < deadline);
     return 0;
 }
 
@@ -34,7 +35,7 @@ static uint8_t sd_command(uint8_t cmd, uint32_t arg, uint8_t crc, uint8_t *extra
 
     sd_spi_cs_low();
     sd_spi_xfer(0xFF);
-    if(cmd != 0 && !sd_wait_ready(SD_READY_TIMEOUT))
+    if(cmd != 0 && !sd_wait_ready())
     {
         if(release)
             sd_deselect();
@@ -65,7 +66,7 @@ static uint8_t sd_command(uint8_t cmd, uint32_t arg, uint8_t crc, uint8_t *extra
     return r1;
 }
 
-uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
+static uint8_t sd_read_block_once(uint32_t lba, uint8_t *dst)
 {
     uint32_t arg = fat32_card_is_sdhc() ? lba : lba * SD_BLOCK_SIZE;
     uint8_t r1 = sd_command(17, arg, 0x01, NULL, 0, 0);
@@ -76,22 +77,46 @@ uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
         return 0;
     }
 
-    for(uint16_t i = 0; i < SD_READ_TIMEOUT; i++)
+    uint64_t deadline = hal_time_us() + SD_READ_TIMEOUT_US;
+    do
     {
         uint8_t token = sd_spi_xfer(0xFF);
         if(token == 0xFE)
         {
-            for(uint16_t j = 0; j < SD_BLOCK_SIZE; j++)
-                dst[j] = sd_spi_xfer(0xFF);
-            sd_spi_xfer(0xFF);
-            sd_spi_xfer(0xFF);
+            uint8_t result = sd_spi_read_bytes(dst, SD_BLOCK_SIZE,
+                                               hal_time_us() + SD_BLOCK_TRANSFER_TIMEOUT_US);
+            if(result)
+            {
+                sd_spi_xfer(0xFF);
+                sd_spi_xfer(0xFF);
+            }
             sd_deselect();
-            return 1;
+            return result;
         }
-    }
+        if(token && token < 0x10U)
+            break;
+    } while(hal_time_us() < deadline);
 
     sd_deselect();
     return 0;
+}
+
+static void sd_retry_bus(void)
+{
+    sd_spi_cs_high();
+    sd_spi_config(SD_RUN_CLK_HZ / 2U);
+    for(uint8_t i = 0U; i < 8U; i++)
+        sd_spi_xfer(0xFF);
+}
+
+uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
+{
+    if(sd_read_block_once(lba, dst))
+        return 1U;
+    sd_retry_bus();
+    uint8_t result = sd_read_block_once(lba, dst);
+    sd_spi_config(SD_RUN_CLK_HZ);
+    return result;
 }
 
 static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t verify)
@@ -128,26 +153,23 @@ static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t 
         return 0;
     }
 
-    for(uint32_t i = 0; i < SD_WRITE_TIMEOUT; i++)
+    if(sd_wait_ready())
     {
-        if(sd_spi_xfer(0xFF) == 0xFF)
-        {
-            sd_deselect();
-            if(!verify)
-                return 1;
-            uint8_t *verify_sector = fat32_verify_scratch();
-            if(!sd_card_read_block(lba, verify_sector))
-            {
-                printf("[SD] CMD24 verify read failed lba=%u\r\n", lba);
-                return 0;
-            }
-            if(memcmp(src, verify_sector, SD_BLOCK_SIZE) != 0)
-            {
-                printf("[SD] CMD24 verify mismatch lba=%u\r\n", lba);
-                return 0;
-            }
+        sd_deselect();
+        if(!verify)
             return 1;
+        uint8_t *verify_sector = fat32_verify_scratch();
+        if(!sd_read_block_once(lba, verify_sector))
+        {
+            printf("[SD] CMD24 verify read failed lba=%u\r\n", lba);
+            return 0;
         }
+        if(memcmp(src, verify_sector, SD_BLOCK_SIZE) != 0)
+        {
+            printf("[SD] CMD24 verify mismatch lba=%u\r\n", lba);
+            return 0;
+        }
+        return 1;
     }
 
     sd_deselect();
@@ -155,14 +177,24 @@ static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t 
     return 0;
 }
 
+static uint8_t sd_write_block(uint32_t lba, const uint8_t *src, uint8_t verify)
+{
+    if(sd_write_block_checked(lba, src, verify))
+        return 1U;
+    sd_retry_bus();
+    uint8_t result = sd_write_block_checked(lba, src, verify);
+    sd_spi_config(SD_RUN_CLK_HZ);
+    return result;
+}
+
 uint8_t sd_card_write_block(uint32_t lba, const uint8_t *src)
 {
-    return sd_write_block_checked(lba, src, 1);
+    return sd_write_block(lba, src, 1U);
 }
 
 uint8_t sd_card_write_block_fast(uint32_t lba, const uint8_t *src)
 {
-    return sd_write_block_checked(lba, src, 0);
+    return sd_write_block(lba, src, 0U);
 }
 
 uint8_t sd_card_init(void)

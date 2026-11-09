@@ -61,6 +61,7 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
     payload.autostart_id = hk_app_autostart_id_is_persistable(
                                snapshot->autostart_id) ?
                            snapshot->autostart_id : HK_AUTOSTART_OFF;
+    payload.audio_volume = clamp_u8(snapshot->audio_volume, 0U, 100U);
     return payload;
 }
 
@@ -84,6 +85,7 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
         return;
 
     memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->audio_volume = clamp_u8(payload->audio_volume, 0U, 100U);
     memcpy(snapshot->app_data, payload->app_data, sizeof(snapshot->app_data));
     snapshot->autostart_id = hk_app_autostart_id_is_persistable(
                                  payload->autostart_id) ?

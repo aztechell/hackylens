@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <hackylens/capability/accelerometer.h>
 
 #include "micropython_binding_test_platform.h"
 #include "micropython_capability_bridge.h"
+#include "audio_service.h"
 #include "display_stage_private.h"
 
 #define LCD_OVERLAY_COMMAND_MAX 256U
@@ -87,6 +89,28 @@ static uint32_t g_external_operation_kind;
 static uint8_t g_external_operation_active;
 static uint32_t g_external_request_id;
 static uint64_t g_external_requested_features;
+static volatile uint8_t *g_audio_pcm;
+static size_t g_audio_size;
+static uint64_t g_audio_complete_at;
+static hk_result_t g_acceleration_status;
+static uint8_t g_accelerometer_present;
+
+struct hk_accelerometer { uint8_t unused; };
+static const hk_accelerometer_t g_accelerometer = {0};
+
+const hk_accelerometer_t *hk_accelerometer_service(void)
+{
+    return g_accelerometer_present ? &g_accelerometer : NULL;
+}
+
+hk_result_t hk_accelerometer_read(const hk_accelerometer_t *sensor, hk_acceleration_t *sample)
+{
+    if(!sensor)
+        return HK_ERR_CAPABILITY_ABSENT;
+    if(g_acceleration_status == HK_OK)
+        *sample = (hk_acceleration_t){-10, 250, 987};
+    return g_acceleration_status;
+}
 
 static void require_true(uint8_t condition, const char *message)
 {
@@ -94,6 +118,39 @@ static void require_true(uint8_t condition, const char *message)
         return;
     fprintf(stderr, "FAIL: %s\n", message);
     exit(1);
+}
+
+uint8_t audio_service_available(void)
+{
+    return 1U;
+}
+
+hk_result_t audio_service_begin(hk_audio_direction_t direction,
+                                volatile uint8_t *pcm, size_t size)
+{
+    require_true(!g_audio_pcm && direction == HK_AUDIO_RECORD,
+                 "audio fixture must start one recording");
+    g_audio_pcm = pcm;
+    g_audio_size = size;
+    g_audio_complete_at = g_now_us + 540000U;
+    return HK_PENDING;
+}
+
+hk_result_t audio_service_cancel(void)
+{
+    g_audio_pcm = NULL;
+    return HK_OK;
+}
+
+hk_result_t audio_service_poll(void)
+{
+    require_true(g_audio_pcm != NULL, "audio must not poll a retired buffer");
+    if(g_now_us < g_audio_complete_at)
+        return HK_PENDING;
+    for(size_t i = 0; i < g_audio_size; i++)
+        g_audio_pcm[i] = (uint8_t)i;
+    g_audio_pcm = NULL;
+    return HK_OK;
 }
 
 static void reset_run(void)
@@ -544,6 +601,61 @@ static void test_failed_display_retire_invalidates_once(void)
     require_true(g_overlay_acquire_calls == 2U, "next run opens a fresh session");
 }
 
+static void test_audio_record_and_stop(void)
+{
+    uint8_t samples[HK_AUDIO_PCM_MAX_BYTES];
+    uint32_t arguments[6] = {sizeof(samples)};
+    size_t length = 0U;
+
+    reset_run();
+    require_true(micropython_binding_call(
+        MICROPYTHON_BINDING_OP_AUDIO_RECORD, arguments, NULL, 0U,
+        samples, sizeof(samples), &length) == MICROPYTHON_BINDING_OK,
+        "full audio buffer must complete after the ordinary RPC deadline");
+    require_true(length == sizeof(samples) && !g_audio_pcm,
+                 "audio must return the full buffer and retire it");
+    for(size_t i = 0; i < length; i++)
+        require_true(samples[i] == (uint8_t)i,
+                     "audio must copy all recorded bytes to the caller");
+
+    reset_run();
+    g_interrupt_on_poll = 2U;
+    samples[0] = 42U;
+    require_true(micropython_binding_call(
+        MICROPYTHON_BINDING_OP_AUDIO_RECORD, arguments, NULL, 0U,
+        samples, sizeof(samples), &length) == MICROPYTHON_BINDING_ERROR_NOT_ACTIVE,
+        "STOP must cancel a pending audio request");
+    require_true(!g_audio_pcm && !g_unwind_before_ack && g_vm_hook_calls == 1U &&
+                 length == 0U && samples[0] == 42U,
+                 "STOP must retire audio before the VM unwinds");
+}
+
+static void test_accelerometer_binding(void)
+{
+    uint8_t available;
+    int16_t axes[3];
+    size_t length;
+    reset_run();
+    g_accelerometer_present = 1U;
+    require_true(micropython_binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_AVAILABLE,
+        NULL, NULL, 0U, &available, sizeof(available), &length) == MICROPYTHON_BINDING_OK &&
+        length == 1U && available, "accelerometer capability availability");
+
+    g_acceleration_status = HK_PENDING;
+    require_true(micropython_binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_READ,
+        NULL, NULL, 0U, (uint8_t *)axes, sizeof(axes), &length) == MICROPYTHON_BINDING_OK &&
+        length == 0U, "accelerometer startup returns no sample");
+    g_acceleration_status = HK_OK;
+    require_true(micropython_binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_READ,
+        NULL, NULL, 0U, (uint8_t *)axes, sizeof(axes), &length) == MICROPYTHON_BINDING_OK &&
+        length == sizeof(axes) && axes[0] == -10 && axes[1] == 250 && axes[2] == 987,
+        "accelerometer preserves signed milli-g and axis order");
+    g_accelerometer_present = 0U;
+    require_true(micropython_binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_READ,
+        NULL, NULL, 0U, (uint8_t *)axes, sizeof(axes), &length) ==
+        MICROPYTHON_BINDING_ERROR_UNAVAILABLE, "absent accelerometer is unavailable");
+}
+
 int main(void)
 {
     test_timeout_cancels_before_dispatch();
@@ -559,7 +671,9 @@ int main(void)
     micropython_capability_bridge_cleanup();
     test_cleanup_failure_attempts_remaining_channels();
     test_failed_display_retire_invalidates_once();
-    puts("MICROPYTHON_BINDINGS_OK cases=12");
+    test_audio_record_and_stop();
+    test_accelerometer_binding();
+    puts("MICROPYTHON_BINDINGS_OK cases=14");
     return 0;
 }
 

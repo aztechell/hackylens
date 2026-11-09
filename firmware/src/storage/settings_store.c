@@ -1,5 +1,6 @@
 #include "settings_store.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -170,7 +171,7 @@ static uint32_t settings_record_crc(const settings_record_t *record)
     crc = crc32_update(crc, (const uint8_t *)&record->version, sizeof(record->version));
     crc = crc32_update(crc, (const uint8_t *)&record->payload_size, sizeof(record->payload_size));
     crc = crc32_update(crc, (const uint8_t *)&record->sequence, sizeof(record->sequence));
-    crc = crc32_update(crc, (const uint8_t *)&record->payload, sizeof(record->payload));
+    crc = crc32_update(crc, (const uint8_t *)&record->payload, record->payload_size);
     return crc;
 }
 
@@ -178,9 +179,10 @@ static uint8_t settings_record_valid(const settings_record_t *record)
 {
     if(record->magic != SETTINGS_MAGIC)
         return 0;
-    if(record->version != SETTINGS_STORAGE_VERSION)
-        return 0;
-    if(record->payload_size != sizeof(settings_payload_t))
+    if(!((record->version == SETTINGS_STORAGE_VERSION &&
+          record->payload_size == sizeof(settings_payload_t)) ||
+         (record->version == SETTINGS_STORAGE_V5_VERSION &&
+          record->payload_size == offsetof(settings_payload_t, audio_volume))))
         return 0;
     return record->crc32 == settings_record_crc(record);
 }
@@ -263,7 +265,7 @@ static uint8_t settings_record_v4_valid(const settings_record_v4_t *record)
 
 static uint8_t settings_slot_valid(const settings_slot_t *slot)
 {
-    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+    if(slot->current.version >= SETTINGS_STORAGE_V5_VERSION)
         return settings_record_valid(&slot->current);
     if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
         return settings_record_v4_valid(&slot->v4);
@@ -276,7 +278,7 @@ static uint8_t settings_slot_valid(const settings_slot_t *slot)
 
 static uint32_t settings_slot_sequence(const settings_slot_t *slot)
 {
-    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+    if(slot->current.version >= SETTINGS_STORAGE_V5_VERSION)
         return slot->current.sequence;
     if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
         return slot->v4.sequence;
@@ -290,7 +292,7 @@ static uint32_t settings_slot_sequence(const settings_slot_t *slot)
 static void settings_slot_payload(const settings_slot_t *slot, settings_payload_t *payload)
 {
     memset(payload, 0, sizeof(*payload));
-    if(slot->current.version == SETTINGS_STORAGE_VERSION)
+    if(slot->current.version >= SETTINGS_STORAGE_V5_VERSION)
         *payload = slot->current.payload;
     else if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
     {
@@ -316,6 +318,9 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
     }
     else
         memcpy(payload, &slot->legacy.payload, sizeof(slot->legacy.payload));
+    if(slot->current.version != SETTINGS_STORAGE_VERSION)
+        payload->audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
+    payload->reserved = 0U;
 }
 
 void settings_store_init(settings_store_load_t *result)

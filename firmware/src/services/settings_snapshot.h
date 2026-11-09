@@ -28,6 +28,7 @@ typedef struct
     camera_persist_settings_t camera;
 #endif
     uint8_t qr_decode_rate;
+    uint8_t audio_volume;
 } settings_snapshot_t;
 
 void settings_snapshot_capture(settings_snapshot_t *snapshot);

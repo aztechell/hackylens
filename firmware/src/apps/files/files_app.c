@@ -4,6 +4,14 @@
 
 #include "files_controller.h"
 #include "files_view.h"
+#if __has_include("hk_config.h")
+#include "hk_config.h"
+#endif
+#if HK_ENABLE_AUDIO_FEATURE
+#include "file_browser_mode.h"
+#include "../../services/audio_player.h"
+#include "../../ui/audio_player_view.h"
+#endif
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
 
@@ -34,8 +42,50 @@ static hk_result_t files_finish_work(
 {
     if(state->close_requested)
         return hk_app_context_request_close(ctx);
+#if HK_ENABLE_AUDIO_FEATURE
+    if(files_mode() != FILES_MODE_AUDIO)
+        state->player_drawn = 0U;
+    else
+    {
+        audio_player_view_t player = audio_player_view(HK_AUDIO_OWNER_FILES);
+        if(!state->player_drawn || player.position != state->player_position ||
+           player.status != state->player_status || audio_service_volume() != state->player_volume ||
+           files_controller_audio_error() != state->player_error)
+            return audio_player_redraw(ctx, state->player_width, !state->player_drawn);
+    }
+#endif
     return HK_OK;
 }
+
+#if HK_ENABLE_AUDIO_FEATURE
+static hk_result_t files_render(const hk_app_context_t *ctx, hk_app_surface_t *surface)
+{
+    if(files_mode() != FILES_MODE_AUDIO)
+        return HK_OK;
+    files_state_t *state;
+    hk_display_info_t display;
+    hk_result_t result = files_state_from(ctx, &state);
+    if(result == HK_OK)
+        result = hk_app_surface_get_info(surface, &display);
+    if(result != HK_OK)
+        return result;
+
+    audio_player_view_t player = audio_player_view(HK_AUDIO_OWNER_FILES);
+    const char *error = files_controller_audio_error();
+    uint8_t volume = audio_service_volume();
+    result = audio_player_draw(surface, &player, volume, error, !state->player_drawn);
+    if(result == HK_OK)
+    {
+        state->player_drawn = 1U;
+        state->player_width = display.width;
+        state->player_status = player.status;
+        state->player_position = player.position;
+        state->player_volume = volume;
+        state->player_error = error;
+    }
+    return result;
+}
+#endif
 
 static hk_result_t files_start(const hk_app_context_t *ctx)
 {
@@ -110,6 +160,8 @@ const hk_app_v2_entry_t files_v2_entry = {
     .state_capacity_bytes = sizeof(s_state_storage),
     .start = files_start,
     .event = files_event,
-    .render = NULL,
+#if HK_ENABLE_AUDIO_FEATURE
+    .render = files_render,
+#endif
     .stop = files_stop,
 };

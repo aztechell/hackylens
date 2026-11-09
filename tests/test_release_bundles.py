@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import firmware_attestation
 import firmware_sidecar
 import package_release_bundles as bundles
+import service_bindings
 
 
 class ReleaseBundleTests(unittest.TestCase):
@@ -41,9 +42,11 @@ class ReleaseBundleTests(unittest.TestCase):
     def attest(self, identifier, disabled_apps=None):
         board = bundles.package_release.load_board(identifier)
         image = self.source / f"hackylens-full-{identifier}.bin"
+        composition = service_bindings.select(board, disabled_apps or set(), set(), set())
         firmware_attestation.write(
             image.with_suffix(".attestation.json"), image, board,
-            target="full", disabled_apps=disabled_apps or set(), exclusions=[],
+            target="full", disabled_apps=set(composition.disabled_apps),
+            exclusions=list(composition.exclusions),
             capabilities_sha256="a" * 64,
         )
 
@@ -85,7 +88,8 @@ class ReleaseBundleTests(unittest.TestCase):
                 self.assertEqual(metadata["image"], f"{stem}.bin")
                 attestation = json.loads(archive.read(f"{stem}-attestation.json"))
                 self.assertTrue(attestation["release_qualified"])
-                self.assertEqual(attestation["composition"]["disabled_apps"], [])
+                self.assertEqual(attestation["composition"]["disabled_apps"],
+                                 ["accelerometer", "recorder"] if identifier == "huskylens-sen0305" else [])
                 manifest = json.loads(archive.read(f"{stem}-release.json"))
                 self.assertEqual(manifest["board_id"], identifier)
                 self.assertEqual(manifest["version"], self.version)

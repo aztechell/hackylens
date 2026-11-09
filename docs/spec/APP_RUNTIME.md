@@ -156,7 +156,8 @@ independent: QR may legitimately spend more than one period decoding a frame.
 ## Render and invalidation
 
 `hk_app_context_request_render` records either a full invalidation or at most
-eight fixed-capacity dirty rectangles. A successful start with a non-null
+eight distinct dirty rectangles. Identical pending rectangles share one slot
+while Display is busy. A successful start with a non-null
 `render` begins with one full invalidation. A null `render` means the app uses
 an existing firmware presentation service; runtime opens no competing batch
 and render requests return `HK_ERR_FEATURE_UNAVAILABLE`. The app cannot present, begin/abort a Display batch, select

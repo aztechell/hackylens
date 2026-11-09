@@ -85,8 +85,13 @@ uint8_t fat_stream_open(fat_stream_t *stream, const fat_file_entry_t *entry, uin
 
 uint8_t fat_stream_read(fat_stream_t *stream, uint8_t *dst, uint32_t len)
 {
+    return fat_stream_read_cached(stream, dst, len, fat32_sector_scratch());
+}
+
+uint8_t fat_stream_read_cached(fat_stream_t *stream, uint8_t *dst,
+                               uint32_t len, uint8_t *sector_data)
+{
     const fat32_geometry_t *geometry = fat32_geometry();
-    uint8_t *sector_data = fat32_sector_scratch();
     uint32_t cluster_size = (uint32_t)geometry->sectors_per_cluster * SD_BLOCK_SIZE;
 
     while(len)

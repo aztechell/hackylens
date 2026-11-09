@@ -18,6 +18,8 @@ board constraints. Headers and behavioral tests should change with their docs.
 - [Lights](capabilities/LIGHTS.md)
 - [Display](capabilities/DISPLAY.md)
 - [External Link](capabilities/EXTERNAL_LINK.md)
+- [Power](capabilities/POWER.md)
+- [Accelerometer](capabilities/ACCELEROMETER.md)
 
 Camera and Storage use existing typed firmware services. They do not need
 additional public wrappers without a concrete consumer.

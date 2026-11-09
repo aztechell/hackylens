@@ -681,6 +681,15 @@ hk_result_t hk_app_context_request_render(
         return HK_ERR_INVALID_ARGUMENT;
     if(runtime->full_invalidation)
         return HK_OK;
+    /* Events may keep sampling while Display is busy. One pending copy of a
+     * region is enough because render reads the latest app state. */
+    for(uint16_t i = 0U; i < runtime->invalidation_count; i++)
+    {
+        const hk_display_rect_t *pending = &runtime->invalidations[i];
+        if(pending->x == region->x && pending->y == region->y &&
+           pending->width == region->width && pending->height == region->height)
+            return HK_OK;
+    }
     if(runtime->invalidation_count >= HK_APP_MAX_INVALIDATIONS)
         return HK_ERR_LIMIT;
     runtime->invalidations[runtime->invalidation_count++] = *region;

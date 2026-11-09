@@ -14,6 +14,8 @@ available = [
   "sd-card",
   "external-uart",
   "external-i2c",
+  "audio",
+  "accelerometer",
 ]
 
 [[routes]]
@@ -232,12 +234,49 @@ pin = 31
 function = "i2c1-sda"
 peripheral = "i2c1"
 
+[[routes]]
+id = "audio-master-clock"
+macro = "IO_AUDIO_MCLK"
+pin = 19
+function = "i2s0-mclk"
+peripheral = "i2s0"
+
+[[routes]]
+id = "audio-bit-clock"
+macro = "IO_AUDIO_BCLK"
+pin = 35
+function = "i2s0-sclk"
+peripheral = "i2s0"
+
+[[routes]]
+id = "audio-word-select"
+macro = "IO_AUDIO_LRCLK"
+pin = 33
+function = "i2s0-ws"
+peripheral = "i2s0"
+
+[[routes]]
+id = "audio-microphone"
+macro = "IO_AUDIO_RX"
+pin = 34
+function = "i2s0-in-d0"
+peripheral = "i2s0"
+
+[[routes]]
+id = "audio-speaker"
+macro = "IO_AUDIO_TX"
+pin = 18
+function = "i2s0-out-d2"
+peripheral = "i2s0"
+
 [drivers]
 display = "st7789-octal"
 camera = "ov7740"
 input = "three-way"
 power = "axp173"
 lights = "cube"
+audio = "es8374"
+accelerometer = "msa301"
 
 [defaults]
 lcd_width = 240

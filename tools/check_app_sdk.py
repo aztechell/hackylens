@@ -189,11 +189,11 @@ def run_executable(path: Path) -> None:
 def compile_header_consumers(temp: Path) -> None:
     source = """#include <hackylens/app.h>
 #ifdef __cplusplus
-static_assert(HK_APP_SDK_VERSION_MINOR == 2U);
+static_assert(HK_APP_SDK_VERSION_MINOR == 3U);
 static_assert(HK_APP_STATE_ALIGNMENT == 16U);
 int main(void) { hk_app_v2_entry_t entry{}; return entry.start != nullptr; }
 #else
-_Static_assert(HK_APP_SDK_VERSION_MINOR == 2U, "sdk version");
+_Static_assert(HK_APP_SDK_VERSION_MINOR == 3U, "sdk version");
 _Static_assert(HK_APP_STATE_ALIGNMENT == 16U, "state alignment");
 int main(void) { hk_app_v2_entry_t entry = {0}; return entry.start != 0; }
 #endif

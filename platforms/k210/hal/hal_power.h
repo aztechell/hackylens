@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-/* Private AXP173 management bus, independent of the external I2C0 service. */
+/* AXP173 on the onboard I2C1 bus, independent of the external I2C0 service. */
 void hal_power_bus_init(void);
 uint8_t hal_power_read_register(uint8_t reg, uint8_t *value);
 uint8_t hal_power_write_register(uint8_t reg, uint8_t value);
@@ -17,6 +17,7 @@ typedef enum {
     HAL_POWER_TX_IDLE,
     HAL_POWER_BUS_CLEAR,
     HAL_POWER_GPIO_COLLISION,
+    HAL_POWER_TARGET_SELECT,
 } hal_power_failure_stage_t;
 /* Last failure, sampled before disabling/clearing the controller. */
 typedef struct {

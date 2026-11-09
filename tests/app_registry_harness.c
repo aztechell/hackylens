@@ -60,6 +60,10 @@ void micropython_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     dummy_draw_icon(x, y, color, bg);
 }
+void recorder_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
 void object_detect_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     dummy_draw_icon(x, y, color, bg);
@@ -156,6 +160,16 @@ const hk_app_v2_entry_t files_v2_entry = {
     .stop = dummy_files_stop,
 };
 const hk_app_v2_entry_t micropython_v2_entry = {0};
+const hk_app_v2_entry_t recorder_v2_entry = {0};
+const hk_app_v2_entry_t accelerometer_v2_entry = {0};
+
+void accelerometer_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)x;
+    (void)y;
+    (void)color;
+    (void)bg;
+}
 static uint8_t s_pong_v2_storage[16];
 static hk_result_t dummy_pong_start(const hk_app_context_t *ctx)
 {
@@ -346,14 +360,18 @@ int main(void)
     const hk_app_t *settings;
     const hk_app_t *sleep;
 
+    CHECK(g_hk_generated_app_count ==
+          11U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER + HK_ENABLE_APP_ACCELEROMETER);
+    CHECK(g_menu_item_count == g_hk_generated_app_count);
+#if HK_ENABLE_APP_ACCELEROMETER
+    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "accelerometer") == 0);
+#elif HK_ENABLE_APP_RECORDER
+    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "recorder") == 0);
+#endif
 #if HK_ENABLE_APP_MICROPYTHON
-    CHECK(g_hk_generated_app_count == 12U);
-    CHECK(g_menu_item_count == 12U);
     CHECK(strcmp(g_menu_items[11]->id, "micropython") == 0);
     CHECK(hk_app_for_autostart_id(10U) == app_by_id("micropython"));
 #else
-    CHECK(g_hk_generated_app_count == 11U);
-    CHECK(g_menu_item_count == 11U);
     CHECK(strcmp(g_menu_items[10]->id, "power") == 0);
     CHECK(hk_app_for_autostart_id(10U) == NULL);
 #endif
@@ -361,7 +379,8 @@ int main(void)
     CHECK(hk_app_autostart_id_is_persistable(10U) == 1U);
     CHECK(hk_app_autostart_id_is_persistable(11U) == 0U);
     CHECK(hk_app_autostart_id_is_persistable(65535U) == 0U);
-    CHECK(strcmp(g_hk_generated_apps[0]->id, "apriltag") == 0);
+    CHECK(strcmp(g_hk_generated_apps[0]->id,
+                 HK_ENABLE_APP_ACCELEROMETER ? "accelerometer" : "apriltag") == 0);
     CHECK(strcmp(g_hk_generated_apps[g_hk_generated_app_count - 1U]->id,
                  "terminal") == 0);
     CHECK(strcmp(g_menu_items[0]->id, "terminal") == 0);

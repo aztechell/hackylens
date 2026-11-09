@@ -7,6 +7,7 @@
 
 #include "../../config/input_config.h"
 #include "../../adapters/micropython/micropython_capability_bridge.h"
+#include "../../services/audio_service.h"
 #include "../../services/micropython_runtime.h"
 
 static void binding_time_raise(hk_result_t result)
@@ -33,6 +34,8 @@ static void binding_raise(micropython_binding_result_t result)
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("binding busy"));
     if(result == MICROPYTHON_BINDING_ERROR_IO)
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("binding I/O error"));
+    if(result == MICROPYTHON_BINDING_ERROR_UNAVAILABLE)
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("capability unavailable"));
     mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("binding inactive"));
 }
 
@@ -328,6 +331,64 @@ static mp_obj_t binding_i2c_read(size_t count, const mp_obj_t *args)
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
     binding_i2c_read_obj, 2, 3, binding_i2c_read);
 
+static mp_obj_t binding_audio_available(void)
+{
+    uint8_t available = 0U;
+    (void)binding_call(MICROPYTHON_BINDING_OP_AUDIO_AVAILABLE,
+                       NULL, NULL, 0U, &available, sizeof(available));
+    return mp_obj_new_bool(available);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_audio_available_obj, binding_audio_available);
+
+static mp_obj_t binding_audio_play(mp_obj_t pcm_object)
+{
+    mp_buffer_info_t pcm;
+    mp_get_buffer_raise(pcm_object, &pcm, MP_BUFFER_READ);
+    if(!pcm.len || pcm.len % 2U || pcm.len > HK_AUDIO_PCM_MAX_BYTES)
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid audio buffer size"));
+    (void)binding_call(MICROPYTHON_BINDING_OP_AUDIO_PLAY,
+                       NULL, pcm.buf, pcm.len, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_audio_play_obj, binding_audio_play);
+
+static mp_obj_t binding_audio_record_into(mp_obj_t pcm_object)
+{
+    mp_buffer_info_t pcm;
+    uint32_t arguments[6] = {0};
+    mp_get_buffer_raise(pcm_object, &pcm, MP_BUFFER_WRITE);
+    if(!pcm.len || pcm.len % 2U || pcm.len > HK_AUDIO_PCM_MAX_BYTES)
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid audio buffer size"));
+    arguments[0] = (uint32_t)pcm.len;
+    return mp_obj_new_int_from_uint(binding_call(
+        MICROPYTHON_BINDING_OP_AUDIO_RECORD, arguments,
+        NULL, 0U, pcm.buf, pcm.len));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_audio_record_into_obj, binding_audio_record_into);
+
+static mp_obj_t binding_accelerometer_available(void)
+{
+    uint8_t available = 0U;
+    (void)binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_AVAILABLE,
+                       NULL, NULL, 0U, &available, sizeof(available));
+    return mp_obj_new_bool(available);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_accelerometer_available_obj, binding_accelerometer_available);
+
+static mp_obj_t binding_acceleration_mg(void)
+{
+    int16_t axes[3];
+    size_t bytes = binding_call(MICROPYTHON_BINDING_OP_ACCELEROMETER_READ,
+                                NULL, NULL, 0U, (uint8_t *)axes, sizeof(axes));
+    if(bytes == 0U)
+        return mp_const_none;
+    if(bytes != sizeof(axes))
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+    mp_obj_t values[] = {mp_obj_new_int(axes[0]), mp_obj_new_int(axes[1]), mp_obj_new_int(axes[2])};
+    return mp_obj_new_tuple(3U, values);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_acceleration_mg_obj, binding_acceleration_mg);
+
 static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hackylens) },
     { MP_ROM_QSTR(MP_QSTR_BUTTON_LEFT), MP_ROM_INT(BUTTON_LEFT) },
@@ -351,6 +412,13 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_uart_read), MP_ROM_PTR(&binding_uart_read_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_write), MP_ROM_PTR(&binding_i2c_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_i2c_read), MP_ROM_PTR(&binding_i2c_read_obj) },
+    { MP_ROM_QSTR(MP_QSTR_AUDIO_RATE_HZ), MP_ROM_INT(HK_AUDIO_RATE_HZ) },
+    { MP_ROM_QSTR(MP_QSTR_AUDIO_MAX_BYTES), MP_ROM_INT(HK_AUDIO_PCM_MAX_BYTES) },
+    { MP_ROM_QSTR(MP_QSTR_audio_available), MP_ROM_PTR(&binding_audio_available_obj) },
+    { MP_ROM_QSTR(MP_QSTR_audio_play), MP_ROM_PTR(&binding_audio_play_obj) },
+    { MP_ROM_QSTR(MP_QSTR_audio_record_into), MP_ROM_PTR(&binding_audio_record_into_obj) },
+    { MP_ROM_QSTR(MP_QSTR_accelerometer_available), MP_ROM_PTR(&binding_accelerometer_available_obj) },
+    { MP_ROM_QSTR(MP_QSTR_acceleration_mg), MP_ROM_PTR(&binding_acceleration_mg_obj) },
 };
 static MP_DEFINE_CONST_DICT(hackylens_module_globals,
                             hackylens_module_globals_table);

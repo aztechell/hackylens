@@ -14,8 +14,9 @@ describes their integration.
 
 ## Bindings and availability
 
-Time, Input, Lights, Display and External Link each have one immutable platform
-binding. Native code and MicroPython use the same production implementation.
+Time, Input, Lights, Display, External Link, Power and Accelerometer each have
+one immutable platform binding. Native code and MicroPython share the production
+implementations of the services they both expose.
 Build-time board resources and app requirements select compatible sources;
 an absent optional service has a null accessor. The build does not emit a
 generic provider inventory or owner grants. Runtime does not parse manifests,
@@ -33,6 +34,8 @@ wrapper. Board/BSP routes and platform HAL stay private to their layers.
 | [Lights](capabilities/LIGHTS.md) | Stable channel sessions; channel overlap rejected; safe-off and local quarantine |
 | [Display](capabilities/DISPLAY.md) | Stable BASE/OVERLAY sessions; explicit transactions and buffer borrows |
 | [External Link](capabilities/EXTERNAL_LINK.md) | Exclusive connector session; mode state, incremental operations, cancellation and IRQ handoff |
+| [Power](capabilities/POWER.md) | Board-lifetime binding with deadline-bound off and restart |
+| [Accelerometer](capabilities/ACCELEROMETER.md) | Board-lifetime read-only binding with no mutable session |
 
 A session must not be copied or moved while open: providers identify its stable
 address. Ordinary close may retain a session for retry after failure. Forced

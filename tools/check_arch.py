@@ -14,11 +14,12 @@ import re
 import shutil
 import subprocess
 import tomllib
-import service_bindings
 from pathlib import Path
 
+from board_contract import Board, load_board
 import check_capabilities
 import check_app_sdk
+import service_bindings
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -134,6 +135,8 @@ FEATURES = {
     "settings": ("settings", "settings_app.h"),
     "sleep": ("sleep", "sleep_app.h"),
     "micropython": ("micropython", "micropython_app.h"),
+    "recorder": ("recorder", "recorder_app.h"),
+    "accelerometer": ("accelerometer", "accelerometer_app.h"),
 }
 FEATURE_DIRS = {f"apps/{directory}/": (name, public)
                 for name, (directory, public) in FEATURES.items()}
@@ -1233,11 +1236,11 @@ def object_undefined_symbol_failures(build_dir: Path) -> list[str]:
     return repository_object_symbol_edge_failures(objects, policy)
 
 
-def provider_object_hashes(build_dir: Path) -> dict[str, str]:
-    bindings = service_bindings.BINDINGS
+def provider_object_hashes(build_dir: Path, board: Board) -> dict[str, str]:
+    selected = set(service_bindings.select(board, set(), set(), set()).bindings)
     objects = list(build_dir.rglob("*.obj"))
     result: dict[str, str] = {}
-    for binding in bindings:
+    for binding in service_bindings.BINDINGS:
         source = canonical_repository_path(binding.provider_source)
         matches = [
             path for path in objects
@@ -1245,11 +1248,14 @@ def provider_object_hashes(build_dir: Path) -> dict[str, str]:
                 f"/{source}.obj".casefold()
             )
         ]
-        if len(matches) != 1:
+        expected = int(binding in selected)
+        if len(matches) != expected:
             raise RuntimeError(
-                f"expected one built provider object for {source}, found {len(matches)}"
+                f"{board.id}: expected {expected} provider object(s) for {source}, "
+                f"found {len(matches)}"
             )
-        result[source] = hashlib.sha256(matches[0].read_bytes()).hexdigest()
+        if matches:
+            result[source] = hashlib.sha256(matches[0].read_bytes()).hexdigest()
     return result
 
 
@@ -1264,14 +1270,14 @@ def provider_hash_mismatches(
     ]
 
 
-def verify_build_architecture(profile: str) -> list[str]:
-    build_root = ROOT / "build" / "huskylens-sen0305"
+def verify_build_architecture(profile: str, board: Board) -> list[str]:
+    build_root = ROOT / "build" / board.id
     build_dir = build_root / "sdk-full"
     if not build_dir.is_dir():
         raise RuntimeError(f"firmware build directory is missing: {build_dir}")
     failures = generated_dependency_failures(build_dir)
     failures.extend(object_undefined_symbol_failures(build_dir))
-    hashes = provider_object_hashes(build_dir)
+    hashes = provider_object_hashes(build_dir, board)
     snapshot = build_root / f"architecture-providers-{profile}.json"
     snapshot.write_text(
         json.dumps(hashes, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1299,6 +1305,8 @@ def main(argv: list[str] | None = None) -> int:
             "hashes, and compare the full profile with the prior disabled build"
         ),
     )
+    parser.add_argument("--board", default="huskylens-sen0305",
+                        help="board ID for compiled architecture evidence")
     args = parser.parse_args(argv)
     failures = layout_failures()
     failures.extend(check_capabilities.validate())
@@ -1335,7 +1343,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
     failures.extend(include_cycle_failures())
     if args.verify_build_profile:
-        failures.extend(verify_build_architecture(args.verify_build_profile))
+        try:
+            failures.extend(verify_build_architecture(args.verify_build_profile,
+                                                       load_board(args.board)))
+        except (RuntimeError, ValueError) as error:
+            failures.append(str(error))
     if failures:
         print("[ARCH] boundary violations:")
         for failure in failures:

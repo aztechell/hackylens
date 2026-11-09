@@ -1,4 +1,5 @@
 #include "hal_power.h"
+#include "hal_onboard_i2c.h"
 #include "hal_time.h"
 
 #include <i2c.h>
@@ -8,9 +9,11 @@
 #include <gpiohs.h>
 #include <encoding.h>
 #include <stdio.h>
+#include <string.h>
 #include "board_config.h"
 
 #define POWER_BUS_TIMEOUT_US 20000ULL
+#define POWER_ADDRESS 0x34U
 #ifndef POWER_BUS_READ
 #define POWER_BUS_READ(field) (((volatile i2c_t *)I2C1_BASE_ADDR)->field)
 #define POWER_BUS_WRITE(field, value) (((volatile i2c_t *)I2C1_BASE_ADDR)->field = (value))
@@ -213,7 +216,7 @@ void hal_power_bus_init(void)
         failed(clear_failure, 0U);
         return;
     }
-    i2c_init(I2C_DEVICE_1, 0x34U, 7U, 100000U);
+    i2c_init(I2C_DEVICE_1, POWER_ADDRESS, 7U, 100000U);
     while(!(POWER_BUS_READ(enable_status) & I2C_ENABLE_STATUS_IC_ENABLE))
     {
         if(hal_time_us() >= deadline)
@@ -225,17 +228,40 @@ void hal_power_bus_init(void)
     s_bus_ready = 1U;
 }
 
-uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
+static uint8_t select_target(uint8_t address, uint8_t reg, uint64_t deadline)
+{
+    if(POWER_BUS_READ(tar) == address)
+        return 1U;
+    POWER_BUS_WRITE(enable, 0U);
+    while(POWER_BUS_READ(enable_status) & I2C_ENABLE_STATUS_IC_ENABLE)
+        if(hal_time_us() >= deadline)
+            goto failed;
+    POWER_BUS_WRITE(tar, address);
+    POWER_BUS_WRITE(enable, I2C_ENABLE_ENABLE);
+    while(!(POWER_BUS_READ(enable_status) & I2C_ENABLE_STATUS_IC_ENABLE))
+        if(hal_time_us() >= deadline)
+            goto failed;
+    return 1U;
+
+failed:
+    failed(HAL_POWER_TARGET_SELECT, reg);
+    return 0U;
+}
+
+uint8_t hal_onboard_i2c_read_bytes(uint8_t address, uint8_t reg, uint8_t *values,
+                                  uint8_t count)
 {
     uint64_t deadline;
-    uint8_t result;
+    /* The register address plus up to seven read commands fit the TX FIFO. */
+    uint8_t result[7];
     hal_power_failure_stage_t stage = HAL_POWER_RX_DRAIN;
 
-    if(!value)
+    if(!values || !count || count > sizeof(result) || address > 0x7fU)
         return 0U;
     if(!s_bus_ready) hal_power_bus_init();
     if(!s_bus_ready) return 0U;
     deadline = hal_time_us() + POWER_BUS_TIMEOUT_US;
+    if(!select_target(address, reg, deadline)) return 0U;
     POWER_BUS_WRITE(enable, I2C_ENABLE_ENABLE);
     (void)POWER_BUS_READ(clr_tx_abrt);
     while(POWER_BUS_READ(rxflr))
@@ -245,14 +271,18 @@ uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
         (void)POWER_BUS_READ(data_cmd);
     }
     POWER_BUS_WRITE(data_cmd, reg);
-    POWER_BUS_WRITE(data_cmd, I2C_DATA_CMD_CMD);
+    for(uint8_t i = 0U; i < count; i++)
+        POWER_BUS_WRITE(data_cmd, I2C_DATA_CMD_CMD);
     stage = HAL_POWER_RX_WAIT;
-    while(POWER_BUS_READ(rxflr) == 0U)
+    for(uint8_t i = 0U; i < count; i++)
     {
-        if(POWER_BUS_READ(tx_abrt_source) || hal_time_us() >= deadline)
-            goto failed;
+        while(POWER_BUS_READ(rxflr) == 0U)
+        {
+            if(POWER_BUS_READ(tx_abrt_source) || hal_time_us() >= deadline)
+                goto failed;
+        }
+        result[i] = (uint8_t)POWER_BUS_READ(data_cmd);
     }
-    result = (uint8_t)POWER_BUS_READ(data_cmd);
     stage = HAL_POWER_RX_IDLE;
     while((POWER_BUS_READ(status) & I2C_STATUS_ACTIVITY) ||
           !(POWER_BUS_READ(status) & I2C_STATUS_TFE))
@@ -262,7 +292,7 @@ uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
     }
     if(POWER_BUS_READ(tx_abrt_source))
         goto failed;
-    *value = result;
+    memcpy(values, result, count);
     return 1U;
 
 failed:
@@ -270,12 +300,19 @@ failed:
     return 0U;
 }
 
-uint8_t hal_power_write_register(uint8_t reg, uint8_t value)
+uint8_t hal_onboard_i2c_read(uint8_t address, uint8_t reg, uint8_t *value)
+{
+    return hal_onboard_i2c_read_bytes(address, reg, value, 1U);
+}
+
+uint8_t hal_onboard_i2c_write(uint8_t address, uint8_t reg, uint8_t value)
 {
     uint64_t deadline;
+    if(address > 0x7fU) return 0U;
     if(!s_bus_ready) hal_power_bus_init();
     if(!s_bus_ready) return 0U;
     deadline = hal_time_us() + POWER_BUS_TIMEOUT_US;
+    if(!select_target(address, reg, deadline)) return 0U;
     POWER_BUS_WRITE(enable, I2C_ENABLE_ENABLE);
     (void)POWER_BUS_READ(clr_tx_abrt);
     POWER_BUS_WRITE(data_cmd, reg);
@@ -292,4 +329,14 @@ uint8_t hal_power_write_register(uint8_t reg, uint8_t value)
 failed:
     failed(HAL_POWER_TX_IDLE, reg);
     return 0U;
+}
+
+uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
+{
+    return hal_onboard_i2c_read(POWER_ADDRESS, reg, value);
+}
+
+uint8_t hal_power_write_register(uint8_t reg, uint8_t value)
+{
+    return hal_onboard_i2c_write(POWER_ADDRESS, reg, value);
 }

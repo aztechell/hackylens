@@ -634,7 +634,8 @@ def stage_board_port(stage: Path, board: Board) -> None:
 
 
 def write_config(stage: Path, disabled_apps: set[str],
-                 wdt_fault_injection: bool = False) -> None:
+                 wdt_fault_injection: bool = False, *,
+                 audio_enabled: bool = False) -> None:
     version = read_firmware_version()
     if wdt_fault_injection:
         version += "-wdtfi"
@@ -646,6 +647,7 @@ def write_config(stage: Path, disabled_apps: set[str],
     for app, flag in APP_MODULES.items():
         lines.append(f"#define {flag} {0 if app in disabled_apps else 1}")
     lines.extend([
+        f"#define HK_ENABLE_AUDIO_FEATURE {int(audio_enabled)}",
         f"#define HK_MICROPYTHON_WDT_FAULT_INJECTION {1 if wdt_fault_injection else 0}",
         "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_APRILTAG || HK_ENABLE_APP_OBJECT_DETECT)",
         "#define HK_ENABLE_QR_FEATURE HK_ENABLE_APP_QR_CAMERA",
@@ -706,7 +708,8 @@ def stage_target(sdk: Path, target_name: str, board: Board,
             shutil.copy2(littlefs / name, stage / name)
 
     service_bindings.write_generated_c(service_selection, stage)
-    write_config(stage, disabled_apps, wdt_fault_injection)
+    write_config(stage, disabled_apps, wdt_fault_injection,
+                 audio_enabled=board.drivers["audio"] != "none")
     write_project_cmake(stage, micropython_package, board, disabled_apps)
     return stage
 
@@ -797,7 +800,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     attestation = out_image.with_suffix(".attestation.json")
     capabilities_path = ROOT / "build" / board.id / "capabilities.json"
     capabilities_sha256 = hashlib.sha256(capabilities_path.read_bytes()).hexdigest()
-    write_build_attestation(
+    attestation_doc = write_build_attestation(
         attestation,
         out_image,
         board,
@@ -810,7 +813,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     )
     if wdt_fault_injection:
         print("[DANGER] isolated test image kept under build/; dist/ was not touched")
-    elif disabled_apps or service_selection.disabled_capabilities:
+    elif attestation_doc["build_profile"] != "hackylens-full":
         print(
             "[BUILD] feature-modified image kept under build/; qualified dist/ "
             "artifacts were not replaced"

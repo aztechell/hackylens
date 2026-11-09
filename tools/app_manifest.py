@@ -40,8 +40,8 @@ MAX_APP_ID_BYTES = 63
 MAX_DISPLAY_NAME_BYTES = 96
 MAX_DEBUG_BYTES = 1024
 MAX_TICK_MS = 60_000
-HARDWARE_SERVICES = frozenset({"display", "input", "time", "lights", "external-link", "power"})
-FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings"})
+HARDWARE_SERVICES = frozenset({"display", "input", "time", "lights", "external-link", "power", "accelerometer"})
+FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings", "audio"})
 OPTIONAL_FALLBACKS = {"display": "headless", "external-link": "hide-external-link-menu"}
 
 

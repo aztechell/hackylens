@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+uint8_t settings_audio_volume(void);
+void settings_set_audio_volume(uint8_t percent);
+
 #include "../core/hk_app.h"
 #include "external_link_types.h"
 

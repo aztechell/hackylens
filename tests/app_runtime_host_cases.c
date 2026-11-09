@@ -537,7 +537,7 @@ int main(void)
     size_t index;
 
     CHECK(HK_APP_SDK_VERSION_MAJOR == 0U);
-    CHECK(HK_APP_SDK_VERSION_MINOR == 2U);
+    CHECK(HK_APP_SDK_VERSION_MINOR == 3U);
     CHECK(HK_APP_SDK_RUNTIME_MAXIMUM_EXCLUSIVE_MINOR == 3U);
     CHECK(HK_APP_SDK_MANIFEST_SCHEMA_MAJOR == 1U);
     for(index = 0U; index < sizeof(points) / sizeof(points[0]); index++)

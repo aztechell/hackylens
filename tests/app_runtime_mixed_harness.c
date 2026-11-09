@@ -515,6 +515,19 @@ static int check_busy_begin_skips_surface_present(void)
     CHECK(hk_app_switch_poll(&fixture.switcher, 1000U) == HK_OK);
     CHECK(fixture.render_count == 1U);
     CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
+
+    fixture.begin_busy = 1U;
+    for(uint8_t index = 0U; index <= HK_APP_MAX_INVALIDATIONS; index++)
+    {
+        fixture.now_us += v2.limits.tick_interval_us;
+        CHECK(hk_app_switch_poll(&fixture.switcher, fixture.now_us) == HK_OK);
+    }
+    CHECK(fixture.tick_count == HK_APP_MAX_INVALIDATIONS + 1U);
+    CHECK(fixture.render_count == 1U && fixture.switcher.runtime.invalidation_count == 1U);
+    fixture.begin_busy = 0U;
+    CHECK(hk_app_switch_poll(&fixture.switcher, fixture.now_us) == HK_OK);
+    CHECK(fixture.render_count == 2U && fixture.invalidate_count == 2U);
+    CHECK(!hk_app_runtime_render_pending(&fixture.switcher.runtime));
     CHECK(hk_app_switch_close(
         &fixture.switcher, HK_APP_STOP_COMPLETED) == HK_OK);
     return 0;

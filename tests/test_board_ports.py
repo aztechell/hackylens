@@ -708,13 +708,16 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
         path: Path | None = None,
     ) -> Path:
         output = path or image.with_suffix(".attestation.json")
+        selected_disabled, exclusions = build_firmware.compose_apps(
+            self.board, disabled_apps or set(), set()
+        )
         firmware_attestation.write(
             output,
             image,
             self.board,
             target="full",
-            disabled_apps=disabled_apps or set(),
-            exclusions=[],
+            disabled_apps=selected_disabled,
+            exclusions=exclusions,
             capabilities_sha256="a" * 64,
         )
         return output
@@ -809,7 +812,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             self.assertTrue(document["release_qualified"])
             self.assertEqual(
                 set(document["composition"]["enabled_apps"]),
-                firmware_attestation.FULL_APP_IDS,
+                firmware_attestation.FULL_APP_IDS - {"accelerometer", "recorder"},
             )
             mutation = copy.deepcopy(document)
             mutation["composition"]["enabled_apps"].append("invented")

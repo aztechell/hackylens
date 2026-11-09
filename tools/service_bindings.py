@@ -33,6 +33,7 @@ BINDINGS = (
     Binding('external-link', ('external-uart', 'external-i2c'), ('external-uart-rx', 'external-uart-tx', 'external-i2c-clock', 'external-i2c-data'), 'hk_external_link_service_t'),
     Binding('lights', ('lights',), ('lcd-backlight', 'illumination', 'rgb-red', 'rgb-green', 'rgb-blue'), 'hk_lights_service_t'),
     Binding('power', ('processor',), (), 'hk_power_t'),
+    Binding('accelerometer', ('accelerometer',), ('pmic-clock', 'pmic-data'), 'hk_accelerometer_t'),
  )
 
 @dataclass(frozen=True)

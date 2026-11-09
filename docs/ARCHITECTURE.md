@@ -1,9 +1,9 @@
 # Architecture
 
-HackyLens 0.5.0 is modular firmware built from common `firmware/src` layers,
+HackyLens 0.6.0 is modular firmware built from common `firmware/src` layers,
 the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
-> HackyLens v0.5 is a layered K210 reference firmware and MicroPython technology
+> HackyLens v0.6 is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 This is the current architecture and implementation status. [Roadmap](ROADMAP.md)
@@ -35,7 +35,7 @@ Camera/KPU/vision are not currently exposed by MicroPython API v1.
 
 ## Runtime and hardware service ownership
 
-All twelve apps use `start/event/render/stop`, one foreground switch and one
+All bundled apps use `start/event/render/stop`, one foreground switch and one
 build-generated immutable registry. Render is optional and separate because
 runtime owns Display transactions. App identity and persisted autostart IDs do
 not depend on menu order. Existing bundled portable firmware services are not
@@ -66,6 +66,10 @@ Context, frame, surface, workspace and asynchronous operation generations remain
 where they reject stale work. Persistent settings and MicroPython sessions have
 separate lifetimes; MP resources retire only after worker terminal handoff.
 Camera frame borrows, KPU completion and core1 executor ownership remain explicit.
+The Cube audio service gives RECORDER, FILES and MicroPython exclusive use of
+one DMA-backed audio path. RECORDER and FILES share the WAV player and all
+three consumers use the persisted volume. Audio services own streaming state
+and SD file handles. The K210 HAL owns the codec, I²S and DMA3.
 
 Camera register control is separate from image capture. Board `camera_control`
 metadata statically selects the private DVP-SCCB or I2C register backend and its
@@ -157,10 +161,11 @@ consumer's command/text budget.
 
 ## Feature modules
 
-All twelve menu applications are self-contained modules: `apps/terminal/`,
+Menu applications are self-contained modules: `apps/terminal/`,
 `apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`,
 `apps/object_detect/`, `apps/micropython/`, `apps/files/`, `apps/buttons/`,
-`apps/pong/`, `apps/settings/`, and POWER in `apps/sleep/`. Each owns its app entry point,
+`apps/pong/`, `apps/settings/`, POWER in `apps/sleep/`, and Cube's
+`apps/recorder/` and `apps/accelerometer/`. Each owns its app entry point,
 controller, view, icon, feature configuration, and feature-specific
 state/services. The only public header of a module is its `*_app.h`, and the app
 implementation owns its typed lifecycle entry. Generated registry code uses typed
@@ -223,13 +228,17 @@ and OBJECT data remain unchanged.
 
 ## Architecture guard
 
-`tools/check_arch.py` uses one declarative table for all twelve feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.
+`tools/check_arch.py` uses one declarative table for the feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.
 
 ## Supported hardware and current qualification
 
-HackyLens v0.5.0 ships full builds for HUSKYLENS SEN0305 (`hackylens-full`)
-and Sipeed Maix Cube (`hackylens-cube`), each with all twelve apps and
-embedded MicroPython. Each build explicitly selects a board. Its `board.toml`
+HackyLens ships full builds for HUSKYLENS SEN0305 (`hackylens-full`)
+and Sipeed Maix Cube (`hackylens-cube`). Both include the original twelve apps
+and embedded MicroPython. Cube also includes RECORDER, WAV playback in FILES,
+and ACCELEROMETER. The latter uses the same read-only typed binding as
+MicroPython. The board provider owns the internal I²C1 transactions. See the
+[v0.6.0 release notes](releases/v0.6.0.md) for the current hardware coverage.
+Each build explicitly selects a board. Its `board.toml`
 owns wiring, defaults, flash layout and programming metadata. On Cube,
 settings and userfs writes require JEDEC to report exactly 16 MiB of flash.
 

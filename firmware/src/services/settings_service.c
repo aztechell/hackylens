@@ -26,6 +26,17 @@ static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UAR
 static uint8_t g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
 static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
+static uint8_t g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
+
+uint8_t settings_audio_volume(void)
+{
+    return g_audio_volume;
+}
+
+void settings_set_audio_volume(uint8_t percent)
+{
+    g_audio_volume = percent <= 100U ? percent : 100U;
+}
 
 void settings_app_data_read(uint8_t data[SETTINGS_APP_DATA_SIZE])
 {
@@ -204,6 +215,7 @@ void settings_defaults(void)
     g_external_link_uart_speed = EXTERNAL_LINK_UART_SPEED_115200;
     g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
     g_autostart_id = HK_AUTOSTART_OFF;
+    g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
     memset(g_app_data, 0, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
@@ -232,6 +244,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     camera_service_persist_get(&snapshot->camera);
 #endif
     snapshot->qr_decode_rate = g_qr_decode_rate;
+    snapshot->audio_volume = g_audio_volume;
 }
 
 void settings_snapshot_apply(const settings_snapshot_t *snapshot)
@@ -255,4 +268,5 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     camera_service_persist_apply(&snapshot->camera);
 #endif
     settings_set_qr_decode_rate(snapshot->qr_decode_rate);
+    settings_set_audio_volume(snapshot->audio_volume);
 }

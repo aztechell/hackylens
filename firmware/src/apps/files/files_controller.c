@@ -7,6 +7,37 @@
 #include "file_browser_mode.h"
 #include "files_actions.h"
 #include "files_presenter.h"
+#if __has_include("hk_config.h")
+#include "hk_config.h"
+#endif
+#if HK_ENABLE_AUDIO_FEATURE
+#include "../../services/audio_player.h"
+
+static const char *s_volume_error;
+
+const char *files_controller_audio_error(void)
+{
+    return s_volume_error;
+}
+
+static void files_audio_buttons(uint32_t pressed)
+{
+    if(pressed & HK_INPUT_BUTTON_BACK)
+    {
+        audio_player_close(HK_AUDIO_OWNER_FILES);
+        files_set_mode(FILES_MODE_LIST);
+        files_presenter_render_list();
+        return;
+    }
+    if(pressed & HK_INPUT_BUTTON_OK)
+    {
+        s_volume_error = NULL;
+        audio_player_toggle(HK_AUDIO_OWNER_FILES);
+    }
+    else if(pressed & (HK_INPUT_BUTTON_LEFT | HK_INPUT_BUTTON_RIGHT))
+        s_volume_error = audio_volume_adjust(pressed & HK_INPUT_BUTTON_LEFT ? -1 : 1);
+}
+#endif
 
 static uint32_t g_files_repeat_button;
 static uint64_t g_files_repeat_due_us;
@@ -212,7 +243,13 @@ static void files_controller_handle_list_buttons(
     if((changed & HK_INPUT_BUTTON_OK) && !(input_state & HK_INPUT_BUTTON_OK))
     {
         if(files_ok_release_should_open())
+        {
             files_open_selected();
+#if HK_ENABLE_AUDIO_FEATURE
+            if(files_mode() == FILES_MODE_AUDIO)
+                s_volume_error = NULL;
+#endif
+        }
         files_ok_reset();
     }
 }
@@ -224,6 +261,13 @@ static void files_controller_handle_buttons(
 
     if(files_mode())
     {
+#if HK_ENABLE_AUDIO_FEATURE
+        if(files_mode() == FILES_MODE_AUDIO)
+        {
+            files_audio_buttons(pressed);
+            return;
+        }
+#endif
         if(files_mode() == FILES_MODE_DELETE_CONFIRM)
         {
             files_controller_handle_delete_confirm(pressed);
@@ -264,6 +308,9 @@ void files_controller_enter(files_state_t *state)
 void files_controller_exit(files_state_t *state)
 {
     (void)state;
+#if HK_ENABLE_AUDIO_FEATURE
+    audio_player_close(HK_AUDIO_OWNER_FILES);
+#endif
     files_presenter_close_image();
     files_presenter_bind_input(NULL);
     files_controller_reset_input();
@@ -300,6 +347,9 @@ void files_controller_handle_media(
     hk_sd_event_t event = HK_SD_EVENT_ERROR;
 
     (void)state;
+#if HK_ENABLE_AUDIO_FEATURE
+    audio_player_close(HK_AUDIO_OWNER_FILES);
+#endif
     files_controller_reset_input();
     if(kind == HK_APP_MEDIA_INSERTED)
         event = HK_SD_EVENT_INSERTED;

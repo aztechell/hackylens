@@ -21,13 +21,16 @@ class CubeBoardTests(unittest.TestCase):
     def setUp(self):
         self.board = board_contract.load_board("sipeed-maix-cube")
 
-    def test_full_composition_has_all_typed_services_and_twelve_apps(self):
+    def test_full_composition_has_all_typed_services_and_fourteen_apps(self):
         board_contract.validate_board_source(self.board)
-        selected = service_bindings.select(self.board, set(), {"micropython", "camera"}, set())
+        selected = service_bindings.select(
+            self.board, set(), {"micropython", "camera", "accelerometer"}, set()
+        )
         self.assertEqual({binding.name for binding in selected.bindings},
-                         {"time", "input", "display", "lights", "external-link", "power"})
+                         {"time", "input", "display", "lights", "external-link", "power", "accelerometer"})
         self.assertFalse(selected.disabled_apps)
         self.assertFalse(selected.absences)
+        self.assertEqual(len(firmware_attestation.FULL_APP_IDS - selected.disabled_apps), 14)
         self.assertEqual(self.board.runtime_profile, "hackylens-cube")
         self.assertTrue(self.board.releaseable)
 
@@ -38,6 +41,7 @@ class CubeBoardTests(unittest.TestCase):
         self.assertEqual(by_macro["IO_BTN_OK"]["pin"], 10)
         self.assertEqual(by_macro["IO_PMIC_SCL"]["peripheral"], "i2c1")
         self.assertEqual(by_macro["IO_PMIC_SDA"]["pin"], 31)
+        self.assertEqual(self.board.drivers["accelerometer"], "msa301")
         self.assertEqual(by_macro["IO_CAM_SCCB_SCLK"]["pin"], 41)
         self.assertEqual(by_macro["IO_CAM_SCCB_SDA"]["pin"], 40)
         self.assertEqual(self.board.data["camera_control"]["address_7bit"], 0x21)

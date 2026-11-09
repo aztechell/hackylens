@@ -1,6 +1,7 @@
 #include "files_actions.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "files_layout.h"
 #include "file_browser_list.h"
@@ -12,6 +13,9 @@
 #include "image_viewer.h"
 #include "files_presenter.h"
 #include "files_firmware.h"
+#if HK_ENABLE_AUDIO_FEATURE
+#include "../../services/audio_player.h"
+#endif
 
 static void files_select_delta(int8_t delta);
 static uint8_t files_open_image_delta(int8_t delta);
@@ -162,6 +166,21 @@ void files_open_selected(void)
             files_presenter_show_result(FILE_RESULT_READ_ERROR);
         else
             files_presenter_render_list();
+        return;
+    }
+
+    const char *extension = strrchr(entry->name, '.');
+    if(extension && str_eq_ci(extension, ".wav"))
+    {
+#if HK_ENABLE_AUDIO_FEATURE
+        const char *error = audio_player_open(HK_AUDIO_OWNER_FILES, entry);
+        if(error)
+            files_presenter_show_status(error);
+        else
+            files_set_mode(FILES_MODE_AUDIO);
+#else
+        files_presenter_show_status("AUDIO UNAVAILABLE");
+#endif
         return;
     }
 

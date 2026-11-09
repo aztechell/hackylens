@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.feature-app-sdk
 owner: platform-architecture
-version: 0.2.0
+version: 0.3.0
 stability: experimental
 compatibility-app-runtime: >=0.2.0,<0.3.0
 compatibility-app-manifest: >=0.1.0,<0.2.0
@@ -41,16 +41,41 @@ language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 
 The canonical umbrella is `sdk/include/hackylens/app.h`. It publishes the
-Feature App SDK `0.2.0` version, the accepted App Runtime range `[0.2.0, 0.3.0)`,
+Feature App SDK `0.3.0` version, the accepted App Runtime range `[0.2.0, 0.3.0)`,
 Capability API range `[0.1.0, 0.2.0)`, and Native App Manifest schema major `1`
 as numeric compile-time metadata. `sdk/include/hackylens/app/runtime.h` owns the
 public lifecycle callback typedefs and immutable `hk_app_v2_entry_t` definition;
 the firmware runtime consumes that definition and MUST NOT maintain a private
 parallel lifecycle ABI.
 
+## Creating a native app
+
+1. Declare the source files and required services in `app.toml`. Use
+   app-prefixed callback names such as `accelerometer_start`. K210 reserves
+   the `start` linker entry and section.
+2. Keep private state in the runtime state slot. Read devices through the
+   declared SDK capability in Timer events and handle BACK through
+   `hk_app_context_request_close`. Store the sample or error before requesting
+   a redraw. Use the render callback exclusively for drawing.
+3. Start with `hk_app_panel_chrome` for the shell frame, centered title and SD
+   indicator. Use `hk_app_panel_label` for full-height text, alignment and
+   ellipsis. A standard glyph occupies 14 × 24 pixels. Reserve a whole line
+   before adding the next row, and keep changing content inside the invalidated
+   rectangle. Reuse the same dirty rectangle for repeated updates to a live
+   region so a busy Display can keep just one pending redraw. Keep button
+   instructions out of the screen and preserve state and error messages.
+4. Capture the initial and updated screens on the smallest supported display.
+   Check complete glyphs, long labels, failure states, BACK navigation and
+   provider-based exclusion on other boards. Compare the shell frame and
+   selection treatment with an existing app on the same board.
+
+The [ACCELEROMETER app](../../firmware/src/apps/accelerometer/accelerometer_app.c)
+is a small reference for sampling on Timer events, displaying the result with
+the common panel and repainting the body when the displayed value changes.
+
 ## App-facing contracts
 
-SDK `0.2.x` defines or re-exports only:
+SDK `0.3.x` defines or re-exports:
 
 - lifecycle callback types `start`, `event`, `render`, and `stop`, plus stop
   reasons from App Runtime `0.2.x`;
@@ -58,10 +83,20 @@ SDK `0.2.x` defines or re-exports only:
 - ordered app events, including Timer and Runtime Close;
 - the bounded view/surface interface backed by a runtime-owned Display session;
 - typed Time/Input bindings and scoped Lights/Display/External Link sessions;
+- a read-only [Accelerometer binding](capabilities/ACCELEROMETER.md) on boards
+  that expose one;
+- panel layout helpers for a render callback's borrowed surface;
 - fixed-capacity private app-state access;
 - `hk_app_context_request_close` as the portable close-request seam;
 - result, version, deadline, cancellation, buffer, and capability types from
   Capability API `0.1.x`.
+
+The optional `hackylens/app/recorder.h` interface is scoped to the built-in
+RECORDER app. It accepts recording and player actions and exposes a read-only
+view of their state. Recording names and status strings are borrowed for the
+current callback. File handles, SD requests, and audio buffers remain in
+firmware services. RECORDER forwards the runtime teardown deadline when it
+retires its session.
 
 The context exposes no mutable descriptor, registry table, provider vtable,
 raw filesystem block access, unrestricted platform path, raw camera/DVP object,
@@ -107,6 +142,10 @@ platform operation. `hk_app_surface_lock` and command-batch drawing are
 mutually exclusive for one render pass. Retaining a surface pointer after callback return is an SDK
 contract violation and every use outside that borrow returns a stale-handle
 error when observable by the runtime.
+
+`<hackylens/app/panel.h>` provides the standard bordered panel, full-height
+labels with alignment and ellipsis, status text, and a volume meter. A panel
+borrows the same surface and has the same render-callback lifetime.
 
 An invalidation requested from inside `render` applies to a later render pass;
 it is not consumed by the pass already in progress. Runtime schedules that
@@ -215,14 +254,12 @@ headers is not SDK conformance.
 
 ## Compatibility
 
-SDK `0.2.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` schema major
-`1`, and Capability API `0.1.x`. Runtime and SDK consumers request
-`[0.2.0, 0.3.0)`; Capability API remains `[0.1.0, 0.2.0)`. An experimental
-breaking change increments MINOR. Publishing this SDK does not change Firmware
-`0.4.0`, HMPY `1.1.0`, Board Port `0.1.0`, or
-MicroPython API `1.0.0`.
+SDK `0.3.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` schema major
+`1`, and Capability API `0.1.x`. SDK `0.3.0` adds panel helpers, the accelerometer
+accessor and the bundled RECORDER interface. Existing SDK `0.2.x` app sources
+continue to use the same lifecycle and context ABI.
 
-All twelve bundled apps use the same runtime entry. No legacy adapter or
+All bundled apps use the same runtime entry. No legacy adapter or
 manifest lifecycle selector remains. Menu, BACK, autostart, debug forced exit,
 safe-mode fallback, and rapid switching use one close/unwind decision.
 

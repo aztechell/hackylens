@@ -154,8 +154,10 @@ diagnostic exclusions, board-driven exclusions, and fault-injection state. The
 attestation is build metadata, not a public contract or runtime discovery
 surface. A `release_qualified` image requires a board with `releaseable=true`,
 the `full` target, the `hackylens-full` build profile and the full production
-app set. It also requires zero exclusions, zero disabled capabilities and WDT
-fault injection turned off. These rules apply to `huskylens-sen0305` with
+app set for that board. SEN0305 excludes RECORDER and ACCELEROMETER because
+the required audio and motion providers are absent. The full Cube build
+requires both apps. Qualification requires zero other exclusions, zero disabled
+capabilities and WDT fault injection turned off. These rules apply to `huskylens-sen0305` with
 runtime profile `hackylens-full` and `sipeed-maix-cube` with runtime profile
 `hackylens-cube`. Standalone image creation and release packaging require and
 revalidate the canonical attestation against the exact input bytes and
@@ -173,8 +175,8 @@ accepted only with
 `--allow-missing-sidecar`, after selected-board address and size checks. The
 override never accepts an existing mismatch or an oversized image.
 
-The `sipeed-maix-cube` port is a release-enabled full runtime with all twelve
-apps starting with 0.5.0. Its exact-16-MiB layout includes settings slots and
+The `sipeed-maix-cube` port has been release-enabled since 0.5.0. Its full
+runtime includes RECORDER and ACCELEROMETER. Its exact-16-MiB layout includes settings slots and
 userfs; runtime flash identification must match that capacity before writes.
 Full images and release-qualified metadata are published into `dist/` and
 packaged with their own board identity. Physical checks and the user's explicit

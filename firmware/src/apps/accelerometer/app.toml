@@ -1,0 +1,8 @@
+id = "accelerometer"
+name = "ACCELEROMETER"
+entry = "accelerometer_v2_entry"
+sources = ["accelerometer_app.c"]
+requires = ["display", "time", "input", "accelerometer"]
+menu_order = 15
+tick_ms = 100
+tick_budget_ms = 100

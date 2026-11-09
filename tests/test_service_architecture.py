@@ -16,9 +16,33 @@ if str(TOOLS) not in sys.path:
 
 import check_arch
 import gen_board
+from board_contract import load_board
+from service_bindings import BINDINGS
 
 
 class ServiceArchitectureGuardTests(unittest.TestCase):
+    def test_provider_object_expectations_follow_board_selection(self) -> None:
+        sen = load_board("huskylens-sen0305")
+        cube = load_board("sipeed-maix-cube")
+        with tempfile.TemporaryDirectory(prefix="provider-objects-") as temp:
+            directory = Path(temp)
+            for binding in BINDINGS:
+                path = directory / f"{binding.provider_source}.obj"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if binding.name == "accelerometer":
+                    accelerometer = path
+                else:
+                    path.write_bytes(b"provider object")
+            self.assertEqual(len(check_arch.provider_object_hashes(directory, sen)),
+                             len(BINDINGS) - 1)
+            with self.assertRaisesRegex(RuntimeError, "expected 1 .*accelerometer"):
+                check_arch.provider_object_hashes(directory, cube)
+            accelerometer.write_bytes(b"accelerometer provider object")
+            self.assertEqual(len(check_arch.provider_object_hashes(directory, cube)),
+                             len(BINDINGS))
+            with self.assertRaisesRegex(RuntimeError, "expected 0 .*accelerometer"):
+                check_arch.provider_object_hashes(directory, sen)
+
     def test_camera_hal_model_guard_runs_on_platform_sources(self) -> None:
         with tempfile.TemporaryDirectory(prefix="camera-arch-") as temp:
             source = Path(temp) / "hal_dvp.c"

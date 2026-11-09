@@ -40,6 +40,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 "-Wextra",
                 "-Werror",
                 "-DMICROPYTHON_BINDING_TESTING",
+                "-DHK_ENABLE_AUDIO_FEATURE=1",
                 f"-I{ROOT / 'tests'}",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
@@ -73,7 +74,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 timeout=30,
             )
 
-        self.assertIn("MICROPYTHON_BINDINGS_OK cases=12", result.stdout)
+        self.assertIn("MICROPYTHON_BINDINGS_OK cases=14", result.stdout)
 
     def test_uart_fifo_capacity_boundaries(self) -> None:
         compiler = self.compiler()
@@ -133,10 +134,14 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
         )
         self.assertFalse(legacy.exists())
         with tempfile.TemporaryDirectory(prefix="hackylens-mpy-bridge-") as temp:
+            (Path(temp) / "hk_config.h").write_text(
+                "#define HK_ENABLE_AUDIO_FEATURE 1\n", encoding="utf-8"
+            )
             object_file = Path(temp) / "micropython_capability_bridge.o"
             subprocess.run([
                 compiler,
                 "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{temp}",
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'adapters' / 'micropython'}",
@@ -154,7 +159,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 for symbol in symbols:
                     normalized = symbol.lstrip("_")
                     self.assertFalse(normalized.startswith(
-                        ("hal_", "hk_board", "i2c_", "uart_", "plic_")
+                        ("hal_", "hk_board", "i2c_", "i2s_", "uart_", "dmac_", "plic_")
                     ))
 
     def test_k210_display_adapter_composition_cancel_and_cleanup(self) -> None:

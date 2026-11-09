@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <hackylens/capability/accelerometer.h>
 #include <hackylens/capability/display.h>
 #include <hackylens/capability/external_link.h>
 #include <hackylens/capability/input.h>
@@ -13,12 +14,23 @@
 #include "../../capabilities/display_stage_private.h"
 #include "../../config/display_config.h"
 #include "../../core/shared_buffer.h"
+#include "../../services/audio_service.h"
 #include "../../services/external_link_service.h"
 #include "../../services/micropython_runtime.h"
 #include "../../services/settings_lights.h"
 
 #if defined(MICROPYTHON_BINDING_TESTING)
 #include "micropython_binding_test_platform.h"
+#else
+#include "hk_config.h"
+#endif
+
+#if HK_ENABLE_AUDIO_FEATURE
+#define MICROPYTHON_BINDING_MAILBOX_BYTES HK_AUDIO_PCM_MAX_BYTES
+_Static_assert(HK_AUDIO_PCM_MAX_BYTES >= MICROPYTHON_BINDING_RECTS_BYTES,
+               "audio mailbox must also fit display batches");
+#else
+#define MICROPYTHON_BINDING_MAILBOX_BYTES MICROPYTHON_BINDING_RECTS_BYTES
 #endif
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
@@ -55,7 +67,7 @@ typedef struct
     volatile uint32_t input_length;
     volatile uint32_t output_length;
     volatile uint32_t result;
-    volatile uint8_t data[MICROPYTHON_BINDING_RECTS_BYTES];
+    volatile uint8_t data[MICROPYTHON_BINDING_MAILBOX_BYTES];
 } micropython_binding_control_t;
 
 typedef struct
@@ -97,6 +109,10 @@ static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
 static uint32_t g_display_run_id;
 static uint8_t g_display_owned;
+#if HK_ENABLE_AUDIO_FEATURE
+static uint32_t g_audio_ticket;
+static uint32_t g_audio_run_id;
+#endif
 
 static micropython_binding_control_t *binding_control(void)
 {
@@ -296,6 +312,9 @@ static uint64_t binding_rpc_timeout_us(
             MICROPYTHON_BINDING_UART_MIN_BAUD;
         timeout += wire_us;
     }
+    if(operation == MICROPYTHON_BINDING_OP_AUDIO_PLAY ||
+       operation == MICROPYTHON_BINDING_OP_AUDIO_RECORD)
+        timeout += 250000ULL;
     return timeout;
 }
 
@@ -399,9 +418,37 @@ static uint16_t binding_read_le16(const volatile uint8_t *data)
 
 static size_t binding_input_limit(uint32_t operation)
 {
+#if HK_ENABLE_AUDIO_FEATURE
+    if(operation == MICROPYTHON_BINDING_OP_AUDIO_PLAY)
+        return HK_AUDIO_PCM_MAX_BYTES;
+#endif
     return operation == MICROPYTHON_BINDING_OP_DISPLAY_RECTS ?
         MICROPYTHON_BINDING_RECTS_BYTES : MICROPYTHON_BINDING_DATA_MAX;
 }
+
+#if HK_ENABLE_AUDIO_FEATURE
+static micropython_binding_result_t binding_audio_result(hk_result_t result)
+{
+    if(result == HK_ERR_FEATURE_UNAVAILABLE)
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+    return binding_external_result(result);
+}
+
+static void binding_audio_progress(micropython_binding_control_t *control)
+{
+    uint32_t ticket = g_audio_ticket;
+    uint8_t cancelled = binding_request_cancelled(control, ticket, g_audio_run_id);
+    hk_result_t result = cancelled ? audio_service_cancel() : audio_service_poll();
+
+    if(result == HK_PENDING)
+        return;
+    if(result == HK_OK && control->operation == MICROPYTHON_BINDING_OP_AUDIO_RECORD)
+        control->output_length = control->arguments[0];
+    g_audio_ticket = 0U;
+    binding_complete_request(control, ticket, cancelled ?
+        MICROPYTHON_BINDING_ERROR_TIMEOUT : binding_audio_result(result), cancelled);
+}
+#endif
 
 static micropython_binding_result_t binding_execute(
     micropython_binding_control_t *control,
@@ -421,6 +468,54 @@ static micropython_binding_result_t binding_execute(
 
     switch(op)
     {
+    case MICROPYTHON_BINDING_OP_ACCELEROMETER_AVAILABLE:
+        control->data[0] = hk_accelerometer_service() != NULL;
+        control->output_length = 1U;
+        return MICROPYTHON_BINDING_OK;
+    case MICROPYTHON_BINDING_OP_ACCELEROMETER_READ:
+    {
+        hk_acceleration_t sample;
+        hk_result_t result = hk_accelerometer_read(hk_accelerometer_service(), &sample);
+        if(result == HK_ERR_CAPABILITY_ABSENT)
+            return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+        if(result == HK_PENDING)
+            return MICROPYTHON_BINDING_OK;
+        if(result != HK_OK)
+            return MICROPYTHON_BINDING_ERROR_IO;
+        const int16_t axes[] = {sample.x_mg, sample.y_mg, sample.z_mg};
+        const uint8_t *bytes = (const uint8_t *)axes;
+        for(size_t i = 0U; i < sizeof(axes); i++)
+            control->data[i] = bytes[i];
+        control->output_length = sizeof(axes);
+        return MICROPYTHON_BINDING_OK;
+    }
+    case MICROPYTHON_BINDING_OP_AUDIO_AVAILABLE:
+#if HK_ENABLE_AUDIO_FEATURE
+        control->data[0] = audio_service_available();
+#else
+        control->data[0] = 0U;
+#endif
+        control->output_length = 1U;
+        return MICROPYTHON_BINDING_OK;
+    case MICROPYTHON_BINDING_OP_AUDIO_PLAY:
+    case MICROPYTHON_BINDING_OP_AUDIO_RECORD:
+#if HK_ENABLE_AUDIO_FEATURE
+    {
+        uint8_t playback = op == MICROPYTHON_BINDING_OP_AUDIO_PLAY;
+        hk_result_t result = audio_service_begin(
+            playback ? HK_AUDIO_PLAY : HK_AUDIO_RECORD,
+            control->data, playback ? input_length : a[0]);
+        if(result == HK_PENDING)
+        {
+            g_audio_ticket = ticket;
+            g_audio_run_id = run_id;
+            return MICROPYTHON_BINDING_ERROR_BUSY;
+        }
+        return binding_audio_result(result);
+    }
+#else
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+#endif
     case MICROPYTHON_BINDING_OP_BUTTONS:
     {
 #if defined(MICROPYTHON_BINDING_TESTING)
@@ -839,6 +934,13 @@ void micropython_capability_bridge_tick(void)
 
     if(!control->run_active)
         return;
+#if HK_ENABLE_AUDIO_FEATURE
+    if(g_audio_ticket)
+    {
+        binding_audio_progress(control);
+        return;
+    }
+#endif
     if(g_external_operation.active)
     {
         binding_external_operation_progress(control);
@@ -877,6 +979,10 @@ void micropython_capability_bridge_tick(void)
         return;
     }
     result = binding_execute(control, ticket, run_id);
+#if HK_ENABLE_AUDIO_FEATURE
+    if(g_audio_ticket)
+        return;
+#endif
     cancelled = binding_request_cancelled(control, ticket, run_id);
     binding_display_transaction_finish(
         ticket, run_id,
@@ -897,6 +1003,11 @@ hk_result_t micropython_capability_bridge_cleanup(void)
         deadline.at_us = UINT64_MAX;
     control->run_active = 0U;
     __sync_synchronize();
+#if HK_ENABLE_AUDIO_FEATURE
+    result = audio_service_cancel();
+    if(first == HK_OK) first = result;
+    g_audio_ticket = 0U;
+#endif
     if(control->request_ticket != control->complete_ticket)
     {
         uint32_t ticket = control->request_ticket;
@@ -945,6 +1056,11 @@ micropython_binding_result_t micropython_binding_call(
 
     if(output_length)
         *output_length = 0U;
+#if !HK_ENABLE_AUDIO_FEATURE
+    if(operation == MICROPYTHON_BINDING_OP_AUDIO_PLAY ||
+       operation == MICROPYTHON_BINDING_OP_AUDIO_RECORD)
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+#endif
     if((input_length && !input) || input_length > binding_input_limit(operation) ||
        (output_capacity && !output) || !output_length)
         return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
@@ -1012,6 +1128,7 @@ const char *micropython_binding_result_name(
     case MICROPYTHON_BINDING_ERROR_TIMEOUT: return "timeout";
     case MICROPYTHON_BINDING_ERROR_IO: return "io";
     case MICROPYTHON_BINDING_ERROR_LIMIT: return "limit";
+    case MICROPYTHON_BINDING_ERROR_UNAVAILABLE: return "unavailable";
     default: return "unknown";
     }
 }

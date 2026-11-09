@@ -1,7 +1,7 @@
 # Maix Cube runtime
 
 The `sipeed-maix-cube` board selects the `hackylens-cube` runtime profile with
-all twelve native apps, including the embedded MicroPython app. This is
+fourteen native apps, including RECORDER, ACCELEROMETER and the embedded MicroPython app. This is
 HackyLens firmware, not a MaixPy firmware build. The board is enabled for
 release starting with 0.5.0. The dated records below distinguish physical
 checks from software checks; external UART/I2C exchange was explicitly waived
@@ -11,8 +11,9 @@ by the user and is not recorded as physically verified.
 
 The port targets the Sipeed Maix Cube 2757 layout: K210/M1n, ST7789V 240x240
 parallel LCD, OV7740 camera, AXP173, 16-MiB SPI flash, SD, three-way control,
-RGB LED, white illumination and backlight. Audio and accelerometer are outside
-this port. Pin mappings come from Sipeed's
+RGB LED, white illumination, backlight, and an ES8374 audio codec for the
+built-in speaker and microphone, and an MSA301 three-axis accelerometer.
+Pin mappings come from Sipeed's
 [MaixPy-v1 Cube board config](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/boards/config/cube.config.json)
 and [Cube schematic](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/Maix-Cube-2757/Maix-Cube-2757%28Schematic%29.pdf).
 Camera/LCD initialization follows the corresponding MaixPy-v1 drivers.
@@ -26,6 +27,13 @@ it probes power status without changing battery charging or regulator policy.
 RGB pins are 13/12/14, white illumination32, and backlight17. All are active-low:
 RGB packages have common anodes; the white LED and backlight use SI2301
 high-side switches. PWM is driven to its inactive high level before pin routing.
+
+The ES8374 uses address `0x10` on the same internal I2C1 bus as the AXP173.
+I2S0 uses MCLK19, BCLK35, LRCLK33, codec data out34 and codec data in18,
+following [Sipeed's Cube codec example](https://github.com/sipeed/MaixPy-v1_scripts/blob/master/modules/others/es8374/es8374.py).
+Audio uses DMA3 and leaves display DMA0 and KPU DMA5 available. The firmware
+audio service and [MicroPython bindings](MICROPYTHON_API.md#built-in-audio)
+support playback and recording of short mono PCM buffers.
 
 Grove signal pins 24/25 support mutually exclusive UART1 RX/TX and I2C0 SCL/SDA
 through the existing External Link service. PMIC management stays on its
@@ -48,6 +56,40 @@ The menu uses a 3x3 grid, two pages and page indicators. SEN0305 keeps its 4x3
 menu and original 320x240 geometry.
 Pong obtains its field dimensions through the public display capability;
 its physics and rendering use the same 240x240 bounds on Cube.
+
+## Recorder and WAV playback
+
+Open RECORDER on the second menu page with a FAT32 microSD card inserted.
+LEFT and RIGHT select RECORD, RECORDINGS, or VOLUME. Press OK to prepare
+space on the card and start recording. Press OK or BACK to finish and save
+to `/hackyens.records/REC00001.WAV`,
+with the number increasing for each new file. Recordings use 16-bit mono PCM
+at 15,869 samples per second. Free an entry in FILES when `hackyens.records`
+reaches its 64-entry limit. If recording is interrupted by an SD error, a temporary
+`.TMP` entry may be left on the card.
+
+In RECORDINGS or FILES, select a WAV and press OK to open the player. OK
+starts or stops playback, LEFT and RIGHT adjust volume, and BACK returns
+to the file list. Both apps use the same player screen with elapsed time,
+duration, playback progress, status, and volume. The player supports 16-bit PCM
+WAV with one or two channels and sample rates from 8 to 48 kHz. It plays stereo files as mono through the
+Cube speaker. The saved volume applies to both apps and MicroPython.
+
+On 2026-11-09, a Cube with a FAT32 card captured 2,873,344 samples and
+published a 181-second WAV. The same file opened and played in RECORDER and
+FILES. FILES played 44.1 and 48 kHz stereo fixtures to completion and restarted
+playback at the beginning after both stop and end of file. The codec mute
+register was set during playback at 0%, and the saved level survived a reboot.
+Host tests cover full and removed cards, including publication of the committed
+prefix when the card is full.
+
+## Accelerometer
+
+Open ACCELEROMETER on the second menu page to see signed X, Y and Z values
+in g and centered bars spanning ±2 g. The values include gravity and use
+the sensor's native axes. MicroPython reads the same sensor through
+`hackylens.acceleration_mg()`. The MSA301 shares the internal I²C1 bus with
+the AXP173 and ES8374. See the [capability contract](spec/capabilities/ACCELEROMETER.md).
 
 ## Controls
 
@@ -218,7 +260,7 @@ at 1.5 Mbaud or the remaining board acceptance criteria.
 Verify cold power-on after disconnecting USB and cycling the battery/power
 button, power/reboot, LCD orientation/colors, all control gestures, RGB/white LED/
 backlight polarity, OV7740 ID and stable frames, SD insert/remove, persisted
-settings, userfs, all twelve apps, AI models, MicroPython start/STOP/recovery,
+settings, userfs, the full board app set, AI models, MicroPython start/STOP/recovery,
 and Grove UART plus I2C controller/target. Host tests and cross-compilation do
 not replace those checks. Record performed checks and explicit acceptance
 waivers separately; release qualification does not turn an unperformed
@@ -594,3 +636,14 @@ availability, stuck SDA/SCL, partial remapping, pending-bit cleanup and both
 initial interrupt states. The release contains exactly two complete board ZIPs
 and `SHA256SUMS.txt`; metadata, SD packages and notices remain inside the ZIPs.
 External UART/I2C exchange remains explicitly untested by user decision.
+
+## Built-in audio checks (2026-11-09)
+
+On Cube 2757, test image SHA-256
+`2556cb4fde3a07c9f975dffe9de9992ae43fd088274b4eb2adcc9ab882493985`
+completed three 660 Hz playback transfers and two 16,000-byte captures
+through MicroPython. The user confirmed hearing the Cube's speaker in a
+separate run on the same image. A 997 Hz tone from a nearby PC was detected in the
+Cube microphone samples above the quiet recording and the off-frequency
+comparison. HMPY STOP ended a playback run in 50 ms. The next run captured
+and played another buffer successfully.

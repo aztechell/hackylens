@@ -13,9 +13,15 @@ import sys
 
 import app_composition
 import build_firmware
+import service_bindings
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SHARED_BINDING_SECTIONS = frozenset(
+    f".{section}.{binding.symbol}"
+    for section in ("rodata", "sdata2")
+    for binding in service_bindings.BINDINGS
+)
 
 
 def _tool(toolchain: Path, name: str) -> Path:
@@ -40,6 +46,14 @@ def validate_source() -> list[str]:
                 f"{path.relative_to(ROOT).as_posix()}: committed generated copy must not exist"
             )
     return failures
+
+
+def disabled_resource_sections(app_id: str, section_names: set[str]) -> list[str]:
+    token = app_id.replace("-", "_")
+    # A language adapter can still reference a shared binding, including an
+    # absent binding, when the corresponding native app is excluded.
+    return sorted(name for name in section_names - SHARED_BINDING_SECTIONS
+                  if token in name)
 
 
 def validate_build(board_id: str) -> list[str]:
@@ -149,8 +163,7 @@ def validate_build(board_id: str) -> list[str]:
         entry = str(apps[app_id]["entry"])
         if re.search(rf"\b{re.escape(entry)}$", symbols, re.MULTILINE):
             failures.append(f"{app_id}: disabled entry symbol remains linked: {entry}")
-        token = app_id.replace("-", "_")
-        leaked_sections = sorted(name for name in section_names if token in name)
+        leaked_sections = disabled_resource_sections(app_id, section_names)
         if leaked_sections:
             failures.append(f"{app_id}: disabled resource section remains: {leaked_sections}")
     return failures

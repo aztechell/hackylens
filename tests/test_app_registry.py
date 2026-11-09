@@ -33,7 +33,7 @@ class AppRegistryTests(unittest.TestCase):
             self.fail("host C compiler is required for registry tests")
         return compiler
 
-    def compile_profile(self, *, micropython: bool) -> str:
+    def compile_profile(self, *, micropython: bool, recorder: bool) -> str:
         with tempfile.TemporaryDirectory(prefix="hackylens-app-registry-") as directory:
             temporary = Path(directory)
             core = temporary / "firmware/src/core"
@@ -53,7 +53,10 @@ class AppRegistryTests(unittest.TestCase):
             )
             definitions = []
             for app in self.model["apps"]:
-                enabled = micropython or app["id"] != "micropython"
+                enabled = {"micropython": micropython, "recorder": recorder,
+                           "accelerometer": recorder}.get(
+                    app["id"], True
+                )
                 definitions.append(
                     f"#define {app_composition.enable_definition(app['id'])} "
                     f"{1 if enabled else 0}"
@@ -225,13 +228,16 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
+        self.assertIn("APP_REGISTRY_OK apps=14 menu=14", self.compile_profile(
+            micropython=True, recorder=True
+        ))
         self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
-            micropython=True
+            micropython=True, recorder=False
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
         self.assertIn("APP_REGISTRY_OK apps=11 menu=11", self.compile_profile(
-            micropython=False
+            micropython=False, recorder=False
         ))
 
     def test_empty_and_single_registry_generation_are_bounded(self) -> None:
@@ -353,13 +359,13 @@ int main(void)
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "files", "buttons", "pong", "settings",
-            "power", "micropython",
+            "power", "micropython", "recorder", "accelerometer",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
-            "power": 0,
+            "power": 0, "recorder": 0, "accelerometer": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
@@ -384,11 +390,11 @@ int main(void)
                 self.assertEqual(app["autostart"]["id"], expected_autostart[app_id])
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
-                    5000 if app_id == "micropython" else 20000,
+                    {"micropython": 5000, "accelerometer": 100_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],
-                    3_000_000 if app_id == "qr-camera" else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython"} else 20000,
+                    100_000 if app_id == "accelerometer" else 3_000_000 if app_id == "qr-camera" else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython", "recorder"} else 20000,
                 )
                 self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:

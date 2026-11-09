@@ -87,13 +87,22 @@ def current_firmware_version(root: Path = ROOT) -> str:
 
 
 def _build_profile(
+    board: Board,
     disabled_apps: set[str], exclusions: list[dict[str, object]],
     disabled_capabilities: set[str],
     wdt_fault_injection: bool,
 ) -> str:
     if wdt_fault_injection:
         return FAULT_BUILD_PROFILE
-    if disabled_apps or exclusions or disabled_capabilities:
+    supported = board.driver_supported_kinds()
+    hardware_apps = {"accelerometer": "accelerometer", "recorder": "audio"}
+    expected_exclusions = [
+        {"app": app, "code": "driver-unsupported", "missing": [kind]}
+        for app, kind in sorted(hardware_apps.items()) if kind not in supported
+    ]
+    expected_disabled = {item["app"] for item in expected_exclusions}
+    if (disabled_apps != expected_disabled or exclusions != expected_exclusions
+            or disabled_capabilities):
         return FEATURE_BUILD_PROFILE
     return FULL_BUILD_PROFILE
 
@@ -125,16 +134,12 @@ def build_document(
         raise AttestationError("capabilities_sha256: expected lowercase SHA-256")
     exclusions = sorted(exclusions, key=lambda item: str(item.get("app", "")))
     profile = _build_profile(
-        disabled_apps, exclusions, disabled_capabilities, wdt_fault_injection
+        board, disabled_apps, exclusions, disabled_capabilities, wdt_fault_injection
     )
     release_qualified = (
         board.releaseable
         and target == "full"
         and profile == FULL_BUILD_PROFILE
-        and enabled_apps == FULL_APP_IDS
-        and not exclusions
-        and not disabled_capabilities
-        and not wdt_fault_injection
     )
     document: dict[str, object] = {
         "schema": SCHEMA_VERSION,
@@ -265,17 +270,13 @@ def validate_document(
         raise AttestationError(f"firmware image not found: {image}")
 
     expected_profile = _build_profile(
-        set(disabled), exclusions, set(disabled_capabilities),
+        board, set(disabled), exclusions, set(disabled_capabilities),
         document["wdt_fault_injection"]
     )
     expected_release = (
         board.releaseable
         and document["target"] == "full"
         and expected_profile == FULL_BUILD_PROFILE
-        and set(enabled) == FULL_APP_IDS
-        and not exclusions
-        and not disabled_capabilities
-        and not document["wdt_fault_injection"]
     )
     expected = {
         "attestation_type": ATTESTATION_TYPE,

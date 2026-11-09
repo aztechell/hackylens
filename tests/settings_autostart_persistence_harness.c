@@ -146,6 +146,7 @@ int main(void)
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&input, 0, sizeof(input));
     input.autostart_id = 300U;
+    input.audio_volume = 30U;
     payload = settings_payload_encode(&input);
     CHECK(payload.autostart_id == 300U);
 
@@ -156,6 +157,22 @@ int main(void)
     CHECK(loaded.has_payload && loaded.payload.autostart_id == 300U);
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.autostart_id == 300U);
+    CHECK(output.audio_volume == 30U);
+
+    memset(s_flash, 0xFF, sizeof(s_flash));
+    settings_record_t v5 = {
+        .magic = SETTINGS_MAGIC,
+        .version = 5U,
+        .payload_size = 106U,
+        .sequence = 76U,
+        .payload = payload,
+    };
+    v5.crc32 = crc32_update(0U, (const uint8_t *)&v5, 12U + v5.payload_size);
+    memcpy(s_flash[0], &v5, sizeof(v5));
+    settings_store_init(&loaded);
+    CHECK(loaded.has_payload && loaded.payload.autostart_id == 300U);
+    settings_payload_decode(&loaded.payload, &output);
+    CHECK(output.audio_volume == SETTINGS_AUDIO_VOLUME_DEFAULT);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&v4, 0, sizeof(v4));

@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.micropython-api
 owner: micropython-runtime
-version: 1.0.0
+version: 1.1.0
 stability: experimental
 api-major: 1
 ---
@@ -107,6 +107,33 @@ The v1 I2C binding is a 100 kHz controller with 7-bit addresses.
 An I2C transaction has a 100 ms hardware deadline. A NACK or bus error raises
 `OSError`; a service deadline raises `RuntimeError`. The connector mode and
 normal external-link service are restored after every run.
+
+## Built-in audio
+
+| API | Meaning |
+|---|---|
+| `audio_available()` | whether the build supports built-in audio |
+| `audio_play(pcm)` | play a readable PCM buffer through the speaker |
+| `audio_record_into(pcm)` | fill a writable PCM buffer from the microphone and return its byte count |
+
+Maix Cube supports these operations. On SEN0305, `audio_available()` returns
+`False` and playback or recording with a valid buffer raises `OSError`.
+
+Audio buffers contain signed 16-bit little-endian mono PCM. Each call accepts an
+even byte count from 2 through `AUDIO_MAX_BYTES` (16,000). `AUDIO_RATE_HZ` is
+15,869 samples per second, giving about half a second per buffer. The call waits
+for its transfer while firmware services continue to run. Stopping a script
+cancels the transfer. See the [speaker and microphone demo](../examples/audio_demo.py).
+Playback uses the volume saved by RECORDER or FILES. An active recording or
+file playback holds the audio device until it completes or stops.
+
+## Built-in accelerometer
+
+`hackylens.accelerometer_available()` reports whether the board provides an
+accelerometer. `hackylens.acceleration_mg()` returns signed `(x, y, z)` values
+in milli-g, including gravity, in native sensor-axis order. It returns `None`
+while the sensor starts and raises `OSError` on unsupported boards or read
+failure. Maix Cube has this capability. SEN0305 reports it as unavailable.
 
 ## Example
 

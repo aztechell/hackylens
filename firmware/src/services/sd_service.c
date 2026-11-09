@@ -11,6 +11,7 @@
 #include "../storage/fat32_volume.h"
 
 static uint8_t g_sd_service_poll_ticks;
+static uint8_t g_sd_failed_probes;
 
 hk_sd_event_t sd_service_tick(void)
 {
@@ -27,13 +28,21 @@ hk_sd_event_t sd_service_tick(void)
         g_sd_service_poll_ticks = SD_POLL_MOUNTED_TICKS;
         if(!fat32_health_check())
         {
+            if(++g_sd_failed_probes < 3U)
+            {
+                g_sd_service_poll_ticks = 2U;
+                return HK_SD_EVENT_NONE;
+            }
+            g_sd_failed_probes = 0U;
             fat32_mark_removed();
             printf("[SD] removed\r\n");
             return HK_SD_EVENT_REMOVED;
         }
+        g_sd_failed_probes = 0U;
         return HK_SD_EVENT_NONE;
     }
 
+    g_sd_failed_probes = 0U;
     fat32_set_probe_silent(1);
     mounted = file_mount_if_needed();
     fat32_set_probe_silent(0);

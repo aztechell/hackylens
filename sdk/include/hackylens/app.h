@@ -4,7 +4,7 @@
 #include <hackylens/app/runtime.h>
 
 #define HK_APP_SDK_VERSION_MAJOR 0U
-#define HK_APP_SDK_VERSION_MINOR 2U
+#define HK_APP_SDK_VERSION_MINOR 3U
 #define HK_APP_SDK_VERSION_PATCH 0U
 
 #define HK_APP_SDK_RUNTIME_MINIMUM_MAJOR 0U

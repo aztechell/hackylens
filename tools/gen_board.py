@@ -68,6 +68,7 @@ def render_board_config(board: Board) -> str:
         f"#define HK_BOARD_LCD_PARALLEL8 {int(board.drivers['display'] == 'st7789-octal')}U",
         f"#define HK_BOARD_CAMERA_OV7740 {int(board.drivers['camera'] == 'ov7740')}U",
         f"#define HK_BOARD_POWER_AXP173 {int(board.drivers['power'] == 'axp173')}U",
+        f"#define HK_BOARD_AUDIO_ES8374 {int(board.drivers['audio'] == 'es8374')}U",
         f"#define HK_BOARD_INPUT_PROFILE_CUBE {int(board.drivers['input'] == 'three-way')}U",
         f"#define HK_BOARD_LIGHTS_CUBE {int(board.drivers['lights'] == 'cube')}U",
         f"#define HK_BOARD_UI_WIDTH {board.data.get('defaults', {}).get('lcd_width', 320)}U",

@@ -559,3 +559,37 @@ uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out)
         ;
     return (uint8_t)spi->dr[0];
 }
+
+uint8_t hal_spi_fifo_read_bytes(uint8_t device, uint8_t *data, size_t size,
+                                uint64_t deadline_us)
+{
+    volatile spi_t *spi = hal_spi_regs(device);
+    size_t sent = 0U;
+    size_t received = 0U;
+    if(!spi || !data)
+        return 0U;
+
+    while(received < size)
+    {
+        size_t available = spi->rxflr;
+        if(available > sent - received || hal_time_us() >= deadline_us)
+        {
+            /* Clear queued dummy frames and stale RX data before the retry. */
+            spi->ssienr = 0U;
+            spi->ssienr = 1U;
+            return 0U;
+        }
+        while(available--)
+            data[received++] = (uint8_t)spi->dr[0];
+
+        /* Count every queued or in-flight frame against the RX FIFO capacity. */
+        size_t room = 32U - (sent - received);
+        while(room && sent < size)
+        {
+            spi->dr[0] = 0xffU;
+            sent++;
+            room--;
+        }
+    }
+    return 1U;
+}

@@ -54,5 +54,7 @@ uint8_t hal_spi_fifo_tx_write_u16be_until(
 uint8_t hal_spi_fifo_tx_end_until(uint8_t device, uint64_t deadline_us);
 void hal_spi_fifo_tx_abort(uint8_t device);
 uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out);
+uint8_t hal_spi_fifo_read_bytes(uint8_t device, uint8_t *data, size_t size,
+                                uint64_t deadline_us);
 
 #endif

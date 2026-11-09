@@ -8,7 +8,8 @@ typedef enum
     FILES_MODE_LIST,
     FILES_MODE_TEXT,
     FILES_MODE_IMAGE,
-    FILES_MODE_DELETE_CONFIRM
+    FILES_MODE_DELETE_CONFIRM,
+    FILES_MODE_AUDIO
 } file_browser_mode_t;
 
 file_browser_mode_t files_mode(void);

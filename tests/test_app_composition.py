@@ -13,12 +13,13 @@ if str(TOOLS) not in sys.path:
 
 import app_composition
 import build_firmware
+from check_app_composition import disabled_resource_sections
 
 
 EXPECTED_APPS = {
     "terminal", "camera", "qr-camera", "face-detect", "apriltag",
     "object-detect", "files", "buttons", "pong", "settings", "power",
-    "micropython",
+    "micropython", "recorder", "accelerometer",
 }
 CAMERA_APPS = {
     "camera", "qr-camera", "face-detect", "apriltag", "object-detect",
@@ -26,6 +27,12 @@ CAMERA_APPS = {
 
 
 class AppCompositionTests(unittest.TestCase):
+    def test_disabled_accelerometer_app_allows_shared_binding_only(self) -> None:
+        self.assertEqual(disabled_resource_sections("accelerometer", {
+            ".sdata2.hk_accelerometer_binding", ".rodata.hk_accelerometer_binding",
+            ".rodata.accelerometer_menu_icon", ".data.accelerometer_state",
+        }), [".data.accelerometer_state", ".rodata.accelerometer_menu_icon"])
+
     def test_repository_manifests_are_complete_and_deterministic(self) -> None:
         first = app_composition.load_model()
         second = app_composition.load_model()

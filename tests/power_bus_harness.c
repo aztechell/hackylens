@@ -106,12 +106,19 @@ static uint32_t read_mmio(volatile uint32_t *reg)
 {
     assert(clock_enabled);
     if(reg == &mmio.clr_tx_abrt) { mmio.tx_abrt_source = 0U; queued = 0U; return 0U; }
-    if(reg == &mmio.data_cmd) { if(!stuck_rx) mmio.rxflr = 0U; return 0xC1U; }
+    if(reg == &mmio.data_cmd)
+    {
+        if(!stuck_rx && mmio.rxflr)
+            mmio.rxflr--;
+        return 0xC1U;
+    }
     return *reg;
 }
 static void write_mmio(volatile uint32_t *reg, uint32_t value)
 {
     assert(clock_enabled);
+    if(reg == &mmio.tar)
+        assert(!(mmio.enable_status & I2C_ENABLE_STATUS_IC_ENABLE));
     *reg = value;
     if(reg == &mmio.enable)
     {
@@ -133,7 +140,7 @@ static void write_mmio(volatile uint32_t *reg, uint32_t value)
             mmio.tx_abrt_source = noack ? 1U : 0U;
             mmio.raw_intr_stat = noack ? I2C_INTR_STAT_TX_ABRT : 0U;
             mmio.status = stuck_idle || no_rx ? I2C_STATUS_ACTIVITY : I2C_STATUS_TFE;
-            if((value & I2C_DATA_CMD_CMD) && !no_rx && !noack) mmio.rxflr = 1U;
+            if((value & I2C_DATA_CMD_CMD) && !no_rx && !noack) mmio.rxflr++;
         }
     }
 }
@@ -186,6 +193,23 @@ int main(void)
     noack = 0U;
     assert(hal_power_read_register(0U, &out) && out == 0xC1U && inits == 2U);
     assert(hal_power_write_register(0x46U, 3U) && last_reg == 0x46U);
+
+    reset();
+    assert(hal_power_read_register(0U, &out) && mmio.tar == 0x34U);
+    assert(hal_onboard_i2c_write(0x10U, 0x36U, 0x20U) && mmio.tar == 0x10U);
+    assert(hal_onboard_i2c_read(0x10U, 0x36U, &out) && mmio.tar == 0x10U);
+    uint8_t axes[6];
+    unsigned before = commands;
+    assert(hal_onboard_i2c_read_bytes(0x26U, 0x02U, axes, sizeof(axes)));
+    assert(commands == before + 7U && last_reg == 0x02U && !mmio.rxflr && mmio.tar == 0x26U);
+    for(unsigned i = 0U; i < sizeof(axes); i++)
+        assert(axes[i] == 0xC1U);
+    assert(hal_power_read_register(0U, &out) && mmio.tar == 0x34U && inits == 1U);
+    noack = 1U;
+    assert(!hal_onboard_i2c_write(0x10U, 0x36U, 0x20U));
+    assert(s_diagnostic.tar == 0x10U && !s_bus_ready);
+    noack = 0U;
+    assert(hal_power_read_register(0U, &out) && mmio.tar == 0x34U && inits == 2U);
 
     reset(); no_rx = 1U; out = 0xA5U;
     assert(!hal_power_read_register(0x46U, &out) && out == 0xA5U && now < 30000U);

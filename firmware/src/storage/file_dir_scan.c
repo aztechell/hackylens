@@ -13,8 +13,6 @@
 #include "fat32_volume.h"
 #include "internal/fat32_state_private.h"
 
-typedef uint8_t (*file_dir_visitor_t)(const fat_file_entry_t *entry, void *context);
-
 static void file_dir_short_name(const uint8_t *raw, char *name, size_t name_size)
 {
     char base[9] = {0};
@@ -56,18 +54,22 @@ static void file_dir_lfn_store(const uint8_t *raw, uint16_t *lfn, size_t lfn_uni
     }
 }
 
-static uint8_t file_dir_scan(uint32_t directory_cluster,
-                             file_dir_visitor_t visitor,
-                             void *context)
+uint8_t file_dir_scan(uint32_t directory_cluster,
+                      file_dir_visitor_t visitor, void *context)
 {
     uint16_t lfn[FILE_LFN_MAX_UNITS] = {0};
     uint32_t current = directory_cluster;
+    uint32_t checkpoint = current;
+    uint32_t stride = 1U;
+    uint32_t traversed = 0U;
     uint32_t ordinal = 0U;
     uint8_t lfn_count = 0U;
     uint8_t sectors_per_cluster = fat32_sectors_per_cluster();
     uint8_t *sector = fat32_sector_scratch();
+    uint32_t cluster_count = fat32_geometry()->cluster_count;
 
-    while(current >= 2U && current < FAT32_EOC)
+    while(sectors_per_cluster && current >= 2U && current < FAT32_EOC &&
+          current - 2U < cluster_count)
     {
         uint32_t base = fat_cluster_lba(current);
 
@@ -118,13 +120,25 @@ static uint8_t file_dir_scan(uint32_t directory_cluster,
                 entry.lfn_count = lfn_count;
                 lfn[0] = 0U;
                 lfn_count = 0U;
-                if(visitor && visitor(&entry, context))
+                if(visitor && visitor(&entry, raw, context))
                     return 1U;
             }
         }
-        current = fat_next_cluster(current);
+        if(!fat_read_next_cluster(current, &current))
+            return 0U;
+        if(current >= FAT32_EOC)
+            return 1U;
+        /* Detect loops without another FAT read or a visited-cluster buffer. */
+        if(current == checkpoint)
+            return 0U;
+        if(++traversed == stride)
+        {
+            checkpoint = current;
+            stride *= 2U;
+            traversed = 0U;
+        }
     }
-    return 1U;
+    return 0U;
 }
 
 typedef struct
@@ -135,8 +149,10 @@ typedef struct
     uint8_t found;
 } file_dir_find_context_t;
 
-static uint8_t file_dir_find_visitor(const fat_file_entry_t *entry, void *opaque)
+static uint8_t file_dir_find_visitor(const fat_file_entry_t *entry,
+                                     const uint8_t short_name[11], void *opaque)
 {
+    (void)short_name;
     file_dir_find_context_t *context = (file_dir_find_context_t *)opaque;
 
     if(!(entry->attr & FAT_ATTR_DIR) ||
@@ -169,8 +185,10 @@ typedef struct
     uint32_t maximum;
 } file_dir_max_context_t;
 
-static uint8_t file_dir_max_visitor(const fat_file_entry_t *entry, void *opaque)
+static uint8_t file_dir_max_visitor(const fat_file_entry_t *entry,
+                                    const uint8_t short_name[11], void *opaque)
 {
+    (void)short_name;
     file_dir_max_context_t *context = (file_dir_max_context_t *)opaque;
     uint32_t index;
 

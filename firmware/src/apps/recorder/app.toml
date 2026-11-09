@@ -1,0 +1,8 @@
+id = "recorder"
+name = "RECORDER"
+entry = "recorder_v2_entry"
+sources = ["recorder_app.c"]
+requires = ["display", "time", "input", "sd-card", "audio"]
+menu_order = 14
+tick_ms = 20
+tick_budget_ms = 1000

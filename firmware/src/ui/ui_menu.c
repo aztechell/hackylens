@@ -15,6 +15,11 @@ void topbar_set_sd_mounted(uint8_t mounted)
     s_topbar_sd_mounted = mounted ? 1 : 0;
 }
 
+uint8_t topbar_sd_mounted(void)
+{
+    return s_topbar_sd_mounted;
+}
+
 void topbar_draw_sd_status(void)
 {
     uint16_t x = HK_DISPLAY_REQUIRED_WIDTH - 23;
@@ -129,6 +134,23 @@ void power_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 void files_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_files);
+}
+
+void recorder_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    hk_ui_display_draw_rect(x + 24U, y + 10U, 12U, 24U, 2U, color);
+    hk_ui_display_draw_rect(x + 18U, y + 25U, 24U, 16U, 2U, color);
+    hk_ui_display_fill_rect(x + 18U, y + 25U, 24U, 2U, bg);
+    hk_ui_display_fill_rect(x + 29U, y + 40U, 2U, 10U, color);
+    hk_ui_display_fill_rect(x + 22U, y + 49U, 16U, 2U, color);
+}
+
+void accelerometer_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_fill_rect(x + 12U, y + 15U, 36U, 5U, color);
+    hk_ui_display_fill_rect(x + 12U, y + 27U, 23U, 5U, color);
+    hk_ui_display_fill_rect(x + 12U, y + 39U, 30U, 5U, color);
 }
 
 void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
