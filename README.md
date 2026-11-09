@@ -58,11 +58,16 @@ flash layout and pin mapping before flashing. See the
 
 ## Screenshots
 
-| Main menu | Live camera | Settings |
-| --- | --- | --- |
-| ![HackyLens main menu](docs/images/menu.png) | ![HackyLens camera preview with FPS overlay](docs/images/camera.png) | ![HackyLens settings](docs/images/settings.png) |
+| HUSKYLENS SEN0305 menu | Sipeed Maix Cube menu |
+| --- | --- |
+| ![HackyLens main menu on SEN0305](docs/images/menu.png) | ![HackyLens main menu on Maix Cube](docs/images/menu-cube.png) |
 
-These 320 x 240 images were captured directly from a running HUSKYLENS over the firmware's UART screenshot protocol.
+| SEN0305 live camera | SEN0305 settings |
+| --- | --- |
+| ![HackyLens camera preview with FPS overlay](docs/images/camera.png) | ![HackyLens settings](docs/images/settings.png) |
+
+The firmware's UART screenshot protocol captured these images directly from the
+320 × 240 SEN0305 and the 240 × 240 Maix Cube.
 
 ## Included apps
 
