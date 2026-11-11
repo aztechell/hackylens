@@ -27,6 +27,7 @@ DEBUG_HANDLER(face_recognition)
 DEBUG_HANDLER(object_detect)
 DEBUG_HANDLER(apriltag)
 DEBUG_HANDLER(micropython)
+DEBUG_HANDLER(accelerometer)
 
 static void dummy_draw_icon(
     uint16_t x, uint16_t y, uint16_t color, uint16_t bg)

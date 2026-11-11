@@ -6,3 +6,5 @@ requires = ["display", "time", "input", "accelerometer"]
 menu_order = 90
 tick_ms = 100
 tick_budget_ms = 100
+debug = "HKACCELINFO"
+debug_entry = "accelerometer_handle_debug_command"

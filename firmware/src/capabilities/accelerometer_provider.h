@@ -6,6 +6,7 @@
 struct hk_accelerometer
 {
     hk_result_t (*read)(hk_acceleration_t *sample);
+    hk_result_t (*read_motion)(hk_acceleration_motion_t *motion);
 };
 
 extern const hk_accelerometer_t hk_accelerometer_binding;

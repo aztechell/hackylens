@@ -1,7 +1,7 @@
 # Maix Cube runtime
 
 The `sipeed-maix-cube` board selects the `hackylens-cube` runtime profile with
-fourteen native apps, including RECORDER, ACCELEROMETER and the embedded MicroPython app. This is
+fifteen apps, including RECORDER, ACCELEROMETER and the embedded MicroPython app. This is
 HackyLens firmware, not a MaixPy firmware build. The board is enabled for
 release starting with 0.5.0. The dated records below distinguish physical
 checks from software checks; external UART/I2C exchange was explicitly waived
@@ -87,11 +87,27 @@ prefix when the card is full.
 
 ## Accelerometer
 
-Open ACCELEROMETER on the second menu page to see signed X, Y and Z values
-in g and centered bars spanning ±2 g. The values include gravity and use
-the sensor's native axes. MicroPython reads the same sensor through
-`hackylens.acceleration_mg()`. The MSA301 shares the internal I²C1 bus with
-the AXP173 and ES8374. See the [capability contract](spec/capabilities/ACCELEROMETER.md).
+Open ACCELEROMETER on the second menu page. LEFT and RIGHT cycle through
+three views. BACK returns to the launcher.
+
+- **LEVEL** shows a bubble and tilt angles along the sensor's X and Y axes.
+  The estimate uses gravity and works best with the Cube held still.
+- **TRACE** plots the last 48 readings of X, Y and Z, about five seconds
+  of history. The graph and live values use g and span ±2 g. The graph
+  draws into the borrowed display framebuffer.
+- **EVENTS** shows orientation after the sensor reports a change, plus
+  tap, double tap, motion and free-fall flags. `LIVE` indicates a flag is
+  currently set. `SEEN` records an event observed since opening the app
+  or clearing the view with OK. Events are sampled status flags.
+
+The values include gravity and use the sensor's native axes. MicroPython
+reads the same XYZ data through `hackylens.acceleration_mg()`. The MSA301
+shares internal I²C1 with the AXP173 and ES8374. See the
+[capability contract](spec/capabilities/ACCELEROMETER.md).
+
+The operator confirmed that a tilt and taps marked MOTION, TAP, and DOUBLE TAP
+on the Cube. The host fixture exercises the free-fall status flag and refreshes
+a full TRACE history across multiple wraps through the K210 display backend.
 
 ## Controls
 

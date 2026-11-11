@@ -147,10 +147,7 @@ void recorder_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 
 void accelerometer_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
-    (void)bg;
-    hk_ui_display_fill_rect(x + 12U, y + 15U, 36U, 5U, color);
-    hk_ui_display_fill_rect(x + 12U, y + 27U, 23U, 5U, color);
-    hk_ui_display_fill_rect(x + 12U, y + 39U, 30U, 5U, color);
+    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_accelerometer);
 }
 
 void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)

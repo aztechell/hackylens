@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.capability.accelerometer
 owner: platform-architecture
-version: 0.1.0
+version: 0.2.0
 stability: experimental
 ---
 
@@ -24,3 +24,17 @@ Maix Cube uses the [MSA301](https://wiki.sipeed.com/soft/maixpy/en/develop_kit_b
 at seven-bit address `0x26` on the internal I²C1 bus, at ±2 g, 14 bits and
 62.5 Hz. The provider reads all six axis bytes in one transaction. SEN0305
 has no accelerometer binding.
+
+`hk_accelerometer_read_motion()` runs on core 0 and reads the optional
+hardware motion status. Its first successful call configures MSA301 event
+detection with a 250 ms status latch and no changes to INT1 routing.
+The provider reports activity, single tap, double tap, free fall and
+orientation change. Activity uses a 250 mg threshold on each axis. Flags
+can repeat in consecutive polls. The orientation value uses native sensor
+axes and becomes meaningful after an orientation event. The output changes
+only on `HK_OK`. A provider without the motion reader returns
+`HK_ERR_FEATURE_UNAVAILABLE`.
+
+The MSA301 also supports selectable ±4/8/16 g ranges, lower resolutions,
+power modes, selectable sample rates and data-ready interrupts. See the
+[MEMSensing datasheet](https://download.kamami.pl/p585252-MSA301.pdf).
