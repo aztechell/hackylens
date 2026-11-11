@@ -7,6 +7,20 @@
 #include "../storage/userfs.h"
 
 static char g_program_source[MICROPYTHON_RUNTIME_SOURCE_MAX + 1U];
+static uint8_t g_staging_borrowed;
+
+uint8_t *micropython_program_borrow_staging(size_t length)
+{
+    if(g_staging_borrowed || length > sizeof(g_program_source))
+        return NULL;
+    g_staging_borrowed = 1U;
+    return (uint8_t *)g_program_source;
+}
+
+void micropython_program_release_staging(void)
+{
+    g_staging_borrowed = 0U;
+}
 
 static micropython_program_result_t micropython_program_from_userfs(
     userfs_result_t result)
@@ -42,6 +56,8 @@ micropython_program_result_t micropython_program_run_file(
         *run_id = 0U;
     if(!name || !name[0])
         return MICROPYTHON_PROGRAM_INVALID_ARGUMENT;
+    if(g_staging_borrowed)
+        return MICROPYTHON_PROGRAM_BUSY;
     fs_result = userfs_mount();
     if(fs_result != USERFS_OK)
         return micropython_program_from_userfs(fs_result);

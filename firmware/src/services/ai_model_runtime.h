@@ -33,12 +33,14 @@ typedef enum
     AI_MODEL_RESULT_KPU,
     AI_MODEL_RESULT_RUN,
     AI_MODEL_RESULT_STOP,
+    AI_MODEL_RESULT_PENDING,
 } ai_model_result_t;
 
 typedef struct
 {
     const ai_model_descriptor_t *descriptor;
     uint8_t *model;
+    uint8_t *scratch;
     uint32_t model_size;
     uint32_t model_crc32;
     uint32_t input_dma_bytes;
@@ -49,12 +51,24 @@ typedef struct
     uint64_t unload_deadline_us;
     volatile ai_model_state_t state;
     volatile uint8_t completion_pending;
+    uint8_t slot;
+    uint8_t borrowed_model;
     ai_model_result_t result;
 } ai_model_runtime_t;
 
 void ai_model_runtime_init(ai_model_runtime_t *runtime);
 ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
                                         const ai_model_descriptor_t *descriptor);
+/* Load a companion for an existing lease. Only one model can run at a time. */
+ai_model_result_t ai_model_runtime_load_related(ai_model_runtime_t *runtime,
+                                                const ai_model_descriptor_t *descriptor,
+                                                const ai_model_runtime_t *primary,
+                                                const ai_model_workspace_t *workspace);
+/* Call on successive ticks until the model is ready or loading fails. */
+ai_model_result_t ai_model_runtime_load_related_step(ai_model_runtime_t *runtime,
+                                                     const ai_model_descriptor_t *descriptor,
+                                                     const ai_model_runtime_t *primary,
+                                                     const ai_model_workspace_t *workspace);
 uint8_t ai_model_runtime_run(ai_model_runtime_t *runtime, const uint8_t *input);
 uint8_t ai_model_runtime_take_completion(ai_model_runtime_t *runtime);
 int ai_model_runtime_get_output(ai_model_runtime_t *runtime, uint32_t index,

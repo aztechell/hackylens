@@ -36,12 +36,15 @@ ai_model_storage_result_t ai_model_storage_load(const char *directory_path,
                                                 const char *model_path,
                                                 uint32_t max_bytes,
                                                 uint32_t alignment,
+                                                uint32_t scratch_bytes,
+                                                const ai_model_workspace_t *workspace,
                                                 uint8_t **buffer,
                                                 uint32_t *size,
-                                                uint32_t *crc32)
+                                                uint32_t *crc32,
+                                                ai_model_reader_t *reader)
 {
     fat_file_entry_t entry;
-    uint8_t *raw;
+    uint8_t *raw = NULL;
     uint8_t *data;
 
     if(buffer) *buffer = NULL;
@@ -57,24 +60,62 @@ ai_model_storage_result_t ai_model_storage_load(const char *directory_path,
         return AI_MODEL_STORAGE_FILE;
     if(entry.size < 28U || !max_bytes || entry.size > max_bytes)
         return AI_MODEL_STORAGE_SIZE;
-    if(alignment < sizeof(void *) || (alignment & (alignment - 1U)) != 0U)
+    if(alignment < sizeof(void *) || (alignment & (alignment - 1U)) != 0U ||
+       scratch_bytes > 49152U)
         return AI_MODEL_STORAGE_ALLOC;
 
-    raw = (uint8_t *)malloc(entry.size + alignment + sizeof(void *));
-    if(!raw)
-        return AI_MODEL_STORAGE_ALLOC;
-    data = (uint8_t *)(((uintptr_t)(raw + sizeof(void *) + alignment - 1U)) &
-                       ~(uintptr_t)(alignment - 1U));
-    ((void **)data)[-1] = raw;
-    if(!fat_file_read_at(&entry, 0U, data, entry.size))
+    /* The optional DMA scratch is part of the model's existing allocation. */
+    size_t padded_size = ((size_t)entry.size + alignment - 1U) & ~(size_t)(alignment - 1U);
+    if(workspace)
     {
-        free(raw);
+        if(!workspace->data || ((uintptr_t)workspace->data & (alignment - 1U)) != 0U ||
+           padded_size + scratch_bytes > workspace->bytes)
+            return AI_MODEL_STORAGE_ALLOC;
+        data = workspace->data;
+    }
+    else
+    {
+        raw = (uint8_t *)malloc(padded_size + scratch_bytes + alignment + sizeof(void *));
+        if(!raw)
+            return AI_MODEL_STORAGE_ALLOC;
+        data = (uint8_t *)(((uintptr_t)(raw + sizeof(void *) + alignment - 1U)) &
+                           ~(uintptr_t)(alignment - 1U));
+        ((void **)data)[-1] = raw;
+    }
+    if(reader)
+        reader->entry = entry;
+    if(reader ? !fat_stream_open(&reader->stream, &reader->entry, 0U) :
+                !fat_file_read_at(&entry, 0U, data, entry.size))
+    {
+        if(raw)
+            free(raw);
         return AI_MODEL_STORAGE_READ;
     }
     if(buffer) *buffer = data;
     if(size) *size = entry.size;
+    if(reader)
+    {
+        reader->position = 0U;
+        return AI_MODEL_STORAGE_PENDING;
+    }
     if(crc32) *crc32 = crc32_update(0U, data, entry.size);
     return AI_MODEL_STORAGE_OK;
+}
+
+ai_model_storage_result_t ai_model_storage_read_step(ai_model_reader_t *reader,
+                                                      uint8_t *buffer, uint32_t size,
+                                                      uint32_t *crc32)
+{
+    uint32_t chunk = size - reader->position;
+    if(chunk > 16U * 1024U)
+        chunk = 16U * 1024U;
+    uint8_t *destination = buffer + reader->position;
+    reader->stream.cache_valid = 0U;
+    if(!mounted() || !fat_stream_read(&reader->stream, destination, chunk))
+        return AI_MODEL_STORAGE_READ;
+    *crc32 = crc32_update(*crc32, destination, chunk);
+    reader->position += chunk;
+    return reader->position == size ? AI_MODEL_STORAGE_OK : AI_MODEL_STORAGE_PENDING;
 }
 
 void ai_model_storage_free(uint8_t *buffer)

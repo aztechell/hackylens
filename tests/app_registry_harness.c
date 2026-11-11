@@ -23,6 +23,7 @@ static uint32_t s_debug_calls;
 DEBUG_HANDLER(camera)
 DEBUG_HANDLER(qr_camera)
 DEBUG_HANDLER(face_detect)
+DEBUG_HANDLER(face_recognition)
 DEBUG_HANDLER(object_detect)
 DEBUG_HANDLER(apriltag)
 DEBUG_HANDLER(micropython)
@@ -125,6 +126,11 @@ const hk_app_v2_entry_t buttons_v2_entry = {
 };
 const hk_app_v2_entry_t camera_v2_entry = {0};
 const hk_app_v2_entry_t face_detect_v2_entry = {0};
+const hk_app_v2_entry_t face_recognition_v2_entry = {0};
+void face_recognition_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    face_detect_draw_icon(x, y, color, bg);
+}
 const hk_app_v2_entry_t object_detect_v2_entry = {0};
 static uint8_t s_files_v2_storage[16];
 static hk_result_t dummy_files_start(const hk_app_context_t *ctx)
@@ -361,9 +367,12 @@ int main(void)
     const hk_app_t *sleep;
 
     CHECK(g_hk_generated_app_count ==
-          11U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER + HK_ENABLE_APP_ACCELEROMETER);
+          11U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
+          HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION);
     CHECK(g_menu_item_count == g_hk_generated_app_count);
-#if HK_ENABLE_APP_ACCELEROMETER
+#if HK_ENABLE_APP_FACE_RECOGNITION
+    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "face-recognition") == 0);
+#elif HK_ENABLE_APP_ACCELEROMETER
     CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "accelerometer") == 0);
 #elif HK_ENABLE_APP_RECORDER
     CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "recorder") == 0);

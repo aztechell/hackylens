@@ -55,6 +55,8 @@ int quirc_resize(struct quirc *q, int w, int h);
  */
 uint8_t *quirc_begin(struct quirc *q, int *w, int *h);
 void quirc_end(struct quirc *q);
+/* HackyLens: finish using the uncached alias of the image from quirc_begin. */
+void quirc_end_with_image(struct quirc *q, uint8_t *image);
 
 /* This structure describes a location in the input image buffer. */
 struct quirc_point {

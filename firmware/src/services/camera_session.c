@@ -23,6 +23,7 @@
 #include "internal/camera_settings_state.h"
 
 static uint8_t s_blocks_sd_poll;
+static uint8_t s_ide_owned;
 
 uint8_t camera_session_snapshot_capture(uint32_t wait_ms)
 {
@@ -164,6 +165,36 @@ uint8_t camera_service_start(void)
 uint8_t camera_service_consume_frame_timeout(void)
 {
     return camera_capture_consume_timeout();
+}
+
+uint8_t camera_service_ide_start(void)
+{
+    if(camera_session_initialized())
+        return camera_service_capture_ready();
+    camera_service_set_qvga_mode(1U);
+    if(!camera_service_start())
+    {
+        camera_service_clear_mode();
+        return 0U;
+    }
+    s_ide_owned = 1U;
+    return 1U;
+}
+
+void camera_service_ide_stop(void)
+{
+    if(!s_ide_owned)
+        return;
+    s_ide_owned = 0U;
+    camera_session_suspend_control();
+    hal_dvp_output_display(0U);
+    camera_service_clear_mode();
+}
+
+void camera_service_ide_tick(void)
+{
+    if(s_ide_owned)
+        (void)camera_service_capture_frame_tick();
 }
 
 void camera_stop(void)

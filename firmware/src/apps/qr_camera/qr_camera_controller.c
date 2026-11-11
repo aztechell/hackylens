@@ -75,18 +75,19 @@ void qr_camera_controller_tick(const hk_input_snapshot_t *input)
     }
     if(camera_runtime_ok_hold_triggered(input))
     {
+        qr_service_discard_scan();
         camera_service_freeze(1U);
         qr_settings_open();
         return;
     }
-    camera_runtime_tick(input);
+    camera_runtime_tick_with_consumer(input, qr_service_submit_frame, NULL);
 }
 
 void qr_camera_controller_poll_decode(void)
 {
     if(!s_session_active || qr_settings_active() || qr_result_open())
         return;
-    if(qr_service_decode_maybe(0U) != QR_DECODE_FOUND)
+    if(qr_service_poll_decode() != QR_DECODE_FOUND)
         return;
     qr_result_show();
     camera_service_freeze(1U);

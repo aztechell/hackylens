@@ -1,6 +1,7 @@
 #ifndef HK_MICROPYTHON_PROGRAM_H
 #define HK_MICROPYTHON_PROGRAM_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef enum
@@ -23,5 +24,9 @@ micropython_program_result_t micropython_program_run_startup(
 
 const char *micropython_program_result_name(
     micropython_program_result_t result);
+
+/* Core-0 staging workspace. Release the borrow before loading a program. */
+uint8_t *micropython_program_borrow_staging(size_t length);
+void micropython_program_release_staging(void);
 
 #endif

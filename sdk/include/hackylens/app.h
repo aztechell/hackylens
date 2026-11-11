@@ -2,6 +2,7 @@
 #define HACKYLENS_APP_H
 
 #include <hackylens/app/runtime.h>
+#include <hackylens/capability/vision.h>
 
 #define HK_APP_SDK_VERSION_MAJOR 0U
 #define HK_APP_SDK_VERSION_MINOR 3U

@@ -228,15 +228,15 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=14 menu=14", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=15 menu=15", self.compile_profile(
             micropython=True, recorder=True
         ))
-        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
             micropython=True, recorder=False
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=11 menu=11", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
             micropython=False, recorder=False
         ))
 
@@ -359,18 +359,19 @@ int main(void)
         expected_order = [
             "terminal", "camera", "qr-camera", "face-detect", "apriltag",
             "object-detect", "files", "buttons", "pong", "settings",
-            "power", "micropython", "recorder", "accelerometer",
+            "power", "micropython", "recorder", "accelerometer", "face-recognition",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
-            "power": 0, "recorder": 0, "accelerometer": 0,
+            "power": 0, "recorder": 0, "accelerometer": 0, "face-recognition": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
             "qr-camera": "HKQRINFO HKQR/HKQRCAM HKQRDECODE",
             "face-detect": "HKFACEINFO",
+            "face-recognition": "HKFRINFO HKFRLEARN",
             "apriltag": "HKTAG/HKTAGINFO",
             "object-detect": "HKOBJECT/HKOBJECTINFO",
             "settings": "HKSETTINGS",
@@ -394,7 +395,7 @@ int main(void)
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],
-                    100_000 if app_id == "accelerometer" else 3_000_000 if app_id == "qr-camera" else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython", "recorder"} else 20000,
+                    100_000 if app_id == "accelerometer" else 3_000_000 if app_id in {"qr-camera", "face-recognition"} else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython", "recorder"} else 20000,
                 )
                 self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:

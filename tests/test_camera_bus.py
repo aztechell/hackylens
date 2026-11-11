@@ -72,7 +72,9 @@ def test_sensor_sequences_stop_at_first_bus_error(board, sensor):
 def test_build_stages_exactly_one_or_no_camera_transport(tmp_path, board, backend, camera_enabled):
     import build_firmware, service_bindings
     board = load_board(board)
-    disabled = set() if camera_enabled else {'camera','qr-camera','face-detect','apriltag','object-detect'}
+    disabled = set() if camera_enabled else {
+        'camera', 'qr-camera', 'face-detect', 'face-recognition', 'apriltag', 'object-detect',
+    }
     selection = service_bindings.select(board, disabled, set(), set())
     build_firmware.stage_platform_sources(tmp_path, disabled, selection)
     staged = tmp_path/'platforms/k210/hal'

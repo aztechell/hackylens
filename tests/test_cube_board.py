@@ -21,7 +21,7 @@ class CubeBoardTests(unittest.TestCase):
     def setUp(self):
         self.board = board_contract.load_board("sipeed-maix-cube")
 
-    def test_full_composition_has_all_typed_services_and_fourteen_apps(self):
+    def test_full_composition_has_all_typed_services_and_fifteen_apps(self):
         board_contract.validate_board_source(self.board)
         selected = service_bindings.select(
             self.board, set(), {"micropython", "camera", "accelerometer"}, set()
@@ -30,7 +30,7 @@ class CubeBoardTests(unittest.TestCase):
                          {"time", "input", "display", "lights", "external-link", "power", "accelerometer"})
         self.assertFalse(selected.disabled_apps)
         self.assertFalse(selected.absences)
-        self.assertEqual(len(firmware_attestation.FULL_APP_IDS - selected.disabled_apps), 14)
+        self.assertEqual(len(firmware_attestation.FULL_APP_IDS - selected.disabled_apps), 15)
         self.assertEqual(self.board.runtime_profile, "hackylens-cube")
         self.assertTrue(self.board.releaseable)
 

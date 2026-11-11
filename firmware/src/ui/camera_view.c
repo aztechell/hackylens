@@ -171,7 +171,9 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
         return 0;
     }
 
-    memset(surface.rgb565_be, 0, (uint32_t)surface.stride_bytes * surface.height);
+    if(viewport.dst_x || viewport.dst_y ||
+       viewport.dst_w != surface.width || viewport.dst_h != surface.height)
+        memset(surface.rgb565_be, 0, (uint32_t)surface.stride_bytes * surface.height);
     if(!camera_view_compose_direct(frame, &surface, &viewport))
     {
         camera_view_prepare_maps(&viewport);

@@ -1,0 +1,10 @@
+id = "face-recognition"
+name = "FACE RECOG"
+entry = "face_recognition_v2_entry"
+sources = ["face_recognition_app.c", "face_recognition_image.c", "face_recognition_models.c"]
+requires = ["display", "input", "camera", "sd-card"]
+menu_order = 16
+tick_ms = 20
+tick_budget_ms = 3000
+debug = "HKFRINFO HKFRLEARN"
+debug_entry = "face_recognition_handle_debug_command"

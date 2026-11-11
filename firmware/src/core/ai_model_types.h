@@ -6,6 +6,12 @@
 #define AI_MODEL_MAX_OUTPUTS 4U
 #define AI_MODEL_MAX_TENSOR_DIMS 4U
 
+typedef struct
+{
+    uint8_t *data;
+    uint32_t bytes;
+} ai_model_workspace_t;
+
 typedef enum
 {
     AI_MODEL_ELEMENT_U8 = 0,
@@ -74,6 +80,7 @@ typedef struct
     const char *labels_path;
     uint32_t max_model_bytes;
     uint32_t expected_model_crc32;
+    uint32_t scratch_bytes;
     uint32_t unload_timeout_us;
     ai_model_kmodel_contract_t kmodel;
     ai_model_tensor_t input;

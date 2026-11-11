@@ -1,13 +1,11 @@
-#include "../../services/resource_cleanup.h"
 #include "face_detect_detector.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "../../services/ai_model_runtime.h"
-#include "../../services/camera_ai_input.h"
-#include "face_detect_config.h"
+#include "camera_ai_input.h"
+#include "resource_cleanup.h"
 
 /* Exact tensor contract of kendryte-standalone-demo/face_detect/detect.kmodel. */
 #define FACE_W 320U
@@ -22,6 +20,7 @@
 #define FACE_CANDIDATE_MAX 64U
 #define FACE_THRESHOLD 0.70f
 #define FACE_NMS 0.30f
+#define FACE_DETECT_UNLOAD_TIMEOUT_US 2000000ULL
 
 typedef struct { float x, y, w, h, p; } face_candidate_t;
 
@@ -33,6 +32,7 @@ static uint32_t g_candidates_count;
 static face_detect_load_result_t g_result = FACE_DETECT_LOAD_FORMAT;
 static face_candidate_t g_candidates[FACE_CANDIDATE_MAX];
 static face_detect_box_t g_boxes[FACE_DETECT_BOX_MAX];
+static face_detect_box_t g_model_boxes[FACE_DETECT_BOX_MAX];
 static uint8_t g_box_count;
 static uint16_t g_max_probability_x1000;
 static uint8_t g_input_min[3];
@@ -184,19 +184,27 @@ static void decode_output(const float *output, size_t bytes)
     {
         face_detect_box_t box = g_boxes[i];
         if(camera_ai_input_map_rect(&g_runtime, &box.x, &box.y, &box.w, &box.h))
+        {
+            g_model_boxes[mapped_count] = g_boxes[i];
             g_boxes[mapped_count++] = box;
+        }
     }
     g_box_count = mapped_count;
 }
 
-static void finish_inference(void)
+static void finish_inference(face_detect_consumer_t consumer, void *context)
 {
     const uint8_t *output;
     size_t bytes;
     if(!ai_model_runtime_take_completion(&g_runtime))
         return;
     if(ai_model_runtime_get_output(&g_runtime, 0U, &output, &bytes) == 0)
+    {
         decode_output((const float *)output, bytes);
+        if(consumer && consumer(camera_ai_input_data(&g_runtime), g_model_boxes,
+                               g_boxes, g_box_count, context))
+            return;
+    }
     else
         g_result = FACE_DETECT_LOAD_KPU;
     /* Keep the DVP's RGB planes immutable while KPU uses them, then arm it
@@ -236,7 +244,7 @@ static face_detect_load_result_t face_result(ai_model_result_t result)
     }
 }
 
-face_detect_load_result_t face_detect_detector_load(void)
+face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *workspace)
 {
     resource_cleanup_poll();
     ai_model_result_t result;
@@ -259,7 +267,7 @@ face_detect_load_result_t face_detect_detector_load(void)
         g_result = FACE_DETECT_LOAD_BUSY;
         return g_result;
     }
-    result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
+    result = ai_model_runtime_load_related(&g_runtime, &g_model_descriptor, NULL, workspace);
     g_result = face_result(result);
     if(result != AI_MODEL_RESULT_OK)
     {
@@ -321,7 +329,17 @@ void face_detect_detector_attach_camera(void)
     (void)camera_ai_input_attach(&g_runtime);
 }
 
-void face_detect_detector_process_frame(void)
+void face_detect_detector_resume(void)
+{
+    camera_ai_input_arm(&g_runtime);
+}
+
+const ai_model_runtime_t *face_detect_detector_model(void)
+{
+    return &g_runtime;
+}
+
+void face_detect_detector_process_frame(face_detect_consumer_t consumer, void *context)
 {
     uint8_t *input = camera_ai_input_data(&g_runtime);
     uint8_t inference_finished;
@@ -329,7 +347,7 @@ void face_detect_detector_process_frame(void)
     if(!face_detect_detector_ready())
         return;
     inference_finished = g_runtime.completion_pending;
-    finish_inference();
+    finish_inference(consumer, context);
     /* The just-finished UI frame was captured with AI output disabled; wait
        for the following frame after re-arming DVP above. */
     if(inference_finished || ai_model_runtime_busy(&g_runtime))

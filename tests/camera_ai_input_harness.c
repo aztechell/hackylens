@@ -54,6 +54,10 @@ int main(void)
     assert(start_hook && finish_hook && !ai_enabled);
     start_hook(hook_context);
     assert(ai_enabled);
+    finish_hook(0, hook_context);
+    assert(!ai_enabled && !camera_ai_input_take(&owner, &sequence));
+    start_hook(hook_context);
+    assert(ai_enabled);
     memset(input, 42, 230400);
     finish_hook(7, hook_context);
     assert(!ai_enabled && camera_ai_input_take(&owner, &sequence) && sequence == 7);

@@ -18,7 +18,10 @@ typedef enum
 
 void qr_service_enter(void);
 void qr_service_exit(void);
-qr_decode_result_t qr_service_decode_maybe(uint8_t force);
+void qr_service_submit_frame(const volatile uint16_t *pixels, uint16_t width,
+                             uint16_t height, uint32_t sequence, void *context);
+qr_decode_result_t qr_service_poll_decode(void);
+void qr_service_discard_scan(void);
 qr_decode_result_t qr_service_decode_force(void);
 void qr_service_format_info(char *line, size_t line_size, const char *screen);
 

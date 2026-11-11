@@ -52,6 +52,7 @@ class MessageType(IntEnum):
 
     PING = 0x40
     SESSION_CLOSE = 0x41
+    CAMERA = 0x50
 
     STDOUT = 0x80
     STDERR = 0x81

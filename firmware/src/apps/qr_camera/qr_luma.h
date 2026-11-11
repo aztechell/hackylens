@@ -10,7 +10,7 @@ typedef struct
     uint8_t max;
 } qr_luma_stats_t;
 
-void qr_luma_fill_image(const uint16_t *src,
+void qr_luma_fill_image(const volatile uint16_t *src,
                         uint8_t *image,
                         uint16_t width,
                         uint16_t height,

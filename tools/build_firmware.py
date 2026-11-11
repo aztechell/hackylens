@@ -143,6 +143,11 @@ CAMERA_AI_INPUT_SOURCE_MODULES = {
     Path("firmware/src/services/camera_ai_input.h"),
 }
 
+FACE_DETECT_SOURCE_MODULES = {
+    Path("firmware/src/services/face_detect_detector.c"),
+    Path("firmware/src/services/face_detect_detector.h"),
+}
+
 CORE1_EXECUTOR_SOURCE_MODULES = {
     Path("firmware/src/services/core1_executor.c"),
     Path("firmware/src/services/core1_executor.h"),
@@ -536,10 +541,10 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str],
         for app in APP_MODULES if app not in disabled_apps
     )) if set(APP_MODULES) - disabled_apps else set()
     camera_feature_enabled = bool(CAMERA_APP_IDS - disabled_apps)
-    camera_ai_input_enabled = ("face-detect" not in disabled_apps or
-                               "object-detect" not in disabled_apps)
-    core1_executor_enabled = ("apriltag" not in disabled_apps or
-                              "micropython" not in disabled_apps)
+    face_detector_enabled = bool({"face-detect", "face-recognition"} - disabled_apps)
+    camera_ai_input_enabled = face_detector_enabled or "object-detect" not in disabled_apps
+    core1_executor_enabled = bool(
+        {"apriltag", "micropython", "qr-camera"} - disabled_apps)
     micropython_feature_enabled = "micropython" not in disabled_apps
 
     for path in (ROOT / "firmware" / "src").rglob("*"):
@@ -567,6 +572,8 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str],
                 raise RuntimeError(f"undeclared app translation unit: {rel}")
         if not camera_ai_input_enabled and rel in CAMERA_AI_INPUT_SOURCE_MODULES:
             print(f"[SKIP] unused camera AI input source {rel}")
+            continue
+        if not face_detector_enabled and rel in FACE_DETECT_SOURCE_MODULES:
             continue
         if not core1_executor_enabled and rel in CORE1_EXECUTOR_SOURCE_MODULES:
             print(f"[SKIP] unused core-1 executor source {rel}")
@@ -649,7 +656,7 @@ def write_config(stage: Path, disabled_apps: set[str],
     lines.extend([
         f"#define HK_ENABLE_AUDIO_FEATURE {int(audio_enabled)}",
         f"#define HK_MICROPYTHON_WDT_FAULT_INJECTION {1 if wdt_fault_injection else 0}",
-        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_APRILTAG || HK_ENABLE_APP_OBJECT_DETECT)",
+        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_APRILTAG || HK_ENABLE_APP_OBJECT_DETECT)",
         "#define HK_ENABLE_QR_FEATURE HK_ENABLE_APP_QR_CAMERA",
         '#include "hk_config_default.h"',
         "#endif",

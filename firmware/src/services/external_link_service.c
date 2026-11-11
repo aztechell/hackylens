@@ -12,7 +12,7 @@
 #include "external_link_protocol.h"
 #include "settings_persistence.h"
 #include "settings_service.h"
-#include "vision_result_service.h"
+#include <hackylens/capability/vision.h>
 
 #define LINK_RESULT_HEADER_SIZE 10U
 #define LINK_ITEM_WIRE_SIZE 16U
@@ -84,7 +84,7 @@ static uint16_t make_response(const hk_link_message_t *request, uint8_t *frame, 
     else if(request->type == HK_LINK_GET_RESULTS)
     {
         response_type = HK_LINK_RESULTS;
-        vision_result_snapshot(&results);
+        hk_vision_read(&results);
         write_u32(payload, results.frame_id);
         payload[4] = results.source;
         payload[5] = results.count;

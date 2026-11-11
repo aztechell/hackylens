@@ -9,6 +9,7 @@
 static uint8_t g_camera_frame_timeout_shown;
 static uint8_t g_camera_frame_timeout_event;
 static uint32_t g_camera_timeout_count;
+static uint32_t g_camera_wait_convert_count;
 static uint64_t g_camera_wait_started_us;
 static camera_stream_frame_t g_snapshot_frame;
 
@@ -46,6 +47,7 @@ void camera_capture_reset_session(void)
     g_camera_frame_timeout_shown = 0;
     g_camera_frame_timeout_event = 0;
     g_camera_wait_started_us = 0;
+    g_camera_wait_convert_count = 0U;
 }
 
 void camera_capture_reset_counters(void)
@@ -89,20 +91,22 @@ uint8_t camera_capture_tick(const char *log_prefix)
     uint64_t now = hal_time_us();
 
     camera_stream_status(&stream);
-    if(stream.have_frame)
-    {
-        g_camera_frame_timeout_shown = 0;
-        g_camera_wait_started_us = now;
-        return 1;
-    }
     if(!stream.running || stream.paused)
-        return 0;
-    if(g_camera_wait_started_us == 0)
+        return stream.have_frame;
+    if(g_camera_wait_started_us == 0 ||
+       stream.convert_count != g_camera_wait_convert_count ||
+       (stream.have_frame && stream.state != CAMERA_STREAM_CAPTURING))
+    {
         g_camera_wait_started_us = now;
+        g_camera_wait_convert_count = stream.convert_count;
+        g_camera_frame_timeout_shown = 0;
+    }
     if(now - g_camera_wait_started_us >= CAMERA_FRAME_TIMEOUT_US)
     {
         g_camera_timeout_count++;
         g_camera_wait_started_us = now;
+        if(stream.state == CAMERA_STREAM_CAPTURING)
+            camera_stream_recover_stalled(stream.convert_count);
         if(!g_camera_frame_timeout_shown)
         {
             printf("%s frame timeout sts=0x%08X\r\n", camera_capture_prefix(log_prefix), stream.last_status);
@@ -110,7 +114,7 @@ uint8_t camera_capture_tick(const char *log_prefix)
             g_camera_frame_timeout_shown = 1;
         }
     }
-    return 0;
+    return stream.have_frame;
 }
 
 uint8_t camera_capture_have_frame(void)

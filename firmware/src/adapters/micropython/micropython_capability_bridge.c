@@ -10,6 +10,7 @@
 #include <hackylens/capability/input.h>
 #include <hackylens/capability/lights.h>
 #include <hackylens/capability/time.h>
+#include <hackylens/capability/vision.h>
 
 #include "../../capabilities/display_stage_private.h"
 #include "../../config/display_config.h"
@@ -32,6 +33,9 @@ _Static_assert(HK_AUDIO_PCM_MAX_BYTES >= MICROPYTHON_BINDING_RECTS_BYTES,
 #else
 #define MICROPYTHON_BINDING_MAILBOX_BYTES MICROPYTHON_BINDING_RECTS_BYTES
 #endif
+
+_Static_assert(sizeof(vision_result_snapshot_t) <= MICROPYTHON_BINDING_MAILBOX_BYTES,
+               "vision snapshot must fit the existing binding mailbox");
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
 #define MICROPYTHON_BINDING_I2C_TIMEOUT_US 100000ULL
@@ -468,6 +472,16 @@ static micropython_binding_result_t binding_execute(
 
     switch(op)
     {
+    case MICROPYTHON_BINDING_OP_VISION_RESULTS:
+    {
+        vision_result_snapshot_t snapshot;
+        hk_vision_read(&snapshot);
+        const uint8_t *bytes = (const uint8_t *)&snapshot;
+        for(size_t i = 0U; i < sizeof(snapshot); i++)
+            control->data[i] = bytes[i];
+        control->output_length = sizeof(snapshot);
+        return MICROPYTHON_BINDING_OK;
+    }
     case MICROPYTHON_BINDING_OP_ACCELEROMETER_AVAILABLE:
         control->data[0] = hk_accelerometer_service() != NULL;
         control->output_length = 1U;

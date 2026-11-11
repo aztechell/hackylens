@@ -10,6 +10,8 @@ typedef struct
     uint32_t pos;
     uint32_t bitbuf;
     uint8_t bitcount;
+    uint16_t *literals;
+    uint16_t *distances;
 } inflate_stream_t;
 
 #endif

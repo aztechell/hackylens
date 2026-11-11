@@ -196,6 +196,33 @@ void camera_stream_resume(void)
     hal_dvp_irq_unmask();
 }
 
+void camera_stream_recover_stalled(uint32_t convert_count)
+{
+    hal_dvp_irq_mask();
+    if(g_running && !g_paused && g_capture_slot >= 0 &&
+       g_convert_count == convert_count)
+    {
+        uint32_t status = hal_dvp_status();
+
+        if(hal_dvp_status_has_frame_finish(status))
+        {
+            /* A finish latched in hardware may have missed its interrupt. */
+            hal_dvp_clear_frame_finish();
+            camera_stream_on_event(HAL_DVP_EVENT_FRAME_FINISH, status, NULL);
+        }
+        else
+        {
+            hal_dvp_stop_capture();
+            g_slots[(uint8_t)g_capture_slot].state = CAMERA_SLOT_FREE;
+            g_capture_slot = -1;
+            g_sync_pending = 1U;
+            if(g_convert_finish_hook)
+                g_convert_finish_hook(0U, g_convert_hook_context);
+        }
+    }
+    hal_dvp_irq_unmask();
+}
+
 uint8_t camera_stream_acquire_latest(camera_stream_frame_t *frame)
 {
     int8_t newest = -1;

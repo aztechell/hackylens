@@ -31,7 +31,10 @@ Native feature apps       MicroPython scripts
 
 Native apps are statically linked C/C++ code; MicroPython executes scripts.
 There is no runtime native loader, manifest parser or provider discovery.
-Camera/KPU/vision are not currently exposed by MicroPython API v1.
+Native C and MicroPython read the same published detector snapshot through
+`hk_vision_read()` and `hackylens.vision_results()`. The Python adapter copies
+it through the existing core-0 mailbox. See the
+[vision result API](MICROPYTHON_API.md#vision-results).
 
 ## Runtime and hardware service ownership
 
@@ -162,7 +165,7 @@ consumer's command/text budget.
 ## Feature modules
 
 Menu applications are self-contained modules: `apps/terminal/`,
-`apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/apriltag/`,
+`apps/camera/`, `apps/qr_camera/`, `apps/face_detect/`, `apps/face_recognition/`, `apps/apriltag/`,
 `apps/object_detect/`, `apps/micropython/`, `apps/files/`, `apps/buttons/`,
 `apps/pong/`, `apps/settings/`, POWER in `apps/sleep/`, and Cube's
 `apps/recorder/` and `apps/accelerometer/`. Each owns its app entry point,
@@ -173,10 +176,10 @@ extern entry objects and does not include app-private headers.
 
 The build manifest maps each app ID to its whole directory. `--disable-app`
 therefore removes every source and private header of that feature. Shared camera
-sources remain while CAMERA, QR-CAMERA, FACE DETECT, APRILTAG, or OBJECT DETECT
+sources remain while CAMERA, QR-CAMERA, FACE DETECT, FACE RECOG, APRILTAG, or OBJECT DETECT
 is enabled; `quirc` is staged only for QR-CAMERA. The planar AI input is staged
-only for FACE/OBJECT. The shared core-1 executor is retained while APRILTAG or
-MICROPYTHON needs it. With no camera consumer, sensor/DVP/camera runtime sources
+only for FACE DETECT, FACE RECOG and OBJECT DETECT. The shared core-1 executor is retained while APRILTAG,
+MICROPYTHON, or QR-CAMERA needs it. With no camera consumer, sensor/DVP/camera runtime sources
 are omitted while the general KPU HAL remains available.
 
 Canonical manifests generate the immutable descriptor and menu arrays. The
@@ -187,6 +190,18 @@ not receive background ticks. Shared screen, SD, debug, boot, and system-tick co
 do not include feature headers or select features with conditionals.
 
 CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
+
+A stalled DVP conversion is rearmed in place. Ready frames and outstanding
+leases remain valid across recovery.
+
+Camera previews leave a minimum gap after a successful update on the parallel
+LCD. The gap counts time already spent elsewhere in the main loop.
+
+The QR preview consumer fills the decoder's uncached luma image from the current
+frame. Core 1 owns quirc and detects codes while capture and display continue.
+The main loop takes results after the worker ticket completes and pauses the
+preview when it opens the result window. Exit discards pending results and
+defers decoder cleanup until the worker releases the image.
 
 FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and POWER likewise own their lifecycle and presentation.
 
@@ -201,7 +216,11 @@ polling inactive apps. The selector draws through the public borrowed Display
 surface, avoiding per-pixel queued commands and their fixed-capacity limit.
 Its power glyph is shared with the main menu as a neutral bitmap asset.
 
-FACE DETECT owns its YOLO detector adapter, view, icon, and debug command. The feature supplies a constant model descriptor and keeps all face-specific output decoding, while generic aligned storage, KPU ownership, DVP frame handoff, output validation, timing, and deferred unload belong to shared services. Its model remains `/hackylens.kmodels/detect.kmodel` on the SD card and is not embedded in firmware flash.
+FACE DETECT owns its view, icon, and debug command. FACE DETECT and FACE RECOG
+share the detector's model descriptor, YOLO decoding, planar input and teardown.
+They load `/hackylens.kmodels/detect.kmodel` from microSD. [FACE RECOG](FACE_RECOGNITION.md)
+keeps two companion models resident under the same KPU lease, runs one
+inference at a time and publishes matching IDs through the shared vision API.
 
 APRILTAG owns its TAG36H11 detector adapter, grayscale downsampler, settings/selection model and descriptor adapter, stabilized in-frame result overlay, icon, and `HKTAG`/`HKTAGINFO` commands. Its descriptor adapter uses the shared camera-independent `settings_menu`, while APRILTAG retains persistence and camera pause/resume policy. It reuses the shared 320x240 camera runtime and publishes native tag IDs through `vision_result_service` as BLOCK results. Core 0 downsamples a leased camera frame only when the single uncached 160x120 luma handoff and shared core-1 executor are free, then immediately releases the frame. Frames seen while detection is busy are discarded instead of queued, preventing stale-result latency. Core-1 create/detect/destroy jobs atomically publish completed result banks and leave the executor available to other apps. `refine_edges` is a persisted runtime request applied before the next detection rather than a detector restart. The app uses camera session overrides for its independent FPS and LED/RGB profile, leaving CAMERA and QR settings unchanged. Its `ALL/SELECTED` filter is applied before the shared result snapshot, so the UART/I2C wire format remains unchanged. Preview overlays are composed into the LCD shadow before the full-frame transfer, so rectangles are not temporarily erased by the following camera frame. The detector does not use a KPU model. The BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag` only when this feature is enabled.
 

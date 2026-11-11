@@ -13,7 +13,8 @@ implementation, hardware checks and limitations, and the
   applications, and which application logic it reused. Use the
   [Cube hardware log](MAIX_CUBE.md) to tie observations to tested builds.
 - Extend MicroPython only for demanded scenarios through existing shared typed
-  services. Camera/KPU/vision are not part of the current Python API.
+  services. The Python API provides read-only vision results. Raw camera and
+  KPU control remain future work.
 - Run equivalent MicroPython and native C applications on both boards using the
   same workloads. Compare behavior, migration effort, flash and RAM use,
   latency distributions and cleanup after failures. Report hardware, toolchain

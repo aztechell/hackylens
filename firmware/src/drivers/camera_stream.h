@@ -37,6 +37,7 @@ typedef struct
 } camera_stream_status_t;
 
 typedef void (*camera_stream_convert_start_hook_t)(void *context);
+/* A zero sequence indicates an aborted conversion. */
 typedef void (*camera_stream_convert_finish_hook_t)(uint32_t sequence,
                                                     void *context);
 
@@ -45,6 +46,7 @@ void camera_stream_stop(void);
 uint8_t camera_stream_has_leases(void);
 void camera_stream_pause(void);
 void camera_stream_resume(void);
+void camera_stream_recover_stalled(uint32_t convert_count);
 uint8_t camera_stream_acquire_latest(camera_stream_frame_t *frame);
 void camera_stream_release(uint32_t lease_id);
 uint8_t camera_stream_have_frame(void);

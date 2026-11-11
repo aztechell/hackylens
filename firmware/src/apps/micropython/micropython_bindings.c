@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include <hackylens/capability/time.h>
+#include <hackylens/capability/vision.h>
 
 #include "py/runtime.h"
 
@@ -389,6 +390,45 @@ static mp_obj_t binding_acceleration_mg(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_acceleration_mg_obj, binding_acceleration_mg);
 
+static mp_obj_t binding_vision_results(void)
+{
+    vision_result_snapshot_t snapshot;
+    size_t length = binding_call(MICROPYTHON_BINDING_OP_VISION_RESULTS,
+                                 NULL, NULL, 0U, (uint8_t *)&snapshot, sizeof(snapshot));
+    if(length != sizeof(snapshot) || snapshot.count > VISION_RESULT_MAX_ITEMS ||
+       snapshot.qr_length > VISION_RESULT_MAX_QR_BYTES)
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+
+    mp_obj_t items[VISION_RESULT_MAX_ITEMS];
+    for(uint8_t i = 0U; i < snapshot.count; i++)
+    {
+        const vision_result_item_t *item = &snapshot.items[i];
+        mp_obj_t fields[] = {
+            MP_OBJ_NEW_SMALL_INT(item->kind), MP_OBJ_NEW_SMALL_INT(item->flags),
+            MP_OBJ_NEW_SMALL_INT(item->id), MP_OBJ_NEW_SMALL_INT(item->x0),
+            MP_OBJ_NEW_SMALL_INT(item->y0), MP_OBJ_NEW_SMALL_INT(item->x1),
+            MP_OBJ_NEW_SMALL_INT(item->y1), MP_OBJ_NEW_SMALL_INT(item->confidence),
+        };
+        items[i] = mp_obj_new_tuple(MP_ARRAY_SIZE(fields), fields);
+    }
+
+    mp_obj_t result = mp_obj_new_dict(6U);
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_frame_id),
+                      mp_obj_new_int_from_uint(snapshot.frame_id));
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_source),
+                      MP_OBJ_NEW_SMALL_INT(snapshot.source));
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_width),
+                      MP_OBJ_NEW_SMALL_INT(snapshot.width));
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_height),
+                      MP_OBJ_NEW_SMALL_INT(snapshot.height));
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_items),
+                      mp_obj_new_tuple(snapshot.count, items));
+    mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_qr_payload),
+                      mp_obj_new_bytes(snapshot.qr_payload, snapshot.qr_length));
+    return result;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_vision_results_obj, binding_vision_results);
+
 static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hackylens) },
     { MP_ROM_QSTR(MP_QSTR_BUTTON_LEFT), MP_ROM_INT(BUTTON_LEFT) },
@@ -419,6 +459,16 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_audio_record_into), MP_ROM_PTR(&binding_audio_record_into_obj) },
     { MP_ROM_QSTR(MP_QSTR_accelerometer_available), MP_ROM_PTR(&binding_accelerometer_available_obj) },
     { MP_ROM_QSTR(MP_QSTR_acceleration_mg), MP_ROM_PTR(&binding_acceleration_mg_obj) },
+    { MP_ROM_QSTR(MP_QSTR_vision_results), MP_ROM_PTR(&binding_vision_results_obj) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_NONE), MP_ROM_INT(VISION_SOURCE_NONE) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_FACE), MP_ROM_INT(VISION_SOURCE_FACE) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_QR), MP_ROM_INT(VISION_SOURCE_QR) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_APRILTAG), MP_ROM_INT(VISION_SOURCE_APRILTAG) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_OBJECT_DETECT), MP_ROM_INT(VISION_SOURCE_OBJECT_DETECT) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_FACE_RECOGNITION), MP_ROM_INT(VISION_SOURCE_FACE_RECOGNITION) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_USER), MP_ROM_INT(VISION_SOURCE_USER) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_BLOCK), MP_ROM_INT(VISION_ITEM_BLOCK) },
+    { MP_ROM_QSTR(MP_QSTR_VISION_ARROW), MP_ROM_INT(VISION_ITEM_ARROW) },
 };
 static MP_DEFINE_CONST_DICT(hackylens_module_globals,
                             hackylens_module_globals_table);

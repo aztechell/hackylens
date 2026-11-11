@@ -7,6 +7,7 @@
 #include "micropython_capability_bridge.h"
 #include "audio_service.h"
 #include "display_stage_private.h"
+#include "vision_result_service.h"
 
 #define LCD_OVERLAY_COMMAND_MAX 256U
 #define LCD_OVERLAY_TEXT_MAX 1024U
@@ -656,6 +657,66 @@ static void test_accelerometer_binding(void)
         MICROPYTHON_BINDING_ERROR_UNAVAILABLE, "absent accelerometer is unavailable");
 }
 
+static vision_result_snapshot_t read_vision_through_bridge(void)
+{
+    vision_result_snapshot_t snapshot;
+    size_t length;
+    require_true(micropython_binding_call(MICROPYTHON_BINDING_OP_VISION_RESULTS,
+        NULL, NULL, 0U, (uint8_t *)&snapshot, sizeof(snapshot), &length) ==
+        MICROPYTHON_BINDING_OK && length == sizeof(snapshot),
+        "vision RPC copies a complete snapshot");
+    return snapshot;
+}
+
+static void test_vision_binding(void)
+{
+    reset_run();
+    vision_result_snapshot_t empty = read_vision_through_bridge();
+    require_true(empty.source == VISION_SOURCE_NONE && empty.count == 0U &&
+                 empty.qr_length == 0U, "no producer gives an empty snapshot");
+
+    const vision_result_item_t block = {
+        .kind = VISION_ITEM_BLOCK, .x0 = 12U, .y0 = 34U, .x1 = 210U, .y1 = 180U,
+    };
+    uint8_t payload[VISION_RESULT_MAX_QR_BYTES];
+    for(size_t i = 0U; i < sizeof(payload); i++)
+        payload[i] = (uint8_t)i;
+    vision_result_publish_qr(640U, 480U, &block, payload, sizeof(payload));
+    vision_result_clear(VISION_SOURCE_FACE);
+
+    vision_result_snapshot_t native;
+    hk_vision_read(&native);
+    vision_result_snapshot_t bridge = read_vision_through_bridge();
+    require_true(bridge.frame_id == native.frame_id && bridge.frame_id == empty.frame_id + 1U &&
+                 bridge.source == native.source && bridge.source == VISION_SOURCE_QR &&
+                 bridge.count == native.count && bridge.count == 1U &&
+                 bridge.width == native.width && bridge.width == 640U &&
+                 bridge.height == native.height && bridge.height == 480U &&
+                 memcmp(bridge.items, native.items, sizeof(bridge.items)) == 0 &&
+                 bridge.items[0].x0 == block.x0 &&
+                 bridge.qr_length == native.qr_length && bridge.qr_length == sizeof(payload) &&
+                 memcmp(bridge.qr_payload, native.qr_payload, sizeof(payload)) == 0 &&
+                 memcmp(bridge.qr_payload, payload, sizeof(payload)) == 0,
+                 "native reader and Python RPC see the same geometry and binary QR bytes");
+    require_true(read_vision_through_bridge().frame_id == bridge.frame_id,
+                 "reading does not consume a publication");
+
+    const vision_result_item_t items[VISION_RESULT_MAX_ITEMS + 1U] = {
+        { .kind = VISION_ITEM_BLOCK, .id = 587U, .flags = 2U, .confidence = 820U },
+    };
+    vision_result_publish(VISION_SOURCE_APRILTAG, 320U, 240U, items, VISION_RESULT_MAX_ITEMS + 1U);
+    bridge = read_vision_through_bridge();
+    require_true(bridge.source == VISION_SOURCE_APRILTAG && bridge.count == VISION_RESULT_MAX_ITEMS &&
+                 bridge.qr_length == 0U && bridge.qr_payload[42] == 0U &&
+                 bridge.items[0].id == 587U && bridge.items[0].flags == 2U &&
+                 bridge.items[0].confidence == 820U, "new producer replaces QR data and caps results");
+    vision_result_clear(VISION_SOURCE_APRILTAG);
+    empty = read_vision_through_bridge();
+    require_true(empty.frame_id == bridge.frame_id + 1U && empty.source == VISION_SOURCE_NONE &&
+                 empty.count == 0U && empty.items[0].id == 0U && empty.width == 0U &&
+                 empty.height == 0U, "producer exit clears its result");
+}
+
 int main(void)
 {
     test_timeout_cancels_before_dispatch();
@@ -673,7 +734,8 @@ int main(void)
     test_failed_display_retire_invalidates_once();
     test_audio_record_and_stop();
     test_accelerometer_binding();
-    puts("MICROPYTHON_BINDINGS_OK cases=14");
+    test_vision_binding();
+    puts("MICROPYTHON_BINDINGS_OK cases=15");
     return 0;
 }
 

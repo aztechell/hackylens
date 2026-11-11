@@ -13,6 +13,7 @@ class FirmwareResourceTests(unittest.TestCase):
         baseline = json.loads(gate.BASELINE.read_text(encoding="utf-8"))
         current = copy.deepcopy(baseline["measurement"])
         current["elf"]["static_ram_bytes"] += baseline["limits"]["static_ram_growth_bytes"]
+        current["image"]["raw_bytes"] += baseline["limits"]["raw_image_growth_bytes"]
         self.assertEqual(gate.budget_failures(current, baseline), [])
         current["elf"]["static_ram_bytes"] += 1
         self.assertEqual(len(gate.budget_failures(current, baseline)), 1)

@@ -261,7 +261,7 @@ void settings_mark_dirty(uint8_t immediate)
     (void)immediate;
 }
 
-void vision_result_snapshot(vision_result_snapshot_t *snapshot)
+void hk_vision_read(vision_result_snapshot_t *snapshot)
 {
     memset(snapshot, 0, sizeof(*snapshot));
 }

@@ -6,7 +6,7 @@
 #include "../../core/hk_string.h"
 #include "../../services/debug_console_service.h"
 #include "face_detect_controller.h"
-#include "face_detect_detector.h"
+#include "../../services/face_detect_detector.h"
 #include "face_detect_view.h"
 
 uint8_t face_detect_handle_debug_command(const char *cmd)

@@ -85,6 +85,11 @@ SDK `0.3.x` defines or re-exports:
 - typed Time/Input bindings and scoped Lights/Display/External Link sessions;
 - a read-only [Accelerometer binding](capabilities/ACCELEROMETER.md) on boards
   that expose one;
+- `hk_vision_read(vision_result_snapshot_t *snapshot)` on core 0, re-exported
+  by `hackylens/app.h`. It copies the latest detector publication into
+  caller-owned storage without opening a session. See the shared
+  [vision result semantics](../MICROPYTHON_API.md#vision-results). In C,
+  `count` and `qr_length` delimit the two arrays;
 - panel layout helpers for a render callback's borrowed surface;
 - fixed-capacity private app-state access;
 - `hk_app_context_request_close` as the portable close-request seam;

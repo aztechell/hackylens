@@ -24,6 +24,8 @@ register providers, negotiate versions or infer hardware from a board ID.
 
 Camera and Storage remain existing typed services and do not acquire a generic
 wrapper. Board/BSP routes and platform HAL stay private to their layers.
+The read-only vision snapshot in `vision.h` is a portable software service
+with no board binding or resource grant.
 
 ## Lifetimes and conflicts
 

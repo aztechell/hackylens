@@ -20,8 +20,8 @@
     }
   },
   "limits": {
-    "static_ram_growth_bytes": 6144,
-    "raw_image_growth_bytes": 0
+    "static_ram_growth_bytes": 7168,
+    "raw_image_growth_bytes": 12288
   },
-  "reason": "Five fixed 1024-byte app states plus bounded cleanup/descriptor metadata; no image growth."
+  "reason": "Fixed app states, vision and HMPY camera transport, plus FACE RECOG code, two resident KPU context slots and a 192-byte feature vector for each of ten IDs. Two model files and crop scratch reuse the PNG workspace. The feature model occupies the heap only while FACE RECOG is open."
 }

@@ -288,14 +288,13 @@ static void flood_fill_seed(struct quirc *q,
  * Adaptive thresholding
  */
 
-static uint8_t otsu(const struct quirc *q)
+static uint8_t otsu(const struct quirc *q, const uint8_t *ptr)
 {
 	unsigned int numPixels = q->w * q->h;
 
 	// Calculate histogram
 	unsigned int histogram[UINT8_MAX + 1];
 	(void)memset(histogram, 0, sizeof(histogram));
-	uint8_t* ptr = q->image;
 	unsigned int length = numPixels;
 	while (length--) {
 		uint8_t value = *ptr++;
@@ -1072,13 +1071,12 @@ static void test_grouping(struct quirc *q, unsigned int i)
 	test_neighbours(q, i, &hlist, &vlist);
 }
 
-static void pixels_setup(struct quirc *q, uint8_t threshold)
+static void pixels_setup(struct quirc *q, uint8_t *source, uint8_t threshold)
 {
 	if (QUIRC_PIXEL_ALIAS_IMAGE) {
-		q->pixels = (quirc_pixel_t *)q->image;
+		q->pixels = (quirc_pixel_t *)source;
 	}
 
-	uint8_t* source = q->image;
 	quirc_pixel_t* dest = q->pixels;
 	int length = q->w * q->h;
 	while (length--) {
@@ -1103,10 +1101,15 @@ uint8_t *quirc_begin(struct quirc *q, int *w, int *h)
 
 void quirc_end(struct quirc *q)
 {
+	quirc_end_with_image(q, q->image);
+}
+
+void quirc_end_with_image(struct quirc *q, uint8_t *image)
+{
 	int i;
 
-	uint8_t threshold = otsu(q);
-	pixels_setup(q, threshold);
+	uint8_t threshold = otsu(q, image);
+	pixels_setup(q, image, threshold);
 
 	for (i = 0; i < q->h; i++)
 		finder_scan(q, i);

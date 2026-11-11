@@ -15,6 +15,9 @@ typedef enum
 
 void camera_active_size_set(camera_size_t size);
 uint8_t camera_service_start(void);
+uint8_t camera_service_ide_start(void);
+void camera_service_ide_stop(void);
+void camera_service_ide_tick(void);
 void camera_stop(void);
 const char *camera_service_fail_reason(void);
 void camera_service_enter_begin(uint8_t qr_mode, uint8_t ok_is_down);

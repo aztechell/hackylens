@@ -14,7 +14,7 @@ HackyLens separates reusable K210 model mechanics from feature behavior.
 
 `core/ai_model_types.h` describes:
 
-- the exact KModel v3 header and first-layer DMA contract;
+- the KModel header, input and output contract for each pinned model;
 - input and output tensor shape, element type, layout, and normalization;
 - an optional expected model CRC32;
 - labels and the post-processing category;
@@ -24,7 +24,10 @@ HackyLens separates reusable K210 model mechanics from feature behavior.
 256-byte-aligned allocation, calculates CRC32, and parses the optional
 256-byte `manifest.hkai`. `services/ai_model_runtime.*` owns the single KPU
 lease, validates the descriptor, manifest, model identity, and output sizes,
-runs asynchronous inference, and completes deferred unload. The shared layer
+runs asynchronous inference, and completes deferred unload. A feature can
+load companion models under its existing lease and run them sequentially.
+The pinned KModel v4 embedding uses the SDK's nncase v0 path and requires an
+expected model CRC32. The shared layer
 does not know about cameras, labels, boxes, or a particular detector.
 
 FACE and OBJECT share `services/camera_ai_input.*`. For an unrotated RGB565
@@ -109,6 +112,9 @@ weights, which is recorded explicitly rather than silently assigning one.
 
 ## SD staging
 
+[FACE RECOG](FACE_RECOGNITION.md) shares the FACE detector and uses two
+additional, separately supplied CanMV models for landmark and feature inference.
+
 The tracked `sdcard/` directory mirrors the card root. Copy its contents to a
 FAT32 card without adding another directory level:
 
@@ -172,8 +178,9 @@ python tools/ai_model.py convert \
 
 Rc5 directly supports TFLite and Caffe frontends. It does not accept ONNX,
 modern `compile` subcommands, `-t k210`, or modern allocator/calibration
-switches. ONNX needs a separately validated ONNX-to-TFLite step. Moving to
-nncase 0.2+ would produce KModel v4 and requires a different device runtime.
+switches. ONNX needs a separately validated ONNX-to-TFLite step. The SDK's
+nncase v0 path serves the pinned FACE RECOG embedding. The host packaging
+tool continues to produce KModel v3 packages.
 
 Conversion success is only the first gate. Every new model still needs
 framework-versus-KModel comparison, operator review, KPU/main-memory

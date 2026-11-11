@@ -43,6 +43,7 @@ typedef struct
     uint32_t display_present_count;
     uint32_t display_abort_count;
     uint32_t sleep_count;
+    uint32_t sleep_after_tick_ms;
     uint32_t activity_count;
     uint32_t shell_input_count;
     uint32_t menu_failure_count;
@@ -79,7 +80,10 @@ static hk_result_t app_event(
     if(event->kind == HK_APP_EVENT_INPUT)
         return hk_app_context_wakeup_token(ctx, 91U, &s_fixture.wakeup);
     if(event->kind == HK_APP_EVENT_TIMER)
+    {
         s_fixture.tick_count++;
+        s_fixture.now_us += 38000U;
+    }
     if(event->kind == HK_APP_EVENT_RUNTIME_CLOSE)
         s_fixture.stop_reason = event->data.close.reason;
     return HK_OK;
@@ -123,7 +127,7 @@ static const hk_app_t s_v2_app = {
     .entry = &s_v2_entry,
     .limits = {
         sizeof(s_state), 256U, sizeof(s_state), HK_APP_STATE_ALIGNMENT,
-        100U, 50U, 50U,
+        20000U, 100000U, 50U,
     },
 };
 
@@ -465,8 +469,13 @@ void hal_sleep_ms(uint32_t milliseconds)
 {
     s_fixture.sleep_count++;
     s_fixture.now_us += (uint64_t)milliseconds * UINT64_C(1000);
-    if(s_fixture.sleep_count >= 2U)
+    if(s_fixture.tick_count)
+    {
+        s_fixture.sleep_after_tick_ms = milliseconds;
         longjmp(s_main_exit, 1);
+    }
+    if(s_fixture.sleep_count > 4U)
+        longjmp(s_main_exit, 2);
 }
 
 static void system_tick(const hk_input_snapshot_t *input)
@@ -513,6 +522,7 @@ int main(void)
     CHECK(s_fixture.menu_failure_count == 0U);
     CHECK(s_fixture.wakeup_sent == 1U);
     CHECK(s_fixture.tick_count == 1U);
+    CHECK(s_fixture.sleep_after_tick_ms == 1U);
     CHECK(s_fixture.render_count == 2U);
     CHECK(s_fixture.display_begin_count == 2U);
     CHECK(s_fixture.display_dirty_count == 2U);

@@ -42,6 +42,7 @@ typedef enum
 
     HMPY_MSG_PING = 0x40,
     HMPY_MSG_SESSION_CLOSE = 0x41,
+    HMPY_MSG_CAMERA = 0x50,
 
     HMPY_MSG_STDOUT = 0x80,
     HMPY_MSG_STDERR = 0x81,

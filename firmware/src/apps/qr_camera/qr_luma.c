@@ -11,7 +11,7 @@ static uint8_t qr_rgb565_luma(uint16_t color)
     return (uint8_t)(((uint16_t)r * 30U + (uint16_t)g * 59U + (uint16_t)b * 11U) / 100U);
 }
 
-void qr_luma_fill_image(const uint16_t *src,
+void qr_luma_fill_image(const volatile uint16_t *src,
                         uint8_t *image,
                         uint16_t width,
                         uint16_t height,

@@ -7,9 +7,10 @@
 #include "files_image_config.h"
 #include "image_decode_png_inflate.h"
 #include "files_firmware.h"
+#include "../../services/media_workspace.h"
 
-
-static uint8_t g_png_comp[PNG_COMP_MAX] __attribute__((aligned(4), section(".bss")));
+_Static_assert(PNG_COMP_MAX == MEDIA_PNG_COMP_BYTES &&
+               HUFF_TABLE_SIZE == MEDIA_PNG_TABLE_ENTRIES, "PNG workspace size");
 
 static uint8_t png_paeth(uint8_t a, uint8_t b, uint8_t c)
 {
@@ -22,7 +23,9 @@ static uint8_t png_paeth(uint8_t a, uint8_t b, uint8_t c)
     return pb <= pc ? b : c;
 }
 
-static uint8_t png_collect_idat(const fat_file_entry_t *entry, uint32_t *width, uint32_t *height, uint8_t *color_type, uint8_t *bpp, uint32_t *comp_size)
+static uint8_t png_collect_idat(const fat_file_entry_t *entry, uint32_t *width, uint32_t *height,
+                                uint8_t *color_type, uint8_t *bpp,
+                                uint8_t *compressed, uint32_t *comp_size)
 {
     static const uint8_t sig[8] = {0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
     uint8_t buf[32];
@@ -85,7 +88,7 @@ static uint8_t png_collect_idat(const fat_file_entry_t *entry, uint32_t *width, 
             while(remain)
             {
                 uint32_t take = remain > SD_BLOCK_SIZE ? SD_BLOCK_SIZE : remain;
-                if(!fat_file_read_at(entry, chunk_offset, &g_png_comp[out], take))
+                if(!fat_file_read_at(entry, chunk_offset, &compressed[out], take))
                     return 0;
                 chunk_offset += take;
                 out += take;
@@ -117,19 +120,29 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
     uint8_t *photo_row = image_decode_row_buffer();
     file_result_t result = FILE_RESULT_OK;
     frame_workspace_borrow_t workspace = FRAME_WORKSPACE_BORROW_NONE;
+    media_workspace_t *media = media_workspace_claim(&workspace);
 
-    if(!png_collect_idat(entry, &width, &height, &color_type, &bpp, &comp_size))
-        return FILE_RESULT_UNSUPPORTED_FORMAT;
+    if(!media)
+        return FILE_RESULT_TOO_LARGE;
+    if(!png_collect_idat(entry, &width, &height, &color_type, &bpp,
+                         media->png.compressed, &comp_size))
+    {
+        result = FILE_RESULT_UNSUPPORTED_FORMAT;
+        goto cleanup;
+    }
 
     row_bytes = width * bpp;
     out_size = (row_bytes + 1U) * height;
-    if(row_bytes > PHOTO_ROW_MAX_BYTES || out_size > PNG_OUT_MAX)
-        return FILE_RESULT_TOO_LARGE;
-    if(!frame_workspace_borrow(out_size, &workspace))
-        return FILE_RESULT_TOO_LARGE;
+    if(row_bytes > PHOTO_ROW_MAX_BYTES || out_size > PNG_OUT_MAX ||
+       !frame_workspace_borrow(out_size, &workspace))
+    {
+        result = FILE_RESULT_TOO_LARGE;
+        goto cleanup;
+    }
     png_out = workspace.data;
 
-    if(!png_zlib_inflate_to_buffer(g_png_comp, comp_size, png_out, out_size))
+    if(!png_zlib_inflate_to_buffer(media->png.compressed, comp_size, png_out, out_size,
+                                  media->png.literals, media->png.distances))
     {
         result = FILE_RESULT_UNSUPPORTED_FORMAT;
         goto cleanup;
@@ -202,5 +215,6 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
 
 cleanup:
     (void)frame_workspace_release(&workspace);
+    media_workspace_release(&workspace);
     return result;
 }

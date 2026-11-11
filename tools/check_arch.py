@@ -127,6 +127,7 @@ FEATURES = {
     "camera": ("camera", "camera_app.h"),
     "qr-camera": ("qr_camera", "qr_camera_app.h"),
     "face-detect": ("face_detect", "face_detect_app.h"),
+    "face-recognition": ("face_recognition", "face_recognition_app.h"),
     "apriltag": ("apriltag", "apriltag_app.h"),
     "object-detect": ("object_detect", "object_detect_app.h"),
     "files": ("files", "files_app.h"),

@@ -120,6 +120,7 @@ ranges, and `0x85--0xff` are reserved and rejected by the v1 codec.
 | `0x32` | `STATUS` | return VM/run state and resource counters |
 | `0x40` | `PING` | heartbeat; response echoes the request payload |
 | `0x41` | `SESSION_CLOSE` | acknowledge and return UART3 to line mode |
+| `0x50` | `CAMERA` | fetch one preview frame or snapshot, or release IDE capture |
 | `0x80` | `STDOUT` | async stdout bytes, including run ID and sequence at the message layer |
 | `0x81` | `STDERR` | async stderr bytes, including run ID and sequence at the message layer |
 | `0x82` | `STATE` | async VM/run state transition |
@@ -202,6 +203,7 @@ Capability bits are stable for v1:
 | 6 | explicitly confirmed format |
 | 7 | HackyLens bindings v1 |
 | 8 | boot flags are defined in the formerly reserved HELLO byte |
+| 9 | camera preview and snapshots |
 
 `LIST` has an empty request. Each entry is a response with `MORE` and payload
 `name, u32 size`; a final empty response without `MORE` terminates the stream,
@@ -212,6 +214,24 @@ including an empty directory.
 `READ` request is `name, u32 offset, u32 length`. A zero `length` means through
 end of file. Each response is `u32 chunk_offset, u32 full_file_size, bytes...`.
 Data chunks are at most 512 bytes and all but the final response carry `MORE`.
+
+### Camera
+
+When HELLO capability bit 9 is set, `CAMERA` accepts a single mode byte.
+Mode 0 requests a 96 × 72 RGB332 preview. Mode 1 requests a 160 × 120
+little-endian RGB565 snapshot. Portrait boards return transposed dimensions
+with pixels already rotated. Every response carries
+`u16 width, u16 height, u32 byte_offset, bytes...` in row order. Offsets
+are contiguous from zero, data chunks are at most 384 bytes, and every
+chunk except the last has `MORE`.
+
+The IDE can borrow frames from a running native camera preview or start
+capture from the launcher. A camera still warming up returns `BUSY` with
+detail `camera frame pending` for the host to retry. An unrelated foreground
+app retains priority. Mode 2 cancels any in-progress transfer, releases
+IDE-owned capture and returns an empty acknowledgement. The firmware also
+releases its capture on session close, app launch or after three seconds
+without a camera request. File reads take priority over camera transfers.
 
 ### Atomic upload
 

@@ -10,7 +10,7 @@
 #include "../../services/camera_session.h"
 #include "../../services/vision_result_service.h"
 #include "../../ui/camera_status_view.h"
-#include "face_detect_detector.h"
+#include "../../services/face_detect_detector.h"
 #include "face_detect_view.h"
 
 static uint8_t g_error;
@@ -18,7 +18,7 @@ static uint8_t g_loading;
 
 static void face_detect_start(const hk_input_snapshot_t *input)
 {
-    face_detect_load_result_t result = face_detect_detector_load();
+    face_detect_load_result_t result = face_detect_detector_load(NULL);
 
     if(result == FACE_DETECT_LOAD_BUSY)
     {
@@ -75,7 +75,7 @@ void face_detect_controller_tick(const hk_input_snapshot_t *input)
     }
     if(g_error || !camera_runtime_tick(input))
         return;
-    face_detect_detector_process_frame();
+    face_detect_detector_process_frame(NULL, NULL);
     if(!face_detect_detector_ready())
     {
         g_error = 1U;

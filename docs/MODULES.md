@@ -8,9 +8,11 @@
 `services/external_link_protocol.*` owns the versioned transport-neutral wire
 codec. `services/external_link_service.*` dispatches it over external UART1 or
 I2C0 without touching the UART3 debug console. `services/vision_result_service.*`
-is the shared producer/consumer boundary for fixed BLOCK/ARROW results. Physical
-pin and peripheral operations stay in board/HAL. See
-`docs/EXTERNAL_LINK_PROTOCOL.md` for the public wire contract.
+owns the latest BLOCK/ARROW publication and QR payload. Native C and MicroPython
+read it through the [shared API](MICROPYTHON_API.md#vision-results). Physical
+pin and peripheral operations stay in board/HAL. See the
+[external link protocol](EXTERNAL_LINK_PROTOCOL.md#results-and-unified-items)
+for the geometry exposed on the wire.
 
 Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG,
 OBJECT DETECT, MICROPYTHON, FILES, BUTTONS, PONG, SETTINGS, SLEEP.

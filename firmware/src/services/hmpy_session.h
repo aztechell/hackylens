@@ -8,5 +8,7 @@ uint8_t hmpy_session_active(void);
 void hmpy_session_begin(void);
 /* Owns UART3 RX while active and pumps bounded response/event work. */
 void hmpy_session_tick(void);
+/* Return any IDE camera workspace before handing control to a native app. */
+void hmpy_session_stop_camera(void);
 
 #endif

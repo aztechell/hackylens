@@ -49,6 +49,7 @@ static uint8_t hmpy_type_is_known(uint8_t type)
         case HMPY_MSG_STATUS:
         case HMPY_MSG_PING:
         case HMPY_MSG_SESSION_CLOSE:
+        case HMPY_MSG_CAMERA:
         case HMPY_MSG_STDOUT:
         case HMPY_MSG_STDERR:
         case HMPY_MSG_STATE:

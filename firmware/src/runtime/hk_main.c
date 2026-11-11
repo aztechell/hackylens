@@ -87,6 +87,21 @@ void hk_main_set_hooks(const hk_main_hooks_t *hooks)
         memset(&s_hooks, 0, sizeof(s_hooks));
 }
 
+static uint64_t runtime_now_us(void)
+{
+    static uint8_t s_time_fallback;
+    uint64_t now_us;
+
+    if(app_runtime_integration_now_us(&now_us) == HK_OK)
+        return now_us;
+    if(!s_time_fallback)
+    {
+        printf("[TIME] capability failure; using HAL clock\r\n");
+        s_time_fallback = 1U;
+    }
+    return hal_time_us();
+}
+
 int hk_main(void)
 {
     uint64_t next_dispatch_us = 0U;
@@ -112,16 +127,7 @@ int hk_main(void)
             printf("[INPUT] provider failure\r\n");
             return -1;
         }
-        if(app_runtime_integration_now_us(&now_us) != HK_OK)
-        {
-            static uint8_t s_time_fallback;
-            if(!s_time_fallback)
-            {
-                printf("[TIME] capability failure; using HAL clock\r\n");
-                s_time_fallback = 1U;
-            }
-            now_us = hal_time_us();
-        }
+        now_us = runtime_now_us();
         if(next_dispatch_us != 0U && now_us < next_dispatch_us)
         {
             sleep_us = next_dispatch_us - now_us;
@@ -153,6 +159,7 @@ int hk_main(void)
         else if(hk_screen_get() == SCREEN_APP &&
                 !app_runtime_integration_active())
             shell_show_menu_reason(HK_APP_STOP_COMPLETED);
+        now_us = runtime_now_us();
         if(hk_screen_get() == SCREEN_APP &&
            app_runtime_integration_active())
             tick_interval_us =

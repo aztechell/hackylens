@@ -10,7 +10,16 @@
 #define AI_MODEL_DEFAULT_UNLOAD_TIMEOUT_US 2000000ULL
 #define AI_MODEL_DMA_ALIGNMENT 256U
 
-static ai_model_runtime_t *g_owner;
+static ai_model_runtime_t *g_models[HAL_KPU_MODEL_SLOTS];
+static uint8_t g_model_count;
+static ai_model_runtime_t *g_loading_model;
+static ai_model_reader_t g_model_reader;
+
+static uint8_t owns_slot(const ai_model_runtime_t *runtime)
+{
+    return runtime && runtime->slot < HAL_KPU_MODEL_SLOTS &&
+           g_models[runtime->slot] == runtime;
+}
 
 static uint32_t element_size(ai_model_element_t element)
 {
@@ -44,6 +53,7 @@ static uint8_t descriptor_valid(const ai_model_descriptor_t *descriptor)
        !descriptor->output_count || descriptor->output_count > AI_MODEL_MAX_OUTPUTS ||
        descriptor->kmodel.output_count != descriptor->output_count ||
        descriptor->kmodel.input_bytes != descriptor->input.bytes ||
+       (descriptor->kmodel.version == 4U && !descriptor->expected_model_crc32) ||
        descriptor->postprocess > AI_MODEL_POSTPROCESS_EMBEDDING ||
        !tensor_valid(&descriptor->input))
         return 0U;
@@ -111,6 +121,8 @@ static void clear_loaded_fields(ai_model_runtime_t *runtime)
 {
     runtime->descriptor = NULL;
     runtime->model = NULL;
+    runtime->scratch = NULL;
+    runtime->borrowed_model = 0U;
     runtime->model_size = 0U;
     runtime->model_crc32 = 0U;
     runtime->input_dma_bytes = 0U;
@@ -124,15 +136,14 @@ static void clear_loaded_fields(ai_model_runtime_t *runtime)
 
 static uint8_t release_resources(ai_model_runtime_t *runtime)
 {
-    uint8_t *model;
-
-    if(!runtime || !hal_kpu_model_unload())
+    if(!owns_slot(runtime) || !hal_kpu_model_unload(runtime->slot))
         return 0U;
-    model = runtime->model;
-    if(model)
-        ai_model_storage_free(model);
-    if(g_owner == runtime)
-        g_owner = NULL;
+    if(runtime->model && !runtime->borrowed_model)
+        ai_model_storage_free(runtime->model);
+    if(g_loading_model == runtime)
+        g_loading_model = NULL;
+    g_models[runtime->slot] = NULL;
+    g_model_count--;
     clear_loaded_fields(runtime);
     return 1U;
 }
@@ -140,10 +151,10 @@ static uint8_t release_resources(ai_model_runtime_t *runtime)
 static ai_model_result_t fail_load(ai_model_runtime_t *runtime, ai_model_result_t result)
 {
     runtime->result = result;
-    if(runtime->model)
+    if(runtime->model && !runtime->borrowed_model)
         ai_model_storage_free(runtime->model);
-    if(g_owner == runtime)
-        g_owner = NULL;
+    g_models[runtime->slot] = NULL;
+    g_model_count--;
     clear_loaded_fields(runtime);
     runtime->result = result;
     return result;
@@ -172,46 +183,25 @@ void ai_model_runtime_init(ai_model_runtime_t *runtime)
     runtime->result = AI_MODEL_RESULT_OK;
 }
 
-ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
-                                        const ai_model_descriptor_t *descriptor)
+static ai_model_result_t finish_model_load(ai_model_runtime_t *runtime)
 {
+    const ai_model_descriptor_t *descriptor = runtime->descriptor;
     ai_model_storage_result_t storage;
     ai_model_manifest_t manifest;
     hal_kpu_load_result_t load_result;
     const uint8_t *output;
     size_t output_bytes;
+    uint8_t slot = runtime->slot;
 
-    if(!runtime)
-        return AI_MODEL_RESULT_DESCRIPTOR;
-    if(!descriptor_valid(descriptor))
-    {
-        runtime->result = AI_MODEL_RESULT_DESCRIPTOR;
-        return runtime->result;
-    }
-    ai_model_runtime_tick(runtime);
-    if(runtime->state != AI_MODEL_STATE_UNLOADED || g_owner ||
-       hal_kpu_is_busy() || hal_kpu_is_loaded())
-    {
-        runtime->result = AI_MODEL_RESULT_BUSY;
-        return runtime->result;
-    }
-
-    runtime->state = AI_MODEL_STATE_LOADING;
-    runtime->descriptor = descriptor;
-    g_owner = runtime;
-    storage = ai_model_storage_load(descriptor->directory_path, descriptor->model_path,
-                                    descriptor->max_model_bytes, AI_MODEL_DMA_ALIGNMENT,
-                                    &runtime->model, &runtime->model_size,
-                                    &runtime->model_crc32);
-    if(storage != AI_MODEL_STORAGE_OK)
-    {
-        printf("[AI] load stage=model path=%s storage=%u\r\n",
-               descriptor->model_path, (unsigned)storage);
-        return fail_load(runtime, storage_result(storage));
-    }
     if(descriptor->expected_model_crc32 &&
        runtime->model_crc32 != descriptor->expected_model_crc32)
         return fail_load(runtime, AI_MODEL_RESULT_FORMAT);
+    if(descriptor->scratch_bytes)
+    {
+        uint32_t rounded = (runtime->model_size + AI_MODEL_DMA_ALIGNMENT - 1U) &
+                           ~(AI_MODEL_DMA_ALIGNMENT - 1U);
+        runtime->scratch = runtime->model + rounded;
+    }
 
     if(descriptor->manifest_path && descriptor->manifest_path[0])
     {
@@ -241,17 +231,17 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
         }
     }
 
-    load_result = hal_kpu_model_load(runtime->model, runtime->model_size,
+    load_result = hal_kpu_model_load(slot, runtime->model, runtime->model_size,
                                      &descriptor->kmodel, &runtime->input_dma_bytes);
     if(load_result != HAL_KPU_LOAD_OK)
         return fail_load(runtime, load_result == HAL_KPU_LOAD_FORMAT ?
                          AI_MODEL_RESULT_FORMAT : AI_MODEL_RESULT_KPU);
     for(uint8_t i = 0U; i < descriptor->output_count; i++)
     {
-        if(hal_kpu_get_output(i, &output, &output_bytes) != 0 ||
+        if(hal_kpu_get_output(slot, i, &output, &output_bytes) != 0 ||
            output_bytes != descriptor->outputs[i].bytes)
         {
-            hal_kpu_model_unload();
+            hal_kpu_model_unload(slot);
             return fail_load(runtime, AI_MODEL_RESULT_OUTPUT);
         }
     }
@@ -262,15 +252,92 @@ ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
     return runtime->result;
 }
 
+static ai_model_result_t begin_model_load(ai_model_runtime_t *runtime,
+                                          const ai_model_descriptor_t *descriptor,
+                                          const ai_model_runtime_t *primary,
+                                          const ai_model_workspace_t *workspace,
+                                          ai_model_reader_t *reader)
+{
+    uint8_t slot = primary ? 1U : 0U;
+    if(!runtime)
+        return AI_MODEL_RESULT_DESCRIPTOR;
+    if(!descriptor_valid(descriptor))
+        return runtime->result = AI_MODEL_RESULT_DESCRIPTOR;
+    ai_model_runtime_tick(runtime);
+    if(primary)
+        while(slot < HAL_KPU_MODEL_SLOTS && g_models[slot])
+            slot++;
+    if(runtime->state != AI_MODEL_STATE_UNLOADED || hal_kpu_is_busy() ||
+       slot == HAL_KPU_MODEL_SLOTS || g_loading_model ||
+       (primary ? (g_models[0] != primary || primary->state != AI_MODEL_STATE_READY) :
+                  g_model_count != 0U))
+        return runtime->result = AI_MODEL_RESULT_BUSY;
+
+    runtime->state = AI_MODEL_STATE_LOADING;
+    runtime->descriptor = descriptor;
+    runtime->slot = slot;
+    runtime->borrowed_model = workspace != NULL;
+    g_models[slot] = runtime;
+    g_model_count++;
+    ai_model_storage_result_t storage = ai_model_storage_load(
+        descriptor->directory_path, descriptor->model_path,
+        descriptor->max_model_bytes, AI_MODEL_DMA_ALIGNMENT,
+        descriptor->scratch_bytes, workspace,
+        &runtime->model, &runtime->model_size, &runtime->model_crc32, reader);
+    if(storage == AI_MODEL_STORAGE_PENDING)
+    {
+        g_loading_model = runtime;
+        return runtime->result = AI_MODEL_RESULT_PENDING;
+    }
+    if(storage != AI_MODEL_STORAGE_OK)
+    {
+        printf("[AI] load stage=model path=%s storage=%u\r\n",
+               descriptor->model_path, (unsigned)storage);
+        return fail_load(runtime, storage_result(storage));
+    }
+    return finish_model_load(runtime);
+}
+
+ai_model_result_t ai_model_runtime_load_related(ai_model_runtime_t *runtime,
+                                                const ai_model_descriptor_t *descriptor,
+                                                const ai_model_runtime_t *primary,
+                                                const ai_model_workspace_t *workspace)
+{
+    return begin_model_load(runtime, descriptor, primary, workspace, NULL);
+}
+
+ai_model_result_t ai_model_runtime_load_related_step(ai_model_runtime_t *runtime,
+                                                     const ai_model_descriptor_t *descriptor,
+                                                     const ai_model_runtime_t *primary,
+                                                     const ai_model_workspace_t *workspace)
+{
+    if(!g_loading_model || g_loading_model != runtime)
+        return begin_model_load(runtime, descriptor, primary, workspace, &g_model_reader);
+    ai_model_storage_result_t storage = ai_model_storage_read_step(
+        &g_model_reader, runtime->model, runtime->model_size, &runtime->model_crc32);
+    if(storage == AI_MODEL_STORAGE_PENDING)
+        return AI_MODEL_RESULT_PENDING;
+    g_loading_model = NULL;
+    if(storage != AI_MODEL_STORAGE_OK)
+        return fail_load(runtime, storage_result(storage));
+    return finish_model_load(runtime);
+}
+
+ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
+                                        const ai_model_descriptor_t *descriptor)
+{
+    return ai_model_runtime_load_related(runtime, descriptor, NULL, NULL);
+}
+
 uint8_t ai_model_runtime_run(ai_model_runtime_t *runtime, const uint8_t *input)
 {
-    if(!runtime || runtime != g_owner || runtime->state != AI_MODEL_STATE_READY ||
+    if(!owns_slot(runtime) || runtime->state != AI_MODEL_STATE_READY ||
        !input || hal_kpu_is_busy())
         return 0U;
     runtime->completion_pending = 0U;
     runtime->started_us = hal_time_us();
     runtime->state = AI_MODEL_STATE_RUNNING;
-    if(hal_kpu_run(input, inference_done, runtime) != 0)
+    if(hal_kpu_run(runtime->slot, input, inference_done, runtime) != 0)
     {
         runtime->state = AI_MODEL_STATE_READY;
         runtime->result = AI_MODEL_RESULT_RUN;
@@ -291,15 +358,15 @@ uint8_t ai_model_runtime_take_completion(ai_model_runtime_t *runtime)
 int ai_model_runtime_get_output(ai_model_runtime_t *runtime, uint32_t index,
                                 const uint8_t **output, size_t *bytes)
 {
-    if(!runtime || runtime != g_owner || runtime->state != AI_MODEL_STATE_READY ||
+    if(!owns_slot(runtime) || runtime->state != AI_MODEL_STATE_READY ||
        !runtime->descriptor || index >= runtime->descriptor->output_count)
         return -1;
-    return hal_kpu_get_output(index, output, bytes);
+    return hal_kpu_get_output(runtime->slot, index, output, bytes);
 }
 
 void ai_model_runtime_request_unload(ai_model_runtime_t *runtime)
 {
-    if(!runtime || runtime->state == AI_MODEL_STATE_UNLOADED)
+    if(!owns_slot(runtime))
         return;
     runtime->completion_pending = 0U;
     if(runtime->state == AI_MODEL_STATE_RUNNING)
@@ -328,7 +395,7 @@ void ai_model_runtime_tick(ai_model_runtime_t *runtime)
 
     if(!runtime || runtime->state != AI_MODEL_STATE_UNLOAD_PENDING)
         return;
-    if(!hal_kpu_is_busy())
+    if(!hal_kpu_slot_busy(runtime->slot))
     {
         release_resources(runtime);
         return;
@@ -338,7 +405,7 @@ void ai_model_runtime_tick(ai_model_runtime_t *runtime)
     if(hal_time_us() - runtime->unload_requested_us < timeout &&
        (!runtime->unload_deadline_us || hal_time_us() < runtime->unload_deadline_us))
         return;
-    stop_result = hal_kpu_stop_and_reset();
+    stop_result = hal_kpu_stop_and_reset(runtime->slot);
     if(stop_result == HAL_KPU_STOP_OK || stop_result == HAL_KPU_STOP_NOT_RUNNING)
     {
         release_resources(runtime);
@@ -350,7 +417,7 @@ void ai_model_runtime_tick(ai_model_runtime_t *runtime)
 
 uint8_t ai_model_runtime_loaded(const ai_model_runtime_t *runtime)
 {
-    return runtime && runtime == g_owner && hal_kpu_is_loaded() &&
+    return owns_slot(runtime) && hal_kpu_is_loaded(runtime->slot) &&
            (runtime->state == AI_MODEL_STATE_READY ||
             runtime->state == AI_MODEL_STATE_RUNNING);
 }
@@ -373,7 +440,7 @@ const char *ai_model_runtime_result_label(ai_model_result_t result)
     static const char *const labels[] = {
         "NONE", "NO SD", "MODEL DIR", "MODEL FILE", "MODEL SIZE", "MODEL ALLOC",
         "MODEL READ", "MANIFEST", "DESCRIPTOR", "MODEL FORMAT", "MODEL OUTPUT",
-        "KPU BUSY", "MODEL LOAD", "KPU RUN", "KPU STOP"
+        "KPU BUSY", "MODEL LOAD", "KPU RUN", "KPU STOP", "MODEL READING"
     };
-    return result <= AI_MODEL_RESULT_STOP ? labels[result] : "MODEL ERROR";
+    return result <= AI_MODEL_RESULT_PENDING ? labels[result] : "MODEL ERROR";
 }

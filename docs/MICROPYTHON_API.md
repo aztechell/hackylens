@@ -135,6 +135,46 @@ in milli-g, including gravity, in native sensor-axis order. It returns `None`
 while the sensor starts and raises `OSError` on unsupported boards or read
 failure. Maix Cube has this capability. SEN0305 reports it as unavailable.
 
+## Vision results
+
+`hackylens.vision_results()` returns a copy of the latest publication from
+FACE DETECT, QR-CAMERA, APRILTAG, OBJECT DETECT or FACE RECOG on either board. It uses the
+same snapshot as the native C SDK's `hk_vision_read()`.
+
+```python
+import hackylens as hl
+
+result = hl.vision_results()
+for kind, flags, id, x0, y0, x1, y1, confidence in result["items"]:
+    if kind == hl.VISION_BLOCK:
+        print(id, x0, y0, x1, y1, confidence)
+if result["source"] == hl.VISION_QR and result["items"]:
+    print(result["qr_payload"])
+```
+
+- `frame_id` identifies a publication and advances on updates and clears.
+  Multiple reads between updates return the same ID.
+- `source` is one of `VISION_NONE`, `VISION_FACE`, `VISION_QR`,
+  `VISION_APRILTAG`, `VISION_OBJECT_DETECT`, `VISION_FACE_RECOGNITION` or the
+  reserved `VISION_USER`.
+- `width` and `height` give the source canvas in pixels. `items` contains up
+  to eight tuples in the order shown above. For `VISION_BLOCK`, the two
+  points bound the detection. For `VISION_ARROW`, they give its endpoints.
+  IDs are source-specific. AprilTag uses `flags` for the Hamming distance.
+  `confidence` is on a 0–1000 scale with source-specific meaning.
+  [FACE RECOG](FACE_RECOGNITION.md) uses ID zero for unknown faces and the
+  nonnegative cosine similarity for confidence.
+- `qr_payload` is `bytes`. A decoded QR result carries one bounding block
+  and up to 383 payload bytes, including any embedded zero bytes. The block
+  has ID and confidence set to zero. Other publications carry `b""`.
+
+Before a detector publishes or after the publishing app exits, the snapshot
+has source `VISION_NONE`, dimensions zero and empty items. A completed scan
+without detections retains its source and dimensions and has empty items.
+An IDE-run script can read the active native app's results while that app stays
+open. QR and AprilTag share core 1 with MicroPython. Read their completed results
+with a short script so the detector can use core 1 again after the script ends.
+
 ## Example
 
 ```python
@@ -196,5 +236,4 @@ baseline/post-reset acceptance procedure; that disruptive physical gate has not
 yet been run. The production API cannot deliberately wedge core 1.
 See [WDT1 hardware acceptance](WDT_HARDWARE_ACCEPTANCE.md).
 
-Camera, KPU, SD/files, and vision-result bindings are intentionally outside API
-v1 and remain a later roadmap increment.
+Raw camera, KPU control and SD/files access remain outside API v1.

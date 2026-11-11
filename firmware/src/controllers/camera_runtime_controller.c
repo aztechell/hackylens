@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#include "../config/camera_config.h"
 #include "../config/camera_layout.h"
 #include "../config/input_config.h"
 
@@ -10,7 +11,7 @@
 #include "../core/hk_screen.h"
 #include "hal_time.h"
 #include "../services/camera_frame.h"
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
 #include "../services/camera_ai_input.h"
 #endif
 #include "../services/camera_input.h"
@@ -25,6 +26,11 @@
 
 static uint32_t g_camera_light_repeat_button;
 static uint64_t g_camera_light_repeat_deadline_us;
+
+#if HK_BOARD_LCD_PARALLEL8
+#define CAMERA_PREVIEW_PANEL_GAP_US 4000ULL
+static uint64_t g_camera_preview_panel_ready_us;
+#endif
 
 static void camera_light_repeat_reset(void)
 {
@@ -73,9 +79,16 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     uint64_t compose_finished_us;
     uint64_t present_finished_us;
 
+#if HK_BOARD_LCD_PARALLEL8
+    /* Space successive camera updates on the parallel panel. Time already
+     * spent outside the preview counts toward the gap. */
+    uint64_t now = hal_time_us();
+    if(now < g_camera_preview_panel_ready_us)
+        hal_sleep_ms((uint32_t)((g_camera_preview_panel_ready_us - now + 999U) / 1000U));
+#endif
     if(!camera_service_preview_acquire(&service_frame))
         return 0;
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
     camera_ai_input_prepare_preview(service_frame.pixels, service_frame.width,
                                     service_frame.height, service_frame.sequence);
 #endif
@@ -106,6 +119,9 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     if(!camera_view_present(&present))
         return 0;
     present_finished_us = hal_time_us();
+#if HK_BOARD_LCD_PARALLEL8
+    g_camera_preview_panel_ready_us = present_finished_us + CAMERA_PREVIEW_PANEL_GAP_US;
+#endif
     camera_service_fps_note_present((uint32_t)(compose_finished_us - compose_started_us),
                                     (uint32_t)(present_finished_us - compose_finished_us));
     return 1;

@@ -72,7 +72,8 @@ The firmware's UART screenshot protocol captured these images directly from the
 ## Included apps
 
 `TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`,
-`MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, and `POWER`
+`MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, `POWER`, and
+[`FACE RECOG`](docs/FACE_RECOGNITION.md)
 
 `POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 

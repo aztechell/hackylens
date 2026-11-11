@@ -28,7 +28,7 @@ class ServiceBindingTests(unittest.TestCase):
 
     def test_excluded_binding_cannot_be_satisfied_by_present_resource(self):
         selection = bindings.select(load_board("huskylens-sen0305"), set(), set(), {"display"})
-        self.assertEqual(len(selection.disabled_apps), 14)
+        self.assertEqual(len(selection.disabled_apps), 15)
         self.assertIn("hk_display_binding = {0}", bindings.generated_c(selection))
         with self.assertRaisesRegex(ValueError, "Time"):
             bindings.select(load_board("huskylens-sen0305"), set(), set(), {"time"})

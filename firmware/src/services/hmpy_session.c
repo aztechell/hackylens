@@ -13,6 +13,12 @@
 #include "hal_watchdog.h"
 #include "board_config.h"
 #include "../storage/userfs.h"
+#if HK_ENABLE_CAMERA_FEATURE
+#include "../core/hk_screen.h"
+#include "camera_frame.h"
+#include "camera_session.h"
+#include "camera_status.h"
+#endif
 
 #define HMPY_SESSION_LEASE_US 10000000ULL
 #define HMPY_READ_DATA_MAX 512U
@@ -29,6 +35,9 @@
 #define HMPY_CAP_FORMAT (1UL << 6)
 #define HMPY_CAP_BINDINGS_V1 (1UL << 7)
 #define HMPY_CAP_BOOT_FLAGS (1UL << 8)
+#define HMPY_CAP_CAMERA (1UL << 9)
+#define HMPY_CAMERA_LEASE_US 3000000ULL
+#define HMPY_CAMERA_CHUNK 384U
 
 #define HMPY_BOOT_FLAG_WDT1_RECOVERY (1U << 0)
 
@@ -53,6 +62,15 @@ typedef struct
     char read_name[USERFS_NAME_MAX + 1U];
     uint8_t upload_last_data[HMPY_UPLOAD_DATA_MAX];
     hmpy_stream_decoder_t decoder;
+#if HK_ENABLE_CAMERA_FEATURE
+    uint8_t *camera_pixels;
+    uint64_t camera_last_request_us;
+    uint32_t camera_request_id;
+    uint32_t camera_offset;
+    uint32_t camera_size;
+    uint16_t camera_width;
+    uint16_t camera_height;
+#endif
 } hmpy_session_state_t;
 
 typedef struct
@@ -235,6 +253,10 @@ static void hmpy_handle_hello(const hmpy_frame_t *frame)
         HMPY_CAP_STDERR | HMPY_CAP_FORMAT | HMPY_CAP_BINDINGS_V1 |
         HMPY_CAP_BOOT_FLAGS;
     uint32_t cursor = 0U;
+
+#if HK_ENABLE_CAMERA_FEATURE
+    capabilities |= HMPY_CAP_CAMERA;
+#endif
 
     if(frame->payload_length != 0U)
     {
@@ -706,8 +728,129 @@ static void hmpy_handle_status(const hmpy_frame_t *frame)
                         g_payload, hmpy_status_payload(), 0U);
 }
 
+#if HK_ENABLE_CAMERA_FEATURE
+static void hmpy_camera_release(void)
+{
+    if(g_session.camera_pixels)
+        micropython_program_release_staging();
+    g_session.camera_pixels = NULL;
+}
+
+static void hmpy_camera_cancel(void)
+{
+    if(g_session.camera_pixels)
+    {
+        hmpy_error(HMPY_MSG_CAMERA, g_session.camera_request_id,
+                   HMPY_ERROR_BUSY, "camera transfer cancelled");
+        hmpy_camera_release();
+    }
+}
+
+void hmpy_session_stop_camera(void)
+{
+    hmpy_camera_cancel();
+    camera_service_ide_stop();
+}
+
+static void hmpy_handle_camera(const hmpy_frame_t *request)
+{
+    camera_preview_frame_t frame;
+    uint8_t mode = request->payload_length == 1U ? request->payload[0] : 255U;
+    uint8_t *out;
+
+    if(mode > 2U)
+    {
+        hmpy_error(request->type, request->request_id, HMPY_ERROR_INVALID_PAYLOAD, "camera mode");
+        return;
+    }
+    if(mode == 2U)
+    {
+        hmpy_session_stop_camera();
+        (void)hmpy_response(request->type, request->request_id, NULL, 0U, 0U);
+        return;
+    }
+    if(g_session.camera_pixels)
+    {
+        hmpy_error(request->type, request->request_id, HMPY_ERROR_BUSY, "camera transfer in progress");
+        return;
+    }
+    if(!camera_service_capture_ready())
+    {
+        if(hk_screen_get() != SCREEN_MENU)
+        {
+            hmpy_error(request->type, request->request_id, HMPY_ERROR_BUSY, "open menu or camera");
+            return;
+        }
+        if(!camera_service_ide_start())
+        {
+            hmpy_error(request->type, request->request_id, HMPY_ERROR_IO, camera_service_fail_reason());
+            return;
+        }
+    }
+    g_session.camera_last_request_us = hal_time_us();
+    activity_note();
+    if(!camera_service_preview_acquire(&frame))
+    {
+        hmpy_error(request->type, request->request_id, HMPY_ERROR_BUSY, "camera frame pending");
+        return;
+    }
+    uint16_t width = mode ? 160U : 96U;
+    uint16_t height = mode ? 120U : 72U;
+    g_session.camera_width = frame.rotate ? height : width;
+    g_session.camera_height = frame.rotate ? width : height;
+    g_session.camera_size = (uint32_t)width * height * (mode + 1U);
+    out = micropython_program_borrow_staging(g_session.camera_size);
+    g_session.camera_pixels = out;
+    if(!out)
+    {
+        camera_service_preview_release(&frame);
+        hmpy_error(request->type, request->request_id, HMPY_ERROR_NO_SPACE, "camera buffer");
+        return;
+    }
+    for(uint32_t y = 0; y < g_session.camera_height; y++)
+    {
+        for(uint32_t x = 0; x < g_session.camera_width; x++)
+        {
+            uint32_t sx = (frame.rotate ? y : x) * frame.width / width;
+            uint32_t sy = (frame.rotate ? height - 1U - x : y) * frame.height / height;
+            uint16_t pixel = frame.pixels[sy * frame.width + sx];
+            if(mode)
+            {
+                hmpy_wr16(out, pixel);
+                out += 2U;
+            }
+            else
+                *out++ = ((pixel >> 8) & 0xE0U) | ((pixel >> 6) & 0x1CU) | ((pixel >> 3) & 3U);
+        }
+    }
+    camera_service_preview_release(&frame);
+    g_session.camera_request_id = request->request_id;
+    g_session.camera_offset = 0U;
+}
+
+static void hmpy_pump_camera(void)
+{
+    uint32_t offset = g_session.camera_offset;
+    uint32_t remaining = g_session.camera_size - offset;
+    uint32_t chunk = remaining > HMPY_CAMERA_CHUNK ? HMPY_CAMERA_CHUNK : remaining;
+    hmpy_wr16(g_payload, g_session.camera_width);
+    hmpy_wr16(g_payload + 2U, g_session.camera_height);
+    hmpy_wr32(g_payload + 4U, offset);
+    memcpy(g_payload + 8U, g_session.camera_pixels + offset, chunk);
+    g_session.camera_offset += chunk;
+    (void)hmpy_response(HMPY_MSG_CAMERA, g_session.camera_request_id,
+                        g_payload, chunk + 8U, chunk < remaining);
+    if(chunk == remaining)
+        hmpy_camera_release();
+}
+#endif
+
 static void hmpy_session_finish(void)
 {
+#if HK_ENABLE_CAMERA_FEATURE
+    hmpy_camera_release();
+    camera_service_ide_stop();
+#endif
     if(g_session.upload_id)
         (void)userfs_upload_abort(g_session.upload_id);
     g_session.upload_id = 0U;
@@ -730,7 +873,11 @@ static void hmpy_handle_frame(const hmpy_frame_t *frame)
 
     if(g_session.read_active && frame->type != HMPY_MSG_PING &&
        frame->type != HMPY_MSG_STOP && frame->type != HMPY_MSG_STATUS &&
-       frame->type != HMPY_MSG_SESSION_CLOSE)
+       frame->type != HMPY_MSG_SESSION_CLOSE
+#if HK_ENABLE_CAMERA_FEATURE
+       && !(frame->type == HMPY_MSG_CAMERA && frame->payload_length == 1U && frame->payload[0] == 2U)
+#endif
+       )
     {
         hmpy_error(frame->type, frame->request_id, HMPY_ERROR_BUSY,
                    "read in progress");
@@ -742,7 +889,12 @@ static void hmpy_handle_frame(const hmpy_frame_t *frame)
     case HMPY_MSG_HELLO: hmpy_handle_hello(frame); break;
     case HMPY_MSG_LIST: hmpy_handle_list(frame); break;
     case HMPY_MSG_STAT: hmpy_handle_stat(frame); break;
-    case HMPY_MSG_READ: hmpy_handle_read(frame); break;
+    case HMPY_MSG_READ:
+#if HK_ENABLE_CAMERA_FEATURE
+        hmpy_camera_cancel();
+#endif
+        hmpy_handle_read(frame);
+        break;
     case HMPY_MSG_UPLOAD_BEGIN: hmpy_handle_upload_begin(frame); break;
     case HMPY_MSG_UPLOAD_CHUNK: hmpy_handle_upload_chunk(frame); break;
     case HMPY_MSG_UPLOAD_COMMIT: hmpy_handle_upload_finish(frame, 0U); break;
@@ -750,9 +902,17 @@ static void hmpy_handle_frame(const hmpy_frame_t *frame)
     case HMPY_MSG_DELETE: hmpy_handle_delete(frame); break;
     case HMPY_MSG_SET_STARTUP: hmpy_handle_set_startup(frame); break;
     case HMPY_MSG_FORMAT: hmpy_handle_format(frame); break;
-    case HMPY_MSG_RUN: hmpy_handle_run(frame); break;
+    case HMPY_MSG_RUN:
+#if HK_ENABLE_CAMERA_FEATURE
+        hmpy_camera_cancel();
+#endif
+        hmpy_handle_run(frame);
+        break;
     case HMPY_MSG_STOP: hmpy_handle_stop(frame); break;
     case HMPY_MSG_STATUS: hmpy_handle_status(frame); break;
+#if HK_ENABLE_CAMERA_FEATURE
+    case HMPY_MSG_CAMERA: hmpy_handle_camera(frame); break;
+#endif
     case HMPY_MSG_PING:
         (void)hmpy_response(frame->type, frame->request_id,
                             frame->payload, frame->payload_length, 0U);
@@ -875,6 +1035,12 @@ void hmpy_session_tick(void)
         hmpy_session_finish();
         return;
     }
+#if HK_ENABLE_CAMERA_FEATURE
+    if(hal_time_us() - g_session.camera_last_request_us >= HMPY_CAMERA_LEASE_US)
+        camera_service_ide_stop();
+    else
+        camera_service_ide_tick();
+#endif
     while(g_session.active && debug_console_read(&byte, 1U) == 1U)
     {
         hmpy_frame_t frame;
@@ -903,4 +1069,8 @@ void hmpy_session_tick(void)
         return;
     hmpy_pump_runtime_output();
     hmpy_pump_diagnostics();
+#if HK_ENABLE_CAMERA_FEATURE
+    if(g_session.camera_pixels)
+        hmpy_pump_camera();
+#endif
 }

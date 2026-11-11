@@ -56,7 +56,7 @@ static void camera_ai_convert_finish(uint32_t sequence, void *context)
         hal_dvp_output_ai(0U);
         g_sequence = sequence;
         __sync_synchronize();
-        g_state = CAMERA_AI_INPUT_READY;
+        g_state = sequence ? CAMERA_AI_INPUT_READY : CAMERA_AI_INPUT_ARMED;
     }
 }
 

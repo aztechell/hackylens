@@ -1,6 +1,7 @@
 #include "firmware_startup.h"
 
 #include <stdio.h>
+#include "hk_config.h"
 
 #include "../../../platforms/k210/startup/platform_bootstrap.h"
 
@@ -13,6 +14,9 @@
 #include "../core/hk_screen.h"
 #include "../services/settings_lights.h"
 #include "../services/debug_console_service.h"
+#if HK_ENABLE_CAMERA_FEATURE && HK_ENABLE_APP_MICROPYTHON
+#include "../services/hmpy_session.h"
+#endif
 #include "../services/external_link_service.h"
 #include "../services/settings_persistence.h"
 #include "../services/settings_service.h"
@@ -40,6 +44,9 @@ static uint8_t firmware_app_enter(
     /* Display BASE is exclusive. Menu UI holds it; v2 apps must take it. */
     if(app != NULL)
     {
+#if HK_ENABLE_CAMERA_FEATURE && HK_ENABLE_APP_MICROPYTHON
+        hmpy_session_stop_camera();
+#endif
         result = hk_ui_display_release();
         if(result != HK_OK)
         {

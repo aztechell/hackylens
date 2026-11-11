@@ -12,10 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CameraStreamLeaseTests(unittest.TestCase):
-    def test_stale_lease_and_exhausted_ids(self) -> None:
+    def test_stale_lease_exhausted_ids_and_stalled_capture(self) -> None:
         compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc")
         self.assertIsNotNone(compiler, "host C compiler is required")
         with tempfile.TemporaryDirectory(prefix="hackylens-camera-lease-") as temp:
+            (Path(temp) / "board_config.h").write_text("", encoding="utf-8")
             executable = Path(temp) / (
                 "camera_stream_lease.exe" if os.name == "nt" else "camera_stream_lease"
             )
@@ -23,7 +24,9 @@ class CameraStreamLeaseTests(unittest.TestCase):
                 [
                     str(compiler), "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
                     f"-I{ROOT / 'platforms' / 'k210' / 'hal'}",
+                    f"-I{temp}",
                     str(ROOT / "tests" / "camera_stream_lease_harness.c"),
+                    str(ROOT / "firmware" / "src" / "services" / "camera_capture.c"),
                     str(ROOT / "firmware" / "src" / "core" / "shared_buffer.c"),
                     str(ROOT / "tests" / "hal_shared_buffer_fake.c"),
                     "-o", str(executable),

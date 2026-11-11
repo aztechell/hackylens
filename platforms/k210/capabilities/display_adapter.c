@@ -543,6 +543,7 @@ static hk_result_t transfer_rect(
     const hk_cancel_t *cancel, uint8_t *progress)
 {
     uint8_t pixels[LCD_W * 2U];
+    const uint8_t *shadow = lcd_st7789_transport_shadow();
     hk_result_t result = terminal_result(deadline, cancel);
 
     if(result != HK_OK)
@@ -554,6 +555,7 @@ static hk_result_t transfer_rect(
     {
         uint16_t y = (uint16_t)((uint32_t)rect->y + row);
         uint32_t row_bytes = rect->width * 2U;
+        const uint8_t *source = shadow + ((uint32_t)y * LCD_W + (uint32_t)rect->x) * 2U;
 
         result = terminal_result(deadline, cancel);
         if(result != HK_OK)
@@ -561,8 +563,12 @@ static hk_result_t transfer_rect(
             lcd_st7789_transport_abort();
             return result;
         }
-        render_span(pixels, (uint16_t)rect->x, (uint16_t)rect->width, y,
-                    base_stage, overlay);
+        if(base_stage || overlay)
+        {
+            render_span(pixels, (uint16_t)rect->x, (uint16_t)rect->width, y,
+                        base_stage, overlay);
+            source = pixels;
+        }
         for(uint32_t offset = 0U; offset < row_bytes;
             offset += K210_DISPLAY_TRANSFER_SLICE_BYTES)
         {
@@ -576,7 +582,7 @@ static hk_result_t transfer_rect(
                 return result;
             }
             result = lcd_st7789_transport_write(
-                pixels + offset, count, deadline, cancel);
+                source + offset, count, deadline, cancel);
             if(result != HK_OK)
             {
                 lcd_st7789_transport_abort();

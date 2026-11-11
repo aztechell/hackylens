@@ -60,6 +60,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                     / "micropython_capability_bridge.c"
                 ),
                 str(ROOT / "firmware" / "src" / "core" / "shared_buffer.c"),
+                str(ROOT / "firmware" / "src" / "services" / "vision_result_service.c"),
                 str(ROOT / "tests" / "hal_shared_buffer_fake.c"),
                 "-o",
                 str(executable),
@@ -74,7 +75,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
                 timeout=30,
             )
 
-        self.assertIn("MICROPYTHON_BINDINGS_OK cases=14", result.stdout)
+        self.assertIn("MICROPYTHON_BINDINGS_OK cases=15", result.stdout)
 
     def test_uart_fifo_capacity_boundaries(self) -> None:
         compiler = self.compiler()

@@ -50,13 +50,10 @@ static void tracked_free(void *memory)
 #undef free
 #include "../firmware/src/apps/qr_camera/qr_decoder_engine.c"
 
-void qr_result_set_status(const char *status) { (void)status; }
-void qr_result_set_payload(const uint8_t *payload, uint16_t size) { (void)payload; (void)size; }
-void qr_result_clear_payload(void) {}
-const char *qr_result_payload_text(void) { return ""; }
 uint8_t *quirc_begin(struct quirc *q, int *width, int *height)
-{ (void)q; (void)width; (void)height; abort(); }
-void quirc_end(struct quirc *q) { (void)q; abort(); }
+{ (void)width; (void)height; return q->image; }
+void quirc_end_with_image(struct quirc *q, uint8_t *image)
+{ (void)q; (void)image; abort(); }
 void quirc_extract(const struct quirc *q, int index, struct quirc_code *code)
 { (void)q; (void)index; (void)code; abort(); }
 quirc_decode_error_t quirc_decode(const struct quirc_code *code, struct quirc_data *data)
@@ -65,26 +62,25 @@ void quirc_flip(struct quirc_code *code) { (void)code; abort(); }
 
 int main(void)
 {
-    qr_engine_stats_t stats;
     qr_decoder_engine_close();
     for(unsigned cycle = 0; cycle < 10; cycle++)
     {
-        assert(qr_decoder_init(320, 240));
+        uint8_t *image = qr_decoder_engine_prepare(320, 240);
+        assert(image);
         assert(live_bytes > 76800);
-        assert(qr_decoder_init(640, 480));
+        assert(qr_decoder_engine_prepare(320, 240) == image);
+        assert(qr_decoder_engine_prepare(640, 480));
         qr_decoder_engine_close();
         assert(live_bytes == 0);
         qr_decoder_engine_close();
         assert(live_bytes == 0);
-        qr_decoder_engine_stats(&stats);
-        assert(!stats.decoder_ready && !stats.decode_count && !stats.code_count);
     }
     allocations_before_failure = 2;
-    assert(!qr_decoder_init(320, 240));
+    assert(!qr_decoder_engine_prepare(320, 240));
     qr_decoder_engine_close();
     assert(live_bytes == 0);
     allocations_before_failure = -1;
-    assert(qr_decoder_init(320, 240));
+    assert(qr_decoder_engine_prepare(320, 240));
     qr_decoder_engine_close();
     assert(live_bytes == 0);
     puts("QR_MEMORY_OK");

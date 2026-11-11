@@ -79,15 +79,15 @@ Capability bits 0–3 mean UART, I2C, BLOCK, and ARROW.
 
 `RESULTS` starts with `frame_id:u32`, `source:u8`, `count:u8`, `width:u16`, and
 `height:u16`. Source `0` is no active result, `1` is face detection, `2` is QR,
-`3` is AprilTag, `4` is VOC20 object detection, and `255` is reserved for user
-algorithms.
+`3` is AprilTag, `4` is VOC20 object detection, `5` is face recognition, and
+`255` is reserved for user algorithms.
 
 Each result is a fixed 16-byte item:
 
 | Offset | Size | Field |
 |---:|---:|---|
 | 0 | 1 | kind: `1=BLOCK`, `2=ARROW` |
-| 1 | 1 | flags, currently zero |
+| 1 | 1 | flags, AprilTag Hamming distance or zero |
 | 2 | 2 | algorithm-local ID |
 | 4 | 2 | x0 |
 | 6 | 2 | y0 |
@@ -102,3 +102,8 @@ For an ARROW they are the start and end points. Coordinates use the `width` by
 publishes up to eight BLOCK items and clears them on app exit. APRILTAG uses
 the native tag ID. OBJECT DETECT uses the VOC20 class ID `0..19` and reports
 confidence on the existing `0..1000` scale; the item layout is unchanged.
+QR publishes a bounding BLOCK for a decoded code with ID and confidence set
+to zero. Its payload bytes are available through the
+[local C and MicroPython API](MICROPYTHON_API.md#vision-results).
+FACE RECOG uses ID zero for unknown faces and 1–10 for learned faces.
+Confidence is the nonnegative cosine similarity scaled to 0–1000.

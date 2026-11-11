@@ -652,8 +652,24 @@ def artifact_measurement(paths: dict[str, Path]) -> dict[str, Any]:
 
 def _new_direct_resources(baseline_commit: str) -> list[str]:
     findings = added_runtime_objects(baseline_commit)
+    # The model reader still allocates once per load. FACE RECOG reserves its
+    # bounded input scratch in that same block, so the allocator's size changed.
+    model_load_allocation = re.compile(
+        r"call:malloc introduced at firmware/src/storage/ai_model_storage\.c:\d+"
+        r" in ai_model_storage_load"
+    )
+    model_storage = "firmware/src/storage/ai_model_storage.c"
+    storage_sites = _runtime_sites({
+        model_storage: (ROOT / model_storage).read_text(encoding="utf-8"),
+    })
+    single_model_allocator = sum(
+        site["signature"] == "call:malloc" and site["function"] == "ai_model_storage_load"
+        for site in storage_sites
+    ) == 1
     direct: list[str] = []
     for finding in findings:
+        if single_model_allocator and model_load_allocation.fullmatch(finding):
+            continue
         signature = finding.split(" introduced at ", 1)[0]
         if signature == "cxx:new" or signature.startswith("alias:"):
             direct.append(finding)

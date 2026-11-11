@@ -7,9 +7,6 @@
 #include "files_image_config.h"
 
 
-static uint16_t g_huff_lit_table[HUFF_TABLE_SIZE] __attribute__((aligned(4), section(".bss")));
-static uint16_t g_huff_dist_table[HUFF_TABLE_SIZE] __attribute__((aligned(4), section(".bss")));
-
 static uint16_t huff_reverse(uint16_t code, uint8_t len)
 {
     uint16_t out = 0;
@@ -109,7 +106,7 @@ static int16_t inflate_huff_decode(inflate_stream_t *s, const uint16_t *table)
     return (int16_t)(entry & 0x01FFU);
 }
 
-static uint8_t inflate_build_fixed_tables(void)
+static uint8_t inflate_build_fixed_tables(inflate_stream_t *s)
 {
     uint8_t lit_lengths[288];
     uint8_t dist_lengths[32];
@@ -125,8 +122,8 @@ static uint8_t inflate_build_fixed_tables(void)
     for(uint8_t i = 0; i < 32; i++)
         dist_lengths[i] = 5;
 
-    return huff_build_table(lit_lengths, 288, g_huff_lit_table) &&
-           huff_build_table(dist_lengths, 32, g_huff_dist_table);
+    return huff_build_table(lit_lengths, 288, s->literals) &&
+           huff_build_table(dist_lengths, 32, s->distances);
 }
 
 static uint8_t inflate_build_dynamic_tables(inflate_stream_t *s)
@@ -148,13 +145,13 @@ static uint8_t inflate_build_dynamic_tables(inflate_stream_t *s)
     memset(lengths, 0, sizeof(lengths));
     for(uint16_t j = 0; j < hclen; j++)
         cl_lengths[order[j]] = (uint8_t)inflate_get_bits(s, 3, &ok);
-    if(!ok || !huff_build_table(cl_lengths, 19, g_huff_dist_table))
+    if(!ok || !huff_build_table(cl_lengths, 19, s->distances))
         return 0;
 
     total = (uint16_t)(hlit + hdist);
     while(i < total)
     {
-        int16_t sym = inflate_huff_decode(s, g_huff_dist_table);
+        int16_t sym = inflate_huff_decode(s, s->distances);
         if(sym < 0)
             return 0;
         if(sym <= 15)
@@ -196,8 +193,8 @@ static uint8_t inflate_build_dynamic_tables(inflate_stream_t *s)
         }
     }
 
-    return huff_build_table(lengths, hlit, g_huff_lit_table) &&
-           huff_build_table(&lengths[hlit], hdist, g_huff_dist_table);
+    return huff_build_table(lengths, hlit, s->literals) &&
+           huff_build_table(&lengths[hlit], hdist, s->distances);
 }
 
 static uint8_t inflate_codes(inflate_stream_t *s, uint8_t *out, uint32_t out_size, uint32_t *out_pos)
@@ -210,7 +207,7 @@ static uint8_t inflate_codes(inflate_stream_t *s, uint8_t *out, uint32_t out_siz
 
     while(1)
     {
-        int16_t sym = inflate_huff_decode(s, g_huff_lit_table);
+        int16_t sym = inflate_huff_decode(s, s->literals);
         if(sym < 0)
             return 0;
         if(sym < 256)
@@ -227,7 +224,7 @@ static uint8_t inflate_codes(inflate_stream_t *s, uint8_t *out, uint32_t out_siz
 
         uint16_t len_index = (uint16_t)(sym - 257);
         uint32_t length = len_base[len_index] + inflate_get_bits(s, len_extra[len_index], &ok);
-        int16_t dist_sym = inflate_huff_decode(s, g_huff_dist_table);
+        int16_t dist_sym = inflate_huff_decode(s, s->distances);
         if(!ok || dist_sym < 0 || dist_sym >= 30)
             return 0;
         uint32_t distance = dist_base[dist_sym] + inflate_get_bits(s, dist_extra[dist_sym], &ok);
@@ -242,9 +239,13 @@ static uint8_t inflate_codes(inflate_stream_t *s, uint8_t *out, uint32_t out_siz
     }
 }
 
-uint8_t png_zlib_inflate_to_buffer(const uint8_t *src, uint32_t src_size, uint8_t *out, uint32_t out_size)
+uint8_t png_zlib_inflate_to_buffer(const uint8_t *src, uint32_t src_size,
+                                  uint8_t *out, uint32_t out_size,
+                                  uint16_t *literals, uint16_t *distances)
 {
     inflate_stream_t s;
+    s.literals = literals;
+    s.distances = distances;
     uint32_t out_pos = 0;
     uint8_t final_block = 0;
     uint8_t ok = 1;
@@ -285,7 +286,7 @@ uint8_t png_zlib_inflate_to_buffer(const uint8_t *src, uint32_t src_size, uint8_
         }
         else if(block_type == 1)
         {
-            if(!inflate_build_fixed_tables() || !inflate_codes(&s, out, out_size, &out_pos))
+            if(!inflate_build_fixed_tables(&s) || !inflate_codes(&s, out, out_size, &out_pos))
                 return 0;
         }
         else if(block_type == 2)
