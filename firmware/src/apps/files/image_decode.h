@@ -14,7 +14,7 @@ typedef hk_indexed_frame_t file_gif_frame_t;
 
 typedef struct
 {
-    void (*begin)(void *context);
+    uint8_t (*begin)(void *context);
     void (*render_row_span)(void *context, uint32_t src_y, uint32_t src_h, const uint8_t *row, uint16_t src_w, uint8_t bpp, uint8_t bgr_order);
     uint8_t (*animation_begin)(void *context, uint16_t canvas_w, uint16_t canvas_h, uint16_t background_rgb565);
     uint8_t (*animation_frame_begin)(void *context, const file_gif_frame_t *frame);

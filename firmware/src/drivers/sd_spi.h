@@ -10,5 +10,6 @@ void sd_spi_cs_high(void);
 void sd_spi_cs_low(void);
 uint8_t sd_spi_xfer(uint8_t out);
 uint8_t sd_spi_read_bytes(uint8_t *data, size_t size, uint64_t deadline_us);
+uint8_t sd_spi_write_bytes(const uint8_t *data, size_t size, uint64_t deadline_us);
 
 #endif

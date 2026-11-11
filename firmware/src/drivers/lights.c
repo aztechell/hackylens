@@ -21,14 +21,14 @@ void lights_screen_backlight_set(uint8_t percent)
     /* Cube's backlight P-MOSFET is enabled by a low gate. */
     duty = (uint8_t)(100U - duty);
 #endif
-    hal_pwm_set(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, PWM_FREQ_HZ, (double)duty / 100.0);
+    hal_pwm_set(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, SCREEN_BL_PWM_FREQ_HZ, (double)duty / 100.0);
     hal_pwm_enable(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, 1);
 }
 
 void lights_screen_backlight_off(void)
 {
 #if HK_BOARD_LIGHTS_CUBE
-    hal_pwm_set(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, PWM_FREQ_HZ, 1.0);
+    hal_pwm_set(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, SCREEN_BL_PWM_FREQ_HZ, 1.0);
     hal_pwm_enable(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, 1);
 #else
     hal_pwm_enable(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, 0);

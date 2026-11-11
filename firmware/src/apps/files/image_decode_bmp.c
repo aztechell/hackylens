@@ -53,8 +53,8 @@ file_result_t files_open_bmp(const fat_file_entry_t *entry, const file_image_sin
     if(row_bytes > row_capacity)
         return FILE_RESULT_TOO_LARGE;
 
-    if(sink->begin)
-        sink->begin(sink->context);
+    if(sink->begin && !sink->begin(sink->context))
+        return FILE_RESULT_READ_ERROR;
     for(uint32_t file_row = 0; file_row < height; file_row++)
     {
         if(!fat_stream_read(&stream, row, row_bytes))

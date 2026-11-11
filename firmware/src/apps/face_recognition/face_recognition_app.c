@@ -18,7 +18,6 @@
 #include "../../services/resource_cleanup.h"
 #include "../../services/vision_result_service.h"
 #include "../../ui/camera_status_view.h"
-#include "../../ui/menu_icons.h"
 #include "face_recognition_image.h"
 
 #define MATCH_MINIMUM 0.61f
@@ -510,11 +509,6 @@ uint8_t face_recognition_handle_debug_command(const char *cmd)
                (unsigned)g_embedding.run_count, (unsigned)g_embedding.last_inference_us,
                g_active->message ? g_active->message : "NONE");
     return 1U;
-}
-
-void face_recognition_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
-{
-    hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_face_detect);
 }
 
 const hk_app_v2_entry_t face_recognition_v2_entry = {

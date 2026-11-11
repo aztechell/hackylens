@@ -109,31 +109,122 @@ hk_result_t fat_find_free_step(fat_cluster_search_t *search, uint32_t *cluster_o
     return search->remaining ? HK_PENDING : HK_ERR_LIMIT;
 }
 
+/* Camera files commonly occupy a contiguous run. Update each FAT sector once
+ * per mirror, with the usual write/readback verification. */
+static hk_result_t fat_check_free_run(uint32_t first, uint32_t end)
+{
+    const uint32_t per_sector = SD_BLOCK_SIZE / 4U;
+    uint8_t *sector = fat32_sector_scratch();
+    while(first < end)
+    {
+        uint32_t index = first / per_sector;
+        if(!sd_card_read_block(fat32_geometry()->fat_begin + index, sector))
+            return HK_ERR_IO;
+        do
+        {
+            if(rd32(sector + (first % per_sector) * 4U) & 0x0fffffffUL)
+                return HK_ERR_BUSY;
+            first++;
+        } while(first < end && first / per_sector == index);
+    }
+    return HK_OK;
+}
+
+static uint8_t fat_write_run(uint32_t first, uint32_t end, uint8_t clear)
+{
+    const fat32_geometry_t *geometry = fat32_geometry();
+    const uint32_t per_sector = SD_BLOCK_SIZE / 4U;
+    uint8_t *sector = fat32_sector_scratch();
+    for(uint8_t copy = 0; copy < geometry->fat_count; copy++)
+    {
+        uint32_t base = geometry->fat_begin + (uint32_t)copy * geometry->sectors_per_fat;
+        for(uint32_t cluster = first; cluster < end;)
+        {
+            uint32_t index = cluster / per_sector;
+            if(!sd_card_read_block(base + index, sector))
+                return 0U;
+            do
+            {
+                uint8_t *entry = sector + (cluster % per_sector) * 4U;
+                uint32_t next = cluster + 1U == end ? FAT32_EOC : cluster + 1U;
+                wr32(entry, (rd32(entry) & 0xf0000000UL) | (clear ? 0U : next));
+                cluster++;
+            } while(cluster < end && cluster / per_sector == index);
+            if(!sd_card_write_block(base + index, sector))
+                return 0U;
+        }
+    }
+    return 1U;
+}
+
+static hk_result_t fat_alloc_run(uint32_t count, uint32_t *first_out)
+{
+    uint32_t first;
+    const uint32_t limit = fat32_geometry()->cluster_count + 2U;
+    if(!fat_find_free_cluster(&first))
+        return HK_ERR_IO;
+    fat32_set_alloc_hint(first);
+    if(count > limit - first)
+        return HK_ERR_BUSY;
+    uint32_t end = first + count;
+    hk_result_t result = fat_check_free_run(first, end);
+    if(result != HK_OK)
+        return result;
+    if(!fat_write_run(first, end, 0U))
+    {
+        (void)fat_write_run(first, end, 1U);
+        return HK_ERR_IO;
+    }
+    fat32_set_alloc_hint(end);
+    *first_out = first;
+    return HK_OK;
+}
+
 uint8_t fat_alloc_chain(uint32_t count, uint32_t *first_out)
 {
-    uint32_t first = 0;
-    uint32_t previous = 0;
+    uint32_t first = 0U;
+    uint32_t previous = 0U;
 
-    if(count == 0)
-        return 0;
+    if(!first_out || count == 0U || count > fat32_geometry()->cluster_count)
+        return 0U;
+    if(count > 1U)
+    {
+        hk_result_t run = fat_alloc_run(count, first_out);
+        if(run != HK_ERR_BUSY)
+            return run == HK_OK;
+    }
 
     for(uint32_t i = 0; i < count; i++)
     {
         uint32_t cluster;
         if(!fat_find_free_cluster(&cluster))
-            return 0;
+            goto failed;
         if(!fat_write_entry(cluster, FAT32_EOC))
-            return 0;
+        {
+            (void)fat_write_entry(cluster, 0U);
+            goto failed;
+        }
         if(previous && !fat_write_entry(previous, cluster))
-            return 0;
-        if(first == 0)
+        {
+            /* The primary FAT link may have been written before the mirror failed. */
+            (void)fat_write_entry(previous, FAT32_EOC);
+            (void)fat_write_entry(cluster, 0U);
+            goto failed;
+        }
+        if(first == 0U)
             first = cluster;
         previous = cluster;
     }
 
     *first_out = first;
-    return 1;
+    return 1U;
+
+failed:
+    if(first)
+        (void)fat_free_chain(first);
+    return 0U;
 }
+
 
 uint8_t fat_free_chain(uint32_t first_cluster)
 {

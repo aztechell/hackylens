@@ -31,6 +31,11 @@ uint8_t sd_spi_read_bytes(uint8_t *data, size_t size, uint64_t deadline_us)
     return hal_spi_fifo_read_bytes(SD_SPI, data, size, deadline_us);
 }
 
+uint8_t sd_spi_write_bytes(const uint8_t *data, size_t size, uint64_t deadline_us)
+{
+    return hal_spi_fifo_write_bytes(SD_SPI, data, size, deadline_us);
+}
+
 void sd_spi_board_init(uint32_t init_hz)
 {
     hk_board_ops.sd_prepare();

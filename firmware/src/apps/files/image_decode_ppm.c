@@ -75,8 +75,8 @@ file_result_t files_open_ppm(const fat_file_entry_t *entry, const file_image_sin
 
     if(!sink || !sink->render_row_span)
         return FILE_RESULT_NOT_FOUND;
-    if(sink->begin)
-        sink->begin(sink->context);
+    if(sink->begin && !sink->begin(sink->context))
+        return FILE_RESULT_READ_ERROR;
     for(uint32_t src_y = 0; src_y < height; src_y++)
     {
         if(!fat_stream_read(&stream, row, row_bytes))

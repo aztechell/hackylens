@@ -61,7 +61,7 @@ DEFAULT_FIELDS = {
     "flash_chip_select", "led_pwm_device", "led_pwm_channel",
     "rgb_pwm_device", "rgb_pwm_channel0", "rgb_pwm_channel1",
     "rgb_pwm_channel2", "screen_pwm_device", "screen_pwm_channel",
-    "pwm_frequency_hz", "camera_xclk_hz",
+    "pwm_frequency_hz", "screen_pwm_frequency_hz", "camera_xclk_hz",
     "camera_max_width", "camera_max_height", "camera_preview_rotate",
 }
 GPIOHS_DEFAULT_ROUTES = {
@@ -106,6 +106,7 @@ DEFAULT_RANGES = {
     "screen_pwm_device": (0, 2),
     "screen_pwm_channel": (0, 3),
     "pwm_frequency_hz": (1, 100_000_000),
+    "screen_pwm_frequency_hz": (1, 100_000_000),
     "camera_xclk_hz": (1, 50_000_000),
     "camera_max_width": (1, 640),
     "camera_max_height": (1, 480),
@@ -617,9 +618,9 @@ def _validate_defaults(data: dict[str, Any]) -> None:
         if name in defaults and defaults[name] != expected:
             raise ContractError(f"defaults.{name}: K210 requires {expected}")
     if data["support"] == "runtime":
-        required_defaults = DEFAULT_FIELDS
+        required_defaults = DEFAULT_FIELDS - {"screen_pwm_frequency_hz"}
         if data.get("runtime_profile") == "hackylens-cube":
-            required_defaults = DEFAULT_FIELDS - {"gpiohs_button_back"}
+            required_defaults -= {"gpiohs_button_back"}
         missing_defaults = sorted(required_defaults - set(defaults))
         if missing_defaults:
             raise ContractError(

@@ -15,6 +15,7 @@
     "pong": "10e3fa8b957d34a0d77dc258a829860ca05ebc317664b998ea0abd6a18ff9520",
     "settings": "2f4e710243e0e7e3b14bf33df360b61816198e588db2a6b00594a5e811d5baeb",
     "power": "4f3fda3b29bdd943b21708cabbc87a98a4d5341decb50ef9c377db2b8f572805",
-    "micropython": "649a04ea294c64c69baa311dc10c657956dfaf37df178b569beb00cc5ae6a4fb"
+    "micropython": "649a04ea294c64c69baa311dc10c657956dfaf37df178b569beb00cc5ae6a4fb",
+    "face-recognition": "8612e0ad6c628ae7a65b0002941c170174d72e43b438559f3b6f954fba7d5d7e"
   }
 }

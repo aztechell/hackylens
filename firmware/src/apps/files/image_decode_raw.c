@@ -38,8 +38,8 @@ file_result_t files_open_raw565(const fat_file_entry_t *entry, const file_image_
     if((uint32_t)width * 2U > row_capacity)
         return FILE_RESULT_TOO_LARGE;
 
-    if(sink->begin)
-        sink->begin(sink->context);
+    if(sink->begin && !sink->begin(sink->context))
+        return FILE_RESULT_READ_ERROR;
     for(uint32_t src_y = 0; src_y < height; src_y++)
     {
         if(!fat_stream_read(&stream, row, (uint32_t)width * 2U))

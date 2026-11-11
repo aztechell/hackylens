@@ -153,8 +153,11 @@ file_result_t files_open_png(const fat_file_entry_t *entry, const file_image_sin
         result = FILE_RESULT_NOT_FOUND;
         goto cleanup;
     }
-    if(sink->begin)
-        sink->begin(sink->context);
+    if(sink->begin && !sink->begin(sink->context))
+    {
+        result = FILE_RESULT_READ_ERROR;
+        goto cleanup;
+    }
     for(uint32_t y = 0; y < height; y++)
     {
         uint8_t *row = &png_out[y * (row_bytes + 1U) + 1U];

@@ -3,5 +3,5 @@ name = "POWER"
 entry = "power_v2_entry"
 sources = ["sleep_app.c", "sleep_controller.c", "sleep_view.c", "power_app.c"]
 requires = ["display", "time", "input", "power"]
-menu_order = 11
+menu_order = 150
 tick_ms = 20

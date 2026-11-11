@@ -158,7 +158,8 @@ static void files_controller_tick_delete(uint32_t input_state, uint64_t now_us)
         return;
     }
 
-    files_controller_handle_nav_repeat(input_state, now_us);
+    if(mode == FILES_MODE_LIST || mode == FILES_MODE_TEXT)
+        files_controller_handle_nav_repeat(input_state, now_us);
 }
 
 static void files_controller_handle_delete_confirm(uint32_t pressed)
@@ -190,15 +191,13 @@ static void files_controller_handle_preview_buttons(
         files_presenter_render_list();
         return;
     }
-    if(pressed & HK_INPUT_BUTTON_LEFT)
+    uint32_t direction = pressed & (HK_INPUT_BUTTON_LEFT | HK_INPUT_BUTTON_RIGHT);
+    if(direction == HK_INPUT_BUTTON_LEFT || direction == HK_INPUT_BUTTON_RIGHT)
     {
-        files_nav_delta(-1);
-        files_repeat_start(HK_INPUT_BUTTON_LEFT, now_us);
-    }
-    if(pressed & HK_INPUT_BUTTON_RIGHT)
-    {
-        files_nav_delta(1);
-        files_repeat_start(HK_INPUT_BUTTON_RIGHT, now_us);
+        files_repeat_reset();
+        files_nav_delta(direction == HK_INPUT_BUTTON_LEFT ? -1 : 1);
+        if(files_mode() == FILES_MODE_TEXT)
+            files_repeat_start(direction, now_us);
     }
     if(pressed & HK_INPUT_BUTTON_OK)
     {

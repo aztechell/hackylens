@@ -14,8 +14,10 @@ pin and peripheral operations stay in board/HAL. See the
 [external link protocol](EXTERNAL_LINK_PROTOCOL.md#results-and-unified-items)
 for the geometry exposed on the wire.
 
-Default enabled apps: TERMINAL, CAMERA, QR-CAMERA, FACE DETECT, APRILTAG,
-OBJECT DETECT, MICROPYTHON, FILES, BUTTONS, PONG, SETTINGS, SLEEP.
+The launcher starts with CAMERA, QR-CAMERA, FACE DETECT, FACE RECOG,
+OBJECT DETECT, APRILTAG and FILES. On Maix Cube, RECORDER and ACCELEROMETER
+follow FILES. MICRO-PYTHON, TERMINAL, BUTTONS, PONG, SETTINGS and POWER finish
+the launcher on both boards.
 
 ## Typed services and app runtime
 

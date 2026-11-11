@@ -1,6 +1,7 @@
 #include "camera_controller.h"
 
 #include <stdio.h>
+#include <hackylens/capability/input.h>
 
 #include "../../controllers/camera_runtime_controller.h"
 #include "../../core/hk_menu.h"
@@ -17,6 +18,8 @@ void camera_controller_enter(const hk_input_snapshot_t *input)
 
 void camera_controller_exit(void)
 {
+    if(camera_photo_controller_active())
+        camera_photo_controller_dismiss();
     camera_settings_close();
     camera_stop();
     camera_service_clear_mode();
@@ -27,6 +30,11 @@ void camera_controller_tick(const hk_input_snapshot_t *input)
     if(camera_settings_active())
     {
         camera_settings_tick(input);
+        return;
+    }
+    if(camera_photo_controller_active())
+    {
+        camera_photo_controller_tick(camera_runtime_redraw_preview);
         return;
     }
     if(camera_runtime_ok_hold_triggered(input))
@@ -60,12 +68,21 @@ uint8_t camera_controller_handle_input(const hk_input_snapshot_t *input)
         return 0U;
     }
 
+    if(camera_photo_controller_active())
+    {
+        if(input && (input->pressed & HK_INPUT_BUTTON_BACK))
+            return 1U;
+        if(input && (input->pressed & HK_INPUT_BUTTON_OK))
+            camera_photo_controller_dismiss();
+        return 0U;
+    }
+
     camera_runtime_input_event_t event = camera_runtime_handle_input(input);
 
     if(event == CAMERA_RUNTIME_INPUT_EXIT)
         return 1U;
     else if(event == CAMERA_RUNTIME_INPUT_OK_RELEASE)
-        camera_photo_controller_take(camera_runtime_redraw_preview);
+        camera_photo_controller_take();
     return 0U;
 }
 

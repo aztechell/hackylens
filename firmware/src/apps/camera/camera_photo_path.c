@@ -56,7 +56,6 @@ static uint8_t photo_create_dir(uint32_t *cluster_out)
     }
 
     *cluster_out = dir_cluster;
-    printf("[PHOTO] mkdir %s cluster=%u\r\n", PHOTO_DIR_LONG_NAME, dir_cluster);
     return 1;
 }
 
@@ -69,16 +68,11 @@ static uint8_t photo_ensure_dir(void)
     if(result == FILE_DIR_SCAN_ERROR)
     {
         file_write_set_error("ROOT READ");
-        printf("[PHOTO] root read failed\r\n");
         return 0;
     }
     if(result == FILE_DIR_SCAN_FOUND)
-    {
-        printf("[PHOTO] dir exists cluster=%u\r\n", g_photo_dir_cluster);
         return g_photo_dir_cluster >= 2;
-    }
 
-    printf("[PHOTO] dir missing, creating %s\r\n", PHOTO_DIR_LONG_NAME);
     return photo_create_dir(&g_photo_dir_cluster);
 }
 

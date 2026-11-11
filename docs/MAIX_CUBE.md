@@ -27,6 +27,8 @@ it probes power status without changing battery charging or regulator policy.
 RGB pins are 13/12/14, white illumination32, and backlight17. All are active-low:
 RGB packages have common anodes; the white LED and backlight use SI2301
 high-side switches. PWM is driven to its inactive high level before pin routing.
+Timer 0 runs the LCD backlight at 500 Hz from the 26 MHz crystal. Timer 2
+runs the white and RGB LEDs at 20 kHz.
 
 The ES8374 uses address `0x10` on the same internal I2C1 bus as the AXP173.
 I2S0 uses MCLK19, BCLK35, LRCLK33, codec data out34 and codec data in18,

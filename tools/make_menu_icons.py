@@ -48,7 +48,7 @@ def main() -> int:
         if not HEADER.is_file() or HEADER.read_text(encoding="utf-8") != expected:
             print("[FAIL] launcher assets are stale; run python tools/make_menu_icons.py")
             return 1
-        print("[OK] all 12 launcher assets match the approved V2 masks")
+        print("[OK] launcher assets match the source masks")
     else:
         HEADER.write_text(expected, encoding="utf-8", newline="\n")
         print(f"[OK] {HEADER}")

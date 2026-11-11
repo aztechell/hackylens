@@ -36,6 +36,7 @@ class MenuIconTests(unittest.TestCase):
             "tests/menu_icons_harness.c", "firmware/src/ui/ui_menu.c",
             "firmware/src/apps/camera/camera_view.c",
             "firmware/src/apps/face_detect/face_detect_view.c",
+            "firmware/src/apps/face_recognition/face_recognition_icon.c",
             "firmware/src/apps/apriltag/apriltag_view.c",
             "firmware/src/apps/object_detect/object_detect_view.c",
             "firmware/src/apps/micropython/micropython_view.c",

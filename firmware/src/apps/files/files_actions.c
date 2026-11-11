@@ -90,19 +90,18 @@ static void files_select_delta(int8_t delta)
     }
 }
 
-uint8_t files_open_image_at_index(uint8_t index)
+static uint8_t files_open_image_at_index(uint8_t index)
 {
     const fat_file_entry_t *entry = files_entry_at(index);
 
     if(!entry || !files_entry_is_image(entry))
         return 0;
 
-    if(files_presenter_render_image(entry) != FILE_RESULT_OK)
-        return 0;
-
+    /* LEFT/RIGHT and BACK operate on the displayed entry even if decoding fails. */
     files_set_index(index);
     files_ensure_visible();
     files_set_mode(FILES_MODE_IMAGE);
+    (void)files_presenter_render_image(entry);
     return 1;
 }
 
@@ -129,7 +128,7 @@ static uint8_t files_open_image_delta(int8_t delta)
     return 0;
 }
 
-uint8_t files_open_image_from_current_or_next(void)
+static uint8_t files_open_image_from_current_or_next(void)
 {
     uint8_t count = files_count();
     uint8_t index = files_index();
@@ -141,7 +140,7 @@ uint8_t files_open_image_from_current_or_next(void)
         index = (uint8_t)(count - 1U);
         files_set_index(index);
     }
-    if(files_entry_is_image(files_entry_at(index)) && files_open_image_at_index(index))
+    if(files_open_image_at_index(index))
         return 1;
     return files_open_image_delta(1);
 }
@@ -186,8 +185,7 @@ void files_open_selected(void)
 
     if(files_entry_is_image(entry))
     {
-        if(files_presenter_render_image(entry) == FILE_RESULT_OK)
-            files_set_mode(FILES_MODE_IMAGE);
+        (void)files_open_image_at_index(files_index());
         return;
     }
 

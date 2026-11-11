@@ -303,6 +303,7 @@ rgb_pwm_channel1 = 1
 rgb_pwm_channel2 = 2
 screen_pwm_device = 0
 screen_pwm_channel = 0
+screen_pwm_frequency_hz = 500
 pwm_frequency_hz = 20000
 # Cube uses I2C2 with the OV7740 seven-bit address.
 camera_xclk_hz = 22000000

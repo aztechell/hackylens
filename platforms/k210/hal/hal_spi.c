@@ -560,13 +560,13 @@ uint8_t hal_spi_fifo_xfer_u8(uint8_t device, uint8_t out)
     return (uint8_t)spi->dr[0];
 }
 
-uint8_t hal_spi_fifo_read_bytes(uint8_t device, uint8_t *data, size_t size,
-                                uint64_t deadline_us)
+static uint8_t fifo_transfer_bytes(uint8_t device, const uint8_t *tx, uint8_t *rx,
+                                   size_t size, uint64_t deadline_us)
 {
     volatile spi_t *spi = hal_spi_regs(device);
     size_t sent = 0U;
     size_t received = 0U;
-    if(!spi || !data)
+    if(!spi || (!tx && !rx))
         return 0U;
 
     while(received < size)
@@ -580,16 +580,33 @@ uint8_t hal_spi_fifo_read_bytes(uint8_t device, uint8_t *data, size_t size,
             return 0U;
         }
         while(available--)
-            data[received++] = (uint8_t)spi->dr[0];
+        {
+            uint8_t byte = (uint8_t)spi->dr[0];
+            if(rx)
+                rx[received] = byte;
+            received++;
+        }
 
         /* Count every queued or in-flight frame against the RX FIFO capacity. */
         size_t room = 32U - (sent - received);
         while(room && sent < size)
         {
-            spi->dr[0] = 0xffU;
+            spi->dr[0] = tx ? tx[sent] : 0xffU;
             sent++;
             room--;
         }
     }
     return 1U;
+}
+
+uint8_t hal_spi_fifo_read_bytes(uint8_t device, uint8_t *data, size_t size,
+                                uint64_t deadline_us)
+{
+    return fifo_transfer_bytes(device, NULL, data, size, deadline_us);
+}
+
+uint8_t hal_spi_fifo_write_bytes(uint8_t device, const uint8_t *data, size_t size,
+                                 uint64_t deadline_us)
+{
+    return fifo_transfer_bytes(device, data, NULL, size, deadline_us);
 }

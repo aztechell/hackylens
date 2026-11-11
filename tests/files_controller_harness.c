@@ -135,6 +135,14 @@ int main(void)
     files_controller_tick(&state, 0U);
     check(g_nav == 4, "release cancels repeat");
 
+    g_mode = FILES_MODE_IMAGE;
+    files_controller_handle_input(&state, &right);
+    check(g_nav == 5, "image navigation advances once per press");
+    g_now_us += 2000000U;
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    files_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    check(g_nav == 5, "held direction must never open an image from a timer");
+
     if(g_failures)
         return 1;
     puts("FILES_CONTROLLER_OK open=1 monotonic=1 failure_safe=1");

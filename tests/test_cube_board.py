@@ -56,6 +56,8 @@ class CubeBoardTests(unittest.TestCase):
                       "HK_BOARD_POWER_AXP173", "HK_BOARD_INPUT_PROFILE_CUBE"):
             self.assertIn(f"#define {macro} 1U", text)
         self.assertIn("#define HK_BOARD_UI_WIDTH 240U", text)
+        self.assertIn("#define SCREEN_BL_PWM_FREQ_HZ 500.0", text)
+        self.assertIn("#define PWM_FREQ_HZ 20000.0", text)
         data = copy.deepcopy(self.board.data)
         data["drivers"]["camera"] = "ov2640"
         with self.assertRaisesRegex(board_contract.ContractError, "drivers"):

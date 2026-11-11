@@ -44,6 +44,7 @@ DEFAULT_MACROS = {
     "rgb_pwm_channel2": "RGB_PWM_CHANNEL2",
     "screen_pwm_device": "SCREEN_BL_PWM_DEVICE",
     "screen_pwm_channel": "SCREEN_BL_PWM_CHANNEL",
+    "screen_pwm_frequency_hz": "SCREEN_BL_PWM_FREQ_HZ",
     "pwm_frequency_hz": "PWM_FREQ_HZ",
     "camera_xclk_hz": "CAMERA_XCLK_HZ",
     "camera_max_width": "CAMERA_MAX_W",
@@ -88,13 +89,15 @@ def render_board_config(board: Board) -> str:
         )
     if board.selected_routes():
         lines.append("")
-    defaults = board.data.get("defaults", {})
+    defaults = dict(board.data.get("defaults", {}))
+    if "pwm_frequency_hz" in defaults:
+        defaults.setdefault("screen_pwm_frequency_hz", defaults["pwm_frequency_hz"])
     for field, macro in DEFAULT_MACROS.items():
         if field not in defaults:
             continue
         value = defaults[field]
         suffix = (
-            ".0" if field == "pwm_frequency_hz"
+            ".0" if field in {"pwm_frequency_hz", "screen_pwm_frequency_hz"}
             else "" if field in {"lcd_width", "lcd_height"}
             else "U"
         )

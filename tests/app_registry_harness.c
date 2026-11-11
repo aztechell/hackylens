@@ -370,18 +370,29 @@ int main(void)
           11U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
           HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION);
     CHECK(g_menu_item_count == g_hk_generated_app_count);
+    static const char *const menu_order[] = {
+        "camera", "qr-camera", "face-detect",
 #if HK_ENABLE_APP_FACE_RECOGNITION
-    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "face-recognition") == 0);
-#elif HK_ENABLE_APP_ACCELEROMETER
-    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "accelerometer") == 0);
-#elif HK_ENABLE_APP_RECORDER
-    CHECK(strcmp(g_menu_items[g_menu_item_count - 1U]->id, "recorder") == 0);
+        "face-recognition",
+#endif
+        "object-detect", "apriltag", "files",
+#if HK_ENABLE_APP_RECORDER
+        "recorder",
+#endif
+#if HK_ENABLE_APP_ACCELEROMETER
+        "accelerometer",
 #endif
 #if HK_ENABLE_APP_MICROPYTHON
-    CHECK(strcmp(g_menu_items[11]->id, "micropython") == 0);
+        "micropython",
+#endif
+        "terminal", "buttons", "pong", "settings", "power",
+    };
+    CHECK(g_menu_item_count == sizeof(menu_order) / sizeof(menu_order[0]));
+    for(uint8_t index = 0U; index < g_menu_item_count; index++)
+        CHECK(strcmp(g_menu_items[index]->id, menu_order[index]) == 0);
+#if HK_ENABLE_APP_MICROPYTHON
     CHECK(hk_app_for_autostart_id(10U) == app_by_id("micropython"));
 #else
-    CHECK(strcmp(g_menu_items[10]->id, "power") == 0);
     CHECK(hk_app_for_autostart_id(10U) == NULL);
 #endif
     CHECK(hk_app_autostart_id_is_persistable(HK_AUTOSTART_OFF) == 1U);
@@ -392,7 +403,6 @@ int main(void)
                  HK_ENABLE_APP_ACCELEROMETER ? "accelerometer" : "apriltag") == 0);
     CHECK(strcmp(g_hk_generated_apps[g_hk_generated_app_count - 1U]->id,
                  "terminal") == 0);
-    CHECK(strcmp(g_menu_items[0]->id, "terminal") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(6U)->id, "files") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(9U)->id, "object-detect") == 0);
     CHECK(strcmp(hk_app_autostart_at(5U)->id,

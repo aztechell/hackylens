@@ -10,6 +10,7 @@ class S7Regressions(unittest.TestCase):
             exe = Path(tmp) / "test.exe"
             subprocess.run([os.environ.get("CC", "gcc"), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-flto", "-ffunction-sections", "-fdata-sections", "-Wl,--gc-sections",
                 '-DHACKYLENS_VERSION="host"', f"-I{ROOT / 'sdk/include'}", f"-I{ROOT / 'firmware/include'}",
+                f"-I{ROOT / 'firmware/assets'}",
                 str(ROOT / 'tests' / name), str(ROOT / source), "-o", str(exe)], check=True)
             result = subprocess.run([str(exe)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -20,3 +21,6 @@ class S7Regressions(unittest.TestCase):
 
     def test_short_press_during_gif_is_retained_for_normal_dispatch(self):
         self.run_harness("files_gif_input_harness.c", "firmware/src/capabilities/input_state.c")
+
+    def test_unsupported_image_remains_navigable_in_both_directions(self):
+        self.run_harness("files_image_navigation_harness.c", "firmware/src/apps/files/files_actions.c")

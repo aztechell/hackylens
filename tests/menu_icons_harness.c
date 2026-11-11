@@ -31,12 +31,13 @@ DECLARE_ICON(pong_draw_icon);
 DECLARE_ICON(settings_draw_icon);
 DECLARE_ICON(power_draw_icon);
 DECLARE_ICON(micropython_view_draw_icon);
+DECLARE_ICON(face_recognition_draw_icon);
 
 static const draw_icon_t callbacks[] = {
     terminal_draw_icon, camera_view_draw_icon, qr_camera_draw_icon,
     face_detect_view_draw_icon, apriltag_view_draw_icon, object_detect_view_draw_icon,
     files_draw_icon, buttons_draw_icon, pong_draw_icon, settings_draw_icon,
-    power_draw_icon, micropython_view_draw_icon,
+    power_draw_icon, micropython_view_draw_icon, face_recognition_draw_icon,
 };
 
 static void reset(void)

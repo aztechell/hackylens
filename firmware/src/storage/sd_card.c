@@ -119,6 +119,24 @@ uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
     return result;
 }
 
+static uint8_t sd_write_payload(uint8_t token, const uint8_t *src)
+{
+    sd_spi_xfer(0xFF);
+    sd_spi_xfer(token);
+    if(!sd_spi_write_bytes(src, SD_BLOCK_SIZE, hal_time_us() + SD_BLOCK_TRANSFER_TIMEOUT_US))
+        return 0xffU;
+    sd_spi_xfer(0xFF);
+    sd_spi_xfer(0xFF);
+
+    for(uint8_t i = 0; i < 64; i++)
+    {
+        uint8_t response = sd_spi_xfer(0xFF);
+        if(response != 0xffU)
+            return response;
+    }
+    return 0xffU;
+}
+
 static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t verify)
 {
     uint32_t arg = fat32_card_is_sdhc() ? lba : lba * SD_BLOCK_SIZE;
@@ -132,20 +150,7 @@ static uint8_t sd_write_block_checked(uint32_t lba, const uint8_t *src, uint8_t 
         return 0;
     }
 
-    sd_spi_xfer(0xFF);
-    sd_spi_xfer(0xFE);
-    for(uint16_t i = 0; i < SD_BLOCK_SIZE; i++)
-        sd_spi_xfer(src[i]);
-    sd_spi_xfer(0xFF);
-    sd_spi_xfer(0xFF);
-
-    response = 0xFF;
-    for(uint8_t i = 0; i < 64; i++)
-    {
-        response = sd_spi_xfer(0xFF);
-        if(response != 0xFF)
-            break;
-    }
+    response = sd_write_payload(0xfeU, src);
     if((response & 0x1FU) != 0x05)
     {
         sd_deselect();
@@ -195,6 +200,53 @@ uint8_t sd_card_write_block(uint32_t lba, const uint8_t *src)
 uint8_t sd_card_write_block_fast(uint32_t lba, const uint8_t *src)
 {
     return sd_write_block(lba, src, 0U);
+}
+
+uint8_t sd_card_write_run(uint32_t lba, uint16_t count,
+                          sd_block_source_t source, void *context)
+{
+    if(!source || !count || lba > UINT32_MAX - (count - 1U))
+        return 0U;
+
+    if(count > 1U)
+    {
+        uint32_t arg = fat32_card_is_sdhc() ? lba : lba * SD_BLOCK_SIZE;
+        uint8_t response = sd_command(25U, arg, 0x01U, NULL, 0U, 0U);
+        if(response == 0U)
+        {
+            uint16_t written = 0U;
+            while(written < count && sd_wait_ready())
+            {
+                const uint8_t *data = source(context, written);
+                if(!data || (sd_write_payload(0xfcU, data) & 0x1fU) != 0x05U)
+                    break;
+                written++;
+            }
+            uint8_t ready = sd_wait_ready();
+            if(ready)
+            {
+                sd_spi_xfer(0xfdU); /* SPI Stop Tran token for CMD25. */
+                sd_spi_xfer(0xffU);
+                ready = sd_wait_ready();
+            }
+            sd_deselect();
+            if(written == count && ready)
+                return 1U;
+            printf("[SD] CMD25 incomplete lba=%u blocks=%u/%u\r\n", lba, written, count);
+            return 0U;
+        }
+        sd_deselect();
+        if(response != 0x04U) /* Fall back only on an explicit illegal-command response. */
+            return 0U;
+    }
+
+    for(uint16_t index = 0U; index < count; index++)
+    {
+        const uint8_t *data = source(context, index);
+        if(!data || !sd_card_write_block_fast(lba + index, data))
+            return 0U;
+    }
+    return 1U;
 }
 
 uint8_t sd_card_init(void)

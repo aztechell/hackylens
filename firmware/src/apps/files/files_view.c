@@ -28,6 +28,7 @@ static uint8_t g_animation_frame_open;
 static uint8_t g_animation_reset_pending;
 static uint8_t g_animation_previous_valid;
 static uint8_t g_animation_backup_valid;
+static uint32_t g_image_lease;
 
 static void files_view_enter_impl(void)
 {
@@ -39,6 +40,36 @@ static void files_view_draw_status_impl(const char *line)
     hk_ui_display_draw_text_centered(96, line, COLOR_TERM_GREEN, COLOR_BLACK);
 }
 
+static void files_view_draw_file_status_impl(const char *name, const char *status)
+{
+    hk_ui_display_surface_t surface;
+    if(!hk_ui_display_frame_acquire(&surface))
+        return;
+    menu_draw_chrome("FILES");
+    hk_ui_display_draw_text_clipped_at(10, 91, HK_DISPLAY_REQUIRED_WIDTH - 20,
+                                       name, COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_at(10, 121, status, COLOR_TERM_GREEN, COLOR_BLACK);
+    (void)hk_ui_display_frame_present(surface.lease_id);
+}
+
+static void files_view_draw_item_icon(file_item_kind_t kind, uint16_t x, uint16_t y,
+                                      uint16_t fg, uint16_t bg)
+{
+    if(kind == FILE_ITEM_DIRECTORY)
+    {
+        hk_ui_display_draw_rect(x, y + 4U, 15U, 10U, 1U, fg);
+        hk_ui_display_fill_rect(x, y + 2U, 6U, 2U, fg);
+        return;
+    }
+
+    hk_ui_display_draw_rect(x + 2U, y, 11U, 15U, 1U, fg);
+    hk_ui_display_fill_rect(x + 10U, y, 3U, 3U, bg);
+    hk_ui_display_fill_rect(x + 10U, y + 1U, 1U, 3U, fg);
+    hk_ui_display_fill_rect(x + 10U, y + 3U, 3U, 1U, fg);
+    hk_ui_display_fill_rect(x + 5U, y + 7U, 5U, 1U, fg);
+    hk_ui_display_fill_rect(x + 5U, y + 10U, 5U, 1U, fg);
+}
+
 static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items, uint8_t count, uint8_t top, uint8_t index)
 {
     uint8_t entry_index = (uint8_t)(top + row);
@@ -46,39 +77,42 @@ static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items,
     uint8_t selected = entry_index == index;
     uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
     uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
-    char line[FILE_NAME_MAX + 4U];
-
     hk_ui_display_fill_rect(6, y, HK_DISPLAY_REQUIRED_WIDTH - 12, FILES_ROW_H - 2, bg);
     if(entry_index >= count)
         return;
 
-    line[0] = items[entry_index].kind == FILE_ITEM_DIRECTORY ? 'D' : 'F';
-    line[1] = ' ';
-    utf8_copy_glyphs(&line[2], sizeof(line) - 2U, items[entry_index].name, 18U);
-    hk_ui_display_draw_text_at(10, y + 1, line, fg, bg);
+    files_view_draw_item_icon(items[entry_index].kind, 11U, y + 5U, fg, bg);
+    hk_ui_display_draw_text_clipped_at(33U, y + 1U, HK_DISPLAY_REQUIRED_WIDTH - 42U,
+                                       items[entry_index].name, fg, bg);
+}
+
+static void files_view_update_row_impl(uint8_t row, const file_list_item_t *items, uint8_t count, uint8_t top, uint8_t index)
+{
+    hk_ui_display_surface_t surface;
+    if(!hk_ui_display_frame_acquire(&surface))
+        return;
+    files_view_draw_row_impl(row, items, count, top, index);
+    const hk_ui_display_rect_t dirty = {6, FILES_ROW_Y0 + row * FILES_ROW_H,
+                                       HK_DISPLAY_REQUIRED_WIDTH - 12, FILES_ROW_H - 2};
+    (void)hk_ui_display_frame_present_regions(surface.lease_id, &dirty, 1U);
 }
 
 static void files_view_render_list_impl(uint8_t sd_present, uint8_t fat_mounted, const file_list_item_t *items, uint8_t count, uint8_t top, uint8_t index)
 {
+    hk_ui_display_surface_t surface;
+    if(!hk_ui_display_frame_acquire(&surface))
+        return;
     menu_draw_chrome("FILES");
     if(!sd_present)
-    {
         hk_ui_display_draw_text_centered(96, "NO SD", COLOR_TERM_GREEN, COLOR_BLACK);
-        return;
-    }
-    if(!fat_mounted)
-    {
+    else if(!fat_mounted)
         hk_ui_display_draw_text_centered(96, "FAT32 ONLY", COLOR_TERM_GREEN, COLOR_BLACK);
-        return;
-    }
-    if(count == 0)
-    {
+    else if(count == 0)
         hk_ui_display_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
-        return;
-    }
-
-    for(uint8_t row = 0; row < FILES_ROWS; row++)
-        files_view_draw_row_impl(row, items, count, top, index);
+    else
+        for(uint8_t row = 0; row < FILES_ROWS; row++)
+            files_view_draw_row_impl(row, items, count, top, index);
+    (void)hk_ui_display_frame_present(surface.lease_id);
 }
 
 static void files_view_render_preview_impl(const char *preview, uint16_t len, uint8_t page)
@@ -105,41 +139,51 @@ static void files_view_render_preview_impl(const char *preview, uint16_t len, ui
     }
 }
 
-static void files_view_clear_image_impl(void)
+static uint8_t files_view_begin_image_impl(void)
 {
+    hk_ui_display_surface_t surface;
+    if(!hk_ui_display_frame_acquire(&surface))
+        return 0U;
+    g_image_lease = surface.lease_id;
     hk_ui_display_fill_rect(0, 0, HK_DISPLAY_REQUIRED_WIDTH, HK_DISPLAY_REQUIRED_HEIGHT, COLOR_BLACK);
+    return 1U;
 }
 
-static void files_view_render_rgb888_scaled_row_at(uint16_t x0, uint16_t y, uint16_t dst_w, const uint8_t *row, uint16_t src_w, uint8_t bgr_order)
+static uint8_t files_view_end_image_impl(uint8_t present)
 {
-    for(uint16_t x = 0; x < dst_w; x++)
-    {
-        uint32_t src_x = (uint32_t)x * src_w / dst_w;
-        const uint8_t *px = &row[src_x * 3U];
-        uint8_t r = bgr_order ? px[2] : px[0];
-        uint8_t g = px[1];
-        uint8_t b = bgr_order ? px[0] : px[2];
-        uint16_t color = (uint16_t)(((uint16_t)(r & 0xF8U) << 8) |
-                                    ((uint16_t)(g & 0xFCU) << 3) |
-                                    ((uint16_t)b >> 3));
-        hk_ui_display_row_buffer()[x * 2U + 0U] = color >> 8;
-        hk_ui_display_row_buffer()[x * 2U + 1U] = color & 0xFF;
-    }
-    hk_ui_display_write_row(
-        x0, y, dst_w, hk_ui_display_row_buffer());
+    uint32_t lease = g_image_lease;
+    g_image_lease = 0U;
+    if(!lease)
+        return 1U;
+    if(present)
+        return hk_ui_display_frame_present(lease);
+    hk_ui_display_frame_cancel(lease);
+    return 1U;
 }
 
-static void files_view_render_rgb565le_scaled_row_at(uint16_t x0, uint16_t y, uint16_t dst_w, const uint8_t *row, uint16_t src_w)
+static void files_view_scale_row(uint8_t *pixels, uint16_t dst_w,
+                                 const uint8_t *row, uint16_t src_w,
+                                 uint8_t bpp, uint8_t bgr_order)
 {
+    uint8_t bytes = bpp == 16U ? 2U : 3U;
     for(uint16_t x = 0; x < dst_w; x++)
     {
-        uint32_t src_x = (uint32_t)x * src_w / dst_w;
-        uint16_t color = (uint16_t)row[src_x * 2U] | ((uint16_t)row[src_x * 2U + 1U] << 8);
-        hk_ui_display_row_buffer()[x * 2U + 0U] = color >> 8;
-        hk_ui_display_row_buffer()[x * 2U + 1U] = color & 0xFF;
+        uint32_t source_x = (uint32_t)x * src_w / dst_w;
+        const uint8_t *pixel = row + source_x * bytes;
+        uint16_t color;
+        if(bytes == 2U)
+            color = (uint16_t)pixel[0] | ((uint16_t)pixel[1] << 8);
+        else
+        {
+            uint8_t red = bgr_order ? pixel[2] : pixel[0];
+            uint8_t blue = bgr_order ? pixel[0] : pixel[2];
+            color = (uint16_t)(((uint16_t)(red & 0xf8U) << 8) |
+                              ((uint16_t)(pixel[1] & 0xfcU) << 3) |
+                              (uint16_t)(blue >> 3));
+        }
+        pixels[x * 2U] = (uint8_t)(color >> 8);
+        pixels[x * 2U + 1U] = (uint8_t)color;
     }
-    hk_ui_display_write_row(
-        x0, y, dst_w, hk_ui_display_row_buffer());
 }
 
 static void files_view_render_image_row_span_impl(uint32_t src_y, uint32_t src_h, const uint8_t *row, uint16_t src_w, uint8_t bpp, uint8_t bgr_order)
@@ -160,13 +204,10 @@ static void files_view_render_image_row_span_impl(uint32_t src_y, uint32_t src_h
     if(y1 > dst_y + dst_h)
         y1 = (uint16_t)(dst_y + dst_h);
 
+    uint8_t *pixels = hk_ui_display_row_buffer();
+    files_view_scale_row(pixels, dst_w, row, src_w, bpp, bgr_order);
     for(uint16_t y = y0; y < y1; y++)
-    {
-        if(bpp == 16)
-            files_view_render_rgb565le_scaled_row_at(dst_x, y, dst_w, row, src_w);
-        else
-            files_view_render_rgb888_scaled_row_at(dst_x, y, dst_w, row, src_w, bgr_order);
-    }
+        hk_ui_display_write_row(dst_x, y, dst_w, pixels);
 }
 
 static void files_view_surface_pixel(uint16_t x, uint16_t y, uint16_t color)
@@ -380,10 +421,12 @@ void files_view_init(void)
     static const files_view_ops_t ops = {
         .enter = files_view_enter_impl,
         .draw_status = files_view_draw_status_impl,
-        .draw_row = files_view_draw_row_impl,
+        .draw_file_status = files_view_draw_file_status_impl,
+        .draw_row = files_view_update_row_impl,
         .render_list = files_view_render_list_impl,
         .render_preview = files_view_render_preview_impl,
-        .clear_image = files_view_clear_image_impl,
+        .begin_image = files_view_begin_image_impl,
+        .end_image = files_view_end_image_impl,
         .render_image_row_span = files_view_render_image_row_span_impl,
         .animation_begin = files_view_animation_begin_impl,
         .animation_frame_begin = files_view_animation_frame_begin_impl,

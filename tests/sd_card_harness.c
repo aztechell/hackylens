@@ -15,6 +15,9 @@ static unsigned attempts;
 static uint8_t selected;
 static uint8_t retry_only;
 static uint8_t removed;
+static uint8_t writing;
+static uint8_t write_timeout;
+static unsigned write_payloads;
 static uint8_t verify_sector[SD_BLOCK_SIZE];
 
 uint64_t hal_time_us(void) { return now_us; }
@@ -46,11 +49,29 @@ uint8_t sd_spi_xfer(uint8_t out)
         return 0xffU;
     uint32_t step = position++;
     if(step == 2U)
-        assert(out == (0x40U | 17U));
+        assert(out == (0x40U | (writing == 2U ? 25U : writing ? 24U : 17U)));
     if(step < 8U)
         return 0xffU;
     if(step == 8U)
         return 0U;
+    if(writing == 2U)
+    {
+        if(step == 11U || step == 17U)
+            assert(out == 0xfcU);
+        if(step == 14U || step == 20U)
+            return 0x05U;
+        if(step == 22U)
+            assert(out == 0xfdU);
+        return 0xffU;
+    }
+    if(writing)
+    {
+        if(step == 10U)
+            assert(out == 0xfeU);
+        if(step == 13U)
+            return 0x05U;
+        return 0xffU;
+    }
     if(payload_left)
     {
         payload_left--;
@@ -72,6 +93,29 @@ uint8_t sd_spi_read_bytes(uint8_t *data, size_t size, uint64_t deadline_us)
     return 1U;
 }
 
+uint8_t sd_spi_write_bytes(const uint8_t *data, size_t size, uint64_t deadline_us)
+{
+    assert(selected && size == SD_BLOCK_SIZE);
+    assert(writing == 2U ? (position == 12U || position == 18U) : position == 11U);
+    assert(deadline_us == now_us + SD_BLOCK_TRANSFER_TIMEOUT_US);
+    for(size_t i = 0U; i < size; i++)
+        assert(data[i] == (uint8_t)i);
+    write_payloads++;
+    if(write_timeout && attempts == 1U)
+    {
+        now_us = deadline_us;
+        return 0U;
+    }
+    now_us += 1024U;
+    return 1U;
+}
+
+static const uint8_t *write_source(void *context, uint16_t index)
+{
+    assert(index == write_payloads);
+    return context;
+}
+
 static void reset(void)
 {
     assert(!selected);
@@ -80,6 +124,8 @@ static void reset(void)
     speed = SD_RUN_CLK_HZ;
     token_delay = 9000U;
     retry_only = removed = 0U;
+    writing = write_timeout = 0U;
+    write_payloads = 0U;
 }
 
 int main(void)
@@ -104,5 +150,22 @@ int main(void)
     removed = 1U;
     assert(!sd_card_read_block(42U, sector) && attempts == 2U);
     assert(now_us < 5000U);
+
+    for(unsigned i = 0U; i < sizeof(sector); i++)
+        sector[i] = (uint8_t)i;
+    reset();
+    writing = 1U;
+    assert(sd_card_write_block_fast(42U, sector));
+    assert(write_payloads == 1U && attempts == 1U && !selected);
+
+    reset();
+    writing = write_timeout = 1U;
+    assert(sd_card_write_block_fast(42U, sector));
+    assert(write_payloads == 2U && attempts == 2U && !selected && speed == SD_RUN_CLK_HZ);
+
+    reset();
+    writing = 2U;
+    assert(sd_card_write_run(42U, 2U, write_source, sector));
+    assert(write_payloads == 2U && attempts == 1U && position == 25U && !selected);
     return 0;
 }

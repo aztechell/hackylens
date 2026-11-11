@@ -6,52 +6,43 @@
 #include "image_decode_gif.h"
 #include "files_firmware.h"
 
-static uint8_t files_name_is_bmp(const char *name)
-{
-    size_t len = strlen(name);
-    if(len < 4)
-        return 0;
-    return name[len - 4] == '.' &&
-           ascii_lower(name[len - 3]) == 'b' &&
-           ascii_lower(name[len - 2]) == 'm' &&
-           ascii_lower(name[len - 1]) == 'p';
-}
+typedef file_result_t (*image_decoder_t)(const fat_file_entry_t *, const file_image_sink_t *);
 
-static uint8_t files_name_has_ext(const char *name, const char *ext)
+static image_decoder_t files_image_decoder(const fat_file_entry_t *entry)
 {
-    size_t len = strlen(name);
-    if(len < 4 || name[len - 4] != '.')
-        return 0;
-    return ascii_lower(name[len - 3]) == ascii_lower(ext[0]) &&
-           ascii_lower(name[len - 2]) == ascii_lower(ext[1]) &&
-           ascii_lower(name[len - 1]) == ascii_lower(ext[2]);
+    static const struct
+    {
+        char extension[5];
+        image_decoder_t decode;
+    } formats[] = {
+        {".bmp", files_open_bmp},
+        {".raw", files_open_raw565},
+        {".ppm", files_open_ppm},
+        {".png", files_open_png},
+        {".gif", files_open_gif},
+    };
+
+    if(!entry || (entry->attr & FAT_ATTR_DIR))
+        return NULL;
+    const char *extension = strrchr(entry->name, '.');
+    if(!extension)
+        return NULL;
+    for(size_t i = 0U; i < sizeof(formats) / sizeof(formats[0]); i++)
+        if(str_eq_ci(extension, formats[i].extension))
+            return formats[i].decode;
+    return NULL;
 }
 
 uint8_t files_entry_is_image(const fat_file_entry_t *entry)
 {
-    if(entry->attr & FAT_ATTR_DIR)
-        return 0;
-    return files_name_is_bmp(entry->name) ||
-           files_name_has_ext(entry->name, "RAW") ||
-           files_name_has_ext(entry->name, "PPM") ||
-           files_name_has_ext(entry->name, "PNG") ||
-           files_name_has_ext(entry->name, "GIF");
+    return files_image_decoder(entry) != NULL;
 }
 
 file_result_t files_open_image_entry(const fat_file_entry_t *entry, const file_image_sink_t *sink)
 {
     files_gif_close();
-    if(files_name_is_bmp(entry->name))
-        return files_open_bmp(entry, sink);
-    if(files_name_has_ext(entry->name, "RAW"))
-        return files_open_raw565(entry, sink);
-    if(files_name_has_ext(entry->name, "PPM"))
-        return files_open_ppm(entry, sink);
-    if(files_name_has_ext(entry->name, "PNG"))
-        return files_open_png(entry, sink);
-    if(files_name_has_ext(entry->name, "GIF"))
-        return files_open_gif(entry, sink);
-    return FILE_RESULT_UNSUPPORTED_FORMAT;
+    image_decoder_t decode = files_image_decoder(entry);
+    return decode ? decode(entry, sink) : FILE_RESULT_UNSUPPORTED_FORMAT;
 }
 
 file_result_t files_image_viewer_tick(uint64_t now_us)

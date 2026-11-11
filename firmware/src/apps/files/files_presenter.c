@@ -69,11 +69,11 @@ void files_presenter_render_preview(void)
         g_files_view_ops->render_preview(files_preview_text(), files_preview_len(), files_preview_page());
 }
 
-static void files_presenter_begin_image(void *context)
+static uint8_t files_presenter_begin_image(void *context)
 {
     (void)context;
-    if(g_files_view_ops && g_files_view_ops->clear_image)
-        g_files_view_ops->clear_image();
+    return g_files_view_ops && g_files_view_ops->begin_image &&
+           g_files_view_ops->begin_image();
 }
 
 void files_presenter_draw_delete_confirm(const char *name)
@@ -85,6 +85,7 @@ void files_presenter_draw_delete_confirm(const char *name)
 static void files_presenter_render_image_row(void *context, uint32_t src_y, uint32_t src_h, const uint8_t *row, uint16_t src_w, uint8_t bpp, uint8_t bgr_order)
 {
     (void)context;
+    files_presenter_sample_input();
     if(g_files_view_ops && g_files_view_ops->render_image_row_span)
         g_files_view_ops->render_image_row_span(src_y, src_h, row, src_w, bpp, bgr_order);
 }
@@ -147,26 +148,46 @@ static const file_image_sink_t *files_presenter_image_sink(void)
     return &sink;
 }
 
+static const char *files_result_label(file_result_t result)
+{
+    switch(result)
+    {
+    case FILE_RESULT_READ_ERROR: return "READ ERR";
+    case FILE_RESULT_UNSUPPORTED_FORMAT: return "UNSUPPORTED";
+    case FILE_RESULT_TOO_LARGE: return "TOO LARGE";
+    case FILE_RESULT_DELETE_FAILED: return "DELETE FAIL";
+    case FILE_RESULT_NOT_FOUND: return "NO FILE";
+    default: return NULL;
+    }
+}
+
 void files_presenter_show_result(file_result_t result)
 {
-    if(result == FILE_RESULT_READ_ERROR)
-        files_presenter_draw_status("READ ERR");
-    else if(result == FILE_RESULT_UNSUPPORTED_FORMAT)
-        files_presenter_draw_status("UNSUPPORTED");
-    else if(result == FILE_RESULT_TOO_LARGE)
-        files_presenter_draw_status("TOO LARGE");
-    else if(result == FILE_RESULT_DELETE_FAILED)
-        files_presenter_draw_status("DELETE FAIL");
-    else if(result == FILE_RESULT_NOT_FOUND)
-        files_presenter_draw_status("NO FILE");
+    const char *label = files_result_label(result);
+    if(label)
+        files_presenter_draw_status(label);
+}
+
+static void files_presenter_image_status(const fat_file_entry_t *entry, const char *status)
+{
+    if(!status)
+        return;
+    if(entry && g_files_view_ops && g_files_view_ops->draw_file_status)
+        g_files_view_ops->draw_file_status(entry->name, status);
+    else
+        files_presenter_draw_status(status);
 }
 
 file_result_t files_presenter_render_image(const fat_file_entry_t *entry)
 {
+    files_presenter_image_status(entry, "LOADING...");
     file_result_t result = files_open_image_entry(entry, files_presenter_image_sink());
+    if(g_files_view_ops && g_files_view_ops->end_image &&
+       !g_files_view_ops->end_image(result == FILE_RESULT_OK))
+        result = FILE_RESULT_READ_ERROR;
 
     if(result != FILE_RESULT_OK)
-        files_presenter_show_result(result);
+        files_presenter_image_status(entry, files_result_label(result));
     return result;
 }
 

@@ -3,6 +3,6 @@ name = "SETTINGS"
 entry = "settings_v2_entry"
 sources = ["settings_app.c", "settings_controller.c", "settings_menu.c", "settings_view.c"]
 requires = ["display", "input"]
-menu_order = 10
+menu_order = 140
 tick_ms = 20
 debug = "HKSETTINGS"

@@ -44,7 +44,8 @@ hk_result_t hal_camera_bus_read8(uint8_t reg, uint8_t *out, uint64_t deadline)
 void hal_pwm_init(uint8_t device) { assert(device < 3U); }
 void hal_pwm_set(uint8_t device, uint8_t channel, double frequency, double value)
 {
-    assert(frequency == PWM_FREQ_HZ && device < 3U && channel < 4U);
+    assert(device < 3U && channel < 4U);
+    assert(frequency == (device == SCREEN_BL_PWM_DEVICE ? 500.0 : PWM_FREQ_HZ));
     assert(value >= 0.0 && value <= 1.0);
     duty[device][channel] = value;
 }

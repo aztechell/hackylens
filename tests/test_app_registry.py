@@ -355,11 +355,11 @@ int main(void)
         for name in ("settings", "power", "files", "qr-camera"):
             self.assertNotIn("lights", apps[name]["requires"])
 
-    def test_current_legacy_menu_autostart_debug_and_tick_parity(self) -> None:
+    def test_launcher_order_and_stable_autostart_debug_and_tick(self) -> None:
         expected_order = [
-            "terminal", "camera", "qr-camera", "face-detect", "apriltag",
-            "object-detect", "files", "buttons", "pong", "settings",
-            "power", "micropython", "recorder", "accelerometer", "face-recognition",
+            "camera", "qr-camera", "face-detect", "face-recognition",
+            "object-detect", "apriltag", "files", "recorder", "accelerometer",
+            "micropython", "terminal", "buttons", "pong", "settings", "power",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,

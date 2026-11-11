@@ -21,21 +21,21 @@ static void cube_early_init(void)
     hal_spi0_enable_dvp_data();
 }
 
-static void cube_pwm_off(uint8_t device, uint8_t channel)
+static void cube_pwm_off(uint8_t device, uint8_t channel, double frequency_hz)
 {
     /* All Cube light gates are active-low. Establish the inactive level
      * before attaching the physical pin to its PWM signal. */
     hal_pwm_init(device);
-    hal_pwm_set(device, channel, PWM_FREQ_HZ, 1.0);
+    hal_pwm_set(device, channel, frequency_hz, 1.0);
     hal_pwm_enable(device, channel, 1U);
 }
 
 static void cube_lights_prepare(void)
 {
-    cube_pwm_off(LED_PWM_DEVICE, LED_PWM_CHANNEL);
-    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL0);
-    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL1);
-    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL2);
+    cube_pwm_off(LED_PWM_DEVICE, LED_PWM_CHANNEL, PWM_FREQ_HZ);
+    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL0, PWM_FREQ_HZ);
+    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL1, PWM_FREQ_HZ);
+    cube_pwm_off(RGB_PWM_DEVICE, RGB_PWM_CHANNEL2, PWM_FREQ_HZ);
     fpioa_set_function(IO_LED_ILLUM, IO_LED_ILLUM_FUNCTION);
     fpioa_set_function(IO_RGB_PWM0, IO_RGB_PWM0_FUNCTION);
     fpioa_set_function(IO_RGB_PWM1, IO_RGB_PWM1_FUNCTION);
@@ -50,7 +50,10 @@ static void cube_lights_prepare(void)
 
 static void cube_display_prepare(void)
 {
-    cube_pwm_off(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL);
+    /* Timer 0 is dedicated to backlight PWM. Use the 26 MHz crystal. */
+    sysctl_clock_set_clock_select(SYSCTL_CLOCK_SELECT_TIMER0, 0);
+    sysctl_clock_set_threshold(SYSCTL_THRESHOLD_TIMER0, 0);
+    cube_pwm_off(SCREEN_BL_PWM_DEVICE, SCREEN_BL_PWM_CHANNEL, SCREEN_BL_PWM_FREQ_HZ);
     fpioa_set_function(IO_LCD_BL, IO_LCD_BL_FUNCTION);
     fpioa_set_function(IO_LCD_DC_OR_AUX, IO_LCD_DC_OR_AUX_FUNCTION);
     fpioa_set_function(IO_LCD_CS, IO_LCD_CS_FUNCTION);
