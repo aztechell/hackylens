@@ -18,10 +18,11 @@ static uint32_t s_dvp_status;
 static uint32_t s_dvp_stops;
 static uint64_t s_now_us;
 
-uint8_t frame_pool_camera_reserve(void)
+uint8_t frame_pool_camera_reserve(uint32_t frame_bytes)
 {
     if(s_reserved)
         return 0U;
+    CHECK(frame_bytes == 320U * 240U * 2U);
     s_reserved = 1U;
     return 1U;
 }

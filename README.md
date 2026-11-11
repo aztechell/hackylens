@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.6.0" src="https://img.shields.io/badge/firmware-v0.6.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.7.0" src="https://img.shields.io/badge/firmware-v0.7.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <a href="docs/MAIX_CUBE.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
@@ -11,10 +11,10 @@
   </p>
 </div>
 
-HackyLens provides a compact on-device environment for camera experiments, QR scanning, face detection, file browsing, diagnostics, and small interactive apps.
+HackyLens provides a compact on-device environment for camera experiments, QR scanning, face recognition, object detection, file browsing, diagnostics, and small interactive apps.
 
 > [!IMPORTANT]
-> HackyLens v0.5 is a layered K210 reference firmware and MicroPython technology
+> HackyLens is a layered K210 reference firmware and MicroPython technology
 > preview. The primary project goal is a lightweight, portable application
 > architecture for robotics hardware: board-independent feature apps, explicit
 > platform capabilities, and a direct path from MicroPython prototypes to native
@@ -26,7 +26,7 @@ HackyLens provides a compact on-device environment for camera experiments, QR sc
 
 ## Hardware
 
-HackyLens v0.6.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
+HackyLens v0.7.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 | Board | Camera | Display |
 | --- | --- | --- |
@@ -35,13 +35,14 @@ HackyLens v0.6.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 Use the firmware package for your board. For other revisions, verify the board,
 flash layout and pin mapping before flashing. See the
-[v0.6.0 release notes](docs/releases/v0.6.0.md) for the hardware checks.
+[v0.7.0 release notes](docs/releases/v0.7.0.md) for the hardware checks.
 
 ## Features
 
 - Live camera preview with configurable capture and display settings
+- USB camera preview and snapshots in HackyLens Code
 - QR scanning powered by [quirc](https://github.com/dlbeer/quirc)
-- KPU-based face detection
+- KPU-based face detection and on-device enrollment and recognition of up to ten IDs
 - KPU Tiny-YOLOv2 object detection with 20 Pascal VOC classes
 - Shared K210 AI-model runtime with validated SD manifests and conversion tools
 - FAT32 SD-card support, photo capture, screenshots, and an image viewer
@@ -87,7 +88,9 @@ Its `ACCELEROMETER` app shows live X/Y/Z readings from the built-in MSA301.
 The tracked `sdcard/` directory mirrors the card root. Copy its contents onto
 a FAT32 card so `hackylens.kmodels` is at the root. It includes the FACE model
 and the verified VOC20 OBJECT package. See [AI models](docs/AI_MODELS.md) for
-the exact model contract and reproducible fetch/package command.
+the exact model contract and reproducible fetch/package command. FACE RECOG
+also needs two CanMV model files installed separately. See
+[FACE RECOG setup](docs/FACE_RECOGNITION.md#install-the-models).
 
 ## Build
 
@@ -146,7 +149,7 @@ in a flasher; keep its same-stem `.json` alongside it.
 After building both full images, create this payload locally with:
 
 ```powershell
-python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.6.0
+python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.7.0
 ```
 
 Verified flat packages are staged separately under `build\release-stage\<board>`;
@@ -163,8 +166,8 @@ python tools\build_firmware.py full --board huskylens-sen0305 --disable-app pong
 
 ### HackyLens Code web IDE
 
-The IDE now lives in the separate sibling repository `hackylens-code` (normally
-checked out at `..\hackylens-code`). It contains the complete buildable source
+The IDE lives in [hackylens-code](https://github.com/aztechell/hackylens-code)
+(normally checked out at `..\hackylens-code`). It contains the complete buildable source
 tree derived from MIT-licensed Pybricks Code at pinned commit
 `ea9af98d1fd0a842ed76d3a7f83767f363bc1b17`, plus the HackyLens Web Serial
 transport, UI and tests:
@@ -196,7 +199,8 @@ selection is the persisted default used for initial selection and an empty-name
 HMPY `RUN`. Uploading and editing remain PC/IDE operations.
 
 The IDE covers edit, atomic upload, list/read/delete, startup selection,
-run/stop/status, and live stdout/stderr. The same HMPY v1 workflow is available
+run/stop/status, live stdout/stderr, and USB camera preview and snapshots.
+The script workflow is also available
 from the reference CLI:
 
 ```powershell

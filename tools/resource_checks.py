@@ -652,8 +652,8 @@ def artifact_measurement(paths: dict[str, Path]) -> dict[str, Any]:
 
 def _new_direct_resources(baseline_commit: str) -> list[str]:
     findings = added_runtime_objects(baseline_commit)
-    # The model reader still allocates once per load. FACE RECOG reserves its
-    # bounded input scratch in that same block, so the allocator's size changed.
+    # A model loaded on the heap uses one block for weights and optional input
+    # scratch. Models with borrowed storage use the same reader.
     model_load_allocation = re.compile(
         r"call:malloc introduced at firmware/src/storage/ai_model_storage\.c:\d+"
         r" in ai_model_storage_load"

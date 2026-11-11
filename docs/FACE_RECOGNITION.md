@@ -49,9 +49,10 @@ computes a feature vector from the aligned face. The three models stay
 resident and take turns on the KPU. The detector retains its own planar
 input until recognition completes. The live preview uses the normal camera
 frame pool and renders the latest completed recognition results.
-The detector and landmark weights reuse the PNG workspace from FILES while
-FACE RECOG is open. The embedding weights load into the heap in 16 KiB steps
-so the app can handle BACK while the card is being read.
+The detector and embedding weights reuse the shared SRAM arena alongside two
+QVGA camera slots. The landmark model and its crop scratch use the heap.
+Embedding weights load into the arena in 16 KiB steps so the app can handle
+BACK while the card is being read. See the [RAM layout](RAM_BUDGET.md).
 
 The app compares quantized vectors using cosine similarity and requires a
 score of at least 0.61 with a 0.05 lead over the second-best ID. It follows

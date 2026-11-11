@@ -470,8 +470,8 @@ def write_reproducible_path_map(path: Path, sdk: Path) -> None:
     path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
-def validate_raw_boot_entry(elf: Path) -> None:
-    """K210 ROM jumps to the raw image base; it cannot honor ELF e_entry."""
+def validate_k210_elf_layout(elf: Path) -> None:
+    """Check the raw reset entry and RAM left after the linker reserves both stacks."""
     data = elf.read_bytes()
     if data[:6] != b"\x7fELF\x02\x01":
         raise RuntimeError("raw boot requires a little-endian ELF64 image")
@@ -484,21 +484,29 @@ def validate_raw_boot_entry(elf: Path) -> None:
             loads.append(segment[4])
     sections = [struct.unpack_from("<IIQQQQIIQQ", data, shoff + i * header[11])
                 for i in range(header[12])]
-    starts = []
+    symbols: dict[bytes, list[int]] = {name: [] for name in (b"_start", b"_heap_start", b"_heap_end")}
     for section in sections:
         if section[1] != 2:
             continue
         strings = sections[section[6]]
         names = data[strings[4]:strings[4] + strings[5]]
         for offset in range(section[4], section[4] + section[5], section[9]):
-            name, _, _, _, value, _ = struct.unpack_from("<IBBHQQ", data, offset)
-            if names[name:].split(b"\0", 1)[0] == b"_start":
-                starts.append(value)
+            name_offset, _, _, section_index, value, _ = struct.unpack_from("<IBBHQQ", data, offset)
+            name = names[name_offset:names.index(b"\0", name_offset)]
+            if section_index and name in symbols:
+                symbols[name].append(value)
     base = min(loads) if loads else None
+    starts = symbols[b"_start"]
     if base != 0x80000000 or entry != base or starts != [base]:
         raise RuntimeError(
             f"unsafe K210 raw boot layout: base={base!r} entry=0x{entry:x} "
             f"_start={starts}; reset entry must be first at 0x80000000"
+        )
+    heap_start, heap_end = symbols[b"_heap_start"], symbols[b"_heap_end"]
+    if len(heap_start) != 1 or len(heap_end) != 1 or not base < heap_start[0] < heap_end[0]:
+        raise RuntimeError(
+            f"invalid K210 heap after static allocations and stacks: "
+            f"_heap_start={heap_start!r} _heap_end={heap_end!r}"
         )
 
 
@@ -787,7 +795,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     built_elf = build_dir / project
     if not built_elf.is_file() or built_elf.stat().st_size == 0:
         raise RuntimeError(f"build did not produce a non-empty ELF: {built_elf}")
-    validate_raw_boot_entry(built_elf)
+    validate_k210_elf_layout(built_elf)
     reject_embedded_host_paths(built, [ROOT, sdk])
     reject_embedded_host_paths(built_elf, [ROOT, sdk])
     flash = board.flash

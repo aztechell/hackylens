@@ -2,11 +2,17 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import zlib
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
+
+import gen_board
 
 
 def test_face_recognition_and_png_workspace():
@@ -24,10 +30,10 @@ def test_face_recognition_and_png_workspace():
         subprocess.run([
             compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
             f"-I{app}", f"-I{files}", f"-I{services}", f"-I{storage}", f"-I{core}",
-            f"-I{ROOT / 'firmware/include'}",
+            f"-I{ROOT / 'firmware/include'}", f"-I{gen_board.board_config_include_dir()}",
             str(ROOT / "tests/face_recognition_harness.c"),
             str(app / "face_recognition_image.c"), str(files / "image_decode_png_inflate.c"),
-            str(services / "media_workspace.c"), str(storage / "ai_model_storage.c"),
+            str(services / "frame_pool.c"), str(storage / "ai_model_storage.c"),
             str(storage / "face_gallery.c"),
             str(core / "hk_binary.c"), "-lm", "-o", str(output),
         ], check=True)

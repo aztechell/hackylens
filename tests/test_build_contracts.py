@@ -381,22 +381,25 @@ class BuildContractsTest(unittest.TestCase):
         )
 
 
-class RawBootEntryTests(unittest.TestCase):
-    def check_layout(self, entry, start):
+class K210ElfLayoutTests(unittest.TestCase):
+    def check_layout(self, entry, start, heap_start=0x80400000, heap_end=0x80600000):
         data = bytearray(512)
         struct.pack_into('<16sHHIQQQIHHHHHH', data, 0,
                          b'\x7fELF\x02\x01' + bytes(10), 2, 243, 1, entry,
                          64, 128, 0, 64, 56, 1, 64, 3, 0)
         struct.pack_into('<IIQQQQQQ', data, 64, 1, 5, 0, 0x80000000,
                          0x80000000, 512, 512, 8)
-        struct.pack_into('<IIQQQQIIQQ', data, 192, 0, 3, 0, 0, 320, 8, 0, 0, 1, 0)
-        struct.pack_into('<IIQQQQIIQQ', data, 256, 0, 2, 0, 0, 336, 24, 1, 0, 8, 24)
-        data[320:328] = b'\0_start\0'
-        struct.pack_into('<IBBHQQ', data, 336, 1, 0, 0, 0, start, 0)
+        names = b'\0_start\0_heap_start\0_heap_end\0'
+        struct.pack_into('<IIQQQQIIQQ', data, 192, 0, 3, 0, 0, 320, len(names), 0, 0, 1, 0)
+        struct.pack_into('<IIQQQQIIQQ', data, 256, 0, 2, 0, 0, 352, 96, 1, 0, 8, 24)
+        data[320:320 + len(names)] = names
+        struct.pack_into('<IBBHQQ', data, 376, 1, 0, 0, 1, start, 0)
+        struct.pack_into('<IBBHQQ', data, 400, names.index(b'_heap_start'), 0, 0, 0xfff1, heap_start, 0)
+        struct.pack_into('<IBBHQQ', data, 424, names.index(b'_heap_end'), 0, 0, 0xfff1, heap_end, 0)
         with tempfile.TemporaryDirectory() as directory:
             elf = Path(directory) / 'fixture.elf'
             elf.write_bytes(data)
-            BUILD_FIRMWARE.validate_raw_boot_entry(elf)
+            BUILD_FIRMWARE.validate_k210_elf_layout(elf)
 
     def test_reset_entry_at_raw_image_base(self):
         self.check_layout(0x80000000, 0x80000000)
@@ -408,6 +411,11 @@ class RawBootEntryTests(unittest.TestCase):
     def test_entry_header_cannot_hide_displaced_start_symbol(self):
         with self.assertRaisesRegex(RuntimeError, 'unsafe K210 raw boot layout'):
             self.check_layout(0x80000000, 0x80000068)
+
+    def test_stacks_must_leave_a_heap(self):
+        for start in (0x80600000, 0x80600040):
+            with self.subTest(heap_start=start), self.assertRaisesRegex(RuntimeError, 'invalid K210 heap'):
+                self.check_layout(0x80000000, 0x80000000, heap_start=start)
 
 
 if __name__ == "__main__":

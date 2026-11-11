@@ -9,16 +9,13 @@ import check_resources as gate
 
 
 class FirmwareResourceTests(unittest.TestCase):
-    def test_budgets_accept_boundary_and_reject_each_excess(self):
+    def test_size_deltas_report_growth_and_savings(self):
         baseline = json.loads(gate.BASELINE.read_text(encoding="utf-8"))
         current = copy.deepcopy(baseline["measurement"])
-        current["elf"]["static_ram_bytes"] += baseline["limits"]["static_ram_growth_bytes"]
-        current["image"]["raw_bytes"] += baseline["limits"]["raw_image_growth_bytes"]
-        self.assertEqual(gate.budget_failures(current, baseline), [])
-        current["elf"]["static_ram_bytes"] += 1
-        self.assertEqual(len(gate.budget_failures(current, baseline)), 1)
-        current["image"]["raw_bytes"] += 1
-        self.assertEqual(len(gate.budget_failures(current, baseline)), 2)
+        current["elf"]["static_ram_bytes"] -= 1024
+        current["image"]["raw_bytes"] += 24576
+        self.assertEqual(gate.size_deltas(current, baseline["measurement"]),
+                         {"static_ram_bytes": -1024, "raw_image_bytes": 24576})
 
     def test_no_new_direct_runtime_resource_sites(self):
         baseline = json.loads(gate.BASELINE.read_text(encoding="utf-8"))

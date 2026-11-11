@@ -197,14 +197,13 @@ static void test_png_workspace(const char *compressed_path)
 {
     const char recognition = 0;
     const char png = 0;
-    media_workspace_t *media = media_workspace_claim(&recognition);
-    assert(media && !media_workspace_claim(&png));
-    memset(media->bytes, 0x41, sizeof(media->bytes));
+    const ai_model_workspace_t weights = media_model_workspace_claim(&recognition);
+    assert(weights.data && !media_workspace_claim(&png));
     media_workspace_release(&png);
     assert(!media_workspace_claim(&png));
     media_workspace_release(&recognition);
 
-    media = media_workspace_claim(&png);
+    media_workspace_t *media = media_workspace_claim(&png);
     assert(media);
     FILE *compressed = fopen(compressed_path, "rb");
     assert(compressed);
@@ -218,15 +217,18 @@ static void test_png_workspace(const char *compressed_path)
     media_workspace_release(&png);
 }
 
-static void test_incremental_model_read(void)
+static void test_incremental_model_read(const ai_model_workspace_t *workspace)
 {
     ai_model_reader_t reader = {0};
     uint8_t *buffer;
     uint32_t size, crc;
+    model_card = 1U;
     for(uint32_t i = 0U; i < sizeof(model_fixture); i++)
         model_fixture[i] = (uint8_t)(i ^ (i >> 3U));
     assert(ai_model_storage_load(NULL, "/model", sizeof(model_fixture), 256U, 0U,
-        NULL, &buffer, &size, &crc, &reader) == AI_MODEL_STORAGE_PENDING);
+        workspace, &buffer, &size, &crc, &reader) == AI_MODEL_STORAGE_PENDING);
+    if(workspace)
+        assert(buffer == workspace->data);
     assert(reader.stream.entry == &reader.entry && reader.entry.size == size && crc == 0U);
     assert(ai_model_storage_read_step(&reader, buffer, size, &crc) == AI_MODEL_STORAGE_PENDING);
     assert(reader.position == 16384U);
@@ -236,7 +238,8 @@ static void test_incremental_model_read(void)
     assert(crc == crc32_update(0U, model_fixture, sizeof(model_fixture)));
     model_card = 0U;
     assert(ai_model_storage_read_step(&reader, buffer, size, &crc) == AI_MODEL_STORAGE_READ);
-    ai_model_storage_free(buffer);
+    if(!workspace)
+        ai_model_storage_free(buffer);
 }
 
 static void test_gallery_records(void)
@@ -268,7 +271,12 @@ int main(int argc, char **argv)
     test_features();
     test_png_workspace(argv[1]);
     test_gallery_records();
-    test_incremental_model_read();
+    test_incremental_model_read(NULL);
+    const char model = 0;
+    const ai_model_workspace_t weights = media_model_workspace_claim(&model);
+    assert(weights.data);
+    test_incremental_model_read(&weights);
+    media_workspace_release(&model);
     puts("FACE_RECOGNITION_OK");
     return 0;
 }

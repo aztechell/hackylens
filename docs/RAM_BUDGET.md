@@ -1,11 +1,11 @@
 # RAM / Flash Budget
 
-The firmware uses statically allocated camera frame buffers, an LCD shadow, SD sectors, PNG inflate buffers, quirc storage, and an optional AprilTag working set.
+The firmware shares an SRAM arena across camera capture, PNG decoding, and large model weights. The LCD shadow and SD sector buffers have separate storage. QR and AprilTag allocate working memory when their sessions start.
 
 Current ownership:
 
 - LCD shadow and row buffer: `drivers/lcd_st7789.c`; the 153,600-byte shadow is also the borrowed RGB565-BE full-frame staging surface, so LCD present does not allocate another framebuffer.
-- Two camera stream slots: `services/frame_pool.c`; preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c` without allocating a third frame. When the camera reservation is inactive, files decoding or the Display batch provider may take the single generation-checked scratch workspace borrow; copied or stale borrow tokens cannot release a later borrower.
+- Two camera stream slots in `services/frame_pool.c` use a stride derived from the capture resolution. Together they reserve 300 KiB at QVGA or 1,200 KiB at VGA. Preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c`. When capture is inactive, FILES or the Display batch provider can borrow one VGA-sized scratch slot. Copied or stale borrow tokens cannot release a later borrower.
 - IDE camera transfers borrow the existing MicroPython program staging buffer for up to 38,400 bytes. The frame lease ends after downsampling. A program start or native app launch releases the staging borrow before using it again.
 - SD/FAT sector buffers: `storage/fat32_sd.c`.
 - Core 1 owns the QR decoder and its heap workspace. The preview fills the
@@ -15,11 +15,15 @@ Current ownership:
 - The vision service retains one fixed result snapshot, including up to 383
   QR payload bytes. The Python bridge transfers the snapshot in its existing
   mailbox.
-- FILES uses the shared 640 KiB media workspace for compressed PNG input and
-  its two Huffman tables. FACE RECOG borrows the same space for the detector,
-  landmark model and 48 KiB crop scratch. Its feature model occupies the heap
-  while the app runs. The workspace is reclaimed after inference stops.
-  Image row buffers remain in `apps/files/image_decode_common.c`.
+- PNG decoding uses a 640 KiB tail lease for compressed input and its two
+  Huffman tables alongside the VGA-sized scratch slot for decoded pixels.
+  FACE RECOG and OBJECT DETECT reserve the same arena tail after the two
+  QVGA slots. The full arena occupies 1,825,280 bytes, down from 1,884,160
+  bytes for the former separate frame and PNG buffers.
+- FACE RECOG keeps the detector and feature model weights in that lease.
+  The landmark model and its crop scratch take about 204 KiB on the heap.
+  Both applications hold their tail lease until their KPU models have been
+  unloaded. A fault during unload quarantines the lease until reset.
 - GIF decoding uses fixed 12-bit LZW tables, one 255-byte sub-block buffer, the shared image row buffer, and small precomputed viewport maps. Frames are composited directly into the 320x240 LCD shadow; disposal mode 3 temporarily reuses one existing camera frame-pool slot, so no GIF-sized logical canvas or additional framebuffer is allocated.
 - Terminal history ring and viewport: `apps/terminal/terminal_buffer.c`; they are omitted when Terminal is disabled.
 - APRILTAG uses one fixed uncached 19,200-byte 160x120 luma handoff, two small result banks, a small stabilized display-result copy, a 74-byte selected-ID bitmap, and temporary heap allocations owned exclusively by its core-1 worker. Camera RGB565 slots are never retained while detection runs. A 16-bit union-find halves its main threshold working set because the bounded 19,200-pixel input cannot exceed its 65,535-node limit. Only TAG36H11 is built; image file I/O, profiling images, pthreads, and all other tag families are disabled. The complete detector, selection UI, and runtime buffers are omitted with `--disable-app apriltag`.
@@ -33,10 +37,20 @@ Current ownership:
   guard row; only one AI app can own it. OBJECT additionally keeps a fixed
   350-box geometry table, the full 350x20 per-class probability workspace, and
   two small result banks. Its SD model is 1,352,588 bytes and declares 43,752
-  bytes of KModel main memory. The model allocation exists only while OBJECT
-  is loaded; no second copy of its 35,000-byte output tensor is retained.
+  bytes of KModel main memory. The stock model weights use the arena lease.
+  Compatible larger SD models can still request heap storage. The output
+  tensor is read directly from KPU main memory.
 - The shared core-1 executor adds only control words and a permanent idle loop
   when APRILTAG, MicroPython, or QR-CAMERA is enabled. KPU output post-processing remains on core 0.
+
+The shared arena increased the linked heap window in the full builds measured
+against revision `78641e0`. Live allocations and fragmentation determine
+which blocks the runtime allocator can provide.
+
+| Board | Previous heap window | Shared arena build |
+| --- | ---: | ---: |
+| Maix Cube | 1,523,712 bytes | 1,582,272 bytes |
+| HUSKYLENS SEN0305 | 1,904,576 bytes | 1,962,880 bytes |
 
 The settings record grows from the legacy 16-byte payload through the 96-byte
 v2 payload, 97-byte v3 payload, and 105-byte v4 payload to a 106-byte v5

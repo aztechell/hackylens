@@ -26,3 +26,7 @@ upstream commit  e89c35465fadb5524c892d2a1c7a76dc76e219ed
 
 See `hackylens.kmodels/detect.UPSTREAM.txt` for its exact URL and provenance
 limitations.
+
+FACE RECOG also needs `ld5.kmodel` and `feature_extraction.kmodel` in
+`/hackylens.kmodels/faces/`. Install these separately using the file sizes
+and hashes in the [FACE RECOG setup guide](https://github.com/aztechell/hackylens/blob/v0.7.0/docs/FACE_RECOGNITION.md#install-the-models).

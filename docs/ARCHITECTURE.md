@@ -1,9 +1,9 @@
 # Architecture
 
-HackyLens 0.6.0 is modular firmware built from common `firmware/src` layers,
+HackyLens 0.7.0 is modular firmware built from common `firmware/src` layers,
 the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
-> HackyLens v0.6 is a layered K210 reference firmware and MicroPython technology
+> HackyLens is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 This is the current architecture and implementation status. [Roadmap](ROADMAP.md)
@@ -251,12 +251,12 @@ and OBJECT data remain unchanged.
 
 ## Supported hardware and current qualification
 
-HackyLens ships full builds for HUSKYLENS SEN0305 (`hackylens-full`)
-and Sipeed Maix Cube (`hackylens-cube`). Both include the original twelve apps
-and embedded MicroPython. Cube also includes RECORDER, WAV playback in FILES,
+HackyLens ships full builds for HUSKYLENS SEN0305 and Sipeed Maix Cube.
+Both include FACE RECOG and embedded MicroPython. SEN0305 has thirteen apps.
+Cube has fifteen and also supports WAV playback in FILES. Its additional apps are RECORDER
 and ACCELEROMETER. The latter uses the same read-only typed binding as
 MicroPython. The board provider owns the internal I²C1 transactions. See the
-[v0.6.0 release notes](releases/v0.6.0.md) for the current hardware coverage.
+[v0.7.0 release notes](releases/v0.7.0.md) for the current hardware coverage.
 Each build explicitly selects a board. Its `board.toml`
 owns wiring, defaults, flash layout and programming metadata. On Cube,
 settings and userfs writes require JEDEC to report exactly 16 MiB of flash.
@@ -316,7 +316,10 @@ removed broker/runtime tables offset part of that growth. The QR scratch change
 addresses the working decoder path and stack pressure; it is not governance
 metadata or a new full framebuffer. Static RAM alone does not measure peak
 stack/heap usage. Older plans and exact resource records can be retrieved from
-Git history; current budgets remain executable in `tools/check_resources.py`.
+Git history. `tools/check_resources.py` reports deltas against a historical
+SEN0305 build and checks for new direct allocation and task-creation sites.
+The firmware build checks the board's firmware partition and verifies that
+the linked RAM layout leaves space for the heap after both core stacks.
 
 ### Current validation workflow
 

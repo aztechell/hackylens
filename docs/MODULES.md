@@ -1,6 +1,6 @@
 # Modules
 
-> HackyLens v0.4 is a layered K210 reference firmware and MicroPython technology
+> HackyLens is a layered K210 reference firmware and MicroPython technology
 > preview.
 
 ## External link and vision results
@@ -61,7 +61,7 @@ Key interfaces (firmware-private unless exported by the SDK):
 - `services/debug_console_service.h` for narrow debug UART read/write access.
 - `services/debug_screenshot_stream.h` and `services/screenshot_source.h` for screenshot UART transport and LCD shadow sourcing.
 - `drivers/camera_stream.h` for the IRQ-driven two-slot camera stream and its explicit frame-lease contract; SDK interrupt details remain private to `platforms/k210/hal/hal_dvp.c`.
-- `apps/face_detect/face_detect_app.h` is the sole public FACE DETECT interface; its private YOLO decoder, controller, DVP adapter, view, configuration, and types remain inside the module. The KPU model is read from `/hackylens.kmodels/detect.kmodel` through the shared AI runtime.
+- `apps/face_detect/face_detect_app.h` is the FACE DETECT app interface. FACE DETECT and FACE RECOG share the decoder and the KPU model at `/hackylens.kmodels/detect.kmodel` through `services/face_detect_detector.h` and the shared AI runtime.
 - `apps/apriltag/apriltag_app.h` is the sole public APRILTAG interface. The module detects TAG36H11 markers on a core-1 worker, reports native IDs `0..586`, and owns its hold-OK settings lifecycle and descriptor adapter, central selection crosshair, persistent selected-ID bitmap, and `ALL/SELECTED` publication filter. Unselected blocks are green and selected IDs are yellow; the numeric ID stays inside each block.
 - `apps/object_detect/object_detect_app.h` is the sole public OBJECT DETECT interface. The module owns VOC20 decoding, class labels, overlays, settings, persistence, and diagnostics. Its SD package is `/hackylens.kmodels/object20/`.
 - `services/camera_ai_input.h` owns the single aligned planar DVP/KPU input and exact frame-boundary handoff shared by FACE and OBJECT. `services/core1_executor.h` owns APRILTAG's reusable core-1 job slot.
@@ -74,9 +74,10 @@ Key interfaces (firmware-private unless exported by the SDK):
 - `storage/screenshot_bmp.h` for BMP encoding, `storage/screenshot_writer.h` for persistence, and focused FAT32/file headers for storage operations.
 - `storage/file_mount.h` and `storage/file_dir_scan.h` for neutral FAT mount and directory queries. Browser lists and image viewing are private FILES APIs.
 - `storage/sd_card.h` is the permanent private raw-block boundary; no feature
-  app includes an SD driver header. `services/frame_pool.*` owns the two fixed
-  camera slots and the mutually exclusive generation-checked scratch workspace;
-  `services/frame_workspace.h` exposes only its internal borrow/release view.
+  app includes an SD driver header. `services/frame_pool.*` owns the shared
+  SRAM arena. `services/frame_workspace.h` provides generation-checked
+  scratch storage while capture is stopped. `services/media_workspace.h`
+  leases a separate region of the same arena for PNG data or AI model weights.
 - `apps/files/image_viewer.h` is private to FILES and supports BMP/PNG/PPM/RAW plus streaming animated GIF87a/GIF89a. GIF playback supports palettes, transparency, interlace, disposal, pause/resume, bulk sub-block reads, and a 1600x1200 logical-canvas limit without loading the complete file into RAM. FILES decodes FAT long names from UTF-16 to UTF-8, renders Russian Cyrillic, and sorts entries by FAT modification time with newest entries first.
 - `ui/hk_ui.h` and per-screen view headers for UI rendering.
 

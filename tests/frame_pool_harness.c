@@ -4,6 +4,7 @@
 
 #include "frame_pool.h"
 #include "frame_workspace.h"
+#include "media_workspace.h"
 
 static void require_true(unsigned condition, const char *message)
 {
@@ -20,6 +21,9 @@ int main(void)
     frame_workspace_borrow_t copied_final;
     frame_workspace_borrow_t second = FRAME_WORKSPACE_BORROW_NONE;
     frame_workspace_borrow_t blocked = FRAME_WORKSPACE_BORROW_NONE;
+    const uint32_t vga = 640U * 480U * 2U;
+    const uint32_t qvga = MEDIA_MODEL_CAMERA_BYTES / FRAME_POOL_CAMERA_SLOT_COUNT;
+    const char models = 0, png = 0;
 
     require_true(frame_workspace_borrow(4096U, &first), "first scratch borrow");
     copied = first;
@@ -28,13 +32,19 @@ int main(void)
                  "borrowed view has required capacity");
     require_true(!frame_workspace_borrow(1U, &blocked),
                  "second scratch borrower is rejected");
-    require_true(!frame_pool_camera_reserve(),
+    require_true(!frame_pool_camera_reserve(vga),
                  "camera reservation conflicts with scratch");
+    require_true(!media_model_workspace_claim(&models).data,
+                 "models cannot overlap a live scratch borrow");
+    media_workspace_t *media = media_workspace_claim(&png);
+    require_true(media && (uint8_t *)media == first.data + first.size,
+                 "PNG and decoded pixels fit in disjoint regions");
+    media_workspace_release(&png);
     require_true(frame_workspace_release(&first), "matching release succeeds");
     require_true(first.data == NULL && first.generation == 0U,
                  "release invalidates caller token");
 
-    require_true(frame_pool_camera_reserve(), "camera reserves both slots");
+    require_true(frame_pool_camera_reserve(vga), "camera reserves both slots");
     require_true(frame_pool_camera_slot(0U) != NULL &&
                  frame_pool_camera_slot(1U) != NULL,
                  "reserved camera slots are available");
@@ -42,6 +52,27 @@ int main(void)
                  "camera slot bound is checked");
     require_true(!frame_workspace_borrow(1U, &blocked),
                  "scratch conflicts with camera reservation");
+    require_true(!media_model_workspace_claim(&models).data && !media_workspace_claim(&png),
+                 "VGA protects the full camera reservation");
+    frame_pool_camera_release();
+
+    const ai_model_workspace_t weights = media_model_workspace_claim(&models);
+    require_true(weights.data && weights.bytes >= 1352588U &&
+                     (uintptr_t)weights.data % FRAME_POOL_ALIGNMENT == 0U,
+                 "stock object model fits aligned arena");
+    media_workspace_release(&png);
+    require_true(!media_workspace_claim(&png) && !frame_pool_camera_reserve(vga) &&
+                     !frame_workspace_borrow(1U, &blocked),
+                 "model lease blocks conflicting reservations and foreign release");
+    require_true(frame_pool_camera_reserve(qvga), "QVGA fits with model storage");
+    require_true(frame_pool_camera_frame_bytes() == qvga &&
+                     (uint8_t *)frame_pool_camera_slot(1U) + qvga == weights.data,
+                 "capture stride and model workspace are disjoint");
+    frame_pool_camera_release();
+    require_true(!frame_pool_camera_reserve(vga),
+                 "stopping capture does not release weights while KPU unloads");
+    media_workspace_release(&models);
+    require_true(frame_pool_camera_reserve(vga), "VGA works again after model release");
     frame_pool_camera_release();
 
     require_true(frame_workspace_borrow(8192U, &second),
@@ -55,7 +86,7 @@ int main(void)
     require_true(frame_workspace_release(&second),
                  "current borrower releases normally");
     require_true(!frame_workspace_borrow(
-                     frame_pool_camera_frame_bytes() + 1U, &blocked),
+                     vga + 1U, &blocked),
                  "oversized borrow is rejected");
 
     require_true(frame_workspace_test_set_generation(UINT32_MAX - 2U),

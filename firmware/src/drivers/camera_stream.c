@@ -116,7 +116,8 @@ uint8_t camera_stream_start(uint16_t width, uint16_t height, uint8_t burst, came
 {
     if(input_format != CAMERA_INPUT_RGB565 && input_format != CAMERA_INPUT_YUV422) return 0;
     camera_stream_stop();
-    if(!frame_pool_camera_reserve())
+    if(!width || !height || (uint32_t)width * height > UINT32_MAX / sizeof(uint16_t) ||
+       !frame_pool_camera_reserve((uint32_t)width * height * sizeof(uint16_t)))
         return 0;
     for(uint8_t i = 0; i < FRAME_POOL_CAMERA_SLOT_COUNT; i++)
     {

@@ -8,6 +8,7 @@
 
 #include "../../services/ai_model_runtime.h"
 #include "../../services/camera_ai_input.h"
+#include "../../services/media_workspace.h"
 #include "object_detect_postprocess.h"
 
 typedef struct
@@ -241,10 +242,23 @@ object_detect_load_result_t object_detect_detector_load(void)
         g_result = OBJECT_DETECT_LOAD_BUSY;
         return g_result;
     }
-    result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
+    const ai_model_workspace_t model_workspace = media_model_workspace_claim(&g_runtime);
+    if(!model_workspace.data)
+    {
+        camera_ai_input_release(&g_runtime);
+        return g_result = OBJECT_DETECT_LOAD_BUSY;
+    }
+    result = ai_model_runtime_load_related(&g_runtime, &g_model_descriptor, NULL, &model_workspace);
+    if(result == AI_MODEL_RESULT_ALLOC)
+    {
+        /* Keep support for compatible SD models larger than the shared arena. */
+        media_workspace_release(&g_runtime);
+        result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
+    }
     g_result = object_result(result);
     if(result != AI_MODEL_RESULT_OK)
     {
+        media_workspace_release(&g_runtime);
         camera_ai_input_release(&g_runtime);
         return g_result;
     }
@@ -297,6 +311,7 @@ void object_detect_detector_service_tick(void)
     if(g_runtime.state == AI_MODEL_STATE_UNLOADED)
     {
         camera_ai_input_release(&g_runtime);
+        media_workspace_release(&g_runtime);
         g_unload_requested = 0U;
     }
     else if(g_runtime.state == AI_MODEL_STATE_FAULT)

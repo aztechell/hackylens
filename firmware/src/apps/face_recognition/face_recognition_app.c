@@ -24,9 +24,6 @@
 #define MATCH_MARGIN 0.05f
 #define LEARN_WINDOW_US 5000000ULL
 #define INFERENCE_LIMIT_US 1000000ULL
-#define DETECTOR_RESERVE (400U * 1024U)
-_Static_assert(DETECTOR_RESERVE + 159768U + 256U + 3U * 128U * 128U <= MEDIA_WORKSPACE_BYTES,
-               "detector, landmark and scratch must fit shared media storage");
 
 typedef enum { SCAN, LANDMARKS, EMBEDDING } recognition_stage_t;
 typedef enum { START_DONE, START_DETECTOR, START_LANDMARK, START_EMBEDDING, START_CAMERA } start_stage_t;
@@ -58,7 +55,7 @@ static ai_model_runtime_t g_landmark;
 static ai_model_runtime_t g_embedding;
 static face_gallery_t g_gallery;
 static uint8_t g_cleanup_pending;
-static media_workspace_t *g_workspace;
+static ai_model_workspace_t g_workspace;
 
 static uint16_t id_bit(uint8_t id) { return (uint16_t)(1U << (id - 1U)); }
 
@@ -79,7 +76,7 @@ static uint8_t cleanup_companions(void)
        face_detect_detector_model()->state != AI_MODEL_STATE_UNLOADED)
         return 0U;
     media_workspace_release(&g_landmark);
-    g_workspace = NULL;
+    g_workspace = (ai_model_workspace_t){0};
     g_cleanup_pending = 0U;
     return 1U;
 }
@@ -127,11 +124,11 @@ static void start_pipeline(recognition_t *app, const hk_input_snapshot_t *input)
     const ai_model_runtime_t *primary = face_detect_detector_model();
     if(app->starting == START_DETECTOR)
     {
-        if(!g_workspace)
-            g_workspace = media_workspace_claim(&g_landmark);
-        if(!g_workspace)
+        if(!g_workspace.data)
+            g_workspace = media_model_workspace_claim(&g_landmark);
+        if(!g_workspace.data)
             return;
-        const ai_model_workspace_t detector_workspace = {g_workspace->bytes, DETECTOR_RESERVE};
+        const ai_model_workspace_t detector_workspace = {g_workspace.data, MEDIA_FACE_DETECTOR_RESERVE};
         face_detect_load_result_t detect = face_detect_detector_load(&detector_workspace);
         if(detect == FACE_DETECT_LOAD_BUSY)
             return;
@@ -147,13 +144,14 @@ static void start_pipeline(recognition_t *app, const hk_input_snapshot_t *input)
     }
     if(app->starting == START_LANDMARK || app->starting == START_EMBEDDING)
     {
-        const ai_model_workspace_t landmark_workspace = {
-            g_workspace->bytes + DETECTOR_RESERVE, MEDIA_WORKSPACE_BYTES - DETECTOR_RESERVE,
+        const ai_model_workspace_t embedding_workspace = {
+            g_workspace.data + MEDIA_FACE_DETECTOR_RESERVE,
+            g_workspace.bytes - MEDIA_FACE_DETECTOR_RESERVE,
         };
         ai_model_result_t result = app->starting == START_LANDMARK ?
-            ai_model_runtime_load_related(&g_landmark, &face_landmark_model,
-                                          primary, &landmark_workspace) :
-            ai_model_runtime_load_related_step(&g_embedding, &face_embedding_model, primary, NULL);
+            ai_model_runtime_load_related(&g_landmark, &face_landmark_model, primary, NULL) :
+            ai_model_runtime_load_related_step(&g_embedding, &face_embedding_model,
+                                              primary, &embedding_workspace);
         if(result == AI_MODEL_RESULT_PENDING)
             return;
         if(result != AI_MODEL_RESULT_OK)
