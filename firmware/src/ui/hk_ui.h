@@ -7,6 +7,7 @@
 void menu_draw_chrome(const char *title);
 void menu_draw_title(const char *title);
 void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected);
+void menu_draw_shortcut_at(uint8_t index, const char *name, uint8_t selected);
 void menu_draw_page(uint8_t page, uint8_t pages);
 void topbar_set_sd_mounted(uint8_t mounted);
 void topbar_draw_sd_status(void);

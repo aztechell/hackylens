@@ -13,6 +13,7 @@
 #include "hk_screen.h"
 
 static uint8_t s_menu_index;
+static uint8_t s_rendered_count;
 static const hk_app_t *s_active_app;
 static uint32_t s_menu_repeat_button;
 static uint8_t s_menu_repeat_ticks;
@@ -39,12 +40,43 @@ static void menu_draw_title_if_ready(const char *title)
         s_menu_view.draw_title(title);
 }
 
-static void menu_draw_registry_item(uint8_t index)
+static uint8_t menu_item_count(void)
 {
-    if(s_menu_view.draw_item_at &&
-       index / MENU_PAGE_ITEMS == s_menu_index / MENU_PAGE_ITEMS)
-        s_menu_view.draw_item_at(index % MENU_PAGE_ITEMS, g_menu_items[index],
-                                (uint8_t)(index == s_menu_index));
+    return MENU_ITEM_COUNT + (s_owner_hooks.shortcut_count ?
+           s_owner_hooks.shortcut_count() : 0U);
+}
+
+static const char *menu_shortcut_name(uint8_t index)
+{
+    return s_owner_hooks.shortcut_name ?
+           s_owner_hooks.shortcut_name(index - MENU_ITEM_COUNT) : NULL;
+}
+
+static const char *menu_item_title(uint8_t index)
+{
+    if(index < MENU_ITEM_COUNT)
+        return g_menu_items[index]->title;
+    const char *name = menu_shortcut_name(index);
+    return name ? name : "NO APPS";
+}
+
+static void menu_draw_item(uint8_t index)
+{
+    if(index / MENU_PAGE_ITEMS != s_menu_index / MENU_PAGE_ITEMS)
+        return;
+    uint8_t slot = index % MENU_PAGE_ITEMS;
+    uint8_t selected = index == s_menu_index;
+    if(index < MENU_ITEM_COUNT)
+    {
+        if(s_menu_view.draw_item_at)
+            s_menu_view.draw_item_at(slot, g_menu_items[index], selected);
+    }
+    else if(s_menu_view.draw_shortcut_at)
+    {
+        const char *name = menu_shortcut_name(index);
+        if(name)
+            s_menu_view.draw_shortcut_at(slot, name, selected);
+    }
 }
 
 static void menu_draw_selection(uint8_t previous)
@@ -54,9 +86,9 @@ static void menu_draw_selection(uint8_t previous)
         menu_render();
         return;
     }
-    menu_draw_title_if_ready(g_menu_items[s_menu_index]->title);
-    menu_draw_registry_item(previous);
-    menu_draw_registry_item(s_menu_index);
+    menu_draw_title_if_ready(menu_item_title(s_menu_index));
+    menu_draw_item(previous);
+    menu_draw_item(s_menu_index);
 }
 
 uint8_t hk_menu_index_get(void)
@@ -64,20 +96,29 @@ uint8_t hk_menu_index_get(void)
     return s_menu_index;
 }
 
+const hk_app_t *hk_menu_active_app(void)
+{
+    return s_active_app;
+}
+
 void menu_render(void)
 {
+    uint8_t count = menu_item_count();
+    s_rendered_count = count;
     hk_back_exit_set_armed(0);
-    if(MENU_ITEM_COUNT == 0U)
+    if(s_menu_index >= count)
+        s_menu_index = 0U;
+    if(count == 0U)
     {
         menu_draw_chrome_if_ready("NO APPS");
         return;
     }
-    menu_draw_chrome_if_ready(g_menu_items[s_menu_index]->title);
-    for(uint8_t index = 0; index < MENU_ITEM_COUNT; index++)
-        menu_draw_registry_item(index);
+    menu_draw_chrome_if_ready(menu_item_title(s_menu_index));
+    for(uint8_t index = 0; index < count; index++)
+        menu_draw_item(index);
     if(s_menu_view.draw_page)
         s_menu_view.draw_page(s_menu_index / MENU_PAGE_ITEMS,
-            (MENU_ITEM_COUNT + MENU_PAGE_ITEMS - 1U) / MENU_PAGE_ITEMS);
+            (count + MENU_PAGE_ITEMS - 1U) / MENU_PAGE_ITEMS);
 }
 
 void shell_show_menu_reason(hk_app_stop_reason_t reason)
@@ -92,7 +133,7 @@ void shell_show_menu_reason(hk_app_stop_reason_t reason)
     menu_render();
     activity_note();
     printf("[SHELL] screen MENU item=%s\r\n",
-           MENU_ITEM_COUNT ? g_menu_items[s_menu_index]->title : "NO APPS");
+           menu_item_title(s_menu_index));
 }
 
 void shell_show_menu(void)
@@ -136,41 +177,63 @@ void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks)
 
 void shell_open_selected(const hk_input_snapshot_t *input)
 {
-    if(MENU_ITEM_COUNT)
+    if(menu_item_count() != s_rendered_count)
+    {
+        menu_render();
+        return;
+    }
+    if(s_menu_index < MENU_ITEM_COUNT)
+    {
         (void)shell_open_app(g_menu_items[s_menu_index], input);
+        return;
+    }
+    const char *name = menu_shortcut_name(s_menu_index);
+    if(name && s_owner_hooks.open_shortcut)
+    {
+        uint8_t index = s_menu_index;
+        printf("[MENU] run %s\r\n", name);
+        uint8_t opened = s_owner_hooks.open_shortcut(name, input);
+        s_menu_index = index;
+        if(!opened)
+            menu_render();
+    }
 }
 
 void menu_select_delta(int8_t delta)
 {
-    uint8_t previous = s_menu_index;
-
-    if(MENU_ITEM_COUNT == 0U)
+    uint8_t count = menu_item_count();
+    if(count != s_rendered_count)
+        menu_render();
+    if(count == 0U)
         return;
 
+    uint8_t previous = s_menu_index;
     if(delta < 0)
-        s_menu_index = s_menu_index == 0 ? MENU_ITEM_COUNT - 1 : s_menu_index - 1;
+        s_menu_index = s_menu_index == 0 ? count - 1 : s_menu_index - 1;
     else if(delta > 0)
-        s_menu_index = (uint8_t)((s_menu_index + 1) % MENU_ITEM_COUNT);
+        s_menu_index = (uint8_t)((s_menu_index + 1) % count);
 
     if(previous != s_menu_index)
     {
         menu_draw_selection(previous);
     }
-    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
+    printf("[MENU] select %s\r\n", menu_item_title(s_menu_index));
 }
 
 void menu_select_vertical(void)
 {
-    uint8_t previous = s_menu_index;
-
-    if(MENU_ITEM_COUNT == 0U)
+    uint8_t count = menu_item_count();
+    if(count != s_rendered_count)
+        menu_render();
+    if(count == 0U)
         return;
-    s_menu_index = (uint8_t)((s_menu_index + MENU_GRID_COLS) % MENU_ITEM_COUNT);
+    uint8_t previous = s_menu_index;
+    s_menu_index = (uint8_t)((s_menu_index + MENU_GRID_COLS) % count);
     if(previous != s_menu_index)
     {
         menu_draw_selection(previous);
     }
-    printf("[MENU] select %s\r\n", g_menu_items[s_menu_index]->title);
+    printf("[MENU] select %s\r\n", menu_item_title(s_menu_index));
 }
 
 void menu_repeat_reset(void)
@@ -194,6 +257,8 @@ void menu_tick(const hk_input_snapshot_t *input)
         menu_repeat_reset();
         return;
     }
+    if(menu_item_count() != s_rendered_count)
+        menu_render();
 
     if(s_menu_repeat_button == 0 || !(buttons & s_menu_repeat_button))
     {

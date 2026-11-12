@@ -11,7 +11,7 @@
 #include "../../services/camera_status.h"
 #include "../../services/settings_lights.h"
 #include "camera_config.h"
-#include "camera_photo_format.h"
+#include "../../services/camera_photo_format.h"
 
 typedef enum
 {

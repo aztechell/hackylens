@@ -23,6 +23,7 @@ typedef enum
     MICROPYTHON_ACTION_LOGS,
     MICROPYTHON_ACTION_STARTUP,
     MICROPYTHON_ACTION_DELETE,
+    MICROPYTHON_ACTION_PIN,
 } micropython_action_t;
 
 typedef struct
@@ -43,6 +44,7 @@ typedef struct
     uint8_t action_index;
     char selected_name[USERFS_NAME_MAX + 1U];
     uint32_t selected_size;
+    uint8_t selected_pinned;
     char startup[USERFS_NAME_MAX + 1U];
     char status[MICROPYTHON_STATUS_COLUMNS + 1U];
     char preview[MICROPYTHON_PREVIEW_LINES]

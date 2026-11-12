@@ -8,6 +8,7 @@
 
 #include "../../config/input_config.h"
 #include "../../adapters/micropython/micropython_capability_bridge.h"
+#include "../../adapters/micropython/micropython_camera_codes.h"
 #include "../../services/audio_service.h"
 #include "../../services/micropython_runtime.h"
 
@@ -37,6 +38,18 @@ static void binding_raise(micropython_binding_result_t result)
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("binding I/O error"));
     if(result == MICROPYTHON_BINDING_ERROR_UNAVAILABLE)
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("capability unavailable"));
+    if(result == MICROPYTHON_BINDING_ERROR_MODEL_FORMAT)
+        mp_raise_ValueError(MP_ERROR_TEXT("incompatible model or manifest"));
+    if(result == MICROPYTHON_BINDING_ERROR_SD_NAME)
+        mp_raise_ValueError(MP_ERROR_TEXT("invalid SD filename"));
+    if(result == MICROPYTHON_BINDING_ERROR_SD_EXISTS)
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("SD file already exists"));
+    if(result == MICROPYTHON_BINDING_ERROR_SD_NO_MEDIA)
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("FAT32 microSD unavailable"));
+    if(result == MICROPYTHON_BINDING_ERROR_SD_FULL)
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("microSD full"));
+    if(result == MICROPYTHON_BINDING_ERROR_SD_IO)
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("microSD write failed"));
     mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("binding inactive"));
 }
 
@@ -390,19 +403,16 @@ static mp_obj_t binding_acceleration_mg(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_acceleration_mg_obj, binding_acceleration_mg);
 
-static mp_obj_t binding_vision_results(void)
+static mp_obj_t binding_vision_object(const vision_result_snapshot_t *snapshot)
 {
-    vision_result_snapshot_t snapshot;
-    size_t length = binding_call(MICROPYTHON_BINDING_OP_VISION_RESULTS,
-                                 NULL, NULL, 0U, (uint8_t *)&snapshot, sizeof(snapshot));
-    if(length != sizeof(snapshot) || snapshot.count > VISION_RESULT_MAX_ITEMS ||
-       snapshot.qr_length > VISION_RESULT_MAX_QR_BYTES)
+    if(snapshot->count > VISION_RESULT_MAX_ITEMS ||
+       snapshot->qr_length > VISION_RESULT_MAX_QR_BYTES)
         binding_raise(MICROPYTHON_BINDING_ERROR_IO);
 
     mp_obj_t items[VISION_RESULT_MAX_ITEMS];
-    for(uint8_t i = 0U; i < snapshot.count; i++)
+    for(uint8_t i = 0U; i < snapshot->count; i++)
     {
-        const vision_result_item_t *item = &snapshot.items[i];
+        const vision_result_item_t *item = &snapshot->items[i];
         mp_obj_t fields[] = {
             MP_OBJ_NEW_SMALL_INT(item->kind), MP_OBJ_NEW_SMALL_INT(item->flags),
             MP_OBJ_NEW_SMALL_INT(item->id), MP_OBJ_NEW_SMALL_INT(item->x0),
@@ -414,20 +424,224 @@ static mp_obj_t binding_vision_results(void)
 
     mp_obj_t result = mp_obj_new_dict(6U);
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_frame_id),
-                      mp_obj_new_int_from_uint(snapshot.frame_id));
+                      mp_obj_new_int_from_uint(snapshot->frame_id));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_source),
-                      MP_OBJ_NEW_SMALL_INT(snapshot.source));
+                      MP_OBJ_NEW_SMALL_INT(snapshot->source));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_width),
-                      MP_OBJ_NEW_SMALL_INT(snapshot.width));
+                      MP_OBJ_NEW_SMALL_INT(snapshot->width));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_height),
-                      MP_OBJ_NEW_SMALL_INT(snapshot.height));
+                      MP_OBJ_NEW_SMALL_INT(snapshot->height));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_items),
-                      mp_obj_new_tuple(snapshot.count, items));
+                      mp_obj_new_tuple(snapshot->count, items));
     mp_obj_dict_store(result, MP_OBJ_NEW_QSTR(MP_QSTR_qr_payload),
-                      mp_obj_new_bytes(snapshot.qr_payload, snapshot.qr_length));
+                      mp_obj_new_bytes(snapshot->qr_payload, snapshot->qr_length));
     return result;
 }
+
+static mp_obj_t binding_vision_results(void)
+{
+    vision_result_snapshot_t snapshot;
+    size_t length = binding_call(MICROPYTHON_BINDING_OP_VISION_RESULTS,
+                                 NULL, NULL, 0U, (uint8_t *)&snapshot, sizeof(snapshot));
+    if(length != sizeof(snapshot))
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+    return binding_vision_object(&snapshot);
+}
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_vision_results_obj, binding_vision_results);
+
+static mp_obj_t binding_camera_open(void)
+{
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_OPEN, NULL, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_camera_open_obj, binding_camera_open);
+
+static mp_obj_t binding_camera_close(void)
+{
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_CLOSE, NULL, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_camera_close_obj, binding_camera_close);
+
+static mp_obj_t binding_camera_tuple(micropython_binding_op_t operation,
+                                     const uint32_t arguments[6],
+                                     const uint8_t *input, size_t input_length,
+                                     size_t count)
+{
+    uint32_t output[5];
+    mp_obj_t values[5];
+    size_t length = binding_call(operation, arguments, input, input_length,
+                                 (uint8_t *)output, sizeof(output));
+    if(!length)
+        return mp_const_none;
+    if(length != count * sizeof(output[0]))
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+    for(size_t i = 0U; i < count; i++)
+        values[i] = mp_obj_new_int_from_uint(output[i]);
+    return mp_obj_new_tuple(count, values);
+}
+
+static mp_obj_t binding_camera_frame(void)
+{
+    return binding_camera_tuple(MICROPYTHON_BINDING_OP_CAMERA_FRAME, NULL, NULL, 0U, 4U);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_camera_frame_obj, binding_camera_frame);
+
+static mp_obj_t binding_camera_release(mp_obj_t lease)
+{
+    uint32_t arguments[6] = {binding_uint(lease, UINT32_MAX)};
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_RELEASE, arguments, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_camera_release_obj, binding_camera_release);
+
+static void binding_camera_rect(mp_obj_t rect, uint32_t arguments[6])
+{
+    if(rect == mp_const_none)
+        return;
+    mp_obj_t *values;
+    mp_obj_get_array_fixed_n(rect, 4U, &values);
+    for(uint8_t i = 0U; i < 4U; i++)
+        arguments[i + 1U] = binding_uint(values[i], UINT16_MAX);
+    if(!arguments[3] || !arguments[4])
+        mp_raise_ValueError(MP_ERROR_TEXT("camera rectangle is empty"));
+}
+
+static mp_obj_t binding_camera_find_color(size_t count, const mp_obj_t *objects)
+{
+    static const uint8_t maximum[] = {31U, 31U, 63U, 63U, 31U, 31U};
+    uint32_t arguments[6] = {binding_uint(objects[0], UINT32_MAX)};
+    mp_obj_t *values;
+    uint8_t threshold[MP_ARRAY_SIZE(maximum)];
+    mp_obj_get_array_fixed_n(objects[1], MP_ARRAY_SIZE(threshold), &values);
+    for(uint8_t i = 0U; i < MP_ARRAY_SIZE(threshold); i++)
+        threshold[i] = binding_uint(values[i], maximum[i]);
+    if(count >= 3U)
+        binding_camera_rect(objects[2], arguments);
+    arguments[5] = count == 4U ? binding_uint(objects[3], UINT32_MAX) : 8U;
+    return binding_camera_tuple(MICROPYTHON_BINDING_OP_CAMERA_FIND_COLOR,
+                                 arguments, threshold, sizeof(threshold), 5U);
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(binding_camera_find_color_obj, 2, 4,
+                                          binding_camera_find_color);
+
+static mp_obj_t binding_camera_present(size_t count, const mp_obj_t *objects)
+{
+    uint32_t arguments[6] = {binding_uint(objects[0], UINT32_MAX)};
+    if(count >= 2U)
+        binding_camera_rect(objects[1], arguments);
+    arguments[5] = count == 3U ? binding_uint(objects[2], UINT16_MAX) : 0x07E0U;
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_PRESENT, arguments, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(binding_camera_present_obj, 1, 3,
+                                          binding_camera_present);
+
+static mp_obj_t binding_camera_model_open(size_t count, const mp_obj_t *objects)
+{
+    uint32_t arguments[6] = {binding_uint(objects[0], UINT8_MAX)};
+    size_t package_length = 0U;
+    const uint8_t *package = NULL;
+    uint8_t ready;
+    if(count == 2U)
+        package = (const uint8_t *)mp_obj_str_get_data(objects[1], &package_length);
+    while(!binding_call(MICROPYTHON_BINDING_OP_CAMERA_MODEL_OPEN, arguments,
+                         package, package_length, &ready, sizeof(ready)))
+        micropython_runtime_vm_hook();
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(binding_camera_model_open_obj, 1, 2,
+                                          binding_camera_model_open);
+
+static mp_obj_t binding_camera_model_close(void)
+{
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_MODEL_CLOSE, NULL, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_camera_model_close_obj, binding_camera_model_close);
+
+static mp_obj_t binding_camera_detect(mp_obj_t lease)
+{
+    const uint32_t arguments[6] = {binding_uint(lease, UINT32_MAX)};
+    vision_result_snapshot_t snapshot;
+    size_t length;
+    (void)binding_call(MICROPYTHON_BINDING_OP_CAMERA_DETECT_SUBMIT, arguments,
+                       NULL, 0U, NULL, 0U);
+    do
+    {
+        micropython_runtime_vm_hook();
+        length = binding_call(MICROPYTHON_BINDING_OP_CAMERA_DETECT_POLL, NULL,
+                              NULL, 0U, (uint8_t *)&snapshot, sizeof(snapshot));
+    } while(!length);
+    if(length != sizeof(snapshot))
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+    return binding_vision_object(&snapshot);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_camera_detect_obj, binding_camera_detect);
+
+static mp_obj_t binding_camera_scan(mp_obj_t lease, mp_obj_t source_obj)
+{
+    uint32_t lease_id = binding_uint(lease, UINT32_MAX);
+    uint32_t source = binding_uint(source_obj, UINT8_MAX);
+    if(source != VISION_SOURCE_QR && source != VISION_SOURCE_APRILTAG)
+        mp_raise_ValueError(MP_ERROR_TEXT("select VISION_QR or VISION_APRILTAG"));
+    vision_result_snapshot_t snapshot;
+    micropython_binding_result_t result = micropython_camera_codes_scan(
+        lease_id, (vision_source_t)source, &snapshot);
+    micropython_runtime_vm_hook();
+    if(result != MICROPYTHON_BINDING_OK)
+        binding_raise(result);
+    return binding_vision_object(&snapshot);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(binding_camera_scan_obj, binding_camera_scan);
+
+static void binding_storage_wait(micropython_binding_op_t op, const uint32_t *args,
+                                 const uint8_t *input, size_t length)
+{
+    uint8_t done;
+    do
+    {
+        if(binding_call(op, args, input, length, &done, sizeof(done)) != sizeof(done))
+            binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
+    } while(!done);
+}
+
+static mp_obj_t binding_sd_write(mp_obj_t name_obj, mp_obj_t data_obj)
+{
+    size_t name_length;
+    const uint8_t *name = (const uint8_t *)mp_obj_str_get_data(name_obj, &name_length);
+    mp_buffer_info_t input;
+    mp_get_buffer_raise(data_obj, &input, MP_BUFFER_READ);
+    const uint8_t *data = input.buf;
+
+    binding_storage_wait(MICROPYTHON_BINDING_OP_SD_BEGIN, NULL, name, name_length);
+    size_t offset = 0U;
+    while(offset < input.len)
+    {
+        uint8_t written[2];
+        size_t take = input.len - offset;
+        if(take > MICROPYTHON_BINDING_DATA_MAX)
+            take = MICROPYTHON_BINDING_DATA_MAX;
+        if(binding_call(MICROPYTHON_BINDING_OP_SD_WRITE, NULL, data + offset, take,
+                        written, sizeof(written)) != sizeof(written))
+            binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
+        offset += written[0] | ((uint32_t)written[1] << 8U);
+    }
+    binding_storage_wait(MICROPYTHON_BINDING_OP_SD_FINISH, NULL, NULL, 0U);
+    return mp_obj_new_int_from_uint(offset);
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(binding_sd_write_obj, binding_sd_write);
+
+static mp_obj_t binding_camera_save(mp_obj_t lease_obj, mp_obj_t name_obj)
+{
+    size_t length;
+    const uint8_t *name = (const uint8_t *)mp_obj_str_get_data(name_obj, &length);
+    const uint32_t args[6] = {binding_uint(lease_obj, UINT32_MAX)};
+    binding_storage_wait(MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN, args, name, length);
+    binding_storage_wait(MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP, NULL, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(binding_camera_save_obj, binding_camera_save);
 
 static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_hackylens) },
@@ -460,6 +674,18 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_accelerometer_available), MP_ROM_PTR(&binding_accelerometer_available_obj) },
     { MP_ROM_QSTR(MP_QSTR_acceleration_mg), MP_ROM_PTR(&binding_acceleration_mg_obj) },
     { MP_ROM_QSTR(MP_QSTR_vision_results), MP_ROM_PTR(&binding_vision_results_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_open), MP_ROM_PTR(&binding_camera_open_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_close), MP_ROM_PTR(&binding_camera_close_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_frame), MP_ROM_PTR(&binding_camera_frame_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_release), MP_ROM_PTR(&binding_camera_release_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_find_color), MP_ROM_PTR(&binding_camera_find_color_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_present), MP_ROM_PTR(&binding_camera_present_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_model_open), MP_ROM_PTR(&binding_camera_model_open_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_model_close), MP_ROM_PTR(&binding_camera_model_close_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_detect), MP_ROM_PTR(&binding_camera_detect_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_scan), MP_ROM_PTR(&binding_camera_scan_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sd_write), MP_ROM_PTR(&binding_sd_write_obj) },
+    { MP_ROM_QSTR(MP_QSTR_camera_save), MP_ROM_PTR(&binding_camera_save_obj) },
     { MP_ROM_QSTR(MP_QSTR_VISION_NONE), MP_ROM_INT(VISION_SOURCE_NONE) },
     { MP_ROM_QSTR(MP_QSTR_VISION_FACE), MP_ROM_INT(VISION_SOURCE_FACE) },
     { MP_ROM_QSTR(MP_QSTR_VISION_QR), MP_ROM_INT(VISION_SOURCE_QR) },

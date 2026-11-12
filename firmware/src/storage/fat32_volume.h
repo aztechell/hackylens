@@ -6,6 +6,7 @@
 uint8_t fat32_mount(void);
 uint8_t hk_sd_present(void);
 uint8_t hk_fat_mounted(void);
+uint32_t fat32_mount_generation(void);
 uint32_t hk_fat_root_cluster(void);
 uint8_t fat32_sectors_per_cluster(void);
 uint32_t fat32_cluster_size(void);

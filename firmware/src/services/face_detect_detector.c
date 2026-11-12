@@ -38,6 +38,7 @@ static uint16_t g_max_probability_x1000;
 static uint8_t g_input_min[3];
 static uint8_t g_input_max[3];
 static uint16_t g_input_mean_x10[3];
+static ai_model_package_t g_package;
 static const ai_model_descriptor_t g_model_descriptor = {
     .id = "face-detect",
     .directory_path = "/hackylens.kmodels",
@@ -244,10 +245,9 @@ static face_detect_load_result_t face_result(ai_model_result_t result)
     }
 }
 
-face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *workspace)
+static face_detect_load_result_t begin_load(void)
 {
     resource_cleanup_poll();
-    ai_model_result_t result;
 
     if(!g_runtime_initialized)
     {
@@ -256,18 +256,19 @@ face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *
     }
     ai_model_runtime_tick(&g_runtime);
     if(g_runtime.state != AI_MODEL_STATE_UNLOADED)
-    {
-        g_result = g_runtime.state == AI_MODEL_STATE_FAULT ?
-                   FACE_DETECT_LOAD_KPU : FACE_DETECT_LOAD_BUSY;
-        return g_result;
-    }
+        return g_runtime.state == AI_MODEL_STATE_FAULT ?
+               FACE_DETECT_LOAD_KPU : FACE_DETECT_LOAD_BUSY;
     reset_detection_state();
     if(!camera_ai_input_acquire(&g_runtime, FACE_W, FACE_H, FACE_INPUT_BYTES))
     {
         g_result = FACE_DETECT_LOAD_BUSY;
         return g_result;
     }
-    result = ai_model_runtime_load_related(&g_runtime, &g_model_descriptor, NULL, workspace);
+    return FACE_DETECT_LOAD_OK;
+}
+
+static face_detect_load_result_t complete_load(ai_model_result_t result)
+{
     g_result = face_result(result);
     if(result != AI_MODEL_RESULT_OK)
     {
@@ -279,6 +280,41 @@ face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *
            (unsigned)((uintptr_t)g_runtime.model & 255U),
            (unsigned)g_runtime.model_size, (unsigned)g_runtime.input_dma_bytes);
     return g_result;
+}
+
+face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *workspace)
+{
+    face_detect_load_result_t result = begin_load();
+    if(result != FACE_DETECT_LOAD_OK)
+        return result;
+    return complete_load(ai_model_runtime_load_related(
+        &g_runtime, &g_model_descriptor, NULL, workspace));
+}
+
+ai_model_result_t face_detect_detector_load_preview_step(const char *package)
+{
+    const ai_model_descriptor_t *descriptor = g_runtime.descriptor;
+    if(g_runtime.state != AI_MODEL_STATE_LOADING)
+    {
+        face_detect_load_result_t start = begin_load();
+        if(start != FACE_DETECT_LOAD_OK)
+            return start == FACE_DETECT_LOAD_BUSY ? AI_MODEL_RESULT_BUSY : AI_MODEL_RESULT_KPU;
+        descriptor = &g_model_descriptor;
+        if(package && package[0])
+        {
+            if(!ai_model_package_describe(&g_package, descriptor, package))
+            {
+                complete_load(AI_MODEL_RESULT_DESCRIPTOR);
+                return AI_MODEL_RESULT_DESCRIPTOR;
+            }
+            descriptor = &g_package.descriptor;
+        }
+    }
+    ai_model_result_t result = ai_model_runtime_load_related_step(
+        &g_runtime, descriptor, NULL, NULL);
+    if(result != AI_MODEL_RESULT_PENDING)
+        complete_load(result);
+    return result;
 }
 
 static uint8_t finish_unload(void)
@@ -339,22 +375,11 @@ const ai_model_runtime_t *face_detect_detector_model(void)
     return &g_runtime;
 }
 
-void face_detect_detector_process_frame(face_detect_consumer_t consumer, void *context)
+static uint8_t submit_input(void)
 {
     uint8_t *input = camera_ai_input_data(&g_runtime);
-    uint8_t inference_finished;
-    uint32_t sequence;
-    if(!face_detect_detector_ready())
-        return;
-    inference_finished = g_runtime.completion_pending;
-    finish_inference(consumer, context);
-    /* The just-finished UI frame was captured with AI output disabled; wait
-       for the following frame after re-arming DVP above. */
-    if(inference_finished || ai_model_runtime_busy(&g_runtime))
-        return;
-    if(!camera_ai_input_take(&g_runtime, &sequence))
-        return;
-    (void)sequence;
+    if(!camera_ai_input_take(&g_runtime, NULL))
+        return 0U;
     if((g_runtime.run_count & 31U) == 0U)
     {
         for(uint8_t plane = 0; plane < 3U; plane++)
@@ -376,12 +401,44 @@ void face_detect_detector_process_frame(face_detect_consumer_t consumer, void *c
     if(g_runtime.run_count == 0U)
         printf("[FACE] kpu start input=%08X bytes=%u\r\n",
                (unsigned)(uintptr_t)input, (unsigned)g_runtime.input_dma_bytes);
-    if(!ai_model_runtime_run(&g_runtime, input))
-    {
-        camera_ai_input_arm(&g_runtime);
-        g_result = FACE_DETECT_LOAD_KPU;
-        printf("[FACE] kpu start failed\r\n");
-    }
+    if(ai_model_runtime_run(&g_runtime, input))
+        return 1U;
+    camera_ai_input_arm(&g_runtime);
+    g_result = FACE_DETECT_LOAD_KPU;
+    printf("[FACE] kpu start failed\r\n");
+    return 0U;
+}
+
+void face_detect_detector_process_frame(face_detect_consumer_t consumer, void *context)
+{
+    if(!face_detect_detector_ready())
+        return;
+    uint8_t inference_finished = g_runtime.completion_pending;
+    finish_inference(consumer, context);
+    /* Wait for the next frame after rearming DVP at completion. */
+    if(!inference_finished && !ai_model_runtime_busy(&g_runtime))
+        (void)submit_input();
+}
+
+hk_result_t face_detect_detector_submit_preview(const camera_preview_frame_t *frame)
+{
+    if(!face_detect_detector_ready())
+        return HK_ERR_INVALID_STATE;
+    if(ai_model_runtime_busy(&g_runtime) || g_runtime.completion_pending)
+        return HK_ERR_BUSY;
+    if(!camera_ai_input_submit_preview(&g_runtime, frame))
+        return HK_ERR_INVALID_ARGUMENT;
+    return submit_input() ? HK_OK : HK_ERR_IO;
+}
+
+hk_result_t face_detect_detector_poll_preview(void)
+{
+    if(!face_detect_detector_ready())
+        return HK_ERR_IO;
+    if(!g_runtime.completion_pending)
+        return HK_PENDING;
+    finish_inference(NULL, NULL);
+    return g_result == FACE_DETECT_LOAD_OK ? HK_OK : HK_ERR_IO;
 }
 
 const face_detect_box_t *face_detect_detector_boxes(uint8_t *count)

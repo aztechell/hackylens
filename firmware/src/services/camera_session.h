@@ -3,6 +3,7 @@
 
 
 #include <stdint.h>
+#include <hackylens/capability/common.h>
 
 #include "../core/camera_types.h"
 
@@ -18,6 +19,9 @@ uint8_t camera_service_start(void);
 uint8_t camera_service_ide_start(void);
 void camera_service_ide_stop(void);
 void camera_service_ide_tick(void);
+hk_result_t camera_service_client_start(void);
+void camera_service_client_stop(void);
+void camera_service_client_tick(void);
 void camera_stop(void);
 const char *camera_service_fail_reason(void);
 void camera_service_enter_begin(uint8_t qr_mode, uint8_t ok_is_down);

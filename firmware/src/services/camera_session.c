@@ -23,7 +23,13 @@
 #include "internal/camera_settings_state.h"
 
 static uint8_t s_blocks_sd_poll;
-static uint8_t s_ide_owned;
+typedef enum
+{
+    CAMERA_PREVIEW_NONE = 0,
+    CAMERA_PREVIEW_IDE,
+    CAMERA_PREVIEW_CLIENT,
+} camera_preview_owner_t;
+static camera_preview_owner_t s_preview_owner;
 
 uint8_t camera_session_snapshot_capture(uint32_t wait_ms)
 {
@@ -167,33 +173,67 @@ uint8_t camera_service_consume_frame_timeout(void)
     return camera_capture_consume_timeout();
 }
 
-uint8_t camera_service_ide_start(void)
+static uint8_t camera_service_preview_start(camera_preview_owner_t owner)
 {
-    if(camera_session_initialized())
-        return camera_service_capture_ready();
     camera_service_set_qvga_mode(1U);
     if(!camera_service_start())
     {
         camera_service_clear_mode();
         return 0U;
     }
-    s_ide_owned = 1U;
+    s_preview_owner = owner;
     return 1U;
 }
 
-void camera_service_ide_stop(void)
+static void camera_service_preview_stop(camera_preview_owner_t owner)
 {
-    if(!s_ide_owned)
+    if(s_preview_owner != owner)
         return;
-    s_ide_owned = 0U;
+    s_preview_owner = CAMERA_PREVIEW_NONE;
     camera_session_suspend_control();
     hal_dvp_output_display(0U);
     camera_service_clear_mode();
 }
 
+uint8_t camera_service_ide_start(void)
+{
+    if(camera_session_initialized() || s_preview_owner != CAMERA_PREVIEW_NONE)
+        return camera_service_capture_ready();
+    return camera_service_preview_start(CAMERA_PREVIEW_IDE);
+}
+
+void camera_service_ide_stop(void)
+{
+    camera_service_preview_stop(CAMERA_PREVIEW_IDE);
+}
+
 void camera_service_ide_tick(void)
 {
-    if(s_ide_owned)
+    if(s_preview_owner == CAMERA_PREVIEW_IDE)
+        (void)camera_service_capture_frame_tick();
+}
+
+hk_result_t camera_service_client_start(void)
+{
+    if(s_preview_owner == CAMERA_PREVIEW_IDE && camera_service_capture_ready())
+    {
+        s_preview_owner = CAMERA_PREVIEW_CLIENT;
+        return HK_OK;
+    }
+    camera_service_ide_stop();
+    if(camera_session_initialized() || s_preview_owner != CAMERA_PREVIEW_NONE)
+        return HK_ERR_BUSY;
+    return camera_service_preview_start(CAMERA_PREVIEW_CLIENT) ? HK_OK : HK_ERR_IO;
+}
+
+void camera_service_client_stop(void)
+{
+    camera_service_preview_stop(CAMERA_PREVIEW_CLIENT);
+}
+
+void camera_service_client_tick(void)
+{
+    if(s_preview_owner == CAMERA_PREVIEW_CLIENT)
         (void)camera_service_capture_frame_tick();
 }
 

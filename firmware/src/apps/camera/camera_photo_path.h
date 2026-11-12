@@ -3,7 +3,7 @@
 
 #include "../../core/photo_types.h"
 
-#include "camera_photo_format.h"
+#include "../../services/camera_photo_format.h"
 #include <stddef.h>
 #include <stdint.h>
 

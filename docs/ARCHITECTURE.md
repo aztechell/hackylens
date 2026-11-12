@@ -36,6 +36,12 @@ Native C and MicroPython read the same published detector snapshot through
 it through the existing core-0 mailbox. See the
 [vision result API](MICROPYTHON_API.md#vision-results).
 
+Scripts can also acquire a camera frame and run the shared FACE, OBJECT,
+QR, or AprilTag implementation on it. Core 0 validates the frame lease and
+stages the decoder input. QR and AprilTag decode on core 1 within the VM job.
+The native apps schedule these decoders through the core-1 executor. See the
+[MicroPython camera API](MICROPYTHON_API.md#camera-and-color-tracking).
+
 ## Runtime and hardware service ownership
 
 All bundled apps use `start/event/render/stop`, one foreground switch and one
@@ -43,6 +49,16 @@ build-generated immutable registry. Render is optional and separate because
 runtime owns Display transactions. App identity and persisted autostart IDs do
 not depend on menu order. Existing bundled portable firmware services are not
 therefore standalone public SDK APIs.
+
+The launcher appends user-pinned script shortcuts after the native registry.
+A shortcut opens the existing MICRO-PYTHON app with a saved program name. Pin
+metadata lives in the USERFS file entry and follows atomic program replacement.
+
+MicroPython can create files in `/PYDATA` on FAT32. The core-0 writer
+publishes a temporary entry under its final name after the last sector is
+written. It tracks the mount generation across calls. Cancellation unlinks the
+temporary entry and frees its clusters incrementally. Camera saves use the
+shared CAMERA encoder and the leased frame in the board's logical orientation.
 
 Time and Input have immutable board-lifetime bindings. Input retains one sampler,
 debounce state and event ring with independent reader cursors. Lights uses
@@ -189,7 +205,12 @@ runtime dispatches lifecycle callbacks, timer and SD events; inactive apps do
 not receive background ticks. Shared screen, SD, debug, boot, and system-tick controllers
 do not include feature headers or select features with conditionals.
 
-CAMERA owns photo capture orchestration, encoders/writers, photo paths, settings adapter, and its view. QR-CAMERA owns quirc integration, luma conversion, result state/view, text persistence, settings, and its view. Both reuse the shared camera session, sensor/frame pipeline, camera preview renderer, and settings persistence.
+CAMERA owns photo capture orchestration, the file writer and paths, settings,
+and its view. The shared photo encoder also serves MicroPython's BMP output.
+QR-CAMERA owns its scan scheduling, result view, text persistence and settings.
+It uses the same quirc wrapper and luma converter as MicroPython. Both native
+apps reuse the shared camera session, sensor and frame pipeline, preview
+renderer, and settings persistence.
 
 A stalled DVP conversion is rearmed in place. Ready frames and outstanding
 leases remain valid across recovery.
@@ -222,10 +243,11 @@ They load `/hackylens.kmodels/detect.kmodel` from microSD. [FACE RECOG](FACE_REC
 keeps two companion models resident under the same KPU lease, runs one
 inference at a time and publishes matching IDs through the shared vision API.
 
-APRILTAG owns its TAG36H11 detector adapter, grayscale downsampler, settings/selection model and descriptor adapter, stabilized in-frame result overlay, icon, and `HKTAG`/`HKTAGINFO` commands. Its descriptor adapter uses the shared camera-independent `settings_menu`, while APRILTAG retains persistence and camera pause/resume policy. It reuses the shared 320x240 camera runtime and publishes native tag IDs through `vision_result_service` as BLOCK results. Core 0 downsamples a leased camera frame only when the single uncached 160x120 luma handoff and shared core-1 executor are free, then immediately releases the frame. Frames seen while detection is busy are discarded instead of queued, preventing stale-result latency. Core-1 create/detect/destroy jobs atomically publish completed result banks and leave the executor available to other apps. `refine_edges` is a persisted runtime request applied before the next detection rather than a detector restart. The app uses camera session overrides for its independent FPS and LED/RGB profile, leaving CAMERA and QR settings unchanged. Its `ALL/SELECTED` filter is applied before the shared result snapshot, so the UART/I2C wire format remains unchanged. Preview overlays are composed into the LCD shadow before the full-frame transfer, so rectangles are not temporarily erased by the following camera frame. The detector does not use a KPU model. The BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag` only when this feature is enabled.
+APRILTAG owns its settings/selection model and descriptor adapter, stabilized in-frame result overlay, icon, and `HKTAG`/`HKTAGINFO` commands. It shares the TAG36H11 decoder and grayscale downsampler with MicroPython. Its descriptor adapter uses the shared camera-independent `settings_menu`, while APRILTAG retains persistence and camera pause/resume policy. It reuses the shared 320x240 camera runtime and publishes native tag IDs through `vision_result_service` as BLOCK results. Core 0 downsamples a leased camera frame only when the single uncached 160x120 luma handoff and shared core-1 executor are free, then immediately releases the frame. Frames seen while detection is busy are discarded instead of queued, preventing stale-result latency. Core-1 create/detect/destroy jobs atomically publish completed result banks and leave the executor available to other apps. `refine_edges` is a persisted runtime request applied before the next detection rather than a detector restart. The app uses camera session overrides for its independent FPS and LED/RGB profile, leaving CAMERA and QR settings unchanged. Its `ALL/SELECTED` filter is applied before the shared result snapshot, so the UART/I2C wire format remains unchanged. Preview overlays are composed into the LCD shadow before the full-frame transfer, so rectangles are not temporarily erased by the following camera frame. The detector does not use a KPU model. The BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag` only when this feature is enabled.
 
-OBJECT DETECT owns the VOC20 labels, YOLOv2 decoder/NMS, settings adapter,
-overlay, icon, and `HKOBJECT`/`HKOBJECTINFO` commands. Its pinned KModel v3
+OBJECT DETECT owns its VOC20 labels, settings adapter, overlay, icon, and
+`HKOBJECT`/`HKOBJECTINFO` commands. It shares the YOLOv2 decoder and NMS
+with MicroPython. Its pinned KModel v3
 accepts planar `1x3x240x320` bytes and returns `1x125x7x10` floats. KPU
 inference is asynchronous; completed output is decoded on core 0 before a new
 DVP input is armed, avoiding K210's non-coherent cross-core cache boundary.
@@ -270,11 +292,14 @@ and cleanup while FACE was active. The user confirmed POW/BACK navigation
 after PMIC bus recovery. See the [v0.5.0 release notes](releases/v0.5.0.md)
 and the [Cube hardware log](MAIX_CUBE.md) for the tested builds and scenarios.
 
-Known-target QR and AprilTag recognition and VOC20 accuracy remain to be
-measured on Cube. The maintainer waived the physical exchange test for Cube's
-Grove UART/I2C. MicroPython has separate acceptance checks for the browser
-workflow, physical BACK during script execution, 1000 run/stop cycles,
-flash endurance and power loss, and [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md).
+The [Cube hardware log](MAIX_CUBE.md#micropython-qr-and-apriltag-checks-2026-11-12)
+records optical AprilTag recognition and intermittent QR reads through
+MicroPython. VOC20 accuracy remains to be measured on Cube.
+The maintainer waived the physical exchange test for Cube's
+Grove UART/I2C. The [hardware log](MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12)
+records IDE threshold selection, physical launches, BACK and microSD output
+on both boards. MicroPython has separate acceptance checks for 1000 run/stop
+cycles, flash endurance and power loss, and [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md).
 
 ### Earlier SEN0305 qualification
 

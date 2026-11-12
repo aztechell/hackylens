@@ -147,6 +147,14 @@ keeps the full audit data, including SHA-256, anchors, defaults, and upstream
 commit. OBJECT also pins the expected CRC32 in its descriptor, so another
 same-shaped model cannot accidentally use the fixed VOC20 decoder.
 
+MicroPython can explicitly select a compatible package directory with
+`camera_model_open(source, package)`. Use the same detector contract and
+class order when packaging a compatible model. The firmware checks the
+selected package's manifest and CRC before submitting work to KPU. The
+[FACE spec](../models/face_detect.json) packages the shipped FACE model for
+this workflow. The [VOC20 spec](../models/object_detect_voc20.json) describes
+the OBJECT DETECT contract.
+
 ## Model lab
 
 `tools/ai_model.py` provides:

@@ -7,7 +7,7 @@
 #include "../../services/camera_session_preferences.h"
 #include "../../services/settings_app_data.h"
 #include "../../services/settings_persistence.h"
-#include "object_detect_detector.h"
+#include "../../services/object_detect_detector.h"
 
 #define OBJECT_DATA_SCHEMA 0U
 #define OBJECT_DATA_FLAGS 1U

@@ -53,6 +53,7 @@ static uint32_t g_rgb_restore_calls;
 static uint32_t g_light_writes;
 static uint32_t g_uart_init_calls;
 static uint32_t g_overlay_acquire_calls;
+static uint32_t g_overlay_begin_calls;
 static uint32_t g_overlay_present_calls;
 static uint32_t g_overlay_release_calls;
 static uint32_t g_overlay_acquired_run_id;
@@ -176,6 +177,7 @@ static void reset_run(void)
     g_light_writes = 0U;
     g_uart_init_calls = 0U;
     g_overlay_acquire_calls = 0U;
+    g_overlay_begin_calls = 0U;
     g_overlay_present_calls = 0U;
     g_overlay_release_calls = 0U;
     g_overlay_acquired_run_id = 0U;
@@ -402,6 +404,8 @@ static void test_display_stages_until_present(void)
     require_true(g_overlay_acquire_calls == 1U &&
                  g_overlay_acquired_run_id == g_run_id,
                  "run prepare must acquire one display lease");
+    require_true(g_overlay_begin_calls == 0U,
+                 "run prepare must leave the shared frame workspace free for capture");
     require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_CLEAR,
                               clear, NULL, 0U) == MICROPYTHON_BINDING_OK,
                  "display clear must stage");
@@ -412,7 +416,7 @@ static void test_display_stages_until_present(void)
     require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_RECT,
                               rect, NULL, 0U) == MICROPYTHON_BINDING_OK,
                  "display rectangle must stage");
-    require_true(g_overlay_present_calls == 0U,
+    require_true(g_overlay_begin_calls == 1U && g_overlay_present_calls == 0U,
                  "staging commands must not write the panel");
     require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
                               none, NULL, 0U) == MICROPYTHON_BINDING_OK,
@@ -798,6 +802,7 @@ hk_result_t hk_display_begin_batch(
     const hk_display_t *handle)
 {
     (void)handle;
+    g_overlay_begin_calls++;
     g_overlay_command_count = 0U;
     g_overlay_text_length = 0U;
     return HK_OK;

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../adapters/micropython/micropython_capability_bridge.h"
 #include "../../config/input_config.h"
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
@@ -62,6 +63,8 @@ static uint32_t g_preview_size;
 static uint32_t g_observed_run_id;
 static uint8_t g_screen_active;
 static uint8_t g_close_requested;
+static uint8_t g_opened_from_pin;
+static uint8_t g_close_after_stop;
 static micropython_view_update_t g_render_update;
 static uint8_t g_render_divider;
 static uint8_t g_console_render_ticks;
@@ -300,6 +303,7 @@ static uint8_t load_file_row(const char *name, uint32_t size, void *context)
     {
         snprintf(g_ui.selected_name, sizeof(g_ui.selected_name), "%s", name);
         g_ui.selected_size = size;
+        g_ui.selected_pinned = userfs_is_pinned(name);
     }
     page->index++;
     return 1U;
@@ -340,6 +344,7 @@ static uint8_t refresh_file_list(uint8_t preserve_name, uint8_t mark_changes)
         g_ui.list_top = 0U;
         g_ui.selected_name[0] = '\0';
         g_ui.selected_size = 0U;
+        g_ui.selected_pinned = 0U;
         g_ui.visible_count = 0U;
         page.changed = old_visible_count != 0U;
         for(uint8_t row = 0U; row < MICROPYTHON_LIST_VISIBLE_ROWS; row++)
@@ -617,6 +622,12 @@ static void render_if_needed(uint8_t force)
 
     if(!g_screen_active)
         return;
+    if(micropython_capability_bridge_camera_presented())
+    {
+        if(!g_render_update.full)
+            request_full_render();
+        return;
+    }
     if(force)
         request_full_render();
     if(!render_pending())
@@ -681,23 +692,25 @@ static uint8_t run_debug_default(void)
     return 1U;
 }
 
-static void run_selected_file(void)
+static void run_file(const char *name)
 {
     micropython_program_result_t result;
     uint32_t run_id = 0U;
     char message[USERFS_NAME_MAX + 8U];
 
-    if(!g_ui.selected_name[0])
+    if(!name[0])
         return;
     log_reset();
-    snprintf(message, sizeof(message), "RUN %s", g_ui.selected_name);
+    snprintf(message, sizeof(message), "RUN %s", name);
     log_message(message);
     result = micropython_program_run_file(
-        g_ui.selected_name, MICROPYTHON_RUNTIME_DEFAULT_LIMIT_MS, &run_id);
+        name, MICROPYTHON_RUNTIME_UNTIL_STOPPED, &run_id);
     if(result != MICROPYTHON_PROGRAM_OK)
     {
         set_status("RUN %s", micropython_program_result_name(result));
         log_message(g_ui.status);
+        if(g_opened_from_pin)
+            show_console();
         return;
     }
     g_observed_run_id = run_id;
@@ -753,7 +766,7 @@ static void execute_action(void)
     switch((micropython_action_t)g_ui.action_index)
     {
     case MICROPYTHON_ACTION_RUN:
-        run_selected_file();
+        run_file(g_ui.selected_name);
         break;
     case MICROPYTHON_ACTION_VIEW:
         g_ui.mode = MICROPYTHON_UI_PREVIEW;
@@ -782,6 +795,17 @@ static void execute_action(void)
         g_ui.mode = MICROPYTHON_UI_DELETE_CONFIRM;
         set_status("");
         request_full_render();
+        break;
+    case MICROPYTHON_ACTION_PIN:
+        result = userfs_set_pinned(g_ui.selected_name, !g_ui.selected_pinned);
+        if(result == USERFS_OK)
+        {
+            g_ui.selected_pinned = userfs_is_pinned(g_ui.selected_name);
+            set_status(g_ui.selected_pinned ? "PINNED TO MENU" : "PIN REMOVED");
+            request_row_render(MICROPYTHON_ACTION_PIN);
+        }
+        else
+            set_status("PIN %s", userfs_result_name(result));
         break;
     default:
         break;
@@ -829,6 +853,8 @@ void micropython_enter(const hk_input_snapshot_t *input)
 
     (void)input;
     g_close_requested = 0U;
+    g_close_after_stop = 0U;
+    g_opened_from_pin = 0U;
     g_screen_active = 1U;
     memset(&g_render_update, 0, sizeof(g_render_update));
     g_render_divider = 0U;
@@ -874,6 +900,11 @@ void micropython_exit(void)
 void micropython_tick(const hk_input_snapshot_t *input)
 {
     (void)input;
+    if(g_close_after_stop && !runtime_active(g_last_state))
+    {
+        g_close_requested = 1U;
+        return;
+    }
     if(g_ui.mode == MICROPYTHON_UI_LIST &&
         ++g_list_refresh_ticks >= MICROPYTHON_LIST_REFRESH_TICKS)
     {
@@ -991,7 +1022,8 @@ static void handle_console_buttons(uint32_t pressed,
         request_info_render();
         request_body_render();
     }
-    if(pressed & BUTTON_OK)
+    if((pressed & BUTTON_OK) && !g_opened_from_pin &&
+       !micropython_capability_bridge_camera_presented())
     {
         if(runtime_active(runtime_state))
             request_runtime_stop();
@@ -1000,7 +1032,12 @@ static void handle_console_buttons(uint32_t pressed,
     if(pressed & BUTTON_BACK)
     {
         if(runtime_active(runtime_state))
+        {
+            g_close_after_stop = g_opened_from_pin;
             request_runtime_stop();
+        }
+        else if(g_opened_from_pin)
+            g_close_requested = 1U;
         else
         {
             (void)refresh_file_list(1U, 0U);
@@ -1208,6 +1245,12 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
 {
     (void)ctx;
     micropython_enter(NULL);
+    const char *name = micropython_program_launch_name();
+    if(name)
+    {
+        g_opened_from_pin = 1U;
+        run_file(name);
+    }
     return HK_OK;
 }
 static hk_result_t app_event(const hk_app_context_t *ctx, const hk_app_event_t *event)

@@ -7,6 +7,7 @@ typedef enum
     RESOURCE_CLEANUP_CORE1,
     RESOURCE_CLEANUP_QR,
     RESOURCE_CLEANUP_FACE_RECOGNITION,
+    RESOURCE_CLEANUP_SCRIPT_SD,
     RESOURCE_CLEANUP_COUNT,
 } resource_cleanup_slot_t;
 /* Called on core0. Return one only when the resource is released or quarantined.

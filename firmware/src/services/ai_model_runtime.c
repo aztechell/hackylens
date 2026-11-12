@@ -75,11 +75,48 @@ static uint8_t contract_equal(const ai_model_kmodel_contract_t *left,
            left->input_bytes == right->input_bytes;
 }
 
+uint8_t ai_model_package_describe(ai_model_package_t *package,
+                                  const ai_model_descriptor_t *detector,
+                                  const char *name)
+{
+    if(!package || !detector || !name || !name[0])
+        return 0U;
+    for(size_t i = 0U; name[i]; i++)
+    {
+        char c = name[i];
+        if(i >= AI_MODEL_PACKAGE_NAME_MAX ||
+           !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_'))
+            return 0U;
+    }
+    snprintf(package->directory, sizeof(package->directory), "/hackylens.kmodels/%s", name);
+    snprintf(package->model, sizeof(package->model), "/hackylens.kmodels/%s/model.kmodel", name);
+    snprintf(package->manifest, sizeof(package->manifest), "/hackylens.kmodels/%s/manifest.hkai", name);
+    snprintf(package->labels, sizeof(package->labels), "/hackylens.kmodels/%s/labels.txt", name);
+    package->descriptor = *detector;
+    package->descriptor.directory_path = package->directory;
+    package->descriptor.model_path = package->model;
+    package->descriptor.manifest_path = package->manifest;
+    package->descriptor.labels_path = package->labels;
+    package->descriptor.manifest_required = 1U;
+    package->descriptor.expected_model_crc32 = 0U;
+    return 1U;
+}
+
+static const char *file_name(const char *path)
+{
+    if(!path)
+        return "";
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
 static uint8_t manifest_matches(const ai_model_descriptor_t *descriptor,
                                 const ai_model_manifest_t *manifest,
                                 uint32_t model_size, uint32_t model_crc32)
 {
     if(strcmp(descriptor->id, manifest->id) != 0 ||
+       strcmp(file_name(descriptor->model_path), manifest->model_file) != 0 ||
+       strcmp(file_name(descriptor->labels_path), manifest->labels_file) != 0 ||
        manifest->model_size != model_size || manifest->model_crc32 != model_crc32 ||
        (descriptor->expected_model_crc32 &&
         descriptor->expected_model_crc32 != model_crc32) ||
@@ -130,6 +167,7 @@ static void clear_loaded_fields(ai_model_runtime_t *runtime)
     runtime->last_inference_us = 0U;
     runtime->started_us = 0U;
     runtime->unload_requested_us = 0U;
+    runtime->unload_deadline_us = 0U;
     runtime->completion_pending = 0U;
     runtime->state = AI_MODEL_STATE_UNLOADED;
 }

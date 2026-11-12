@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "camera_frame.h"
+
 /*
  * One camera/KPU application is active at a time. This shared planar RGB888
  * slot avoids permanently reserving a separate 230 KiB DVP input in every
@@ -18,6 +20,10 @@ uint8_t camera_ai_input_take(const void *owner, uint32_t *sequence);
 void camera_ai_input_prepare_preview(const volatile uint16_t *pixels,
                                      uint16_t width, uint16_t height,
                                      uint32_t sequence);
+/* Convert an explicitly leased frame for a client without DVP AI hooks.
+ * The camera lease can be released after conversion. */
+uint8_t camera_ai_input_submit_preview(const void *owner,
+                                       const camera_preview_frame_t *frame);
 uint8_t camera_ai_input_map_rect(const void *owner, int16_t *x, int16_t *y,
                                  int16_t *w, int16_t *h);
 void camera_ai_input_arm(const void *owner);

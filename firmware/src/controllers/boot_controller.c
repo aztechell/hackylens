@@ -19,6 +19,7 @@ static const hk_menu_view_t g_menu_view = {
     .draw_title = menu_draw_title,
     .draw_item_at = menu_draw_item_at,
     .draw_page = menu_draw_page,
+    .draw_shortcut_at = menu_draw_shortcut_at,
 };
 
 static void boot_log_banner(void)

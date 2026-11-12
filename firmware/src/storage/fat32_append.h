@@ -8,6 +8,7 @@
 #include "../config/sd_config.h"
 #include "fat32_allocation.h"
 #include "fat32_types.h"
+#include "sd_card.h"
 
 typedef struct
 {
@@ -28,9 +29,14 @@ hk_result_t fat_append_prepare(fat_append_t *file);
 hk_result_t fat_append_prefetch(fat_append_t *file);
 hk_result_t fat_append_write(fat_append_t *file, const uint8_t *data,
                              size_t bytes, size_t *accepted);
+/* Writes a short run from a sector generator, without buffering a second copy. */
+hk_result_t fat_append_write_run(fat_append_t *file, uint32_t remaining,
+                                 sd_block_source_t source, void *context, size_t *accepted);
 hk_result_t fat_append_flush(fat_append_t *file);
 hk_result_t fat_append_publish(fat_append_t *file, const char *ext,
                                const uint8_t *header, size_t header_size);
 hk_result_t fat_append_discard_empty(fat_append_t *file);
+/* Unlink the temporary entry, then free at most one cluster per call. */
+hk_result_t fat_append_discard_step(fat_append_t *file);
 
 #endif

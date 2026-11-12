@@ -25,6 +25,10 @@ micropython_program_result_t micropython_program_run_startup(
 const char *micropython_program_result_name(
     micropython_program_result_t result);
 
+/* Borrowed name for the duration of a synchronous launcher activation. */
+void micropython_program_set_launch_name(const char *name);
+const char *micropython_program_launch_name(void);
+
 /* Core-0 staging workspace. Release the borrow before loading a program. */
 uint8_t *micropython_program_borrow_staging(size_t length);
 void micropython_program_release_staging(void);

@@ -1,4 +1,3 @@
-#include "../../services/resource_cleanup.h"
 #include "object_detect_detector.h"
 
 #include <stdio.h>
@@ -6,10 +5,10 @@
 
 #include <hackylens/capability/time.h>
 
-#include "../../services/ai_model_runtime.h"
-#include "../../services/camera_ai_input.h"
-#include "../../services/media_workspace.h"
+#include "camera_ai_input.h"
+#include "media_workspace.h"
 #include "object_detect_postprocess.h"
+#include "resource_cleanup.h"
 
 typedef struct
 {
@@ -49,6 +48,7 @@ static uint8_t g_nms = OBJECT_DETECT_DEFAULT_NMS;
 static object_detect_load_result_t g_result = OBJECT_DETECT_LOAD_FORMAT;
 static object_detect_result_bank_t g_result_banks[2] __attribute__((aligned(64)));
 static object_detect_postprocess_workspace_t g_workspace __attribute__((aligned(64)));
+static ai_model_package_t g_package;
 static uint64_t object_time_now_us(void)
 {
     uint64_t value = 0U;
@@ -214,10 +214,9 @@ static uint8_t finish_inference(void)
     return 1U;
 }
 
-object_detect_load_result_t object_detect_detector_load(void)
+static object_detect_load_result_t begin_load(ai_model_workspace_t *workspace)
 {
     resource_cleanup_poll();
-    ai_model_result_t result;
 
     if(!g_runtime_initialized)
     {
@@ -226,11 +225,8 @@ object_detect_load_result_t object_detect_detector_load(void)
     }
     object_detect_detector_service_tick();
     if(g_runtime.state != AI_MODEL_STATE_UNLOADED)
-    {
-        g_result = g_runtime.state == AI_MODEL_STATE_FAULT ?
-                   OBJECT_DETECT_LOAD_KPU : OBJECT_DETECT_LOAD_BUSY;
-        return g_result;
-    }
+        return g_runtime.state == AI_MODEL_STATE_FAULT ?
+               OBJECT_DETECT_LOAD_KPU : OBJECT_DETECT_LOAD_BUSY;
     reset_detection_state();
     g_session_epoch++;
     if(g_session_epoch == 0U)
@@ -242,19 +238,17 @@ object_detect_load_result_t object_detect_detector_load(void)
         g_result = OBJECT_DETECT_LOAD_BUSY;
         return g_result;
     }
-    const ai_model_workspace_t model_workspace = media_model_workspace_claim(&g_runtime);
-    if(!model_workspace.data)
+    *workspace = media_model_workspace_claim(&g_runtime);
+    if(!workspace->data)
     {
         camera_ai_input_release(&g_runtime);
         return g_result = OBJECT_DETECT_LOAD_BUSY;
     }
-    result = ai_model_runtime_load_related(&g_runtime, &g_model_descriptor, NULL, &model_workspace);
-    if(result == AI_MODEL_RESULT_ALLOC)
-    {
-        /* Keep support for compatible SD models larger than the shared arena. */
-        media_workspace_release(&g_runtime);
-        result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
-    }
+    return OBJECT_DETECT_LOAD_OK;
+}
+
+static object_detect_load_result_t complete_load(ai_model_result_t result)
+{
     g_result = object_result(result);
     if(result != AI_MODEL_RESULT_OK)
     {
@@ -272,6 +266,57 @@ object_detect_load_result_t object_detect_detector_load(void)
            (unsigned)g_runtime.model_size,
            (unsigned)g_runtime.input_dma_bytes);
     return g_result;
+}
+
+object_detect_load_result_t object_detect_detector_load(void)
+{
+    ai_model_workspace_t workspace;
+    object_detect_load_result_t start = begin_load(&workspace);
+    if(start != OBJECT_DETECT_LOAD_OK)
+        return start;
+    ai_model_result_t result = ai_model_runtime_load_related(
+        &g_runtime, &g_model_descriptor, NULL, &workspace);
+    if(result == AI_MODEL_RESULT_ALLOC)
+    {
+        media_workspace_release(&g_runtime);
+        result = ai_model_runtime_load(&g_runtime, &g_model_descriptor);
+    }
+    return complete_load(result);
+}
+
+ai_model_result_t object_detect_detector_load_preview_step(const char *package)
+{
+    ai_model_result_t result;
+    if(g_runtime.state == AI_MODEL_STATE_LOADING)
+        result = ai_model_runtime_load_related_step(&g_runtime, g_runtime.descriptor, NULL, NULL);
+    else
+    {
+        ai_model_workspace_t workspace;
+        object_detect_load_result_t start = begin_load(&workspace);
+        if(start != OBJECT_DETECT_LOAD_OK)
+            return start == OBJECT_DETECT_LOAD_BUSY ? AI_MODEL_RESULT_BUSY : AI_MODEL_RESULT_KPU;
+        const ai_model_descriptor_t *descriptor = &g_model_descriptor;
+        if(package && package[0])
+        {
+            if(!ai_model_package_describe(&g_package, descriptor, package))
+            {
+                complete_load(AI_MODEL_RESULT_DESCRIPTOR);
+                return AI_MODEL_RESULT_DESCRIPTOR;
+            }
+            descriptor = &g_package.descriptor;
+        }
+        result = ai_model_runtime_load_related_step(
+            &g_runtime, descriptor, NULL, &workspace);
+        if(result == AI_MODEL_RESULT_ALLOC)
+        {
+            media_workspace_release(&g_runtime);
+            result = ai_model_runtime_load_related_step(
+                &g_runtime, descriptor, NULL, NULL);
+        }
+    }
+    if(result != AI_MODEL_RESULT_PENDING)
+        complete_load(result);
+    return result;
 }
 
 static uint8_t finish_unload(void)
@@ -334,27 +379,12 @@ void object_detect_detector_attach_camera(void)
     (void)camera_ai_input_attach(&g_runtime);
 }
 
-void object_detect_detector_process_frame(uint32_t camera_sequence)
+static uint8_t submit_input(void)
 {
-    uint8_t *input;
-    uint8_t rearmed;
     uint32_t input_sequence;
-
-    object_detect_detector_service_tick();
-    if(!object_detect_detector_ready())
-        return;
-    rearmed = finish_inference();
-    if(rearmed || ai_model_runtime_busy(&g_runtime))
-    {
-        g_busy_drop_count++;
-        return;
-    }
-
-    input = camera_ai_input_data(&g_runtime);
-    if(!input)
-        return;
+    uint8_t *input = camera_ai_input_data(&g_runtime);
     if(!camera_ai_input_take(&g_runtime, &input_sequence))
-        return;
+        return 0U;
     if(!g_input_stats_ready)
     {
         uint32_t plane_bytes = OBJECT_DETECT_INPUT_W * OBJECT_DETECT_INPUT_H;
@@ -391,10 +421,44 @@ void object_detect_detector_process_frame(uint32_t camera_sequence)
             camera_ai_input_arm(&g_runtime);
         g_result = OBJECT_DETECT_LOAD_KPU;
         printf("[OBJECT] kpu start failed\r\n");
-        return;
+        return 0U;
     }
     g_submit_count++;
+    return 1U;
+}
+
+void object_detect_detector_process_frame(uint32_t camera_sequence)
+{
     (void)camera_sequence;
+    object_detect_detector_service_tick();
+    if(!object_detect_detector_ready())
+        return;
+    if(finish_inference() || ai_model_runtime_busy(&g_runtime))
+    {
+        g_busy_drop_count++;
+        return;
+    }
+    (void)submit_input();
+}
+
+hk_result_t object_detect_detector_submit_preview(const camera_preview_frame_t *frame)
+{
+    if(!object_detect_detector_ready())
+        return HK_ERR_INVALID_STATE;
+    if(ai_model_runtime_busy(&g_runtime) || g_runtime.completion_pending)
+        return HK_ERR_BUSY;
+    if(!camera_ai_input_submit_preview(&g_runtime, frame))
+        return HK_ERR_INVALID_ARGUMENT;
+    return submit_input() ? HK_OK : HK_ERR_IO;
+}
+
+hk_result_t object_detect_detector_poll_preview(void)
+{
+    if(!object_detect_detector_ready())
+        return HK_ERR_IO;
+    if(!finish_inference())
+        return HK_PENDING;
+    return g_result == OBJECT_DETECT_LOAD_OK ? HK_OK : HK_ERR_IO;
 }
 
 void object_detect_detector_invalidate_results(void)

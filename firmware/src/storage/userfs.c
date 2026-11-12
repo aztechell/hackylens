@@ -16,6 +16,7 @@
 #define USERFS_STARTUP_FILE ".startup"
 #define USERFS_META_TEMP ".meta-upload"
 #define USERFS_UPLOAD_PREFIX ".upload-"
+#define USERFS_PIN_ATTR 1U
 
 typedef struct
 {
@@ -41,6 +42,9 @@ static userfs_upload_t g_upload;
 static userfs_state_t g_state;
 static userfs_result_t g_last_error;
 static uint32_t g_next_upload_id;
+static char g_pins[USERFS_PIN_MAX][USERFS_NAME_MAX + 1U];
+static uint8_t g_pin_count;
+static uint8_t g_pins_loaded;
 
 static userfs_result_t userfs_remember(userfs_result_t result)
 {
@@ -301,6 +305,8 @@ userfs_result_t userfs_unmount(void)
     if(g_upload.active)
         userfs_upload_abort(g_upload.id);
     result = lfs_unmount(&g_lfs);
+    g_pins_loaded = 0U;
+    g_pin_count = 0U;
     g_state = result == 0 ? USERFS_STATE_UNINITIALIZED : USERFS_STATE_IO_ERROR;
     return userfs_remember(userfs_from_lfs(result));
 }
@@ -408,6 +414,92 @@ userfs_result_t userfs_stat(const char *name, uint32_t *size)
     return userfs_remember(userfs_from_lfs(result));
 }
 
+static uint8_t userfs_collect_pin(const char *name, uint32_t size, void *context)
+{
+    int *error = context;
+    uint8_t pinned = 0U;
+    (void)size;
+    int result = lfs_getattr(&g_lfs, name, USERFS_PIN_ATTR, &pinned, sizeof(pinned));
+    if(result < 0 && result != LFS_ERR_NOATTR)
+    {
+        *error = result;
+        return 0U;
+    }
+    if(result == sizeof(pinned) && pinned)
+    {
+        memcpy(g_pins[g_pin_count++], name, strlen(name) + 1U);
+        if(g_pin_count == USERFS_PIN_MAX)
+            return 0U;
+    }
+    return 1U;
+}
+
+static userfs_result_t userfs_load_pins(void)
+{
+    int error = 0;
+    if(g_state != USERFS_STATE_MOUNTED)
+        return USERFS_ERROR_NOT_MOUNTED;
+    if(g_pins_loaded)
+        return USERFS_OK;
+    if(g_upload.active)
+        return USERFS_ERROR_BUSY;
+    g_pin_count = 0U;
+    userfs_result_t result = userfs_list(userfs_collect_pin, &error);
+    if(result == USERFS_OK && error)
+        result = userfs_from_lfs(error);
+    g_pins_loaded = result == USERFS_OK;
+    if(!g_pins_loaded)
+        g_pin_count = 0U;
+    return result;
+}
+
+uint8_t userfs_pin_count(void)
+{
+    (void)userfs_load_pins();
+    return g_pin_count;
+}
+
+const char *userfs_pin_name(uint8_t index)
+{
+    return index < userfs_pin_count() ? g_pins[index] : NULL;
+}
+
+uint8_t userfs_is_pinned(const char *name)
+{
+    if(!name)
+        return 0U;
+    for(uint8_t i = 0U, count = userfs_pin_count(); i < count; i++)
+        if(strcmp(g_pins[i], userfs_normal_name(name)) == 0)
+            return 1U;
+    return 0U;
+}
+
+userfs_result_t userfs_set_pinned(const char *name, uint8_t pinned)
+{
+    if(!userfs_valid_name(name, 0U))
+        return userfs_remember(USERFS_ERROR_INVALID_ARGUMENT);
+    if(g_upload.active)
+        return userfs_remember(USERFS_ERROR_BUSY);
+    userfs_result_t result = userfs_load_pins();
+    if(result != USERFS_OK)
+        return userfs_remember(result);
+    uint32_t size;
+    result = userfs_stat(name, &size);
+    if(result != USERFS_OK)
+        return result;
+    pinned = pinned != 0U;
+    if(pinned == userfs_is_pinned(name))
+        return userfs_remember(USERFS_OK);
+    if(pinned && g_pin_count == USERFS_PIN_MAX)
+        return userfs_remember(USERFS_ERROR_NO_SPACE);
+    const char *normal = userfs_normal_name(name);
+    int error = pinned ? lfs_setattr(&g_lfs, normal, USERFS_PIN_ATTR, &pinned, sizeof(pinned)) :
+                         lfs_removeattr(&g_lfs, normal, USERFS_PIN_ATTR);
+    if(error == 0)
+        g_pins_loaded = 0U;
+    return userfs_remember(userfs_from_lfs(error));
+}
+
 static int userfs_file_open(lfs_file_t *file, const char *name, int flags)
 {
     memset(g_file_cache, 0, sizeof(g_file_cache));
@@ -471,6 +563,8 @@ userfs_result_t userfs_remove(const char *name)
             return userfs_remember(userfs_from_lfs(result));
     }
     result = lfs_remove(&g_lfs, userfs_normal_name(name));
+    if(result == 0 && userfs_is_pinned(name))
+        g_pins_loaded = 0U;
     return userfs_remember(userfs_from_lfs(result));
 }
 
@@ -583,6 +677,12 @@ userfs_result_t userfs_upload_commit(uint32_t upload_id)
     verify = userfs_verify_upload();
     if(verify != USERFS_OK)
         return userfs_remember(verify);
+    uint8_t pinned = 0U;
+    result = lfs_getattr(&g_lfs, g_upload.target, USERFS_PIN_ATTR, &pinned, sizeof(pinned));
+    if(result == sizeof(pinned) && pinned)
+        result = lfs_setattr(&g_lfs, g_upload.temporary, USERFS_PIN_ATTR, &pinned, sizeof(pinned));
+    if(result < 0 && result != LFS_ERR_NOATTR && result != LFS_ERR_NOENT)
+        return userfs_remember(userfs_from_lfs(result));
     result = lfs_rename(&g_lfs, g_upload.temporary, g_upload.target);
     if(result < 0)
         return userfs_remember(userfs_from_lfs(result));
@@ -704,6 +804,8 @@ const char *userfs_result_name(userfs_result_t result)
 #ifdef USERFS_TESTING
 void userfs_test_power_cycle(void)
 {
+    g_pins_loaded = 0U;
+    g_pin_count = 0U;
     memset(&g_lfs, 0, sizeof(g_lfs));
     memset(&g_config, 0, sizeof(g_config));
     memset(&g_file_config, 0, sizeof(g_file_config));

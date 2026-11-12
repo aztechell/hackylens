@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../firmware/src/adapters/micropython/micropython_capability_bridge.h"
 #include "../firmware/src/apps/micropython/micropython_app.h"
 #include "../firmware/src/apps/micropython/micropython_view.h"
 #include "../firmware/src/config/input_config.h"
@@ -34,6 +35,8 @@ static micropython_view_state_t g_view;
 static micropython_runtime_status_t g_runtime;
 static char g_startup[USERFS_NAME_MAX + 1U] = "startup.py";
 static char g_run_name[USERFS_NAME_MAX + 1U];
+static const char *g_launch_name;
+static uint8_t g_pinned;
 static char g_output[1024];
 static size_t g_output_size;
 static unsigned g_run_count;
@@ -41,6 +44,7 @@ static unsigned g_stop_count;
 static unsigned g_menu_count;
 static unsigned g_failures;
 static uint8_t g_list_busy;
+static uint8_t g_camera_presented;
 static unsigned g_render_count;
 static micropython_view_update_t g_last_update;
 
@@ -247,11 +251,25 @@ const char *userfs_result_name(userfs_result_t result)
     }
 }
 
+uint8_t userfs_is_pinned(const char *name)
+{
+    return g_pinned && strcmp(name, "startup.py") == 0;
+}
+
+userfs_result_t userfs_set_pinned(const char *name, uint8_t pinned)
+{
+    check(strcmp(name, "startup.py") == 0, "toggle selected script pin");
+    g_pinned = pinned;
+    return USERFS_OK;
+}
+
+const char *micropython_program_launch_name(void) { return g_launch_name; }
+
 micropython_program_result_t micropython_program_run_file(
     const char *name, uint32_t time_limit_ms, uint32_t *run_id)
 {
     fake_file_t *file = find_file(name);
-    (void)time_limit_ms;
+    check(time_limit_ms == MICROPYTHON_RUNTIME_UNTIL_STOPPED, "local runs stay active until stopped");
     if(!file)
         return MICROPYTHON_PROGRAM_NOT_FOUND;
     if(!file->size || file->size > MICROPYTHON_RUNTIME_SOURCE_MAX)
@@ -296,6 +314,11 @@ void micropython_runtime_poll(void)
 {
 }
 
+uint8_t micropython_capability_bridge_camera_presented(void)
+{
+    return g_camera_presented;
+}
+
 void micropython_runtime_get_status(micropython_runtime_status_t *status)
 {
     *status = g_runtime;
@@ -337,6 +360,17 @@ int main(void)
         check(g_render_count == renders,
               "unchanged periodic USERFS refresh performs no rendering");
     }
+    {
+        unsigned renders = g_render_count;
+        g_camera_presented = 1U;
+        render();
+        check(g_render_count == renders,
+              "script manager must leave the camera view visible during capture");
+        g_camera_presented = 0U;
+        render();
+        check(g_render_count == renders + 1U && g_last_update.full,
+              "script manager must restore its entire screen after camera close");
+    }
     press_button(BUTTON_LEFT);
     render();
     check(!g_last_update.full && !g_last_update.body &&
@@ -377,6 +411,14 @@ int main(void)
     render();
     check(strcmp(g_startup, "startup.py") == 0,
           "startup action sets selected startup");
+
+    select_action(MICROPYTHON_ACTION_PIN);
+    press_button(BUTTON_OK);
+    render();
+    check(g_view.selected_pinned, "selected script is pinned");
+    press_button(BUTTON_OK);
+    render();
+    check(!g_view.selected_pinned, "selected script can be unpinned");
 
     select_action(MICROPYTHON_ACTION_DELETE);
     press_button(BUTTON_OK);
@@ -512,6 +554,28 @@ int main(void)
     check(g_view.mode == MICROPYTHON_UI_LIST && g_view.file_count == 0U,
           "empty USERFS opens the upload hint state");
     check(g_run_count == 1U, "empty USERFS never falls back to smoke autorun");
+
+    unsigned prior_menu_count = g_menu_count;
+    g_files[1].present = 1U;
+    g_launch_name = "alpha.py";
+    unsigned renders_before_launch = g_render_count;
+    check(micropython_v2_entry.start(NULL) == HK_OK, "launcher opens MicroPython runtime");
+    g_launch_name = NULL;
+    check(g_render_count == renders_before_launch + 1U,
+          "shortcut defers console rendering until after VM startup");
+    render();
+    check(g_view.mode == MICROPYTHON_UI_CONSOLE && g_run_count == 2U &&
+          strcmp(g_run_name, "alpha.py") == 0, "launcher runs the selected script");
+    press_button(BUTTON_OK);
+    check(g_runtime.state == MICROPYTHON_RUNTIME_RUNNING,
+          "launcher leaves OK available to the script");
+    press_button(BUTTON_BACK);
+    check(g_runtime.state == MICROPYTHON_RUNTIME_STOPPING && g_menu_count == prior_menu_count,
+          "launcher BACK waits for the VM to stop");
+    g_runtime.state = MICROPYTHON_RUNTIME_STOPPED;
+    const hk_app_event_t timer = {.kind = HK_APP_EVENT_TIMER};
+    check(micropython_v2_entry.event(NULL, &timer) == HK_OK &&
+          g_menu_count == prior_menu_count + 1U, "launcher returns to menu after cleanup");
 
     if(g_failures)
         return 1;

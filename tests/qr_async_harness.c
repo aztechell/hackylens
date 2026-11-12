@@ -9,6 +9,7 @@
 #include "../firmware/src/apps/qr_camera/qr_service.h"
 #include "../firmware/src/services/core1_executor.h"
 #include "../firmware/src/services/resource_cleanup.h"
+#include "qr_fixture.h"
 
 static core1_executor_job_fn s_job;
 static void *s_context;
@@ -73,18 +74,7 @@ void camera_service_frame_snapshot_done(uint8_t resume)
 
 static void draw_code(void)
 {
-    /* Version 1-L, mask 0, byte payload "HL". */
-    static const uint32_t rows[] = {
-        0x1fd47fU, 0x105041U, 0x17455dU, 0x17505dU, 0x175a5dU, 0x104e41U, 0x1fd57fU,
-        0x000500U, 0x0475f7U, 0x0caf11U, 0x1cec51U, 0x0bbcbcU, 0x04e85dU, 0x0c4500U,
-        0x19177fU, 0x1c4741U, 0x15535dU, 0x0aa85dU, 0x16eb5dU, 0x0bb941U, 0x1eef7fU,
-    };
-
-    memset(s_pixels, 255, sizeof(s_pixels));
-    for(unsigned y = 0; y < 84; ++y)
-        for(unsigned x = 0; x < 84; ++x)
-            if(rows[y / 4U] & (1U << (x / 4U)))
-                s_pixels[(y + 48U) * QR_AUTOSCAN_W + x + 88U] = 0;
+    draw_qr_fixture(s_pixels, QR_AUTOSCAN_W, QR_AUTOSCAN_H, 0U);
 }
 
 static void submit_frame(void)

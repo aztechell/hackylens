@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "id": "face-detect",
+  "model_file": "model.kmodel",
+  "labels_file": "labels.txt",
+  "input": {
+    "shape": [1, 3, 240, 320],
+    "element": "u8",
+    "layout": "chw",
+    "normalization": "none"
+  },
+  "outputs": [
+    {"shape": [1, 30, 15, 20], "element": "f32", "layout": "chw"}
+  ],
+  "postprocess": "yolo2",
+  "postprocess_config": {
+    "grid": [20, 15],
+    "anchors": [1.889, 2.5245, 2.9465, 3.94056, 3.99987, 5.3658, 5.155437, 6.92275, 6.718375, 9.01025],
+    "default_confidence": 0.7,
+    "default_nms": 0.3
+  },
+  "labels": ["face"]
+}

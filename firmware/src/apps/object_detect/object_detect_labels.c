@@ -1,6 +1,6 @@
 #include "object_detect_labels.h"
 
-#include "object_detect_config.h"
+#include "../../services/object_detect_config.h"
 
 static const char *const g_labels[OBJECT_DETECT_CLASS_COUNT] = {
     "aeroplane", "bicycle", "bird", "boat", "bottle",

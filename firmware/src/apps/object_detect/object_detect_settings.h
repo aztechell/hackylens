@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "object_detect_types.h"
+#include "../../services/object_detect_types.h"
 
 void object_detect_settings_load(void);
 void object_detect_settings_apply_session(void);

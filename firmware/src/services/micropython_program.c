@@ -8,6 +8,17 @@
 
 static char g_program_source[MICROPYTHON_RUNTIME_SOURCE_MAX + 1U];
 static uint8_t g_staging_borrowed;
+static const char *g_launch_name;
+
+void micropython_program_set_launch_name(const char *name)
+{
+    g_launch_name = name;
+}
+
+const char *micropython_program_launch_name(void)
+{
+    return g_launch_name;
+}
 
 uint8_t *micropython_program_borrow_staging(size_t length)
 {

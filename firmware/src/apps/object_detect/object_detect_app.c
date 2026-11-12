@@ -9,7 +9,7 @@
 #include "../../core/hk_string.h"
 #include "../../services/debug_console_service.h"
 #include "object_detect_controller.h"
-#include "object_detect_detector.h"
+#include "../../services/object_detect_detector.h"
 #include "object_detect_settings.h"
 #include "object_detect_view.h"
 

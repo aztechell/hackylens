@@ -3,10 +3,11 @@
 
 #include <stdint.h>
 
-#include "../../core/photo_types.h"
+#include "../core/photo_types.h"
 
-#include "camera_config.h"
-
+#define PHOTO_BMP_HEADER_SIZE 54U
+#define PHOTO_BMP565_HEADER_SIZE 66U
+#define PHOTO_PPM_HEADER_MAX 32U
 
 const char *photo_format_label(photo_format_t format);
 const char *photo_format_ext(photo_format_t format);

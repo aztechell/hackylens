@@ -33,6 +33,22 @@ typedef enum
     MICROPYTHON_BINDING_OP_ACCELEROMETER_AVAILABLE,
     MICROPYTHON_BINDING_OP_ACCELEROMETER_READ,
     MICROPYTHON_BINDING_OP_VISION_RESULTS,
+    MICROPYTHON_BINDING_OP_CAMERA_OPEN,
+    MICROPYTHON_BINDING_OP_CAMERA_CLOSE,
+    MICROPYTHON_BINDING_OP_CAMERA_FRAME,
+    MICROPYTHON_BINDING_OP_CAMERA_RELEASE,
+    MICROPYTHON_BINDING_OP_CAMERA_FIND_COLOR,
+    MICROPYTHON_BINDING_OP_CAMERA_PRESENT,
+    MICROPYTHON_BINDING_OP_CAMERA_MODEL_OPEN,
+    MICROPYTHON_BINDING_OP_CAMERA_MODEL_CLOSE,
+    MICROPYTHON_BINDING_OP_CAMERA_DETECT_SUBMIT,
+    MICROPYTHON_BINDING_OP_CAMERA_DETECT_POLL,
+    MICROPYTHON_BINDING_OP_CAMERA_CODE_FRAME,
+    MICROPYTHON_BINDING_OP_SD_BEGIN,
+    MICROPYTHON_BINDING_OP_SD_WRITE,
+    MICROPYTHON_BINDING_OP_SD_FINISH,
+    MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN,
+    MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP,
 } micropython_binding_op_t;
 
 typedef enum
@@ -45,12 +61,21 @@ typedef enum
     MICROPYTHON_BINDING_ERROR_IO,
     MICROPYTHON_BINDING_ERROR_LIMIT,
     MICROPYTHON_BINDING_ERROR_UNAVAILABLE,
+    MICROPYTHON_BINDING_ERROR_MODEL_FORMAT,
+    MICROPYTHON_BINDING_ERROR_SD_NAME,
+    MICROPYTHON_BINDING_ERROR_SD_EXISTS,
+    MICROPYTHON_BINDING_ERROR_SD_NO_MEDIA,
+    MICROPYTHON_BINDING_ERROR_SD_FULL,
+    MICROPYTHON_BINDING_ERROR_SD_IO,
 } micropython_binding_result_t;
 
 /* Core-0 lifecycle and dispatcher. */
 void micropython_capability_bridge_prepare(uint32_t run_id);
 void micropython_capability_bridge_tick(void);
 hk_result_t micropython_capability_bridge_cleanup(void);
+void micropython_capability_bridge_release_camera(void);
+void micropython_capability_bridge_release_storage(void);
+uint8_t micropython_capability_bridge_camera_presented(void);
 
 /* Core-1 synchronous RPC. VM stop/deadline hooks remain live while waiting. */
 micropython_binding_result_t micropython_binding_call(

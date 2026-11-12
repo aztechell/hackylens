@@ -31,6 +31,8 @@ static uint16_t g_width;
 static uint16_t g_height;
 static uint32_t g_input_bytes;
 static uint8_t g_preview_input;
+static uint8_t g_attached;
+static uint8_t g_rotate;
 static volatile camera_ai_input_state_t g_state;
 static volatile uint32_t g_sequence;
 
@@ -79,6 +81,8 @@ uint8_t *camera_ai_input_acquire(const void *owner,
     /* YUV DVP AI output contains only Y, not three RGB planes. */
     g_preview_input = camera_sensor_input_format() == CAMERA_INPUT_YUV422 ||
                       CAMERA_PREVIEW_ROTATE;
+    g_rotate = CAMERA_PREVIEW_ROTATE;
+    g_attached = 0U;
     g_state = CAMERA_AI_INPUT_DISABLED;
     g_sequence = 0U;
     memset(camera_ai_uncached(), 0, input_bytes + width);
@@ -109,6 +113,7 @@ uint8_t camera_ai_input_attach(const void *owner)
         camera_stream_set_convert_hooks(camera_ai_convert_start,
                                     camera_ai_convert_finish,
                                     (void *)owner);
+    g_attached = 1U;
     g_sequence = 0U;
     __sync_synchronize();
     g_state = CAMERA_AI_INPUT_ARMED;
@@ -119,22 +124,39 @@ void camera_ai_input_prepare_preview(const volatile uint16_t *pixels,
                                      uint16_t width, uint16_t height,
                                      uint32_t sequence)
 {
-    if(!g_owner || !g_preview_input || g_state != CAMERA_AI_INPUT_ARMED ||
+    if(!g_owner || !g_attached || !g_preview_input || g_state != CAMERA_AI_INPUT_ARMED ||
        width != g_width || height != g_height || !sequence) return;
     /* Called in the main loop while the existing preview lease is held.
        KPU owns this separate immutable planar slot until completion. */
-    if(!camera_ai_transform_rgb565(pixels, width, height, CAMERA_PREVIEW_ROTATE,
+    if(!camera_ai_transform_rgb565(pixels, width, height, g_rotate,
                                    camera_ai_uncached())) return;
     g_sequence = sequence;
     __sync_synchronize();
     g_state = CAMERA_AI_INPUT_READY;
 }
 
+uint8_t camera_ai_input_submit_preview(const void *owner,
+                                       const camera_preview_frame_t *frame)
+{
+    if(!owner || owner != g_owner || g_attached || !frame || !frame->sequence ||
+       frame->width != g_width || frame->height != g_height ||
+       (g_state != CAMERA_AI_INPUT_DISABLED && g_state != CAMERA_AI_INPUT_ARMED))
+        return 0U;
+    if(!camera_ai_transform_rgb565(frame->pixels, frame->width, frame->height,
+                                  frame->rotate, camera_ai_uncached()))
+        return 0U;
+    g_rotate = frame->rotate;
+    g_sequence = frame->sequence;
+    __sync_synchronize();
+    g_state = CAMERA_AI_INPUT_READY;
+    return 1U;
+}
+
 uint8_t camera_ai_input_map_rect(const void *owner, int16_t *x, int16_t *y,
                                  int16_t *w, int16_t *h)
 {
     return owner && owner == g_owner &&
-        camera_ai_transform_rect(g_width, g_height, CAMERA_PREVIEW_ROTATE, x, y, w, h);
+        camera_ai_transform_rect(g_width, g_height, g_rotate, x, y, w, h);
 }
 
 uint8_t camera_ai_input_take(const void *owner, uint32_t *sequence)
@@ -175,6 +197,7 @@ void camera_ai_input_release(const void *owner)
     camera_ai_input_cancel(owner);
     camera_stream_clear_convert_hooks((void *)owner);
     g_owner = NULL;
+    g_attached = 0U;
     g_width = 0U;
     g_height = 0U;
     g_input_bytes = 0U;

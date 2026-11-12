@@ -13,7 +13,7 @@ experimental; a version number alone does not imply a stability promise.
 | Typed hardware API | 0.1.0 | Public service headers |
 | Board Port | 0.1.0 | [Board Port](BOARD_PORT.md) |
 | HMPY | 1.1.0; wire major 1 | [HMPY](../HMPY_PROTOCOL.md) and codec constants |
-| MicroPython API | 1.1.0 | [MicroPython API](../MICROPYTHON_API.md) |
+| MicroPython API | 1.5.0 | [MicroPython API](../MICROPYTHON_API.md) |
 | External Link | 1.0.0; wire major 1 | [External Link](../EXTERNAL_LINK_PROTOCOL.md) |
 | AI Model Package | 1.0.0; schema 1 | [AI Models](../AI_MODELS.md) |
 

@@ -13,7 +13,7 @@
 #include "../../services/vision_result_service.h"
 #include "../../ui/camera_status_view.h"
 #include "../../ui/camera_view.h"
-#include "object_detect_detector.h"
+#include "../../services/object_detect_detector.h"
 #include "object_detect_settings.h"
 #include "object_detect_settings_menu.h"
 #include "object_detect_view.h"

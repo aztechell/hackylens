@@ -3,7 +3,7 @@
 #include <string.h>
 #include "../firmware/src/ui/camera_view.h"
 #include "../firmware/src/ui/display_binding.h"
-#include "../firmware/src/core/hk_menu.h"
+#include "../firmware/src/core/hk_menu_runtime.h"
 #include "../firmware/src/apps/apriltag/apriltag_view.h"
 #include "../firmware/src/apps/face_detect/face_detect_view.h"
 #include "../firmware/src/apps/object_detect/object_detect_view.h"
@@ -12,6 +12,8 @@
 static uint8_t screen[240 * 240 * 2];
 static uint16_t source[640 * 480];
 static unsigned chrome_count, item_count, last_page, last_pages;
+static uint8_t pin_count;
+static unsigned selected_pin_count, opened_pin_count;
 static camera_view_rect_t drawn_rect;
 static unsigned drawn_rect_count;
 static const hk_app_t app = {.title = "APP"};
@@ -29,6 +31,12 @@ static void title(const char *text) { assert(text); }
 static void item(uint8_t slot, const hk_app_t *entry, uint8_t selected)
 { assert(slot < 9 && entry == &app); (void)selected; item_count++; }
 static void page(uint8_t index, uint8_t count) { last_page = index; last_pages = count; }
+static uint8_t pins(void) { return pin_count; }
+static const char *pin(uint8_t index) { return index < pin_count ? "tracker.py" : NULL; }
+static void draw_pin(uint8_t slot, const char *name, uint8_t selected)
+{ assert(slot == 3 && strcmp(name, "tracker.py") == 0); selected_pin_count += selected; }
+static uint8_t open_pin(const char *name, const hk_input_snapshot_t *input)
+{ assert(strcmp(name, "tracker.py") == 0); (void)input; opened_pin_count++; return 1U; }
 const uint8_t *hk_font_glyph(uint32_t cp)
 { static const uint8_t glyph[48] = {0x80}; (void)cp; return glyph; }
 uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
@@ -46,7 +54,7 @@ static uint16_t pixel(unsigned x, unsigned y)
 
 int main(void)
 {
-    const hk_menu_view_t view = {chrome, title, item, page};
+    const hk_menu_view_t view = {chrome, title, item, page, draw_pin};
     camera_view_frame_t frame = {.pixels = source, .width = 320, .height = 240};
     camera_view_present_t present;
     const camera_view_rect_t box = {160, 120, 80, 60};
@@ -147,6 +155,18 @@ int main(void)
     assert(hk_menu_index_get() == 9 && chrome_count == 2 && item_count == 3 && last_page == 1);
     for(unsigned index = 0; index < 3; index++) menu_select_delta(1);
     assert(hk_menu_index_get() == 0 && chrome_count == 3 && item_count == 9 && last_page == 0);
+    const hk_menu_owner_hooks_t hooks = {
+        .shortcut_count = pins, .shortcut_name = pin, .open_shortcut = open_pin,
+    };
+    menu_owner_hooks_set(&hooks);
+    pin_count = 1U;
+    menu_select_delta(-1);
+    assert(hk_menu_index_get() == 12 && selected_pin_count == 1 && last_page == 1);
+    shell_open_selected(NULL);
+    assert(opened_pin_count == 1);
+    pin_count = 0U;
+    shell_open_selected(NULL);
+    assert(hk_menu_index_get() == 0 && opened_pin_count == 1);
     puts("CUBE_LAYOUT_OK preview=240x240 fit=cover rotation=clockwise overlays=clipped menu=two-pages");
     return 0;
 }

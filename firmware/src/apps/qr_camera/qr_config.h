@@ -8,8 +8,6 @@
 #define QR_AUTOSCAN_H 240U
 #define QR_PAYLOAD_MAX 384U
 #define QR_STATUS_LOG_INTERVAL_US 2000000ULL
-#define QR_PASS_INVERT 0x01U
-#define QR_PASS_STRETCH 0x02U
 #define QR_DIR_LONG_NAME "hackylens.qr"
 
 #endif

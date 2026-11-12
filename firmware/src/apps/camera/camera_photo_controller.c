@@ -11,7 +11,7 @@
 #include "../../ui/camera_view.h"
 #include "camera_config.h"
 #include "camera_photo_capture.h"
-#include "camera_photo_format.h"
+#include "../../services/camera_photo_format.h"
 #include "camera_photo_service.h"
 
 static hk_deadline_t s_until;

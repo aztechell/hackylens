@@ -50,6 +50,15 @@ uint8_t sd_card_write_block(uint32_t lba, const uint8_t *src)
     return sd_card_write_block_fast(lba, src);
 }
 
+uint8_t sd_card_write_run(uint32_t lba, uint16_t count,
+                          sd_block_source_t source, void *context)
+{
+    for(uint16_t i = 0U; i < count; i++)
+        if(!sd_card_write_block_fast(lba + i, source(context, i)))
+            return 0U;
+    return 1U;
+}
+
 uint8_t fat_write_entry(uint32_t cluster, uint32_t value)
 {
     (void)cluster;
@@ -61,6 +70,12 @@ uint32_t fat_next_cluster(uint32_t cluster)
 {
     (void)cluster;
     return 0U;
+}
+
+uint8_t fat_read_next_cluster(uint32_t cluster, uint32_t *next)
+{
+    *next = fat_next_cluster(cluster);
+    return mounted;
 }
 
 uint8_t fat_free_chain(uint32_t cluster)

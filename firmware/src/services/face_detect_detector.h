@@ -3,8 +3,10 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <hackylens/capability/common.h>
 
 #include "ai_model_runtime.h"
+#include "camera_frame.h"
 
 #define FACE_DETECT_BOX_MAX 8U
 #define FACE_DETECT_INPUT_WIDTH 320U
@@ -39,6 +41,10 @@ typedef uint8_t (*face_detect_consumer_t)(const uint8_t *rgb_planes,
                                          uint8_t count, void *context);
 
 face_detect_load_result_t face_detect_detector_load(const ai_model_workspace_t *workspace);
+/* Explicit-frame clients use the same detector without installing DVP hooks. */
+ai_model_result_t face_detect_detector_load_preview_step(const char *package);
+hk_result_t face_detect_detector_submit_preview(const camera_preview_frame_t *frame);
+hk_result_t face_detect_detector_poll_preview(void);
 void face_detect_detector_unload(void);
 void face_detect_detector_limit_unload(uint64_t deadline_us);
 void face_detect_detector_service_tick(void);

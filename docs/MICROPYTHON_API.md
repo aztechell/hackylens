@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.micropython-api
 owner: micropython-runtime
-version: 1.1.0
+version: 1.5.0
 stability: experimental
 api-major: 1
 ---
@@ -11,14 +11,23 @@ api-major: 1
 HackyLens embeds upstream MicroPython inside the main firmware. A program runs
 on K210 core 1 with a private 128 KiB GC heap and a 24 KiB conservative stack
 limit. Core 0 keeps the menu, serial protocol, display, flash, and hardware
-services responsive. The default execution limit is 30 seconds and the maximum
-requested limit is 300 seconds.
+services responsive. HMPY runs default to 30 seconds and accept up to 300
+seconds. Runs started on the device continue until completion, an error, or a
+stop request.
 
 The native **MICRO-PYTHON** app is a script manager. It lists USERFS `.py`
 files, previews source without loading the whole file, runs the selected file,
 shows scrollable output, changes startup selection, and deletes only after an
 explicit confirmation. Opening the app does not run the selected startup file.
 That selection remains the HMPY/default program used when `RUN` omits a name.
+
+Select a saved script in MICRO-PYTHON and choose **PIN TO MENU**. Up to eight
+scripts appear after the built-in apps in the main menu. Select a shortcut and
+press OK to run it with the PC disconnected. BACK stops the script and returns
+to the shortcut after the runtime releases its resources. The IDE's STOP also
+stops a local run when connected. Pin state survives reboot and re-upload of
+the same file. Choose **UNPIN FROM MENU** to remove the shortcut. Deleting the
+file removes its shortcut too.
 
 Import the board module with:
 
@@ -172,8 +181,111 @@ Before a detector publishes or after the publishing app exits, the snapshot
 has source `VISION_NONE`, dimensions zero and empty items. A completed scan
 without detections retains its source and dimensions and has empty items.
 An IDE-run script can read the active native app's results while that app stays
-open. QR and AprilTag share core 1 with MicroPython. Read their completed results
-with a short script so the detector can use core 1 again after the script ends.
+open. QR and AprilTag share core 1 with MicroPython. Read native results with a
+short script so the detector can use core 1 again after the script ends. Use
+`camera_scan()` to decode a frame captured by the script itself.
+
+## Camera and color tracking
+
+The camera API uses a QVGA RGB565 stream on SEN0305 and Maix Cube. Start
+the script from the main menu via HackyLens Code or run a saved script
+in MICRO-PYTHON. A native app with the foreground blocks camera open.
+Use `camera_present()` for drawing during capture. A script can start
+a regular display batch after closing the camera. A regular display batch
+keeps the frame workspace reserved for the rest of that run.
+
+| Function | Behavior |
+| --- | --- |
+| `camera_open()` | Claims the camera for the run. Raises `RuntimeError` if busy and `OSError` on initialization failure. |
+| `camera_frame()` | Returns `(lease, width, height, sequence)` or `None` while a frame is pending. The run can hold one frame at a time. |
+| `camera_find_color(lease, threshold, roi=None, min_pixels=8)` | Returns the largest four-connected component as `(x, y, width, height, pixels)`, or `None` if no component reaches the minimum. |
+| `camera_present(lease, box=None, color=0x07e0)` | Fits the entire frame to the LCD and optionally outlines a rectangle in the given RGB565 color. |
+| `camera_release(lease)` | Returns the frame slot to capture. |
+| `camera_close()` | Stops capture, releases any held frame, and restores the underlying UI. |
+
+The lease refers to the existing camera buffer. Frame pixels stay in
+firmware memory. Pass optional arguments by position. ROI, box, and result rectangles use `(x, y, width, height)`
+in frame pixels after board rotation, with the origin at the upper left.
+Release the frame promptly so capture can reuse the slot. Using a released
+lease raises `RuntimeError`. VM teardown closes the camera on completion,
+STOP, or an uncaught exception.
+
+In HackyLens Code, open Camera and take an RGB565 snapshot with the object in
+the lighting where you will run the tracker. Drag across a representative
+patch of the object and copy the threshold into the [color tracker example](../examples/color_tracker.py).
+The six inclusive RGB565 bins are `(r_min, r_max, g_min, g_max, b_min, b_max)`.
+Red and blue range from 0 to 31 and green ranges from 0 to 63. The live preview
+uses RGB332 and produces coarser thresholds. Run the script to see the box on
+the board and the coordinates and matched pixel count in the console. Pin the
+saved script to run it from the main menu. Press OK during the run to save the
+current frame and detection result to microSD. Press BACK to stop.
+
+## microSD output
+
+| Function | Behavior |
+| --- | --- |
+| `camera_save(lease, name)` | Saves the leased frame as a 24-bit BMP in its logical orientation. Returns `None` on success. |
+| `sd_write(name, data)` | Creates a file from a bytes-like object and returns the number of bytes written. |
+
+Both functions write inside `/PYDATA` on a FAT32 microSD card. The firmware
+creates the directory when needed. Use a filename with a 1–8 character base
+and a 1–3 character extension. Letters, digits, underscores and hyphens are
+allowed. `camera_save` requires `.BMP`. The firmware reserves `.TMP` for
+in-progress writes. Filename collisions are case-insensitive. Use a new name
+for each save.
+
+An invalid name raises `ValueError`. A stale frame lease raises `RuntimeError`.
+An existing file, missing card, full volume or write failure raises `OSError`.
+The firmware publishes the final name after writing all bytes. BACK and STOP
+cancel a write that is still in progress. If the card is removed or the device
+loses power during a save, a `.TMP` file can remain. Open finished images in
+FILES or read the card on a computer.
+
+## KPU detectors
+
+Open the camera, then call `camera_model_open(source)` with `VISION_FACE`
+or `VISION_OBJECT_DETECT`. The firmware loads the same SD model and uses the
+same detector as the corresponding native app. FACE uses
+`/hackylens.kmodels/detect.kmodel`. OBJECT DETECT uses the `object20` package.
+The load reads the model in 16 KiB steps so the console can handle STOP.
+
+`camera_detect(lease)` runs inference on the leased frame and returns a
+dictionary with the same fields as `vision_results()`. Its `frame_id` is the
+frame's `sequence`. Coordinates use the same logical orientation as
+`camera_present()`. A result with no detections has empty `items`. FACE
+uses the face index as the ID and reports confidence as 1000. OBJECT DETECT
+returns the VOC class ID and confidence on the 0–1000 scale.
+
+Pass an optional package name as the second argument of `camera_model_open`
+to load from `/hackylens.kmodels/<package>/`. The name accepts 1–31 lowercase
+ASCII letters, digits, hyphens, or underscores. The directory must contain
+`model.kmodel`, `manifest.hkai`, and `labels.txt`. The model must match the
+selected detector's KModel header, tensors, and YOLO decoding. OBJECT DETECT
+uses the same anchors and VOC class order for all compatible packages. The
+firmware checks the manifest against the actual model's CRC and size, declared
+filenames, detector ID, and tensor contract before loading it into KPU.
+
+Call `camera_model_close()` before opening another model. Closing the camera
+or ending the Python run releases the model. An incompatible model or
+manifest raises `ValueError`. Missing SD files or KPU errors raise `OSError`.
+The [KPU detector example](../examples/kpu_detector.py) runs on both boards.
+
+## QR and AprilTag
+
+Call `camera_scan(lease, source)` with `VISION_QR` or `VISION_APRILTAG`
+while holding a frame from `camera_frame()`. Both boards use the same
+decoders as the native apps. QR tries the original and inverted images, then
+uses a local luminance threshold as a fallback. It returns the first decoded
+code. AprilTag scans for tag36h11 markers and reports up to
+eight tags. The scan runs on the same core as the VM, so STOP takes effect
+at a scan boundary. The run releases decoder memory on exit.
+
+The result has the fields of `vision_results()`, with `frame_id` set to the
+leased frame's sequence and half-open bounding boxes in the orientation of
+`camera_present()`. QR returns raw bytes in `qr_payload`. AprilTag returns
+the tag ID and Hamming distance in each item's `id` and `flags`. A scan
+with no detections returns an empty `items` tuple. A stale lease raises
+`RuntimeError`. See the [code scanner example](../examples/code_scanner.py).
 
 ## Example
 
@@ -224,8 +336,8 @@ HMPY v1 clients can distinguish this recovery path through HELLO capability
 `BOOT_FLAGS` and boot flag `WDT1_RECOVERY`; older v1 clients safely ignore the
 formerly reserved byte.
 
-After normal or cooperative execution, HackyLens deinitializes the VM, restores lights and the
-external connector service, and reports the final state through the app and
+After normal or cooperative execution, HackyLens deinitializes the VM, releases the
+camera, restores lights and the external connector service, and reports the final state through the app and
 HMPY protocol. The fixed heap and source buffers stay reserved for reuse by the
 next run; no script allocation survives VM deinitialization. An uncaught
 exception is reported as an error run and its traceback is sent through stdout.
@@ -235,5 +347,3 @@ It has a dedicated `-wdtfi` firmware build and a two-phase read-only
 baseline/post-reset acceptance procedure; that disruptive physical gate has not
 yet been run. The production API cannot deliberately wedge core 1.
 See [WDT1 hardware acceptance](WDT_HARDWARE_ACCEPTANCE.md).
-
-Raw camera, KPU control and SD/files access remain outside API v1.

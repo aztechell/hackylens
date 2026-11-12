@@ -1,7 +1,7 @@
 #ifndef HK_OBJECT_DETECT_CONFIG_H
 #define HK_OBJECT_DETECT_CONFIG_H
 
-#include "../../config/settings_config.h"
+#include "../config/settings_config.h"
 
 #define OBJECT_DETECT_INPUT_W 320U
 #define OBJECT_DETECT_INPUT_H 240U

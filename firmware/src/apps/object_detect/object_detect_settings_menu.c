@@ -4,7 +4,7 @@
 
 #include "hk_config.h"
 #include "../../core/camera_types.h"
-#include "object_detect_config.h"
+#include "../../services/object_detect_config.h"
 #include "object_detect_settings.h"
 
 static const char *const g_light_choices[] = {"LED", "RGB"};

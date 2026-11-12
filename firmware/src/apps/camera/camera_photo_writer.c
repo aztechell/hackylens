@@ -12,7 +12,6 @@
 #include "../../storage/fat32_allocation.h"
 #include "../../storage/fat32_volume.h"
 #include "../../storage/internal/fat32_state_private.h"
-#include "camera_photo_encode.h"
 #include "camera_photo_path.h"
 #include "camera_photo_writer.h"
 #include "../../storage/sd_card.h"

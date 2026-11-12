@@ -170,8 +170,6 @@ LEGACY_PATHS = {
     "controllers/screen_controller.c", "controllers/screen_controller.h",
     "services/photo_service.c", "services/photo_service.h",
     "services/qr_camera_frame_adapter.c", "services/qr_camera_frame_adapter.h",
-    "services/qr_decoder_engine.c", "services/qr_decoder_engine.h",
-    "services/qr_luma.c", "services/qr_luma.h",
     "services/qr_result.h", "services/qr_result_state.c",
     "services/qr_service.c", "services/qr_service.h",
     "storage/file_browser_state.c", "storage/file_delete.c", "storage/file_delete.h",

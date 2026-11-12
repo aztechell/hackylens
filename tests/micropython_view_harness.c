@@ -215,6 +215,16 @@ int main(void)
           g_regions[1].y >= 53U && g_regions[1].y + g_regions[1].height <= 240U,
           "list rows remain inside body region");
 
+    ui.mode = MICROPYTHON_UI_ACTIONS;
+    ui.action_index = MICROPYTHON_ACTION_PIN;
+    ui.selected_pinned = 1U;
+    reset_calls();
+    update = (micropython_view_update_t){0U, 0U, 0U, 1U << MICROPYTHON_ACTION_PIN};
+    micropython_view_render(&ui, &runtime, &filesystem, &update);
+    check(g_region_count == 1U && g_regions[0].y >= 53U &&
+          g_regions[0].y + g_regions[0].height <= 240U,
+          "pin and unpin row remains fully visible");
+
     ui.mode = MICROPYTHON_UI_CONSOLE;
     ui.log_count = 9U;
     ui.log_total = 48U;

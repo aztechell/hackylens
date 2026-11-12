@@ -11,6 +11,9 @@
 #include "hal_time.h"
 #include "hal_watchdog.h"
 #include "hk_config.h"
+#if HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_APRILTAG
+#include "../adapters/micropython/micropython_camera_codes.h"
+#endif
 
 #include "port/micropython_embed.h"
 #include "py/compile.h"
@@ -151,17 +154,21 @@ static void micropython_worker(void *context)
     mp_stack_set_limit(MICROPYTHON_STACK_LIMIT_BYTES);
     (void)micropython_exec_source(shared);
     mp_embed_deinit();
+#if HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_APRILTAG
+    micropython_camera_codes_cleanup();
+#endif
 
     __sync_synchronize();
     if(shared->exit_reason == MICROPYTHON_EXIT_NONE)
         shared->exit_reason = MICROPYTHON_EXIT_COMPLETE;
+    shared->heartbeat_us = hal_time_us();
+    __sync_synchronize();
     if(shared->exit_reason == MICROPYTHON_EXIT_COMPLETE)
         shared->state = MICROPYTHON_RUNTIME_FINISHED;
     else if(shared->exit_reason == MICROPYTHON_EXIT_EXCEPTION)
         shared->state = MICROPYTHON_RUNTIME_ERROR;
     else
         shared->state = MICROPYTHON_RUNTIME_STOPPED;
-    shared->heartbeat_us = hal_time_us();
     __sync_synchronize();
 }
 
@@ -200,7 +207,8 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
 
     if(!time_limit_ms)
         time_limit_ms = MICROPYTHON_RUNTIME_DEFAULT_LIMIT_MS;
-    if(time_limit_ms > MICROPYTHON_RUNTIME_MAX_LIMIT_MS)
+    if(time_limit_ms > MICROPYTHON_RUNTIME_MAX_LIMIT_MS &&
+       time_limit_ms != MICROPYTHON_RUNTIME_UNTIL_STOPPED)
         time_limit_ms = MICROPYTHON_RUNTIME_MAX_LIMIT_MS;
 
     for(size_t i = 0; i < length; i++)
@@ -219,7 +227,8 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
     now = hal_time_us();
     shared->started_us = now;
     shared->heartbeat_us = now;
-    shared->deadline_us = now + (uint64_t)time_limit_ms * 1000ULL;
+    shared->deadline_us = time_limit_ms == MICROPYTHON_RUNTIME_UNTIL_STOPPED ?
+                          0U : now + (uint64_t)time_limit_ms * 1000ULL;
     shared->state = MICROPYTHON_RUNTIME_STARTING;
     __sync_synchronize();
 
@@ -240,14 +249,14 @@ uint8_t micropython_runtime_request_stop(void)
 {
     micropython_shared_t *shared = micropython_shared_init();
 
-    if(shared->state != MICROPYTHON_RUNTIME_STARTING &&
-       shared->state != MICROPYTHON_RUNTIME_RUNNING &&
-       shared->state != MICROPYTHON_RUNTIME_STOPPING)
+    if(!micropython_state_active(shared->state))
         return 0U;
-    shared->stop_requested = 1U;
     if(!shared->stop_requested_us)
         shared->stop_requested_us = hal_time_us();
-    shared->state = MICROPYTHON_RUNTIME_STOPPING;
+    /* Core 1 publishes the terminal state. Keep STOP as a separate flag
+     * so it cannot overwrite a worker that completes during this call. */
+    __sync_synchronize();
+    shared->stop_requested = 1U;
     __sync_synchronize();
     return 1U;
 }
@@ -267,12 +276,11 @@ void micropython_runtime_poll(void)
         g_ticket = 0U;
         micropython_capability_bridge_cleanup();
         __sync_synchronize();
-        if(shared->state == MICROPYTHON_RUNTIME_STARTING ||
-           shared->state == MICROPYTHON_RUNTIME_RUNNING ||
-           shared->state == MICROPYTHON_RUNTIME_STOPPING)
+        if(micropython_state_active(shared->state))
         {
-            shared->state = MICROPYTHON_RUNTIME_ERROR;
             shared->exit_reason = MICROPYTHON_EXIT_CORE1_FAILURE;
+            __sync_synchronize();
+            shared->state = MICROPYTHON_RUNTIME_ERROR;
         }
     }
     micropython_watchdog_poll(shared);
@@ -290,6 +298,8 @@ void micropython_runtime_get_status(micropython_runtime_status_t *status)
     write = shared->output_write;
     read = shared->output_read;
     status->state = (micropython_runtime_state_t)shared->state;
+    if(shared->stop_requested && micropython_state_active(status->state))
+        status->state = MICROPYTHON_RUNTIME_STOPPING;
     status->exit_reason = (micropython_runtime_exit_t)shared->exit_reason;
     status->run_id = shared->run_id;
     status->source_bytes = shared->source_bytes;

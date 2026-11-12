@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#define QR_PASS_INVERT 0x01U
+#define QR_PASS_STRETCH 0x02U
+#define QR_PASS_LOCAL 0x04U
+
 typedef struct
 {
     uint8_t min;
@@ -22,5 +26,8 @@ void qr_luma_fill_image(const volatile uint16_t *src,
                         uint8_t mode,
                         uint8_t update_stats,
                         qr_luma_stats_t *stats);
+
+/* Fill a 320x240 image using the mean luminance near each source pixel. */
+void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image);
 
 #endif

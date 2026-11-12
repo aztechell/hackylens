@@ -11,8 +11,9 @@
 
 /* K210's two CPU cores are not cache coherent.  Both cores must access the
  * mailbox through the SRAM uncached alias (0x4...), never through its normal
- * cached address (0x8...). */
-typedef struct
+ * cached address (0x8...). Reserve complete cache lines so cached writes to
+ * adjacent globals cannot overwrite the mailbox. */
+typedef struct __attribute__((aligned(64)))
 {
     volatile uint32_t started;
     volatile uint32_t online;
@@ -23,7 +24,10 @@ typedef struct
     void *volatile context;
 } core1_executor_control_t;
 
-static core1_executor_control_t g_control_storage __attribute__((aligned(64)));
+_Static_assert(sizeof(core1_executor_control_t) % 64U == 0U,
+               "executor control must occupy complete cache lines");
+
+static core1_executor_control_t g_control_storage;
 static uint8_t g_control_initialized;
 
 static core1_executor_control_t *core1_executor_control(void)

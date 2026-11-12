@@ -10,6 +10,7 @@ static uint8_t g_sd_present;
 static uint8_t g_sd_sdhc;
 static uint8_t g_sd_probe_silent;
 static uint8_t g_fat_mounted;
+static uint32_t g_fat_mount_generation;
 static uint32_t g_fat_lba_begin;
 static uint32_t g_fat_fat_begin;
 static uint32_t g_fat_data_begin;
@@ -31,6 +32,11 @@ uint8_t hk_sd_present(void)
 uint8_t hk_fat_mounted(void)
 {
     return g_fat_mounted;
+}
+
+uint32_t fat32_mount_generation(void)
+{
+    return g_fat_mount_generation;
 }
 
 uint32_t hk_fat_root_cluster(void)
@@ -121,6 +127,7 @@ void fat32_set_mounted(const fat32_mount_info_t *mount)
     g_fat_sectors_per_cluster = mount->sectors_per_cluster;
     g_fat_count = mount->fat_count;
     g_fat_alloc_hint = 2;
+    g_fat_mount_generation++;
     g_fat_mounted = 1;
 }
 

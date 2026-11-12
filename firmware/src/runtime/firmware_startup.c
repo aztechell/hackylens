@@ -10,12 +10,16 @@
 #include "../controllers/sd_event_controller.h"
 #include "../controllers/auto_sleep_controller.h"
 #include "app_runtime_integration.h"
+#include "../core/hk_app_registry.h"
 #include "../core/hk_menu_runtime.h"
 #include "../core/hk_screen.h"
 #include "../services/settings_lights.h"
 #include "../services/debug_console_service.h"
-#if HK_ENABLE_CAMERA_FEATURE && HK_ENABLE_APP_MICROPYTHON
+#if HK_ENABLE_APP_MICROPYTHON
+#include "../adapters/micropython/micropython_capability_bridge.h"
+#if HK_ENABLE_CAMERA_FEATURE
 #include "../services/hmpy_session.h"
+#endif
 #endif
 #include "../services/external_link_service.h"
 #include "../services/settings_persistence.h"
@@ -23,6 +27,18 @@
 #include "../storage/file_mount.h"
 #include "../ui/hk_ui.h"
 #include "../ui/display_binding.h"
+#if HK_ENABLE_APP_MICROPYTHON
+#include "../services/micropython_program.h"
+#include "../storage/userfs.h"
+
+static uint8_t firmware_open_python_shortcut(const char *name, const hk_input_snapshot_t *input)
+{
+    micropython_program_set_launch_name(name);
+    uint8_t opened = shell_open_app(hk_app_for_id("micropython"), input);
+    micropython_program_set_launch_name(NULL);
+    return opened;
+}
+#endif
 
 static void firmware_wake_from_sleep(void)
 {
@@ -44,8 +60,12 @@ static uint8_t firmware_app_enter(
     /* Display BASE is exclusive. Menu UI holds it; v2 apps must take it. */
     if(app != NULL)
     {
+#if HK_ENABLE_APP_MICROPYTHON
+        micropython_capability_bridge_release_storage();
+#endif
 #if HK_ENABLE_CAMERA_FEATURE && HK_ENABLE_APP_MICROPYTHON
         hmpy_session_stop_camera();
+        micropython_capability_bridge_release_camera();
 #endif
         result = hk_ui_display_release();
         if(result != HK_OK)
@@ -103,6 +123,11 @@ void firmware_startup(void)
     static const hk_menu_owner_hooks_t owner_hooks = {
         .enter = firmware_app_enter,
         .exit = firmware_app_exit,
+#if HK_ENABLE_APP_MICROPYTHON
+        .shortcut_count = userfs_pin_count,
+        .shortcut_name = userfs_pin_name,
+        .open_shortcut = firmware_open_python_shortcut,
+#endif
     };
 
     menu_owner_hooks_set(&owner_hooks);
@@ -127,6 +152,9 @@ void firmware_startup(void)
     boot_controller_startup();
     boot_controller_show_boot_screen();
     topbar_set_sd_mounted(file_mount_if_needed());
+#if HK_ENABLE_APP_MICROPYTHON
+    (void)userfs_mount();
+#endif
     autostart_controller_start();
     debug_console_start_rx();
 }

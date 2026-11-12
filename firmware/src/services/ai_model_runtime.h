@@ -56,6 +56,22 @@ typedef struct
     ai_model_result_t result;
 } ai_model_runtime_t;
 
+#define AI_MODEL_PACKAGE_NAME_MAX 31U
+
+typedef struct
+{
+    ai_model_descriptor_t descriptor;
+    char directory[72];
+    char model[72];
+    char manifest[72];
+    char labels[72];
+} ai_model_package_t;
+
+/* Builds a descriptor for a named package using the detector's tensor and
+ * KModel contract. The package owns the paths for the lifetime of the model. */
+uint8_t ai_model_package_describe(ai_model_package_t *package,
+                                  const ai_model_descriptor_t *detector,
+                                  const char *name);
 void ai_model_runtime_init(ai_model_runtime_t *runtime);
 ai_model_result_t ai_model_runtime_load(ai_model_runtime_t *runtime,
                                         const ai_model_descriptor_t *descriptor);

@@ -7,11 +7,24 @@ Current ownership:
 - LCD shadow and row buffer: `drivers/lcd_st7789.c`; the 153,600-byte shadow is also the borrowed RGB565-BE full-frame staging surface, so LCD present does not allocate another framebuffer.
 - Two camera stream slots in `services/frame_pool.c` use a stride derived from the capture resolution. Together they reserve 300 KiB at QVGA or 1,200 KiB at VGA. Preview, photo, QR, and debug snapshots lease these slots through `drivers/camera_stream.c`. When capture is inactive, FILES or the Display batch provider can borrow one VGA-sized scratch slot. Copied or stale borrow tokens cannot release a later borrower.
 - IDE camera transfers borrow the existing MicroPython program staging buffer for up to 38,400 bytes. The frame lease ends after downsampling. A program start or native app launch releases the staging borrow before using it again.
+- Python color tracking holds one existing camera frame lease and sends only
+  metadata and detection results through the binding mailbox. The C scan
+  workspace occupies 15,360 bytes and tracks connected runs across two rows.
+  Preview uses the existing LCD shadow. An idle Python display lease leaves
+  the frame arena available to camera capture.
 - SD/FAT sector buffers: `storage/fat32_sd.c`.
+- Python microSD writes use a 512-byte FAT sector buffer and send script data
+  through the existing binding mailbox in 256-byte chunks. BMP output uses
+  one sector of the same mailbox to encode the leased frame with the CAMERA
+  encoder.
 - Core 1 owns the QR decoder and its heap workspace. The preview fills the
   decoder's existing image through its uncached alias, so autoscan adds no
   second luma image and retains no camera lease. Session exit schedules cleanup
   after any outstanding ticket, including after partial initialization.
+- Python scans run on the VM's core and stage luma while the script holds a
+  frame. QR writes to the decoder's existing image. AprilTag shares one
+  19,200-byte luma buffer with the native app. VM teardown releases both
+  decoder heaps.
 - The vision service retains one fixed result snapshot, including up to 383
   QR payload bytes. The Python bridge transfers the snapshot in its existing
   mailbox.

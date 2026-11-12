@@ -70,6 +70,19 @@ int main(void)
     assert(!camera_ai_input_data(&owner) && !ai_enabled);
     camera_ai_input_prepare_preview(frame, 320, 240, 9);
     assert(!camera_ai_input_take(&owner, &sequence));
+
+    input = camera_ai_input_acquire(&owner, 320, 240, 230400);
+    assert(input && !start_hook && !finish_hook && !ai_enabled);
+    for(unsigned i = 0; i < 76800; i++) frame[i] = 0x07E0;
+    camera_preview_frame_t preview = {frame, 320, 240, 1, 11, 10};
+    assert(!camera_ai_input_submit_preview(&other, &preview));
+    assert(camera_ai_input_submit_preview(&owner, &preview));
+    assert(camera_ai_input_take(&owner, &sequence) && sequence == 10);
+    assert(input[80] == 0 && input[76880] == 255 && input[153680] == 0);
+    frame[319] = 0;
+    assert(!camera_ai_input_submit_preview(&owner, &preview));
+    assert(input[76880] == 255 && !start_hook && !finish_hook && !ai_enabled);
+    camera_ai_input_release(&owner);
     puts("CAMERA_AI_INPUT_OK");
     return 0;
 }

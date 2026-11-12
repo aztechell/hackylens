@@ -56,7 +56,7 @@ class AppCompositionTests(unittest.TestCase):
         by_id = {app["id"]: app for app in document["apps"]}
         self.assertEqual(by_id["qr-camera"]["enable_definition"], "HK_ENABLE_APP_QR_CAMERA")
         self.assertIn(
-            "firmware/src/apps/qr_camera/qr_decoder_engine.c",
+            "firmware/src/apps/qr_camera/qr_service.c",
             by_id["qr-camera"]["sources"],
         )
         self.assertEqual(

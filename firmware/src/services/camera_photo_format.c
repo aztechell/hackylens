@@ -3,11 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../core/photo_types.h"
-
-#include "camera_config.h"
-
-#include "../../core/hk_binary.h"
+#include "../core/hk_binary.h"
 
 const char *photo_format_label(photo_format_t format)
 {

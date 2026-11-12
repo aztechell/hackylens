@@ -20,11 +20,15 @@ static uint32_t s_next_ticket = 1U;
 static uint8_t s_job_complete;
 static uint8_t s_throw_exception;
 static uint8_t s_probe_running;
+static uint8_t s_finish_on_clock;
+static uint8_t s_check_interrupt;
 static uint32_t s_prepare_count;
 static uint32_t s_cleanup_count;
 static uint32_t s_wake_count;
 static const char *s_expected_source;
 static uint64_t s_now_us = 1000U;
+
+static void run_worker(void);
 
 uint8_t core1_executor_init(void) { return 1U; }
 uint8_t core1_executor_idle(void) { return !s_job || s_job_complete; }
@@ -52,7 +56,15 @@ hk_result_t micropython_capability_bridge_cleanup(void)
     return HK_OK;
 }
 void hk_screen_request_wake(void) { s_wake_count++; }
-uint64_t hal_time_us(void) { return s_now_us; }
+uint64_t hal_time_us(void)
+{
+    if(s_finish_on_clock)
+    {
+        s_finish_on_clock = 0U;
+        run_worker();
+    }
+    return s_now_us;
+}
 void hal_watchdog_force_reset(uint64_t timeout_ms)
 {
     (void)timeout_ms;
@@ -111,6 +123,8 @@ mp_obj_t mp_call_function_0(mp_obj_t module)
         s_test_nlr->ret_val = (void *)(uintptr_t)1U;
         longjmp(s_test_nlr->jump, 1);
     }
+    if(s_check_interrupt)
+        micropython_runtime_vm_hook();
     return module;
 }
 void mp_obj_print_exception(const int *print, mp_obj_t exception)
@@ -121,7 +135,9 @@ void mp_obj_print_exception(const int *print, mp_obj_t exception)
 void mp_raise_type(const int *type)
 {
     CHECK(type == &mp_type_KeyboardInterrupt);
-    CHECK(0);
+    CHECK(s_test_nlr != NULL);
+    s_test_nlr->ret_val = (void *)(uintptr_t)1U;
+    longjmp(s_test_nlr->jump, 1);
 }
 
 static void run_worker(void)
@@ -185,6 +201,44 @@ int main(void)
     CHECK(after.exit_reason == MICROPYTHON_EXIT_INVALID_SOURCE);
     CHECK(after.run_id == 2U);
     CHECK(s_wake_count == 2U);
-    puts("MICROPYTHON_RUNTIME_OK busy=2 invalid_active=2 complete=1 exception=1 cleanup=2");
+
+    s_probe_running = 0U;
+    s_throw_exception = 0U;
+    s_expected_source = "stop";
+    CHECK(micropython_runtime_start("stop", 4U, 1000U) == 1U);
+    CHECK(micropython_runtime_request_stop() == 1U);
+    micropython_runtime_get_status(&after);
+    CHECK(after.state == MICROPYTHON_RUNTIME_STOPPING);
+    s_check_interrupt = 1U;
+    run_worker();
+    micropython_runtime_poll();
+    micropython_runtime_get_status(&after);
+    CHECK(after.state == MICROPYTHON_RUNTIME_STOPPED);
+    CHECK(after.exit_reason == MICROPYTHON_EXIT_REQUESTED && s_cleanup_count == 3U);
+
+    s_check_interrupt = 0U;
+    s_expected_source = "finish";
+    CHECK(micropython_runtime_start("finish", 6U, 1000U) == 1U);
+    s_finish_on_clock = 1U;
+    CHECK(micropython_runtime_request_stop() == 1U);
+    micropython_runtime_poll();
+    micropython_runtime_get_status(&after);
+    CHECK(after.state == MICROPYTHON_RUNTIME_FINISHED);
+    CHECK(after.exit_reason == MICROPYTHON_EXIT_COMPLETE && s_cleanup_count == 4U);
+
+    s_expected_source = "local";
+    CHECK(micropython_runtime_start("local", 5U, MICROPYTHON_RUNTIME_UNTIL_STOPPED));
+    micropython_runtime_get_status(&after);
+    CHECK(after.deadline_us == 0U);
+    s_now_us += 3600000000ULL;
+    micropython_runtime_poll();
+    CHECK(!micropython_runtime_interrupt_pending());
+    CHECK(micropython_runtime_request_stop());
+    s_check_interrupt = 1U;
+    run_worker();
+    micropython_runtime_poll();
+    micropython_runtime_get_status(&after);
+    CHECK(after.exit_reason == MICROPYTHON_EXIT_REQUESTED && s_cleanup_count == 5U);
+    puts("MICROPYTHON_RUNTIME_OK busy=2 invalid_active=2 complete=2 exception=1 stop=2 cleanup=5");
     return 0;
 }

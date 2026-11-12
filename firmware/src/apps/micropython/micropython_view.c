@@ -18,12 +18,16 @@
 #define PY_LIST_ROW_H 24U
 #define PY_LIST_ROW_PITCH 26U
 #define PY_ACTION_ROW_Y0 57U
-#define PY_ACTION_ROW_H 28U
-#define PY_ACTION_ROW_PITCH 34U
+#define PY_ACTION_ROW_H 26U
+#define PY_ACTION_ROW_PITCH 29U
 #define PY_TEXT_ROW_PITCH 20U
 #define PY_FONT_W 12U
 #define PY_FONT_H 20U
 #define PY_MAX_GLYPHS (HK_DISPLAY_REQUIRED_WIDTH / PY_FONT_W)
+
+_Static_assert(PY_ACTION_ROW_Y0 + (MICROPYTHON_ACTION_COUNT - 1U) *
+               PY_ACTION_ROW_PITCH + PY_ACTION_ROW_H <= HK_DISPLAY_REQUIRED_HEIGHT,
+               "all script actions must fit on screen");
 
 static uint32_t small_text_next(const char **text)
 {
@@ -207,6 +211,8 @@ static const char *action_label(const micropython_view_state_t *ui,
                strcmp(ui->startup, ui->selected_name) == 0 ?
                "CLEAR STARTUP" : "SET STARTUP";
     case MICROPYTHON_ACTION_DELETE: return "DELETE";
+    case MICROPYTHON_ACTION_PIN:
+        return ui->selected_pinned ? "UNPIN FROM MENU" : "PIN TO MENU";
     default: return "";
     }
 }
@@ -317,8 +323,8 @@ static void draw_action_row(const micropython_view_state_t *ui, uint8_t row)
 
     hk_ui_display_fill_rect(20U, y, HK_DISPLAY_REQUIRED_WIDTH - 40U,
                             PY_ACTION_ROW_H, bg);
-    hk_ui_display_draw_text_at(28U, (uint16_t)(y + 2U),
-                               action_label(ui, row), fg, bg);
+    draw_small_text(28U, (uint16_t)(y + 3U), HK_DISPLAY_REQUIRED_WIDTH - 56U,
+                    action_label(ui, row), fg, bg);
 }
 
 static void draw_body(const micropython_view_state_t *ui,

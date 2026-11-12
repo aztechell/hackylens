@@ -9,6 +9,9 @@ typedef struct
 {
     uint8_t (*enter)(const hk_app_t *app, const hk_input_snapshot_t *input);
     void (*exit)(const hk_app_t *app, hk_app_stop_reason_t reason);
+    uint8_t (*shortcut_count)(void);
+    const char *(*shortcut_name)(uint8_t index);
+    uint8_t (*open_shortcut)(const char *name, const hk_input_snapshot_t *input);
 } hk_menu_owner_hooks_t;
 
 void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks);

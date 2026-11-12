@@ -7,6 +7,7 @@
 #define USERFS_NAME_MAX 63U
 #define USERFS_FILE_MAX (256U * 1024U)
 #define USERFS_UPLOAD_CHUNK_MAX 1024U
+#define USERFS_PIN_MAX 8U
 
 typedef enum
 {
@@ -71,6 +72,12 @@ userfs_result_t userfs_upload_abort(uint32_t upload_id);
 
 userfs_result_t userfs_set_startup(const char *name);
 userfs_result_t userfs_get_startup(char *name, size_t capacity);
+
+/* Launcher pins belong to saved files and follow atomic replacements. */
+uint8_t userfs_pin_count(void);
+const char *userfs_pin_name(uint8_t index);
+uint8_t userfs_is_pinned(const char *name);
+userfs_result_t userfs_set_pinned(const char *name, uint8_t pinned);
 
 const char *userfs_result_name(userfs_result_t result);
 

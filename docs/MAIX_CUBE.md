@@ -665,3 +665,176 @@ separate run on the same image. A 997 Hz tone from a nearby PC was detected in t
 Cube microphone samples above the quiet recording and the off-frequency
 comparison. HMPY STOP ended a playback run in 50 ms. The next run captured
 and played another buffer successfully.
+
+## MicroPython camera and KPU checks (2026-11-12)
+
+On both boards, the color tracker processed 60 out of 60 frames from the
+sensor color bars, drew the largest region, and released the camera on STOP,
+exception, and normal completion. Repeated runs reached 6.2–6.6 frames/s on
+SEN0305 and 9.3–9.9 frames/s on Maix Cube with LCD presentation. The LCD
+capture on Maix Cube showed the rectangle in the rotated frame.
+
+The KPU probe loaded the shipped FACE model and the named `object20` package,
+including manifest checks. Each measurement covered eight QVGA frames.
+The probe checked frame sequence and orientation, then reran both detectors
+after an exception, STOP during model loading, and STOP during an inference
+loop.
+
+| Board | Detector | Load (s) | Mean `camera_detect` call (ms) | Loop (frames/s) |
+| --- | --- | ---: | ---: | ---: |
+| SEN0305 | FACE | 2.8–3.0 | 73–80 | 7.3–8.0 |
+| SEN0305 | OBJECT | 8.7–9.3 | 82–87 | 6.8–7.5 |
+| Maix Cube | FACE | 1.5–1.6 | 51–56 | 10.9–11.9 |
+| Maix Cube | OBJECT | 5.1–5.3 | 58–62 | 10.2–10.8 |
+
+The KPU loop ran without LCD presentation. Both models returned empty
+detection lists for the test scene. The Python heap held 2,304 bytes after
+collection, with 127,744 bytes free. The detector uses the existing
+230,720-byte planar input in firmware. The browser-to-device flow and positive
+detection accuracy are pending. KPU serial logs are under
+`build/vision-acceptance/` as `kpu-sen-probe.log` and `kpu-cube-probe.log`.
+
+## MicroPython QR and AprilTag checks (2026-11-12)
+
+Both boards scanned live QVGA frames and returned the expected frame sequence
+and orientation. Each measurement used 16 frames with no LCD presentation.
+Both detectors returned empty lists for the test scene. The probe checked
+stale frame rejection, then reran both decoders after an uncaught exception
+with a frame held and after STOP during an AprilTag loop. The native QR and
+AprilTag apps also processed frames after the Python probe.
+
+| Board | Decoder | Mean `camera_scan` call (ms) | Loop (frames/s) |
+| --- | --- | ---: | ---: |
+| SEN0305 | QR | 125.9–126.3 | 5.9–6.1 |
+| SEN0305 | AprilTag | 30.6–31.1 | 14.0–14.5 |
+| Maix Cube | QR | 87.4–95.1 | 8.5–8.9 |
+| Maix Cube | AprilTag | 28.1–29.8 | 14.9–15.7 |
+
+The Python heap held 1,952 bytes after collection, with 128,096 bytes free.
+This count covers the VM heap. The firmware also uses the shared 19,200-byte
+AprilTag luma buffer and the 76,800-byte image allocated by quirc.
+The host test decoded normal and inverted QR fixtures and tag36h11 ID 42,
+including the rotated result boxes. Serial logs are in `build/vision-acceptance/` under
+`codes-sen-probe.log` and `codes-cube-probe.log`.
+
+A follow-up on Maix Cube used two black-and-white reference images displayed
+in front of the physical camera. MicroPython returned QR payload `HL` in
+two separate runs. Both QR runs timed out before three consecutive correct
+frames. One run also retried intermittent `binding inactive` errors during
+QR scanning. The separate AprilTag test read tag36h11 ID 42 with Hamming
+distance zero on three consecutive frames, reporting box `(16, 26, 131, 132)`
+at frame 123. The logs are `cube-live-retry.log`, `cube-live-qr-final.log`
+and `cube-live-tag.log` under `build/qr-apriltag-cards/`. Positive optical
+reads on SEN0305 remain pending.
+
+The Cube ELF placed the uncached QR image pointer in the same cache line as
+the cached flag updated during camera presentation. The QR bridge now sends
+the image address and lease together in its synchronized request. The
+45-second run without a reference marker completed 277 scans with zero errors
+before the change and 282 scans with zero errors on the rebuilt Cube. The
+rebuilt Cube also reran QR and AprilTag after STOP and an uncaught exception.
+These runs verify the scan and cleanup paths. In a 90-second optical repeat
+on that build, Cube read `HL` once and reported zero binding errors. The run
+did not reach three consecutive matching frames.
+
+The next build adds a local luminance threshold as a fallback after the
+original and inverted QR passes. On 36 synthetic QVGA RGB565 frames with
+different marker sizes, blur and lighting gradients, the previous passes read
+6 frames and the new sequence read 22. The host regression includes a QR
+fixture with a luminance gradient that requires the fallback.
+
+One lifecycle probe with the local fallback reported a core-1 failure on
+restart. The Cube ELF showed that the executor's uncached mailbox shared a
+cache line with the cached debug log. The MicroPython bridge mailbox also
+shared its last line with cached state. Both structures now occupy complete
+cache lines, verified in the Cube and SEN0305 ELF files.
+
+With both changes, Cube completed 190 QR scans with LCD presentation in
+45 seconds without a scan error. Three lifecycle probes completed, including
+restarts after STOP and an uncaught exception. One additional probe aborted
+on a malformed serial packet while awaiting the STOP response. On a scene
+without a QR code, the mean scan call took 167–172 ms with the fallback.
+The mailbox-only build took 92–95 ms in the same probe. Logs are under
+`build/qr-apriltag-cards/` as `cube-qr-final-stress.log` and
+`cube-qr-final-cycle-*.log`.
+
+Two optical runs on the final build used the original `HL` card. The first
+reported no matches in 25 seconds. The second, with the card confirmed in
+a separate 120 × 160 RGB565 snapshot, reported one match in 20 seconds.
+Both runs reported zero binding errors. On the captured snapshot, the host
+decoder found the QR grid but returned an error-correction failure for the
+original luminance, including after cropping and global contrast adjustment.
+The local-threshold pass decoded `HL` from the same snapshot after rotation
+and scaling to QVGA.
+
+A separate 20-second run with the same payload encoded at error-correction
+level H reported two matches, with a longest streak of one matching frame
+and zero binding errors. Neither card reached three consecutive matches.
+Logs are `cube-qr-final-optical.log`, `cube-qr-final-optical-repeat.log`
+and `cube-qr-final-optical-h.log` under `build/qr-apriltag-cards/`.
+
+## Python launcher checks (2026-11-12)
+
+The full launcher builds booted on both boards and accepted `VPTEST.py` over
+HMPY. The host tests exercised pin/unpin, launcher selection, BACK waiting for
+VM cleanup, and a local run with one simulated hour elapsed. The USERFS power
+cut test verified that the pin remains with either complete version of a
+replaced file. Deleting and re-uploading the file left it unpinned. A timed
+run started from the Cube launcher held the camera for 117.6 seconds with no
+deadline. One physical BACK press stopped the VM and selected `VPTEST.py`
+again in the main menu. The initial SEN0305 launcher run timed out during
+camera initialization. The launcher now defers the console redraw to its next
+tick and `camera_open()` allows two seconds for a cold sensor start. After
+those changes, a physical launch ran `COLOR.py` for 45.3 seconds with no
+deadline. BACK stopped the VM and returned to the main menu. The SEN0305
+status and console logs are `pin-launch-sen-status.log` and
+`pin-launch-sen-console.log` under `build/vision-acceptance/`.
+
+## Python microSD output checks (2026-11-12)
+
+The HMPY probe wrote 4,097 bytes and saved a live camera frame on both
+boards. It checked filename validation, case-insensitive collision rejection,
+and stale frame rejection. STOP interrupted a second BMP save. The next run
+reopened the camera and saved successfully under the interrupted filename.
+
+| Board | Frame orientation | Data write (ms) | BMP save (ms) |
+| --- | --- | ---: | ---: |
+| SEN0305 | 320 × 240 | 1,045 | 7,249 |
+| Maix Cube | 240 × 320 | 1,362 | 3,906 |
+
+Both BMPs were 230,454 bytes. The save probe reported 1,568 bytes in the
+MicroPython heap after collection, with 128,480 bytes free. The SEN0305 ELF
+allocates 600 bytes for the static writer state, including its sector buffer.
+The host FAT32 test read the bytes back and checked BMP headers and row padding. It also
+simulated a full volume, a data write failure and a media change. The SD
+probe logs are in `build/vision-acceptance/` under `sd-sen-final-probe.log`
+and `sd-cube-final-probe.log`.
+
+The color tracker example used a threshold sampled from the Cube sensor color
+bars and saved `122906.BMP` and `122906.TXT` in `/PYDATA`. The detected region
+was `(0, 200, 240, 38, 9120)`. The test invoked the example's save branch once
+from an HMPY run. Pressing OK during the pinned SEN0305 run saved `49262.BMP`
+and `49262.TXT` in `/PYDATA`. The tracker reported more frames after the save.
+After the browser test on Cube, the user started the same `VPTEST.py` from
+its shortcut, pressed OK and returned to the menu with BACK. FILES showed
+`344118.BMP`. Its text companion recorded frame 1501 and the region
+`(0, 200, 240, 38, 9120)`, as shown in `pin-launch-cube-files.png` under
+`build/vision-acceptance/`.
+
+## Browser color tracker checks (2026-11-12)
+
+HackyLens Code in Chrome captured a 160 × 120 RGB565 snapshot over Web Serial.
+Dragging a rectangle over the dark scene yielded `(0, 2, 0, 3, 0, 2)`. The
+copy button put that tuple on the clipboard. Pasting it into the tracker and
+saving `COLOR.py` wrote 1,792 bytes to USERFS. Running that file from the IDE
+reported a `(0, 0, 320, 240)` box with about 75,800 matching pixels. The IDE's
+STOP ended the run with exit reason 2. Selecting an illuminated region in a
+second snapshot yielded `(22, 31, 50, 63, 28, 31)`. With that threshold, the
+tracker reported a distinct region with about 13,500 matching pixels, for
+example `(66, 129, 254, 111, 13580)`.
+
+On Cube, Chrome captured a 120 × 160 RGB565 snapshot of the sensor color bars.
+Selecting an area inside the red bar copied `(30, 31, 10, 12, 0, 1)`. The IDE
+saved it in the existing pinned `VPTEST.py` and ran the tracker. The resulting
+region in the 240 × 320 frame was `(0, 200, 240, 38, 9120)`. STOP ended the
+run with exit reason 2.

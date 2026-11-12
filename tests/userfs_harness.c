@@ -217,6 +217,9 @@ int main(void)
             "blank flash must not auto-format");
     require(userfs_format_explicit() == USERFS_OK, "explicit format");
     upload("main.py", old_script, old_size);
+    require(userfs_set_pinned("main.py", 1U) == USERFS_OK &&
+            userfs_pin_count() == 1U && strcmp(userfs_pin_name(0U), "main.py") == 0,
+            "pin is visible in the launcher");
     require(userfs_set_startup("main.py") == USERFS_OK, "set startup");
     require(userfs_get_startup(startup, sizeof(startup)) == USERFS_OK &&
             strcmp(startup, "main.py") == 0, "get startup");
@@ -238,6 +241,7 @@ int main(void)
     g_mutations = 0U;
     require(try_replacement(new_script, new_size) == USERFS_OK,
             "uninterrupted replacement");
+    require(userfs_is_pinned("main.py"), "replacement preserves launcher pin");
     mutation_count = g_mutations;
     require(mutation_count > 0U, "replacement must mutate flash");
 
@@ -264,6 +268,7 @@ int main(void)
         is_new = size == new_size &&
                  memcmp(readback, new_script, size) == 0;
         require(is_old || is_new, "atomic replace exposed partial script");
+        require(userfs_is_pinned("main.py"), "power cut did not drop launcher pin");
     }
 
     /* A rejected CRC must never publish a target and must remain abortable. */
@@ -297,6 +302,9 @@ int main(void)
     listed = 0U;
     require(userfs_list(list_count, &listed) == USERFS_OK && listed == 0U,
             "delete removes program");
+    require(userfs_pin_count() == 0U, "delete removes launcher pin");
+    upload("main.py", new_script, new_size);
+    require(!userfs_is_pinned("main.py"), "new upload does not resurrect a deleted pin");
 
     g_fail_after = -1;
     free(snapshot);

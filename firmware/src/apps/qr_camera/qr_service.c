@@ -8,8 +8,8 @@
 #include "../../services/vision_result_service.h"
 #include "qr_camera_frame_adapter.h"
 #include "qr_camera_firmware.h"
-#include "qr_decoder_engine.h"
-#include "qr_luma.h"
+#include "../../services/qr_decoder_engine.h"
+#include "../../services/qr_luma.h"
 #include "qr_result.h"
 
 #define QR_WORKER_TIMEOUT_US 500000ULL
@@ -26,6 +26,7 @@ typedef struct
 } qr_worker_exchange_t;
 
 static qr_worker_exchange_t g_exchange_storage __attribute__((aligned(64)));
+static qr_decoder_engine_t g_decoder;
 static uint32_t g_qr_ticket;
 static uint8_t g_decoder_open;
 static uint8_t g_cleanup_pending;
@@ -55,19 +56,19 @@ static void qr_worker_prepare(void *context)
 {
     qr_worker_exchange_t *exchange = context;
     exchange->image = hk_shared_buffer_uncached(
-        qr_decoder_engine_prepare(exchange->width, exchange->height));
+        qr_decoder_engine_prepare(&g_decoder, exchange->width, exchange->height));
 }
 
 static void qr_worker_scan(void *context)
 {
     qr_worker_exchange_t *exchange = context;
-    qr_decoder_engine_scan(exchange->image, &exchange->scan);
+    qr_decoder_engine_scan(&g_decoder, exchange->image, &exchange->scan);
 }
 
 static void qr_worker_close(void *context)
 {
     qr_worker_exchange_t *exchange = context;
-    qr_decoder_engine_close();
+    qr_decoder_engine_close(&g_decoder);
     exchange->image = NULL;
 }
 

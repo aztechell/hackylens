@@ -111,6 +111,8 @@ def compose_apps(board: Board, disabled_apps: set[str],
 
 
 CAMERA_FEATURE_SOURCE_MODULES = {
+    Path("firmware/src/core/color_tracker.c"),
+    Path("firmware/src/core/color_tracker.h"),
     Path("firmware/src/drivers/camera_sensor.c"),
     Path("firmware/src/drivers/camera_sensor.h"),
     Path("firmware/src/drivers/ov7740_sensor.c"),
@@ -147,6 +149,20 @@ FACE_DETECT_SOURCE_MODULES = {
     Path("firmware/src/services/face_detect_detector.c"),
     Path("firmware/src/services/face_detect_detector.h"),
 }
+OBJECT_DETECT_SOURCE_MODULES = {
+    path.relative_to(ROOT)
+    for path in (ROOT / "firmware" / "src" / "services").glob("object_detect_*")
+}
+QR_DECODER_SOURCE_MODULES = {
+    Path("firmware/src/services/qr_decoder_engine.c"),
+    Path("firmware/src/services/qr_decoder_engine.h"),
+    Path("firmware/src/services/qr_luma.c"),
+    Path("firmware/src/services/qr_luma.h"),
+}
+APRILTAG_DECODER_SOURCE_MODULES = {
+    Path("firmware/src/services/apriltag_decoder.c"),
+    Path("firmware/src/services/apriltag_decoder.h"),
+}
 
 CORE1_EXECUTOR_SOURCE_MODULES = {
     Path("firmware/src/services/core1_executor.c"),
@@ -166,11 +182,15 @@ MICROPYTHON_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/services/micropython_program.h"),
     Path("firmware/src/adapters/micropython/micropython_capability_bridge.c"),
     Path("firmware/src/adapters/micropython/micropython_capability_bridge.h"),
+    Path("firmware/src/adapters/micropython/micropython_camera_codes.c"),
+    Path("firmware/src/adapters/micropython/micropython_camera_codes.h"),
     Path("firmware/src/services/micropython_port.c"),
     Path("firmware/src/services/micropython_runtime.c"),
     Path("firmware/src/services/micropython_runtime.h"),
     Path("firmware/src/storage/userfs.c"),
     Path("firmware/src/storage/userfs.h"),
+    Path("firmware/src/services/script_sd_store.c"),
+    Path("firmware/src/services/script_sd_store.h"),
 }
 
 TARGETS = {
@@ -582,6 +602,12 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str],
             print(f"[SKIP] unused camera AI input source {rel}")
             continue
         if not face_detector_enabled and rel in FACE_DETECT_SOURCE_MODULES:
+            continue
+        if "object-detect" in disabled_apps and rel in OBJECT_DETECT_SOURCE_MODULES:
+            continue
+        if "qr-camera" in disabled_apps and rel in QR_DECODER_SOURCE_MODULES:
+            continue
+        if "apriltag" in disabled_apps and rel in APRILTAG_DECODER_SOURCE_MODULES:
             continue
         if not core1_executor_enabled and rel in CORE1_EXECUTOR_SOURCE_MODULES:
             print(f"[SKIP] unused core-1 executor source {rel}")

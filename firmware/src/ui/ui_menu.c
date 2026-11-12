@@ -1,6 +1,8 @@
 #include "hk_ui.h"
 #include "menu_icons.h"
 
+#include <stdio.h>
+
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
 
@@ -9,6 +11,16 @@
 #include "../ui/display_binding.h"
 
 static uint8_t s_topbar_sd_mounted;
+
+#define MENU_TITLE_X (HK_DISPLAY_REQUIRED_WIDTH >= 320 ? 52U : 23U)
+#define MENU_TITLE_CHARS ((HK_DISPLAY_REQUIRED_WIDTH - 2U * MENU_TITLE_X) / HACKYLENS_FONT_W)
+
+static void menu_draw_clipped_title(const char *title)
+{
+    char label[MENU_TITLE_CHARS + 1U];
+    snprintf(label, sizeof(label), "%s", title);
+    hk_ui_display_draw_text_centered(3, label, COLOR_TERM_GREEN, COLOR_BLACK);
+}
 
 void topbar_set_sd_mounted(uint8_t mounted)
 {
@@ -46,7 +58,7 @@ void menu_draw_chrome(const char *title)
 #if HK_DISPLAY_REQUIRED_WIDTH >= 320
     hk_ui_display_draw_text_at(4, 3, "<o>", COLOR_TERM_GREEN, COLOR_BLACK);
 #endif
-    hk_ui_display_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
+    menu_draw_clipped_title(title);
     topbar_draw_sd_status();
 }
 
@@ -58,28 +70,48 @@ void menu_draw_title(const char *title)
     hk_ui_display_fill_rect(
         title_x, 2U, sd_status_x - title_x,
         MENU_BAR_H - 4U - MENU_LINE, COLOR_BLACK);
-    hk_ui_display_draw_text_centered(3, title, COLOR_TERM_GREEN, COLOR_BLACK);
+    menu_draw_clipped_title(title);
+}
+
+static void menu_draw_tile(uint8_t index, uint8_t selected, uint16_t *x, uint16_t *y)
+{
+    uint8_t col = (uint8_t)(index % MENU_GRID_COLS);
+    uint8_t row = (uint8_t)(index / MENU_GRID_COLS);
+    *x = MENU_ICON_X0 + col * (MENU_ICON + MENU_ICON_GAP_X);
+    *y = MENU_ICON_Y0 + row * (MENU_ICON + MENU_ICON_GAP_Y);
+    uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
+
+    hk_ui_display_fill_rect(*x, *y, MENU_ICON, MENU_ICON, bg);
+    if(selected)
+        hk_ui_display_draw_rect(*x + 4, *y + 4, MENU_ICON - 8, MENU_ICON - 8, MENU_LINE, COLOR_BLACK);
+    else
+        hk_ui_display_draw_rect(*x, *y, MENU_ICON, MENU_ICON, MENU_LINE, COLOR_TERM_GREEN);
 }
 
 void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
 {
-    void (*draw_icon)(uint16_t, uint16_t, uint16_t, uint16_t) =
-        app ? app->draw_icon : NULL;
-    uint8_t col = (uint8_t)(index % MENU_GRID_COLS);
-    uint8_t row = (uint8_t)(index / MENU_GRID_COLS);
-    uint16_t x = MENU_ICON_X0 + col * (MENU_ICON + MENU_ICON_GAP_X);
-    uint16_t y = MENU_ICON_Y0 + row * (MENU_ICON + MENU_ICON_GAP_Y);
+    uint16_t x, y;
+    menu_draw_tile(index, selected, &x, &y);
+    if(app && app->draw_icon)
+        app->draw_icon(x, y, selected ? COLOR_BLACK : COLOR_TERM_GREEN,
+                      selected ? COLOR_TERM_GREEN : COLOR_BLACK);
+}
+
+void menu_draw_shortcut_at(uint8_t index, const char *name, uint8_t selected)
+{
+    uint16_t x, y;
     uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
     uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
-
-    hk_ui_display_fill_rect(x, y, MENU_ICON, MENU_ICON, bg);
-    if(selected)
-        hk_ui_display_draw_rect(x + 4, y + 4, MENU_ICON - 8, MENU_ICON - 8, MENU_LINE, COLOR_BLACK);
-    else
-        hk_ui_display_draw_rect(x, y, MENU_ICON, MENU_ICON, MENU_LINE, COLOR_TERM_GREEN);
-
-    if(draw_icon)
-        draw_icon(x, y, fg, bg);
+    char label[4] = {0};
+    menu_draw_tile(index, selected, &x, &y);
+    uint8_t length = 0U;
+    while(length < sizeof(label) - 1U && name[length] && name[length] != '.')
+    {
+        label[length] = name[length];
+        length++;
+    }
+    hk_ui_display_draw_text_at(x + (MENU_ICON - length * HACKYLENS_FONT_W) / 2U,
+                               y + 18U, label, fg, bg);
 }
 
 void menu_draw_page(uint8_t page, uint8_t pages)

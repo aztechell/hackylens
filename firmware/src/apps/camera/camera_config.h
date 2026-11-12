@@ -3,8 +3,5 @@
 
 #define CAMERA_REVIEW_MS 2500U
 #define PHOTO_DIR_LONG_NAME "hackylens.photo"
-#define PHOTO_BMP_HEADER_SIZE 54U
-#define PHOTO_BMP565_HEADER_SIZE 66U
-#define PHOTO_PPM_HEADER_MAX 32U
 
 #endif

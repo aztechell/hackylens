@@ -194,9 +194,11 @@ features but expose no script filesystem. Formatting is never automatic.
 
 The on-device **MICRO-PYTHON** app lists stored `.py` files and provides RUN,
 read-only source preview, scrollable logs, startup selection, and confirmed
-deletion. Entering the app never executes a script automatically: the startup
-selection is the persisted default used for initial selection and an empty-name
-HMPY `RUN`. Uploading and editing remain PC/IDE operations.
+deletion. Use **PIN TO MENU** to run a saved script from the main menu. The
+startup selection supplies the default file for an empty-name HMPY `RUN`
+and the initial selection in MICRO-PYTHON. Upload scripts from a PC with the
+IDE or USB CLI. The [examples](examples/README.md) cover display, camera,
+vision, and audio.
 
 The IDE covers edit, atomic upload, list/read/delete, startup selection,
 run/stop/status, live stdout/stderr, and USB camera preview and snapshots.

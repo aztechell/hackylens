@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "../../ui/camera_view.h"
-#include "object_detect_types.h"
+#include "../../services/object_detect_types.h"
 
 void object_detect_view_compose_results(
     camera_view_present_t *present,

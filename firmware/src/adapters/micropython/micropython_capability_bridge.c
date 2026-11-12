@@ -26,6 +26,29 @@
 #include "hk_config.h"
 #endif
 
+#if HK_ENABLE_APP_MICROPYTHON || HK_ENABLE_CAMERA_FEATURE
+#include "../../core/hk_menu.h"
+#include "../../core/hk_screen.h"
+#endif
+#if HK_ENABLE_APP_MICROPYTHON
+#include "../../config/sd_config.h"
+#include "../../services/script_sd_store.h"
+#endif
+#if HK_ENABLE_CAMERA_FEATURE
+#include "micropython_camera_codes.h"
+#include "../../services/camera_client.h"
+#include "../../services/camera_photo_encode.h"
+#include "../../services/camera_vision_client.h"
+#include "../../ui/camera_view.h"
+
+static const char g_camera_owner;
+static uint8_t g_camera_presented;
+#endif
+#if HK_ENABLE_APP_MICROPYTHON && HK_ENABLE_CAMERA_FEATURE
+static uint32_t g_save_lease;
+static uint32_t g_save_offset;
+#endif
+
 #if HK_ENABLE_AUDIO_FEATURE
 #define MICROPYTHON_BINDING_MAILBOX_BYTES HK_AUDIO_PCM_MAX_BYTES
 _Static_assert(HK_AUDIO_PCM_MAX_BYTES >= MICROPYTHON_BINDING_RECTS_BYTES,
@@ -38,6 +61,7 @@ _Static_assert(sizeof(vision_result_snapshot_t) <= MICROPYTHON_BINDING_MAILBOX_B
                "vision snapshot must fit the existing binding mailbox");
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
+#define MICROPYTHON_BINDING_CAMERA_OPEN_TIMEOUT_US 2000000ULL
 #define MICROPYTHON_BINDING_I2C_TIMEOUT_US 100000ULL
 #define MICROPYTHON_BINDING_I2C_HZ 100000U
 #define MICROPYTHON_BINDING_UART_BITS_PER_BYTE 10ULL
@@ -57,7 +81,8 @@ typedef enum
     BINDING_EXTERNAL_I2C,
 } binding_external_mode_t;
 
-typedef struct
+/* Both cores use the uncached alias. Cached globals must not share its tail. */
+typedef struct __attribute__((aligned(64)))
 {
     volatile uint32_t run_active;
     volatile uint32_t run_id;
@@ -99,8 +124,10 @@ typedef struct
     uint32_t run_id;
 } binding_display_cancel_context_t;
 
-static micropython_binding_control_t g_control_storage
-    __attribute__((aligned(64)));
+_Static_assert(sizeof(micropython_binding_control_t) % 64U == 0U,
+               "binding control must occupy complete cache lines");
+
+static micropython_binding_control_t g_control_storage;
 static uint8_t g_external_owned;
 static hk_external_link_t g_external;
 static uint32_t g_lights_owned;
@@ -113,6 +140,7 @@ static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
 static uint32_t g_display_run_id;
 static uint8_t g_display_owned;
+static uint8_t g_display_batch_started;
 #if HK_ENABLE_AUDIO_FEATURE
 static uint32_t g_audio_ticket;
 static uint32_t g_audio_run_id;
@@ -220,6 +248,16 @@ static void binding_display_stage_reset(uint32_t run_id)
 {
     g_display_run_id = run_id;
     g_display_transaction.active = 0U;
+    g_display_batch_started = 0U;
+}
+
+static hk_result_t binding_display_begin(void)
+{
+    if(g_display_batch_started)
+        return HK_OK;
+    hk_result_t result = hk_display_begin_batch(&g_display);
+    g_display_batch_started = result == HK_OK;
+    return result;
 }
 
 static void binding_display_transaction_begin(uint32_t ticket,
@@ -306,6 +344,8 @@ static void binding_complete_request(
 static uint64_t binding_rpc_timeout_us(
     micropython_binding_op_t operation, size_t input_length)
 {
+    if(operation == MICROPYTHON_BINDING_OP_CAMERA_OPEN)
+        return MICROPYTHON_BINDING_CAMERA_OPEN_TIMEOUT_US;
     uint64_t timeout = MICROPYTHON_BINDING_RPC_TIMEOUT_US;
 
     if(operation == MICROPYTHON_BINDING_OP_UART_WRITE)
@@ -319,6 +359,9 @@ static uint64_t binding_rpc_timeout_us(
     if(operation == MICROPYTHON_BINDING_OP_AUDIO_PLAY ||
        operation == MICROPYTHON_BINDING_OP_AUDIO_RECORD)
         timeout += 250000ULL;
+    if(operation >= MICROPYTHON_BINDING_OP_SD_BEGIN &&
+       operation <= MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP)
+        timeout += 2000000ULL;
     return timeout;
 }
 
@@ -430,6 +473,386 @@ static size_t binding_input_limit(uint32_t operation)
         MICROPYTHON_BINDING_RECTS_BYTES : MICROPYTHON_BINDING_DATA_MAX;
 }
 
+void micropython_capability_bridge_release_storage(void)
+{
+#if HK_ENABLE_APP_MICROPYTHON
+    script_sd_abort();
+#if HK_ENABLE_CAMERA_FEATURE
+    g_save_lease = 0U;
+#endif
+#endif
+}
+
+void micropython_capability_bridge_release_camera(void)
+{
+#if HK_ENABLE_CAMERA_FEATURE
+#if HK_ENABLE_APP_MICROPYTHON
+    if(g_save_lease)
+        micropython_capability_bridge_release_storage();
+#endif
+    camera_vision_close(&g_camera_owner);
+    camera_client_close(&g_camera_owner);
+    if(g_camera_presented && hk_screen_get() == SCREEN_MENU)
+        menu_render();
+    g_camera_presented = 0U;
+#endif
+}
+
+uint8_t micropython_capability_bridge_camera_presented(void)
+{
+#if HK_ENABLE_CAMERA_FEATURE
+    return g_camera_presented;
+#else
+    return 0U;
+#endif
+}
+
+#if HK_ENABLE_APP_MICROPYTHON
+static uint8_t binding_is_storage_operation(uint32_t operation)
+{
+    return operation >= MICROPYTHON_BINDING_OP_SD_BEGIN &&
+           operation <= MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP;
+}
+
+static micropython_binding_result_t binding_storage_result(script_sd_result_t result)
+{
+    switch(result)
+    {
+    case SCRIPT_SD_OK:
+    case SCRIPT_SD_PENDING: return MICROPYTHON_BINDING_OK;
+    case SCRIPT_SD_INVALID_NAME: return MICROPYTHON_BINDING_ERROR_SD_NAME;
+    case SCRIPT_SD_EXISTS: return MICROPYTHON_BINDING_ERROR_SD_EXISTS;
+    case SCRIPT_SD_NO_MEDIA: return MICROPYTHON_BINDING_ERROR_SD_NO_MEDIA;
+    case SCRIPT_SD_FULL: return MICROPYTHON_BINDING_ERROR_SD_FULL;
+    case SCRIPT_SD_BUSY: return MICROPYTHON_BINDING_ERROR_BUSY;
+    default: return MICROPYTHON_BINDING_ERROR_SD_IO;
+    }
+}
+
+#if HK_ENABLE_CAMERA_FEATURE
+static uint16_t binding_save_pixel(void *context, uint32_t x, uint32_t y)
+{
+    const camera_preview_frame_t *frame = context;
+    uint32_t offset = frame->rotate ?
+        (frame->height - 1U - x) * frame->width + y : y * frame->width + x;
+    return frame->pixels[offset];
+}
+
+typedef struct
+{
+    const photo_encoder_t *encoder;
+    uint8_t *scratch;
+    uint32_t size;
+} binding_photo_run_t;
+
+static const uint8_t *binding_save_sector(void *context, uint16_t index)
+{
+    const binding_photo_run_t *run = context;
+    uint32_t offset = g_save_offset + (uint32_t)index * SD_BLOCK_SIZE;
+    uint32_t count = run->size - offset;
+    if(count > SD_BLOCK_SIZE)
+        count = SD_BLOCK_SIZE;
+    photo_encode_fill_file_bytes(run->encoder, offset, run->scratch, count);
+    if(count < SD_BLOCK_SIZE)
+        memset(run->scratch + count, 0, SD_BLOCK_SIZE - count);
+    return run->scratch;
+}
+
+static script_sd_result_t binding_save_step(camera_preview_frame_t *frame,
+                                           uint8_t *scratch)
+{
+    const photo_source_t source = {
+        .format = PHOTO_FORMAT_BMP24,
+        .width = frame->rotate ? frame->height : frame->width,
+        .height = frame->rotate ? frame->width : frame->height,
+        .read_pixel = binding_save_pixel,
+        .ctx = frame,
+    };
+    photo_encoder_t encoder;
+    uint32_t total = photo_encode_begin(&encoder, &source);
+    if(g_save_offset == total)
+    {
+        script_sd_result_t result = script_sd_finish();
+        if(result != SCRIPT_SD_PENDING)
+            g_save_lease = 0U;
+        return result;
+    }
+    binding_photo_run_t run = {&encoder, scratch, total};
+    size_t written;
+    script_sd_result_t result = script_sd_write_run(total - g_save_offset, binding_save_sector,
+                                                    &run, &written);
+    if(result != SCRIPT_SD_OK && result != SCRIPT_SD_PENDING)
+    {
+        g_save_lease = 0U;
+        return result;
+    }
+    g_save_offset += written;
+    return SCRIPT_SD_PENDING;
+}
+#endif
+
+static micropython_binding_result_t binding_storage_execute(
+    micropython_binding_control_t *control, uint32_t lease)
+{
+    const hk_app_t *app = hk_menu_active_app();
+    if(hk_screen_get() == SCREEN_APP && (!app || strcmp(app->id, "micropython") != 0))
+        return MICROPYTHON_BINDING_ERROR_BUSY;
+    activity_note();
+    script_sd_result_t result;
+    uint8_t *data = (uint8_t *)control->data;
+    switch(control->operation)
+    {
+    case MICROPYTHON_BINDING_OP_SD_BEGIN:
+        result = script_sd_begin((const char *)data, control->input_length, 0U);
+        break;
+    case MICROPYTHON_BINDING_OP_SD_WRITE:
+    {
+        size_t accepted;
+        result = script_sd_write(data, control->input_length, &accepted);
+        control->data[0] = (uint8_t)accepted;
+        control->data[1] = (uint8_t)(accepted >> 8U);
+        control->output_length = 2U;
+        return binding_storage_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_SD_FINISH:
+        result = script_sd_finish();
+        break;
+#if HK_ENABLE_CAMERA_FEATURE
+    case MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN:
+    case MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP:
+    {
+        uint8_t start = control->operation == MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN;
+        camera_preview_frame_t frame;
+        if(camera_client_get(&g_camera_owner, start ? lease : g_save_lease, &frame) != HK_OK)
+        {
+            micropython_capability_bridge_release_storage();
+            return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        }
+        if(start)
+        {
+            result = script_sd_begin((const char *)data, control->input_length, 1U);
+            if(result == SCRIPT_SD_OK)
+            {
+                g_save_lease = lease;
+                g_save_offset = 0U;
+            }
+        }
+        else
+            result = binding_save_step(&frame, data);
+        break;
+    }
+#endif
+    default:
+        (void)lease;
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+    }
+    control->data[0] = result == SCRIPT_SD_OK;
+    control->output_length = 1U;
+    return binding_storage_result(result);
+}
+#endif
+
+#if HK_ENABLE_CAMERA_FEATURE
+static micropython_binding_result_t binding_camera_result(hk_result_t result)
+{
+    if(result == HK_PENDING)
+        return MICROPYTHON_BINDING_OK;
+    if(result == HK_ERR_STALE_HANDLE || result == HK_ERR_INVALID_STATE)
+        return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+    if(result == HK_ERR_FEATURE_UNAVAILABLE)
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+    if(result == HK_ERR_VERSION_INCOMPATIBLE)
+        return MICROPYTHON_BINDING_ERROR_MODEL_FORMAT;
+    return binding_external_result(result);
+}
+
+static hk_result_t binding_camera_present(const uint32_t arguments[6],
+                                         const hk_color_rect_t *box)
+{
+    camera_preview_frame_t frame;
+    camera_view_present_t present;
+    hk_result_t result = camera_client_get(&g_camera_owner, arguments[0], &frame);
+
+    if(result != HK_OK)
+        return result;
+    const camera_view_frame_t image = {
+        .pixels = frame.pixels,
+        .width = frame.width,
+        .height = frame.height,
+        .rotate = frame.rotate,
+        .fit = IMAGE_VIEWPORT_CONTAIN,
+    };
+    uint16_t width = frame.rotate ? frame.height : frame.width;
+    uint16_t height = frame.rotate ? frame.width : frame.height;
+    if(arguments[5] > UINT16_MAX ||
+       (box && (!box->width || !box->height ||
+                (uint32_t)box->x + box->width > width ||
+                (uint32_t)box->y + box->height > height)))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!camera_view_compose_frame(&image, &present))
+        return HK_ERR_BUSY;
+    if(box)
+    {
+        /* Camera View accepts sensor coordinates. The VM uses the same
+         * logical coordinates as the rotated IDE preview. */
+        camera_view_rect_t sensor = frame.rotate ?
+            (camera_view_rect_t){box->y, frame.height - box->x - box->width,
+                                 box->height, box->width} :
+            (camera_view_rect_t){box->x, box->y, box->width, box->height};
+        camera_view_compose_rects(&present, &image, &sensor, 1U, (uint16_t)arguments[5]);
+    }
+    g_camera_presented = 1U;
+    return camera_view_present(&present) ? HK_OK : HK_ERR_IO;
+}
+
+static micropython_binding_result_t binding_camera_execute(
+    micropython_binding_control_t *control, const uint32_t arguments[6])
+{
+    uint32_t output[5];
+    size_t output_size = 0U;
+    hk_result_t result;
+
+    switch(control->operation)
+    {
+    case MICROPYTHON_BINDING_OP_CAMERA_OPEN:
+    {
+        const hk_app_t *app = hk_menu_active_app();
+        if(g_display_batch_started ||
+           (hk_screen_get() == SCREEN_APP && (!app || strcmp(app->id, "micropython") != 0)))
+            return MICROPYTHON_BINDING_ERROR_BUSY;
+        activity_note();
+        result = camera_client_open(&g_camera_owner);
+        break;
+    }
+    case MICROPYTHON_BINDING_OP_CAMERA_CLOSE:
+        micropython_capability_bridge_release_camera();
+        return MICROPYTHON_BINDING_OK;
+    case MICROPYTHON_BINDING_OP_CAMERA_FRAME:
+    {
+        camera_preview_frame_t frame;
+        result = camera_client_acquire(&g_camera_owner, &frame);
+        if(result == HK_OK)
+        {
+            output[0] = frame.lease_id;
+            output[1] = frame.rotate ? frame.height : frame.width;
+            output[2] = frame.rotate ? frame.width : frame.height;
+            output[3] = frame.sequence;
+            output_size = 4U * sizeof(uint32_t);
+            activity_note();
+        }
+        break;
+    }
+    case MICROPYTHON_BINDING_OP_CAMERA_RELEASE:
+        result = camera_client_release(&g_camera_owner, arguments[0]);
+        break;
+    case MICROPYTHON_BINDING_OP_CAMERA_MODEL_OPEN:
+    {
+        char package[AI_MODEL_PACKAGE_NAME_MAX + 1U];
+        size_t length = control->input_length;
+        if(length >= sizeof(package) || arguments[0] > UINT8_MAX)
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        for(size_t i = 0U; i < length; i++)
+        {
+            package[i] = (char)control->data[i];
+            if(!package[i])
+                return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        }
+        package[length] = '\0';
+        activity_note();
+        result = camera_vision_open_step(&g_camera_owner, (vision_source_t)arguments[0], package);
+        if(result == HK_OK)
+        {
+            control->data[0] = 1U;
+            control->output_length = 1U;
+        }
+        return binding_camera_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_CAMERA_MODEL_CLOSE:
+        camera_vision_close(&g_camera_owner);
+        return MICROPYTHON_BINDING_OK;
+    case MICROPYTHON_BINDING_OP_CAMERA_DETECT_SUBMIT:
+        result = camera_vision_submit(&g_camera_owner, arguments[0]);
+        break;
+    case MICROPYTHON_BINDING_OP_CAMERA_DETECT_POLL:
+    {
+        vision_result_snapshot_t snapshot;
+        result = camera_vision_poll(&g_camera_owner, &snapshot);
+        if(result == HK_OK)
+        {
+            const uint8_t *bytes = (const uint8_t *)&snapshot;
+            for(size_t i = 0U; i < sizeof(snapshot); i++)
+                control->data[i] = bytes[i];
+            control->output_length = sizeof(snapshot);
+        }
+        return binding_camera_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_CAMERA_CODE_FRAME:
+    {
+        micropython_code_frame_t frame;
+        uint8_t *qr_image;
+        if(control->input_length != sizeof(qr_image))
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        uint8_t *address_bytes = (uint8_t *)&qr_image;
+        for(size_t i = 0U; i < sizeof(qr_image); i++)
+            address_bytes[i] = control->data[i];
+        result = micropython_camera_codes_stage(&g_camera_owner, arguments[0],
+            (vision_source_t)arguments[1], (uint8_t)arguments[2], qr_image, &frame);
+        if(result == HK_OK)
+        {
+            const uint8_t *bytes = (const uint8_t *)&frame;
+            for(size_t i = 0U; i < sizeof(frame); i++)
+                control->data[i] = bytes[i];
+            control->output_length = sizeof(frame);
+        }
+        return binding_camera_result(result);
+    }
+    default:
+    {
+        for(uint8_t i = 1U; i <= 4U; i++)
+        {
+            if(arguments[i] > UINT16_MAX)
+                return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        }
+        const hk_color_rect_t rect = {
+            arguments[1], arguments[2], arguments[3], arguments[4],
+        };
+        const hk_color_rect_t *region =
+            rect.x || rect.y || rect.width || rect.height ? &rect : NULL;
+        if(control->operation == MICROPYTHON_BINDING_OP_CAMERA_PRESENT)
+        {
+            result = binding_camera_present(arguments, region);
+            break;
+        }
+        if(control->input_length != 6U)
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        const hk_color_threshold_t threshold = {
+            control->data[0], control->data[1], control->data[2],
+            control->data[3], control->data[4], control->data[5],
+        };
+        hk_color_blob_t blob;
+        result = camera_client_find_color(
+            &g_camera_owner, arguments[0], region, &threshold, arguments[5], &blob);
+        if(result == HK_OK && blob.pixels)
+        {
+            output[0] = blob.bounds.x;
+            output[1] = blob.bounds.y;
+            output[2] = blob.bounds.width;
+            output[3] = blob.bounds.height;
+            output[4] = blob.pixels;
+            output_size = sizeof(output);
+        }
+        break;
+    }
+    }
+
+    const uint8_t *bytes = (const uint8_t *)output;
+    for(size_t i = 0U; i < output_size; i++)
+        control->data[i] = bytes[i];
+    control->output_length = output_size;
+    return binding_camera_result(result);
+}
+#endif
+
 #if HK_ENABLE_AUDIO_FEATURE
 static micropython_binding_result_t binding_audio_result(hk_result_t result)
 {
@@ -470,8 +893,29 @@ static micropython_binding_result_t binding_execute(
     if(binding_request_cancelled(control, ticket, run_id))
         return MICROPYTHON_BINDING_ERROR_TIMEOUT;
 
+#if HK_ENABLE_APP_MICROPYTHON
+    if(binding_is_storage_operation(op))
+        return binding_storage_execute(control, a[0]);
+#endif
+
     switch(op)
     {
+    case MICROPYTHON_BINDING_OP_CAMERA_OPEN:
+    case MICROPYTHON_BINDING_OP_CAMERA_CLOSE:
+    case MICROPYTHON_BINDING_OP_CAMERA_FRAME:
+    case MICROPYTHON_BINDING_OP_CAMERA_RELEASE:
+    case MICROPYTHON_BINDING_OP_CAMERA_FIND_COLOR:
+    case MICROPYTHON_BINDING_OP_CAMERA_PRESENT:
+    case MICROPYTHON_BINDING_OP_CAMERA_MODEL_OPEN:
+    case MICROPYTHON_BINDING_OP_CAMERA_MODEL_CLOSE:
+    case MICROPYTHON_BINDING_OP_CAMERA_DETECT_SUBMIT:
+    case MICROPYTHON_BINDING_OP_CAMERA_DETECT_POLL:
+    case MICROPYTHON_BINDING_OP_CAMERA_CODE_FRAME:
+#if HK_ENABLE_CAMERA_FEATURE
+        return binding_camera_execute(control, a);
+#else
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+#endif
     case MICROPYTHON_BINDING_OP_VISION_RESULTS:
     {
         vision_result_snapshot_t snapshot;
@@ -553,6 +997,9 @@ static micropython_binding_result_t binding_execute(
         if(!g_display_owned || g_display_run_id != run_id ||
            a[0] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        result = binding_display_begin();
+        if(result != HK_OK)
+            return binding_display_result(result);
         binding_display_transaction_begin(ticket, run_id);
         /* clear() starts a fresh staged frame.  The currently presented
          * overlay remains visible until an explicit successful present(). */
@@ -574,6 +1021,9 @@ static micropython_binding_result_t binding_execute(
         if(a[0] >= HK_DISPLAY_REQUIRED_WIDTH || a[1] >= HK_DISPLAY_REQUIRED_HEIGHT ||
            a[2] > 0xFFFFU || a[3] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        result = binding_display_begin();
+        if(result != HK_OK)
+            return binding_display_result(result);
         binding_display_transaction_begin(ticket, run_id);
         width = (uint32_t)binding_display_glyph_count(
                     (const uint8_t *)control->data, input_length) *
@@ -603,6 +1053,9 @@ static micropython_binding_result_t binding_execute(
         if(a[0] >= HK_DISPLAY_REQUIRED_WIDTH || a[1] >= HK_DISPLAY_REQUIRED_HEIGHT || !a[2] || !a[3] ||
            a[2] > 0xFFFFU || a[3] > 0xFFFFU || a[4] > 0xFFFFU)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        result = binding_display_begin();
+        if(result != HK_OK)
+            return binding_display_result(result);
         binding_display_transaction_begin(ticket, run_id);
         rect = (hk_display_rect_t){
             (int32_t)a[0], (int32_t)a[1], a[2], a[3],
@@ -633,10 +1086,14 @@ static micropython_binding_result_t binding_execute(
     }
     case MICROPYTHON_BINDING_OP_DISPLAY_RECTS:
     {
+        hk_result_t result;
         if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
         if(input_length % MICROPYTHON_BINDING_RECT_BYTES != 0U)
             return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        result = binding_display_begin();
+        if(result != HK_OK)
+            return binding_display_result(result);
         binding_display_transaction_begin(ticket, run_id);
         for(uint32_t offset = 0U; offset < input_length;
             offset += MICROPYTHON_BINDING_RECT_BYTES)
@@ -646,8 +1103,6 @@ static micropython_binding_result_t binding_execute(
                 binding_read_le16(record), binding_read_le16(record + 2),
                 binding_read_le16(record + 4), binding_read_le16(record + 6),
             };
-            hk_result_t result;
-
             if((uint32_t)rect.x >= HK_DISPLAY_REQUIRED_WIDTH ||
                (uint32_t)rect.y >= HK_DISPLAY_REQUIRED_HEIGHT ||
                !rect.width || !rect.height)
@@ -674,13 +1129,19 @@ static micropython_binding_result_t binding_execute(
 
         if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        result = binding_display_begin();
+        if(result != HK_OK)
+            return binding_display_result(result);
         result = hk_display_stage_checkpoint(
             &g_display, &commands, &text_bytes);
         if(result == HK_OK)
             result = hk_display_present(
                 &g_display, deadline, &cancel);
         if(result == HK_OK)
-            result = hk_display_begin_batch(&g_display);
+        {
+            g_display_batch_started = 0U;
+            result = binding_display_begin();
+        }
         if(result == HK_OK)
             result = hk_display_stage_restore(
                 &g_display, commands, text_bytes);
@@ -928,9 +1389,6 @@ void micropython_capability_bridge_prepare(uint32_t run_id)
     binding_display_stage_reset(run_id);
     display_result = hk_display_open(
         hk_display_service(), HK_DISPLAY_PLANE_OVERLAY, &g_display);
-    if(display_result == HK_OK)
-        display_result = hk_display_begin_batch(
-            &g_display);
     if(display_result != HK_OK && g_display.service)
         (void)hk_display_retire(&g_display, HK_DEADLINE_IMMEDIATE);
     g_display_owned = display_result == HK_OK;
@@ -948,6 +1406,9 @@ void micropython_capability_bridge_tick(void)
 
     if(!control->run_active)
         return;
+#if HK_ENABLE_CAMERA_FEATURE
+    camera_client_tick(&g_camera_owner);
+#endif
 #if HK_ENABLE_AUDIO_FEATURE
     if(g_audio_ticket)
     {
@@ -967,6 +1428,10 @@ void micropython_capability_bridge_tick(void)
     run_id = control->run_id;
     if(binding_request_cancelled(control, ticket, run_id))
     {
+#if HK_ENABLE_APP_MICROPYTHON
+        if(binding_is_storage_operation(control->operation))
+            micropython_capability_bridge_release_storage();
+#endif
         binding_complete_request(control, ticket,
                                  MICROPYTHON_BINDING_ERROR_TIMEOUT, 1U);
         return;
@@ -1002,7 +1467,13 @@ void micropython_capability_bridge_tick(void)
         ticket, run_id,
         (uint8_t)(cancelled || result != MICROPYTHON_BINDING_OK));
     if(cancelled)
+    {
+#if HK_ENABLE_APP_MICROPYTHON
+        if(binding_is_storage_operation(control->operation))
+            micropython_capability_bridge_release_storage();
+#endif
         result = MICROPYTHON_BINDING_ERROR_TIMEOUT;
+    }
     binding_complete_request(control, ticket, result, cancelled);
 }
 
@@ -1017,6 +1488,8 @@ hk_result_t micropython_capability_bridge_cleanup(void)
         deadline.at_us = UINT64_MAX;
     control->run_active = 0U;
     __sync_synchronize();
+    micropython_capability_bridge_release_storage();
+    micropython_capability_bridge_release_camera();
 #if HK_ENABLE_AUDIO_FEATURE
     result = audio_service_cancel();
     if(first == HK_OK) first = result;
@@ -1143,6 +1616,12 @@ const char *micropython_binding_result_name(
     case MICROPYTHON_BINDING_ERROR_IO: return "io";
     case MICROPYTHON_BINDING_ERROR_LIMIT: return "limit";
     case MICROPYTHON_BINDING_ERROR_UNAVAILABLE: return "unavailable";
+    case MICROPYTHON_BINDING_ERROR_MODEL_FORMAT: return "model-format";
+    case MICROPYTHON_BINDING_ERROR_SD_NAME: return "sd-name";
+    case MICROPYTHON_BINDING_ERROR_SD_EXISTS: return "sd-exists";
+    case MICROPYTHON_BINDING_ERROR_SD_NO_MEDIA: return "sd-no-media";
+    case MICROPYTHON_BINDING_ERROR_SD_FULL: return "sd-full";
+    case MICROPYTHON_BINDING_ERROR_SD_IO: return "sd-io";
     default: return "unknown";
     }
 }

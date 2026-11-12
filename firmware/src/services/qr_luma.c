@@ -1,14 +1,57 @@
 #include "qr_luma.h"
 
-#include "qr_config.h"
-
-
 static uint8_t qr_rgb565_luma(uint16_t color)
 {
     uint8_t r = (uint8_t)((color >> 8) & 0xF8U);
     uint8_t g = (uint8_t)((color >> 3) & 0xFCU);
     uint8_t b = (uint8_t)((color << 3) & 0xF8U);
     return (uint8_t)(((uint16_t)r * 30U + (uint16_t)g * 59U + (uint16_t)b * 11U) / 100U);
+}
+
+void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image)
+{
+    enum { WIDTH = 320, HEIGHT = 240, RADIUS = 8, BIAS = 3 };
+    uint16_t columns[WIDTH] = {0};
+    unsigned top = 0U;
+    unsigned bottom = RADIUS;
+
+    for(unsigned y = 0U; y <= bottom; y++)
+        for(unsigned x = 0U; x < WIDTH; x++)
+            columns[x] += qr_rgb565_luma(src[y * WIDTH + x]);
+
+    for(unsigned y = 0U; y < HEIGHT; y++)
+    {
+        const unsigned rows = bottom - top + 1U;
+        unsigned left = 0U;
+        unsigned right = RADIUS;
+        uint32_t sum = 0U;
+        for(unsigned x = 0U; x <= right; x++)
+            sum += columns[x];
+
+        for(unsigned x = 0U; x < WIDTH; x++)
+        {
+            unsigned luma = qr_rgb565_luma(src[y * WIDTH + x]);
+            unsigned samples = rows * (right - left + 1U);
+            image[y * WIDTH + x] = (luma + BIAS) * samples < sum ? 0U : 255U;
+            if(x >= RADIUS)
+                sum -= columns[left++];
+            if(right + 1U < WIDTH)
+                sum += columns[++right];
+        }
+
+        if(y >= RADIUS)
+        {
+            const volatile uint16_t *old_row = src + top++ * WIDTH;
+            for(unsigned x = 0U; x < WIDTH; x++)
+                columns[x] -= qr_rgb565_luma(old_row[x]);
+        }
+        if(bottom + 1U < HEIGHT)
+        {
+            const volatile uint16_t *new_row = src + ++bottom * WIDTH;
+            for(unsigned x = 0U; x < WIDTH; x++)
+                columns[x] += qr_rgb565_luma(new_row[x]);
+        }
+    }
 }
 
 void qr_luma_fill_image(const volatile uint16_t *src,

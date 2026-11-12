@@ -48,7 +48,7 @@ static void tracked_free(void *memory)
 #undef malloc
 #undef calloc
 #undef free
-#include "../firmware/src/apps/qr_camera/qr_decoder_engine.c"
+#include "../firmware/src/services/qr_decoder_engine.c"
 
 uint8_t *quirc_begin(struct quirc *q, int *width, int *height)
 { (void)width; (void)height; return q->image; }
@@ -62,26 +62,27 @@ void quirc_flip(struct quirc_code *code) { (void)code; abort(); }
 
 int main(void)
 {
-    qr_decoder_engine_close();
+    qr_decoder_engine_t engine = {0};
+    qr_decoder_engine_close(&engine);
     for(unsigned cycle = 0; cycle < 10; cycle++)
     {
-        uint8_t *image = qr_decoder_engine_prepare(320, 240);
+        uint8_t *image = qr_decoder_engine_prepare(&engine, 320, 240);
         assert(image);
         assert(live_bytes > 76800);
-        assert(qr_decoder_engine_prepare(320, 240) == image);
-        assert(qr_decoder_engine_prepare(640, 480));
-        qr_decoder_engine_close();
+        assert(qr_decoder_engine_prepare(&engine, 320, 240) == image);
+        assert(qr_decoder_engine_prepare(&engine, 640, 480));
+        qr_decoder_engine_close(&engine);
         assert(live_bytes == 0);
-        qr_decoder_engine_close();
+        qr_decoder_engine_close(&engine);
         assert(live_bytes == 0);
     }
     allocations_before_failure = 2;
-    assert(!qr_decoder_engine_prepare(320, 240));
-    qr_decoder_engine_close();
+    assert(!qr_decoder_engine_prepare(&engine, 320, 240));
+    qr_decoder_engine_close(&engine);
     assert(live_bytes == 0);
     allocations_before_failure = -1;
-    assert(qr_decoder_engine_prepare(320, 240));
-    qr_decoder_engine_close();
+    assert(qr_decoder_engine_prepare(&engine, 320, 240));
+    qr_decoder_engine_close(&engine);
     assert(live_bytes == 0);
     puts("QR_MEMORY_OK");
     return 0;
