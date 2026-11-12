@@ -14,3 +14,6 @@ device, select the file, and choose **RUN**. Press **BACK** to stop.
 
 The vision scripts require a firmware build exposing the corresponding
 camera bindings. See the [MicroPython API](../docs/MICROPYTHON_API.md).
+
+Use the [marker cards and USB check](markers/README.md) to try the QR and
+AprilTag scanner with known inputs.
