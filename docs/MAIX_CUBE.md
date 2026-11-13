@@ -820,6 +820,17 @@ Cube completed scans on all 20 consecutive app opens without rebooting.
 This separate check exercised scanner restart without measuring
 presentation latency (`cube-qr-reopen-check.log`).
 
+### CAMERA preview pixel order (2026-11-13)
+
+A screen target with straight edges reproduced doubled horizontal edges
+and a broken diagonal on Cube at 160 × 120. Both the raw camera capture
+and LCD screenshot showed the artifact. The preview now reads each RGB565
+pair in logical sensor order before applying rotation or scaling. Replaying
+the same raw frame through the old and new preview renderers removed the
+duplicated edges. A fresh LCD screenshot at 160 × 120 confirmed the
+correction on Cube. Captures and the renderer comparison are under
+`build/camera-160-diagnostics/`.
+
 ## Python launcher checks (2026-11-12)
 
 The full launcher builds booted on both boards and accepted `VPTEST.py` over

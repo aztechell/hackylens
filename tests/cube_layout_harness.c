@@ -52,14 +52,24 @@ void hk_ui_display_draw_rect(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uin
 static uint16_t pixel(unsigned x, unsigned y)
 { unsigned at = (y * 240 + x) * 2; return ((uint16_t)screen[at] << 8) | screen[at + 1]; }
 
+static void fill_dvp_gradient(unsigned width, unsigned height)
+{
+    /* Logical columns 1, 2, 3, 4 ... arrive as 2, 1, 4, 3 ... */
+    for(unsigned y = 0; y < height; y++)
+        for(unsigned x = 0; x < width; x += 2)
+        {
+            source[y * width + x] = x + 2;
+            source[y * width + x + 1] = x + 1;
+        }
+}
+
 int main(void)
 {
     const hk_menu_view_t view = {chrome, title, item, page, draw_pin};
     camera_view_frame_t frame = {.pixels = source, .width = 320, .height = 240};
     camera_view_present_t present;
     const camera_view_rect_t box = {160, 120, 80, 60};
-    for(unsigned y = 0; y < 240; y++)
-        for(unsigned x = 0; x < 320; x++) source[y * 320 + x] = x + 1;
+    fill_dvp_gradient(320, 240);
     assert(camera_view_compose_frame(&frame, &present));
     assert(pixel(0, 29) == 0 && pixel(0, 30) == 1);
     assert(pixel(239, 209) == 319 && pixel(239, 210) == 0);
@@ -68,6 +78,17 @@ int main(void)
     frame.fit = IMAGE_VIEWPORT_COVER;
     assert(camera_view_compose_frame(&frame, &present));
     assert(pixel(0, 0) == 41 && pixel(239, 239) == 280);
+
+    /* Exact 2x scaling takes the unrotated direct path. */
+    frame.width = frame.height = 120;
+    fill_dvp_gradient(120, 120);
+    assert(camera_view_compose_frame(&frame, &present));
+    assert(pixel(0, 0) == 1 && pixel(1, 0) == 1 && pixel(2, 0) == 2);
+    assert(pixel(238, 239) == 120 && pixel(239, 239) == 120);
+    frame.width = 320;
+    frame.height = 240;
+    fill_dvp_gradient(320, 240);
+
     frame.fit = IMAGE_VIEWPORT_CONTAIN;
     frame.rotate = 1;
     assert(camera_view_compose_frame(&frame, &present));
@@ -93,11 +114,11 @@ int main(void)
         unsigned width = widths[index];
         frame.width = width;
         frame.height = width * 3 / 4;
-        for(unsigned y = 0; y < frame.height; y++)
-            for(unsigned x = 0; x < width; x++) source[y * width + x] = x + 1;
+        fill_dvp_gradient(width, frame.height);
         assert(camera_view_compose_frame(&frame, &present));
         assert(pixel(0, 0) == width / 8 + 1);
         assert(pixel(239, 0) == pixel(0, 0));
+        assert(pixel(0, 2) == width / 8 + 2 * frame.height / 240 + 1);
         assert(pixel(0, 239) == width / 8 + 239 * (width * 3 / 4) / 240 + 1);
         for(unsigned y = 0; y < 240; y++)
             for(unsigned x = 0; x < 240; x++) assert(pixel(x, y) != 0);

@@ -6,7 +6,7 @@
 
 typedef struct
 {
-    volatile uint16_t *pixels;
+    volatile uint16_t *pixels; /* K210 DVP RGB565, right pixel first in each pair. */
     uint16_t width;
     uint16_t height;
     uint8_t rotate; /* 1: 90 degrees clockwise; 0: sensor orientation. */

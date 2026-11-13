@@ -29,7 +29,8 @@ static inline void camera_view_write_pixel(uint8_t *dst, uint16_t color)
 
 static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
                                           hk_ui_display_surface_t *surface,
-                                          const image_viewport_t *viewport)
+                                          const image_viewport_t *viewport,
+                                          uint32_t pair_xor)
 {
     uint16_t x_step;
     uint16_t y_step;
@@ -70,7 +71,7 @@ static uint8_t camera_view_compose_direct(const camera_view_frame_t *frame,
         for(uint16_t x = 0; x < HK_DISPLAY_REQUIRED_WIDTH; x++)
         {
             uint32_t src_x = x_step ? (uint32_t)x * x_step : ((uint32_t)x >> 1U);
-            camera_view_write_pixel(dst + x * 2U, src[src_x]);
+            camera_view_write_pixel(dst + x * 2U, src[src_x ^ pair_xor]);
         }
     }
     return 1;
@@ -174,7 +175,10 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
     if(viewport.dst_x || viewport.dst_y ||
        viewport.dst_w != surface.width || viewport.dst_h != surface.height)
         memset(surface.rgb565_be, 0, (uint32_t)surface.stride_bytes * surface.height);
-    if(!camera_view_compose_direct(frame, &surface, &viewport))
+    /* Undo the DVP's pixel pairing in sensor coordinates, before rotation
+     * and scaling reach the LCD. Camera capture widths are even. */
+    const uint32_t pair_xor = (frame->width & 1U) == 0U;
+    if(!camera_view_compose_direct(frame, &surface, &viewport, pair_xor))
     {
         camera_view_prepare_maps(&viewport);
         for(uint16_t y = 0; y < viewport.dst_h; y++)
@@ -201,7 +205,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
                     src_y = logical_y;
                 }
 
-                color = frame->pixels[src_y * frame->width + src_x];
+                color = frame->pixels[src_y * frame->width + (src_x ^ pair_xor)];
                 camera_view_write_pixel(dst + x * 2U, color);
             }
         }
