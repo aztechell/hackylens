@@ -101,7 +101,10 @@ uint8_t camera_capture_tick(const char *log_prefix)
         g_camera_wait_convert_count = stream.convert_count;
         g_camera_frame_timeout_shown = 0;
     }
-    if(now - g_camera_wait_started_us >= CAMERA_FRAME_TIMEOUT_US)
+    /* Sensor startup and initial DVP synchronization can span several frames. */
+    const uint64_t timeout_us = stream.captured_count == 0U
+        ? CAMERA_FIRST_FRAME_TIMEOUT_US : CAMERA_FRAME_TIMEOUT_US;
+    if(now - g_camera_wait_started_us >= timeout_us)
     {
         g_camera_timeout_count++;
         g_camera_wait_started_us = now;

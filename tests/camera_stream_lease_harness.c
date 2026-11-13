@@ -69,6 +69,22 @@ static void capture_frame(void)
     s_callback(HAL_DVP_EVENT_FRAME_FINISH, 0U, s_callback_context);
 }
 
+static void first_frame_has_time_to_settle(void)
+{
+    s_now_us = 1000U;
+    CHECK(camera_capture_start(320U, 240U, 1U, CAMERA_INPUT_RGB565));
+    s_now_us += 150000U;
+    CHECK(!camera_capture_tick(NULL));
+    CHECK(!camera_capture_consume_timeout());
+    s_now_us += 150000U;
+    CHECK(!camera_capture_tick(NULL));
+    CHECK(camera_capture_consume_timeout());
+    capture_frame();
+    CHECK(camera_capture_tick(NULL));
+    CHECK(!camera_capture_consume_timeout());
+    camera_capture_reset_session();
+}
+
 static void stalled_capture_recovers(void)
 {
     camera_capture_frame_t leased = {0};
@@ -145,6 +161,7 @@ int main(void)
     CHECK(!camera_stream_has_leases());
     CHECK(g_slots[leased_slot].state == CAMERA_SLOT_FREE);
 
+    first_frame_has_time_to_settle();
     stalled_capture_recovers();
     CHECK(camera_stream_start(320U, 240U, 1U, CAMERA_INPUT_RGB565));
     g_next_lease_id = UINT32_MAX - 1U;

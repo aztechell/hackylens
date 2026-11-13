@@ -4,6 +4,7 @@
 #include "board_config.h"
 
 #define CAMERA_FRAME_TIMEOUT_US 150000ULL
+#define CAMERA_FIRST_FRAME_TIMEOUT_US 300000ULL
 #define CAMERA_FRAME_WAIT_MS 90
 
 #endif
