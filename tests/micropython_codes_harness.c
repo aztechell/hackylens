@@ -96,6 +96,23 @@ static void draw_uneven_qr(void)
     }
 }
 
+/* A 3 px/module code sheared in both axes. Center-only extraction finds
+ * the grid but fails error correction on this raster. */
+static void draw_sheared_qr(void)
+{
+    for(int y = 0; y < 240; y++)
+    {
+        for(int x = 0; x < 320; x++)
+        {
+            int u = 16 * (x - 88) - 3 * (y - 48);
+            int v = 16 * (y - 48) - 3 * (x - 88);
+            unsigned black = u >= 0 && v >= 0 && u < 21 * 48 && v < 21 * 48 &&
+                (qr_fixture_rows[v / 48] & (1U << (u / 48)));
+            pixels[y * 320 + x] = black ? 0U : UINT16_MAX;
+        }
+    }
+}
+
 static void assert_rotation(vision_result_item_t original, vision_result_item_t rotated)
 {
     assert(rotated.x0 == 240U - original.y1 && rotated.y0 == original.x0);
@@ -109,6 +126,7 @@ int main(void)
            MICROPYTHON_BINDING_ERROR_NOT_ACTIVE);
     assert(copy_count == 0U);
     draw_qr_fixture(pixels, 320U, 240U, 0U);
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_QR, &result) ==
            MICROPYTHON_BINDING_OK);
     assert(result.source == VISION_SOURCE_QR && result.frame_id == 13U);
@@ -118,6 +136,7 @@ int main(void)
 
     rotate = 1U;
     draw_qr_fixture(pixels, 320U, 240U, 1U);
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_QR, &result) ==
            MICROPYTHON_BINDING_OK);
     assert(copy_count == 3U && result.width == 240U && result.height == 320U);
@@ -126,9 +145,19 @@ int main(void)
     assert_rotation(original, result.items[0]);
 
     draw_uneven_qr();
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_QR, &result) ==
            MICROPYTHON_BINDING_OK);
     assert(local_pass_count == 1U);
+    assert(result.count == 1U && result.qr_length == 2U);
+    assert(memcmp(result.qr_payload, "HL", 2U) == 0);
+
+    draw_sheared_qr();
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
+    unsigned before = copy_count;
+    assert(micropython_camera_codes_scan(7U, VISION_SOURCE_QR, &result) ==
+           MICROPYTHON_BINDING_OK);
+    assert(copy_count == before + 1U);
     assert(result.count == 1U && result.qr_length == 2U);
     assert(memcmp(result.qr_payload, "HL", 2U) == 0);
 

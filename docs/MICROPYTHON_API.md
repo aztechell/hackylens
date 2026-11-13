@@ -285,7 +285,8 @@ leased frame's sequence and half-open bounding boxes in the orientation of
 `camera_present()`. QR returns raw bytes in `qr_payload`. AprilTag returns
 the tag ID and Hamming distance in each item's `id` and `flags`. A scan
 with no detections returns an empty `items` tuple. A stale lease raises
-`RuntimeError`. See the [code scanner example](../examples/code_scanner.py).
+`RuntimeError`. See the [code scanner example](../examples/code_scanner.py)
+and the [marker cards and USB check](../examples/markers/README.md).
 
 ## Example
 

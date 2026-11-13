@@ -25,6 +25,16 @@
 #endif // QUIRC_USE_TGMATH
 #include "quirc_internal.h"
 
+#if defined(QUIRC_USE_FLOAT_MATH)
+#define quirc_rint rintf
+#define quirc_sqrt sqrtf
+#define quirc_fabs fabsf
+#else
+#define quirc_rint rint
+#define quirc_sqrt sqrt
+#define quirc_fabs fabs
+#endif
+
 /************************************************************************
  * Linear algebra routines
  */
@@ -104,8 +114,8 @@ static void perspective_map(const quirc_float_t *c,
 	quirc_float_t x = (c[0]*u + c[1]*v + c[2]) * den;
 	quirc_float_t y = (c[3]*u + c[4]*v + c[5]) * den;
 
-	ret->x = (int) rint(x);
-	ret->y = (int) rint(y);
+	ret->x = (int) quirc_rint(x);
+	ret->y = (int) quirc_rint(y);
 }
 
 static void perspective_unmap(const quirc_float_t *c,
@@ -655,7 +665,7 @@ static quirc_float_t length(struct quirc_point a, struct quirc_point b)
 {
 	quirc_float_t x = abs(a.x - b.x) + 1;
 	quirc_float_t y = abs(a.y - b.y) + 1;
-	return sqrt(x * x +  y * y);
+	return quirc_sqrt(x * x + y * y);
 }
 /* Estimate grid size by determing distance between capstones
  */
@@ -686,12 +696,12 @@ static void measure_grid_size(struct quirc *q, int index)
  * transform. Returns +/- 1 for black/white, 0 for cells which are
  * out of image bounds.
  */
-static int read_cell(const struct quirc *q, int index, int x, int y)
+static int read_cell(const struct quirc *q, const struct quirc_grid *qr,
+		     quirc_float_t x, quirc_float_t y)
 {
-	const struct quirc_grid *qr = &q->grids[index];
 	struct quirc_point p;
 
-	perspective_map(qr->c, x + (quirc_float_t)0.5, y + (quirc_float_t)0.5, &p);
+	perspective_map(qr->c, x, y, &p);
 	if (p.y < 0 || p.y >= q->h || p.x < 0 || p.x >= q->w)
 		return 0;
 
@@ -1018,7 +1028,7 @@ static void test_neighbours(struct quirc *q, int i,
 		const struct neighbour *hn = &hlist->n[j];
 		for (int k = 0; k < vlist->count; k++) {
 			const struct neighbour *vn = &vlist->n[k];
-			quirc_float_t squareness = fabs((quirc_float_t)1.0 - hn->distance / vn->distance);
+			quirc_float_t squareness = quirc_fabs((quirc_float_t)1.0 - hn->distance / vn->distance);
 			if (squareness < (quirc_float_t)0.2)
 				record_qr_grid(q, hn->index, i, vn->index);
 		}
@@ -1047,8 +1057,8 @@ static void test_grouping(struct quirc *q, unsigned int i)
 
 		perspective_unmap(c1->c, &c2->center, &u, &v);
 
-		u = fabs(u - (quirc_float_t)3.5);
-		v = fabs(v - (quirc_float_t)3.5);
+		u = quirc_fabs(u - (quirc_float_t)3.5);
+		v = quirc_fabs(v - (quirc_float_t)3.5);
 
 		if (u < (quirc_float_t)0.2 * v) {
 			struct neighbour *n = &hlist.n[hlist.count++];
@@ -1121,15 +1131,24 @@ void quirc_end_with_image(struct quirc *q, uint8_t *image)
 void quirc_extract(const struct quirc *q, int index,
 		   struct quirc_code *code)
 {
-	const struct quirc_grid *qr = &q->grids[index];
+	quirc_extract_offset(q, index, code, 0, 0);
+}
+
+void quirc_extract_offset(const struct quirc *q, int index,
+			  struct quirc_code *code, int dx, int dy)
+{
+	static const quirc_float_t offsets[] = {0.3, 0.5, 0.7};
+	const struct quirc_grid *qr;
 	int y;
 	int i = 0;
 
 	memset(code, 0, sizeof(*code));
 
-	if (index < 0 || index > q->num_grids)
+	if (index < 0 || index >= q->num_grids ||
+	    dx < -1 || dx > 1 || dy < -1 || dy > 1)
 		return;
 
+	qr = &q->grids[index];
 	perspective_map(qr->c, 0.0, 0.0, &code->corners[0]);
 	perspective_map(qr->c, qr->grid_size, 0.0, &code->corners[1]);
 	perspective_map(qr->c, qr->grid_size, qr->grid_size,
@@ -1147,7 +1166,7 @@ void quirc_extract(const struct quirc *q, int index,
 	for (y = 0; y < qr->grid_size; y++) {
 		int x;
 		for (x = 0; x < qr->grid_size; x++) {
-			if (read_cell(q, index, x, y) > 0) {
+			if (read_cell(q, qr, x + offsets[dx + 1], y + offsets[dy + 1]) > 0) {
 				code->cell_bitmap[i >> 3] |= (1 << (i & 7));
 			}
 			i++;

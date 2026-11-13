@@ -75,6 +75,7 @@ void camera_service_frame_snapshot_done(uint8_t resume)
 static void draw_code(void)
 {
     draw_qr_fixture(s_pixels, QR_AUTOSCAN_W, QR_AUTOSCAN_H, 0U);
+    pack_qr_fixture_dvp(s_pixels, QR_AUTOSCAN_W * QR_AUTOSCAN_H);
 }
 
 static void submit_frame(void)
@@ -90,10 +91,11 @@ int main(void)
     submit_frame();
     assert(qr_service_poll_decode() == QR_DECODE_IDLE);
     run_worker(); /* Prepare. */
-    draw_code();
+    draw_qr_fixture(s_pixels, QR_AUTOSCAN_W, QR_AUTOSCAN_H, 0U);
     for(unsigned y = 0U; y < QR_AUTOSCAN_H * 2U; y++)
         for(unsigned x = 0U; x < QR_AUTOSCAN_W * 2U; x++)
             s_vga_pixels[y * QR_AUTOSCAN_W * 2U + x] = s_pixels[y / 2U * QR_AUTOSCAN_W + x / 2U];
+    pack_qr_fixture_dvp(s_vga_pixels, QR_AUTOSCAN_W * QR_AUTOSCAN_H * 4U);
     qr_service_submit_frame(s_vga_pixels, QR_AUTOSCAN_W * 2U, QR_AUTOSCAN_H * 2U, 1U, NULL);
     assert(qr_service_poll_decode() == QR_DECODE_IDLE);
     memset(s_vga_pixels, 255, sizeof(s_vga_pixels)); /* The camera may reuse its slot. */

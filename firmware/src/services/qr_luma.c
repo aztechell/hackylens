@@ -8,16 +8,17 @@ static uint8_t qr_rgb565_luma(uint16_t color)
     return (uint8_t)(((uint16_t)r * 30U + (uint16_t)g * 59U + (uint16_t)b * 11U) / 100U);
 }
 
-void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image)
+void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image, uint8_t mode)
 {
     enum { WIDTH = 320, HEIGHT = 240, RADIUS = 8, BIAS = 3 };
     uint16_t columns[WIDTH] = {0};
     unsigned top = 0U;
     unsigned bottom = RADIUS;
+    const unsigned pair_xor = (mode & QR_LUMA_DVP_PAIRS) != 0U;
 
     for(unsigned y = 0U; y <= bottom; y++)
         for(unsigned x = 0U; x < WIDTH; x++)
-            columns[x] += qr_rgb565_luma(src[y * WIDTH + x]);
+            columns[x] += qr_rgb565_luma(src[y * WIDTH + (x ^ pair_xor)]);
 
     for(unsigned y = 0U; y < HEIGHT; y++)
     {
@@ -30,7 +31,7 @@ void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image)
 
         for(unsigned x = 0U; x < WIDTH; x++)
         {
-            unsigned luma = qr_rgb565_luma(src[y * WIDTH + x]);
+            unsigned luma = qr_rgb565_luma(src[y * WIDTH + (x ^ pair_xor)]);
             unsigned samples = rows * (right - left + 1U);
             image[y * WIDTH + x] = (luma + BIAS) * samples < sum ? 0U : 255U;
             if(x >= RADIUS)
@@ -43,13 +44,13 @@ void qr_luma_fill_local_qvga(const volatile uint16_t *src, uint8_t *image)
         {
             const volatile uint16_t *old_row = src + top++ * WIDTH;
             for(unsigned x = 0U; x < WIDTH; x++)
-                columns[x] -= qr_rgb565_luma(old_row[x]);
+                columns[x] -= qr_rgb565_luma(old_row[x ^ pair_xor]);
         }
         if(bottom + 1U < HEIGHT)
         {
             const volatile uint16_t *new_row = src + ++bottom * WIDTH;
             for(unsigned x = 0U; x < WIDTH; x++)
-                columns[x] += qr_rgb565_luma(new_row[x]);
+                columns[x] += qr_rgb565_luma(new_row[x ^ pair_xor]);
         }
     }
 }
@@ -71,6 +72,8 @@ void qr_luma_fill_image(const volatile uint16_t *src,
     uint8_t min = stats ? stats->min : 0;
     uint8_t max = stats ? stats->max : 0;
     uint16_t range = max > min ? (uint16_t)(max - min) : 0;
+    /* K210 DVP stores the right pixel in the low half of each RGB565 word. */
+    const uint16_t pair_xor = (mode & QR_LUMA_DVP_PAIRS) != 0U && (src_stride & 1U) == 0U;
 
     if(update_stats)
     {
@@ -84,7 +87,7 @@ void qr_luma_fill_image(const volatile uint16_t *src,
         for(uint16_t x = 0; x < width; x++)
         {
             uint16_t src_x = (uint16_t)(src_x0 + (((uint32_t)x * src_w) / width));
-            uint8_t luma = qr_rgb565_luma(src[(uint32_t)src_y * src_stride + src_x]);
+            uint8_t luma = qr_rgb565_luma(src[(uint32_t)src_y * src_stride + (src_x ^ pair_xor)]);
 
             if(update_stats)
             {

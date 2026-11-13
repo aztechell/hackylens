@@ -432,6 +432,15 @@ def write_project_cmake(
         *(f'    "{cmake_path(path)}"' for path in allowed_app_includes),
         ")",
     ]
+    if "qr-camera" not in (disabled_apps or set()):
+        # K210 has a single-precision FPU. Use it for quirc's grid fitting
+        # and select math functions that keep the calculations in float.
+        lines.extend([
+            "target_compile_definitions(${PROJECT_NAME} PRIVATE",
+            "    QUIRC_FLOAT_TYPE=float",
+            "    QUIRC_USE_FLOAT_MATH",
+            ")",
+        ])
     if package is not None:
         sources = [
             path for path in sorted(package.rglob("*.c"))

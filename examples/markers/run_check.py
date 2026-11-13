@@ -15,10 +15,8 @@ from hmpy_client import HmpyClient, open_serial_transport
 from hmpy_protocol import MessageType
 
 ACTIVE_STATES = (1, 2, 3)
-PASS_LINE = b"PASS MARKER CHECK"
 
-
-def run_check(client, marker, seconds=90):
+def run_check(client, marker, seconds=90, measure=False):
     if client.status().runtime_state in ACTIVE_STATES:
         raise RuntimeError("A Python script is already running")
 
@@ -29,6 +27,9 @@ def run_check(client, marker, seconds=90):
     source = source.replace(b'MODE = "both"', f'MODE = "{marker}"'.encode("ascii"), 1)
     source = source.replace(b"PHASE_TIMEOUT_MS = 90000",
                             f"PHASE_TIMEOUT_MS = {seconds * 1000}".encode("ascii"), 1)
+    if measure:
+        source = source.replace(b"MEASURE = False", b"MEASURE = True", 1)
+    completion_line = b"MEASUREMENT COMPLETE" if measure else b"PASS MARKER CHECK"
     timeout_ms = (seconds * (2 if marker == "both" else 1) + 15) * 1000
     run_id = None
     output = bytearray()
@@ -53,7 +54,7 @@ def run_check(client, marker, seconds=90):
                     sys.stderr.buffer.flush()
             client.events.clear()
             if status.run_id == run_id and status.runtime_state not in ACTIVE_STATES:
-                if status.exit_reason == 1 and PASS_LINE in output.splitlines():
+                if status.exit_reason == 1 and completion_line in output.splitlines():
                     return
                 raise RuntimeError(f"Marker check failed (exit reason {status.exit_reason})")
         raise TimeoutError("No final state received from the board")
@@ -77,9 +78,12 @@ def main():
     parser.add_argument("--board", required=True, choices=("huskylens-sen0305", "sipeed-maix-cube"))
     parser.add_argument("--marker", choices=("both", "qr", "apriltag"), default="both")
     parser.add_argument("--seconds", type=int, default=90, help="time allowed per marker")
+    parser.add_argument("--measure", action="store_true", help="measure every frame for the full interval")
     args = parser.parse_args()
     if not 1 <= args.seconds <= 90:
         parser.error("--seconds must be between 1 and 90")
+    if args.measure and args.marker == "both":
+        parser.error("--measure requires one marker to be in view before the run")
     with open_serial_transport(serial, args.port, 115200, timeout=0.05, write_timeout=2) as port:
         client = HmpyClient(port)
         client.open()
@@ -88,7 +92,7 @@ def main():
             if info.board != args.board:
                 raise RuntimeError(f"Expected {args.board}, got {info.board}")
             print(info.board, info.firmware_version, flush=True)
-            run_check(client, args.marker, args.seconds)
+            run_check(client, args.marker, args.seconds, measure=args.measure)
         finally:
             client.close()
 

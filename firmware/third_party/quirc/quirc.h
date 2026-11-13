@@ -166,6 +166,12 @@ int quirc_count(const struct quirc *q);
 void quirc_extract(const struct quirc *q, int index,
 		   struct quirc_code *code);
 
+/* Re-extract a grid with the sample moved by one fifth of a cell along
+ * each axis. Each direction is -1, 0, or 1.
+ */
+void quirc_extract_offset(const struct quirc *q, int index,
+			  struct quirc_code *code, int dx, int dy);
+
 /* Decode a QR-code, returning the payload data. */
 quirc_decode_error_t quirc_decode(const struct quirc_code *code,
 				  struct quirc_data *data);

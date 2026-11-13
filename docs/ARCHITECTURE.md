@@ -208,9 +208,12 @@ do not include feature headers or select features with conditionals.
 CAMERA owns photo capture orchestration, the file writer and paths, settings,
 and its view. The shared photo encoder also serves MicroPython's BMP output.
 QR-CAMERA owns its scan scheduling, result view, text persistence and settings.
-It uses the same quirc wrapper and luma converter as MicroPython. Both native
-apps reuse the shared camera session, sensor and frame pipeline, preview
-renderer, and settings persistence.
+It uses the same quirc wrapper and luma converter as MicroPython. The
+converter restores the order of RGB565 pixel pairs from the K210 DVP
+buffer. Quirc fits the grid using the K210's single-precision FPU and
+tries nearby sample positions if the center samples fail to decode.
+Both native apps reuse the shared camera session, sensor and frame
+pipeline, preview renderer, and settings persistence.
 
 A stalled DVP conversion is rearmed in place. Ready frames and outstanding
 leases remain valid across recovery.
@@ -292,9 +295,13 @@ and cleanup while FACE was active. The user confirmed POW/BACK navigation
 after PMIC bus recovery. See the [v0.5.0 release notes](releases/v0.5.0.md)
 and the [Cube hardware log](MAIX_CUBE.md) for the tested builds and scenarios.
 
-The [Cube hardware log](MAIX_CUBE.md#micropython-qr-and-apriltag-checks-2026-11-12)
-records optical AprilTag recognition and intermittent QR reads through
-MicroPython. VOC20 accuracy remains to be measured on Cube.
+The Cube hardware log records [optical AprilTag recognition](MAIX_CUBE.md#micropython-qr-and-apriltag-checks-2026-11-12)
+and [QR timing on an on-screen card](MAIX_CUBE.md#qr-camera-pixel-order-2026-11-13).
+MicroPython read 20 of 20 presentations within one second. QR-CAMERA
+read 19 of 20 within one second with a reboot before each trial. A
+separate check on the build with the QR worker cache fix confirmed that
+scanning resumed on all 20 app opens without a reboot. VOC20 accuracy
+remains to be measured on Cube.
 The maintainer waived the physical exchange test for Cube's
 Grove UART/I2C. The [hardware log](MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12)
 records IDE threshold selection, physical launches, BACK and microSD output

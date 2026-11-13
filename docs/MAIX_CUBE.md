@@ -773,6 +773,53 @@ and zero binding errors. Neither card reached three consecutive matches.
 Logs are `cube-qr-final-optical.log`, `cube-qr-final-optical-repeat.log`
 and `cube-qr-final-optical-h.log` under `build/qr-apriltag-cards/`.
 
+### QR camera pixel order (2026-11-13)
+
+Two full 320 × 240 RGB565 captures of the displayed `HL` card showed
+that the K210 DVP buffer held adjacent pixels in reverse order within
+each 32-bit word. With the original order the host decoder missed both
+captures. With the pixel order corrected in the QR luminance conversion,
+both captures decoded as `HL` on the normal pass. The two dark control
+captures produced no result.
+
+In a ten-second MicroPython run on Cube, the previous firmware read 1 of
+32 scanned frames, with its first match at 3.06 seconds. With the pixel
+order correction and the grid sampling retry, a separate run with the
+same card read 8 of 9 scanned frames, including eight in a row, with its
+first match at 2.60 seconds. Neither run reported a binding error or an
+unexpected payload. These are separate live runs. The full-frame replay
+above compares the decoders on identical input. The logs are
+`cube-qr-live-baseline-metrics.log` and `cube-qr-live-dvp-repeat.log`.
+
+Quirc now uses the K210's single-precision floating-point instructions for
+grid fitting. In a ten-second run with the displayed `HL` card, the final
+build read all 38 scanned frames. The first match took 406 ms and the
+longest interval without a match was 469 ms. No unexpected payloads or
+binding errors were reported. The native QR-CAMERA app also read `HL` in
+VGA camera mode. The logs are `cube-qr-live-float-metrics.log` and
+`cube-qr-live-float-native.log`. A separate run after removing the card
+reported no results in 22 scanned frames over five seconds
+(`cube-qr-live-float-no-card.log`). These results cover one card setup.
+
+In a separate Cube test, a PC alternated the `HL` card with a blank
+white screen. The MicroPython scanner confirmed a blank frame before
+each presentation and read all 20 presentations within one second
+(442–735 ms, median 476 ms). The interval includes the time to show the
+card and receive the result over USB. The log is
+`cube-qr-20-presentations-reset.log`.
+
+The native QR-CAMERA app read 19 of 20 separate presentations within
+one second when started after a board reboot before each trial. The
+remaining presentation decoded in 1,124 ms. The card was displayed only
+after an initial scan of the blank screen. The log is
+`cube-qr-20-presentations-native-cold.log`. Earlier attempts that reopened
+QR-CAMERA without a reboot stopped producing scans after several app
+transitions. The native worker exchange occupied part of the same cache
+line as QR settings. After padding the exchange to whole cache lines,
+Cube completed scans on all 20 consecutive app opens without rebooting.
+This separate check exercised scanner restart without measuring
+presentation latency (`cube-qr-reopen-check.log`).
+
 ## Python launcher checks (2026-11-12)
 
 The full launcher builds booted on both boards and accepted `VPTEST.py` over

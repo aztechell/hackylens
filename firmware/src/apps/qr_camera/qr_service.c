@@ -17,7 +17,9 @@
 _Static_assert(QR_PAYLOAD_MAX - 1U == VISION_RESULT_MAX_QR_BYTES,
                "QR decoder and vision results must retain the same payload size");
 
-typedef struct
+/* Both cores use the uncached alias. Keep cached neighbors out of every
+ * cache line occupied by the exchange, including the last one. */
+typedef struct __attribute__((aligned(64)))
 {
     uint8_t *image;
     uint16_t width;
@@ -25,7 +27,9 @@ typedef struct
     qr_engine_scan_t scan;
 } qr_worker_exchange_t;
 
-static qr_worker_exchange_t g_exchange_storage __attribute__((aligned(64)));
+_Static_assert(sizeof(qr_worker_exchange_t) % 64U == 0U,
+               "QR worker exchange must occupy complete cache lines");
+static qr_worker_exchange_t g_exchange_storage;
 static qr_decoder_engine_t g_decoder;
 static uint32_t g_qr_ticket;
 static uint8_t g_decoder_open;
@@ -144,7 +148,8 @@ static uint8_t qr_submit_scan(const volatile uint16_t *pixels, uint16_t width,
     qr_worker_exchange_t *exchange = qr_exchange();
 
     qr_luma_fill_image(pixels, exchange->image, exchange->width, exchange->height,
-                       width, 0U, 0U, width, height, mode, update_stats, &g_luma);
+                       width, 0U, 0U, width, height, mode | QR_LUMA_DVP_PAIRS,
+                       update_stats, &g_luma);
     g_scan_width = width;
     g_scan_height = height;
     g_qr_ticket = core1_executor_submit(qr_worker_scan, exchange);

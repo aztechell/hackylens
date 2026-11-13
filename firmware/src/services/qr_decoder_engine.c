@@ -11,6 +11,26 @@ static uint16_t qr_clip_coordinate(int coordinate, uint16_t extent)
     return coordinate < extent ? (uint16_t)coordinate : (uint16_t)(extent - 1U);
 }
 
+static uint8_t qr_decode_candidate(const struct quirc *decoder, int index,
+                                   struct quirc_code *code, struct quirc_data *data)
+{
+    /* Retry sampling inside each module using the grid already found. */
+    static const int8_t offsets[][2] = {{0, 0}, {0, 1}, {1, 0}, {-1, 0}, {0, -1}};
+    for(size_t i = 0U; i < sizeof(offsets) / sizeof(offsets[0]); i++)
+    {
+        quirc_extract_offset(decoder, index, code, offsets[i][0], offsets[i][1]);
+        quirc_decode_error_t error = quirc_decode(code, data);
+        if(error == QUIRC_SUCCESS)
+            return 1U;
+        if(error == QUIRC_ERROR_INVALID_GRID_SIZE || error == QUIRC_ERROR_INVALID_VERSION)
+            return 0U;
+        quirc_flip(code);
+        if(quirc_decode(code, data) == QUIRC_SUCCESS)
+            return 1U;
+    }
+    return 0U;
+}
+
 void qr_decoder_engine_close(qr_decoder_engine_t *engine)
 {
     if(engine->decoder)
@@ -49,16 +69,7 @@ void qr_decoder_engine_scan(qr_decoder_engine_t *engine,
 
     for(int index = 0; index < scan->code_count; index++)
     {
-        quirc_decode_error_t error;
-
-        quirc_extract(engine->decoder, index, &code);
-        error = quirc_decode(&code, &data);
-        if(error != QUIRC_SUCCESS)
-        {
-            quirc_flip(&code);
-            error = quirc_decode(&code, &data);
-        }
-        if(error == QUIRC_SUCCESS)
+        if(qr_decode_candidate(engine->decoder, index, &code, &data))
         {
             scan->found = 1U;
             scan->x0 = engine->width - 1U;

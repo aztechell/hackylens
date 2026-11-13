@@ -41,11 +41,11 @@ hk_result_t micropython_camera_codes_stage(const void *owner, uint32_t lease,
         if(!qr_image || frame.width != PYTHON_QR_WIDTH || frame.height != PYTHON_QR_HEIGHT)
             return HK_ERR_INVALID_ARGUMENT;
         if(mode == QR_PASS_LOCAL)
-            qr_luma_fill_local_qvga(frame.pixels, qr_image);
+            qr_luma_fill_local_qvga(frame.pixels, qr_image, QR_LUMA_DVP_PAIRS);
         else
             qr_luma_fill_image(frame.pixels, qr_image, frame.width, frame.height,
                                frame.width, 0U, 0U, frame.width, frame.height,
-                               mode, 0U, NULL);
+                               mode | QR_LUMA_DVP_PAIRS, 0U, NULL);
         break;
     }
 #endif
