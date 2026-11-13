@@ -362,4 +362,5 @@ results, and `python tools/check_arch.py` for the layer/dependency guard.
 CI builds the full firmware for both boards and checks each app composition.
 It also checks reduced SEN0305 builds. On a release tag, CI validates each
 full image against its board-specific sidecar and attestation, then packages
-one ZIP per board with `tools/package_release_bundles.py`.
+one firmware ZIP per board and one shared SD-card ZIP with
+`tools/package_release_bundles.py`.

@@ -86,11 +86,11 @@ Its `ACCELEROMETER` app shows live X/Y/Z readings from the built-in MSA301.
 ## SD models
 
 The tracked `sdcard/` directory mirrors the card root. Copy its contents onto
-a FAT32 card so `hackylens.kmodels` is at the root. It includes the FACE model
-and the verified VOC20 OBJECT package. See [AI models](docs/AI_MODELS.md) for
-the exact model contract and reproducible fetch/package command. FACE RECOG
-also needs two CanMV model files installed separately. See
-[FACE RECOG setup](docs/FACE_RECOGNITION.md#install-the-models).
+a FAT32 card so `hackylens.kmodels` is at the root. It includes the FACE detector,
+the two CanMV models for FACE RECOG, and the verified VOC20 OBJECT package. See
+[AI models](docs/AI_MODELS.md) for the model contracts and
+[FACE RECOG setup](docs/FACE_RECOGNITION.md#install-the-models) for the CanMV
+model hashes and license.
 
 ## Build
 
@@ -138,13 +138,15 @@ feature-disabled builds are not release-qualified.
 
 Tagged releases are automated by `.github/workflows/release.yml`. A pushed
 `vX.Y.Z` tag must match `VERSION`; CI builds full firmware for SEN0305 and Maix
-Cube. The release contains exactly two complete board ZIPs,
+Cube. The release contains two firmware ZIPs,
 `hackylens-huskylens-sen0305-v<version>.zip` and
-`hackylens-sipeed-maix-cube-v<version>.zip`, plus `SHA256SUMS.txt`.
-Each ZIP contains the binary, same-stem flasher JSON, build attestation, release
-manifest, SD-card model ZIP, dependency manifest, third-party notices ZIP, and
-internal SHA-256 checksums. Extract the board ZIP before selecting its `.bin`
-in a flasher; keep its same-stem `.json` alongside it.
+`hackylens-sipeed-maix-cube-v<version>.zip`, one shared
+`hackylens-sdcard-v<version>.zip` and `SHA256SUMS.txt` covering all three.
+Each firmware ZIP contains the binary, same-stem flasher JSON, build attestation,
+release manifest, dependency manifest, third-party notices ZIP and internal
+SHA-256 checksums. Extract the board ZIP and keep the `.bin` and its same-stem
+`.json` together when flashing. Copy the contents of `sdcard/` from the shared
+ZIP to the root of a FAT32 card for either board.
 
 After building both full images, create this payload locally with:
 
@@ -152,8 +154,8 @@ After building both full images, create this payload locally with:
 python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.7.0
 ```
 
-Verified flat packages are staged separately under `build\release-stage\<board>`;
-`dist\release` contains only the two public ZIPs and their checksums. Packaging
+Verified firmware packages are staged under `build\release-stage\<board>`.
+`dist\release` contains the three public ZIPs and their checksums. Packaging
 refuses unexpected files in either output. The existing `package_release.py
 --board <board> --out-dir <directory>` interface remains available for flat
 packages. Release notes come from `docs/releases/<tag>.md` when present.

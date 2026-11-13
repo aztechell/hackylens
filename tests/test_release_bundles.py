@@ -69,18 +69,27 @@ class ReleaseBundleTests(unittest.TestCase):
     def update_outer_sums(self):
         (self.output / "SHA256SUMS.txt").write_text("".join(
             f"{bundles.package_release.sha256(self.output / name)}  {name}\n"
-            for name in sorted(bundles.bundle_names(self.version))
+            for name in sorted(bundles.bundle_names(self.version) | {bundles.sdcard_name(self.version)})
         ), encoding="ascii")
 
-    def test_complete_board_packages_preserve_flat_contract_and_hashes(self):
+    def test_complete_board_packages_reference_one_shared_sdcard_archive(self):
         self.assertEqual(self.package(), 0)
+        shared = bundles.sdcard_name(self.version)
+        shared_hash = bundles.package_release.sha256(self.output / shared)
         self.assertEqual({p.name for p in self.output.iterdir()},
-                         bundles.bundle_names(self.version) | {"SHA256SUMS.txt"})
-        self.assertEqual(len(bundles.verify_public(self.output, self.version)), 3)
+                         bundles.bundle_names(self.version) | {shared, "SHA256SUMS.txt"})
+        self.assertEqual(len(bundles.verify_public(self.output, self.version)), 4)
+        with zipfile.ZipFile(self.output / shared) as archive:
+            self.assertEqual(archive.namelist(), ["sdcard/model.txt"])
+            self.assertEqual(archive.read("sdcard/model.txt"), b"model fixture")
         for identifier in bundles.RELEASE_BOARDS:
             stem = f"hackylens-{identifier}-v{self.version}"
             with zipfile.ZipFile(self.output / f"{stem}.zip") as archive:
-                self.assertEqual(set(archive.namelist()), bundles.flat_names(identifier, self.version))
+                self.assertEqual(set(archive.namelist()), {
+                    f"{stem}.bin", f"{stem}.json", f"{stem}-attestation.json",
+                    f"{stem}-release.json", f"{stem}-third-party.json",
+                    f"{stem}-third-party-notices.zip", "SHA256SUMS.txt",
+                })
                 for name in archive.namelist():
                     self.assertEqual(archive.read(name), (self.stage / identifier / name).read_bytes())
                 metadata = json.loads(archive.read(f"{stem}.json"))
@@ -93,6 +102,8 @@ class ReleaseBundleTests(unittest.TestCase):
                 manifest = json.loads(archive.read(f"{stem}-release.json"))
                 self.assertEqual(manifest["board_id"], identifier)
                 self.assertEqual(manifest["version"], self.version)
+                self.assertEqual(manifest["sdcard"], shared)
+                self.assertEqual(manifest["sdcard_sha256"], shared_hash)
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(bundles.main([*self.args(), "--verify-only"]), 0)
 
@@ -152,6 +163,14 @@ class ReleaseBundleTests(unittest.TestCase):
                 archive.writestr(name, data)
         self.update_outer_sums()
         with self.assertRaisesRegex(SystemExit, "member checksum mismatch"):
+            bundles.verify_public(self.output, self.version)
+
+    def test_verify_rejects_sdcard_replacement_even_when_outer_checksum_matches(self):
+        self.package()
+        with zipfile.ZipFile(self.output / bundles.sdcard_name(self.version), "w") as archive:
+            archive.writestr("sdcard/model.txt", "different model")
+        self.update_outer_sums()
+        with self.assertRaisesRegex(SystemExit, "manifest does not match shared SD-card archive"):
             bundles.verify_public(self.output, self.version)
 
     def test_both_boards_and_matching_tag_are_required(self):

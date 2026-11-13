@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Wrap verified flat releases into the two public board bundles."""
+"""Publish two verified firmware bundles and their shared SD-card archive."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import re
+import shutil
 import sys
 import zipfile
 
@@ -20,17 +22,21 @@ ROOT = TOOLS_DIR.parent
 RELEASE_BOARDS = ("huskylens-sen0305", "sipeed-maix-cube")
 
 
-def flat_names(identifier: str, version: str) -> set[str]:
+def board_members(identifier: str, version: str) -> set[str]:
     stem = f"hackylens-{identifier}-v{version}"
     return {stem + suffix for suffix in (
         ".bin", ".json", "-attestation.json", "-release.json",
-        "-sdcard.zip", "-third-party.json", "-third-party-notices.zip",
+        "-third-party.json", "-third-party-notices.zip",
     )} | {"SHA256SUMS.txt"}
 
 
 def bundle_names(version: str) -> set[str]:
     return {f"hackylens-{identifier}-v{version}.zip"
             for identifier in RELEASE_BOARDS}
+
+
+def sdcard_name(version: str) -> str:
+    return f"hackylens-sdcard-v{version}.zip"
 
 
 def read_sums(text: str, expected: set[str]) -> dict[str, str]:
@@ -56,14 +62,17 @@ def exact_directory(directory: Path, expected: set[str]) -> None:
 
 
 def verify_public(directory: Path, version: str) -> list[Path]:
-    names = bundle_names(version)
+    shared_sdcard = sdcard_name(version)
+    names = bundle_names(version) | {shared_sdcard}
     exact_directory(directory, names | {"SHA256SUMS.txt"})
     checksums = read_sums((directory / "SHA256SUMS.txt").read_text(encoding="ascii"), names)
+    for name, checksum in checksums.items():
+        if package_release.sha256(directory / name) != checksum:
+            raise SystemExit(f"release bundle checksum mismatch: {name}")
     for identifier in RELEASE_BOARDS:
-        path = directory / f"hackylens-{identifier}-v{version}.zip"
-        if package_release.sha256(path) != checksums[path.name]:
-            raise SystemExit(f"release bundle checksum mismatch: {path.name}")
-        expected = flat_names(identifier, version)
+        stem = f"hackylens-{identifier}-v{version}"
+        path = directory / f"{stem}.zip"
+        expected = board_members(identifier, version)
         with zipfile.ZipFile(path) as archive:
             if len(archive.namelist()) != len(expected) or set(archive.namelist()) != expected:
                 raise SystemExit(f"release bundle contents do not match allowlist: {path.name}")
@@ -76,6 +85,10 @@ def verify_public(directory: Path, version: str) -> list[Path]:
                         digest.update(chunk)
                 if digest.hexdigest() != checksum:
                     raise SystemExit(f"release bundle member checksum mismatch: {name}")
+            manifest = json.loads(archive.read(f"{stem}-release.json"))
+            if (manifest.get("sdcard") != shared_sdcard or
+                    manifest.get("sdcard_sha256") != checksums[shared_sdcard]):
+                raise SystemExit(f"release manifest does not match shared SD-card archive: {path.name}")
     return [directory / name for name in sorted(names | {"SHA256SUMS.txt"})]
 
 
@@ -104,11 +117,16 @@ def main(argv: list[str] | None = None) -> int:
     stage_root, output_root = args.stage_dir.resolve(), args.out_dir.resolve()
     if stage_root == output_root or stage_root in output_root.parents or output_root in stage_root.parents:
         raise SystemExit("release staging and public output directories must be separate")
-    expected = bundle_names(version) | {"SHA256SUMS.txt"}
+    shared_sdcard = sdcard_name(version)
+    names = bundle_names(version) | {shared_sdcard}
+    expected = names | {"SHA256SUMS.txt"}
     package_release.ensure_allowlisted_output(args.out_dir, expected)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     package_release.validate_output_paths(args.out_dir, [args.out_dir / name for name in expected])
-    # Keep the flat API and every board/sidecar/attestation qualification gate.
+    sdcard_archive = args.stage_dir / shared_sdcard
+    package_release.validate_output_paths(args.stage_dir, [sdcard_archive])
+    args.stage_dir.mkdir(parents=True, exist_ok=True)
+    package_release.write_sdcard_archive(args.sdcard, sdcard_archive)
     stages = []
     for identifier in args.boards:
         stage = args.stage_dir / identifier
@@ -116,22 +134,21 @@ def main(argv: list[str] | None = None) -> int:
             "--board", identifier,
             "--tag", args.tag,
             "--firmware", str(args.firmware_dir / f"hackylens-full-{identifier}.bin"),
-            "--sdcard", str(args.sdcard),
+            "--sdcard-archive", str(sdcard_archive),
             "--out-dir", str(stage),
         ])
-        exact_directory(stage, flat_names(identifier, version))
+        exact_directory(stage, board_members(identifier, version))
         stages.append((identifier, stage))
     # Publish nothing until both board packages have passed qualification.
-    bundles = []
+    shutil.copy2(sdcard_archive, args.out_dir / shared_sdcard)
     for identifier, stage in stages:
         output = args.out_dir / f"hackylens-{identifier}-v{version}.zip"
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED,
                              compresslevel=9) as archive:
-            for name in sorted(flat_names(identifier, version)):
+            for name in sorted(board_members(identifier, version)):
                 archive.write(stage / name, name)
-        bundles.append(output)
     (args.out_dir / "SHA256SUMS.txt").write_text(
-        "".join(f"{package_release.sha256(path)}  {path.name}\n" for path in sorted(bundles)),
+        "".join(f"{package_release.sha256(args.out_dir / name)}  {name}\n" for name in sorted(names)),
         encoding="ascii", newline="\n",
     )
     for path in verify_public(args.out_dir, version):

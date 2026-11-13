@@ -112,8 +112,8 @@ weights, which is recorded explicitly rather than silently assigning one.
 
 ## SD staging
 
-[FACE RECOG](FACE_RECOGNITION.md) shares the FACE detector and uses two
-additional, separately supplied CanMV models for landmark and feature inference.
+[FACE RECOG](FACE_RECOGNITION.md) shares the FACE detector and uses the two
+bundled CanMV models for landmark and feature inference.
 
 The tracked `sdcard/` directory mirrors the card root. Copy its contents to a
 FAT32 card without adding another directory level:
@@ -123,6 +123,10 @@ sdcard/
 └── hackylens.kmodels/
     ├── detect.kmodel
     ├── detect.UPSTREAM.txt
+    ├── faces/
+    │   ├── ld5.kmodel
+    │   ├── feature_extraction.kmodel
+    │   └── LICENSE.CanMV
     └── object20/
         ├── model.kmodel
         ├── manifest.hkai

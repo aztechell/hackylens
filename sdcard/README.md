@@ -7,6 +7,9 @@ Expected model paths:
 ```text
 /hackylens.kmodels/detect.kmodel
 /hackylens.kmodels/detect.UPSTREAM.txt
+/hackylens.kmodels/faces/ld5.kmodel
+/hackylens.kmodels/faces/feature_extraction.kmodel
+/hackylens.kmodels/faces/LICENSE.CanMV
 /hackylens.kmodels/object20/model.kmodel
 /hackylens.kmodels/object20/manifest.hkai
 /hackylens.kmodels/object20/manifest.json
@@ -27,6 +30,7 @@ upstream commit  e89c35465fadb5524c892d2a1c7a76dc76e219ed
 See `hackylens.kmodels/detect.UPSTREAM.txt` for its exact URL and provenance
 limitations.
 
-FACE RECOG also needs `ld5.kmodel` and `feature_extraction.kmodel` in
-`/hackylens.kmodels/faces/`. Install these separately using the file sizes
-and hashes in the [FACE RECOG setup guide](https://github.com/aztechell/hackylens/blob/v0.7.0/docs/FACE_RECOGNITION.md#install-the-models).
+FACE RECOG uses the two bundled CanMV models in `/hackylens.kmodels/faces/`.
+Keep `LICENSE.CanMV` with those files. The
+[FACE RECOG setup guide](https://github.com/aztechell/hackylens/blob/main/docs/FACE_RECOGNITION.md#install-the-models)
+lists their exact sizes, hashes and upstream source.

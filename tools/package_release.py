@@ -176,6 +176,18 @@ def write_firmware_notices(
         archive.write(littlefs_license, "licenses/littlefs-LICENSE.md")
 
 
+def write_sdcard_archive(source: Path, destination: Path) -> None:
+    if not source.is_dir():
+        raise SystemExit(f"SD-card tree not found: {source}")
+    if destination.resolve().is_relative_to(source.resolve()):
+        raise SystemExit("SD-card archive must be outside the SD-card source tree")
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=9) as archive:
+        for path in sorted(source.rglob("*")):
+            if path.is_file():
+                archive.write(path, Path("sdcard") / path.relative_to(source))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Package a HackyLens release")
     parser.add_argument("--board", required=True, help="Canonical board.toml ID")
@@ -193,7 +205,10 @@ def main(argv: list[str] | None = None) -> int:
             "firmware stem + .attestation.json"
         ),
     )
-    parser.add_argument("--sdcard", type=Path, default=ROOT / "sdcard")
+    sdcard = parser.add_mutually_exclusive_group()
+    sdcard.add_argument("--sdcard", type=Path, default=ROOT / "sdcard")
+    sdcard.add_argument("--sdcard-archive", type=Path,
+                        help="Reference an existing shared SD-card ZIP in the release manifest")
     parser.add_argument("--out-dir", type=Path,
                         default=ROOT / "dist" / "release")
     parser.add_argument("--tag", help="Expected release tag, for example v0.4.0")
@@ -239,8 +254,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     except AttestationError as exc:
         raise SystemExit(f"build attestation validation failed: {exc}") from exc
-    if not args.sdcard.is_dir():
-        raise SystemExit(f"SD-card tree not found: {args.sdcard}")
+    if args.sdcard_archive is None:
+        if not args.sdcard.is_dir():
+            raise SystemExit(f"SD-card tree not found: {args.sdcard}")
+    elif not args.sdcard_archive.is_file():
+        raise SystemExit(f"shared SD-card archive not found: {args.sdcard_archive}")
     flash_layout = flash_layout_document(board)
     flash = board.flash
     partitions = board.partitions
@@ -248,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
 
     artifact_stem = f"hackylens-{board.id}-v{version}"
     firmware_out = args.out_dir / f"{artifact_stem}.bin"
-    sdcard_out = args.out_dir / f"{artifact_stem}-sdcard.zip"
+    sdcard_path = args.sdcard_archive or args.out_dir / f"{artifact_stem}-sdcard.zip"
     metadata_out = args.out_dir / f"{artifact_stem}.json"
     attestation_out = args.out_dir / f"{artifact_stem}-attestation.json"
     release_manifest_out = args.out_dir / f"{artifact_stem}-release.json"
@@ -259,25 +277,13 @@ def main(argv: list[str] | None = None) -> int:
         args.out_dir / f"{artifact_stem}-third-party-notices.zip"
     )
     sums_out = args.out_dir / "SHA256SUMS.txt"
-    expected_names = {
-        firmware_out.name,
-        sdcard_out.name,
-        metadata_out.name,
-        attestation_out.name,
-        release_manifest_out.name,
-        dependencies_out.name,
-        notices_out.name,
-        sums_out.name,
-    }
-    ensure_allowlisted_output(args.out_dir, expected_names)
+    artifacts = [firmware_out, attestation_out, dependencies_out, notices_out,
+                 metadata_out, release_manifest_out]
+    if args.sdcard_archive is None:
+        artifacts.insert(2, sdcard_path)
+    ensure_allowlisted_output(args.out_dir, {path.name for path in (*artifacts, sums_out)})
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    validate_output_paths(
-        args.out_dir,
-        [
-            firmware_out, sdcard_out, metadata_out, attestation_out,
-            release_manifest_out, dependencies_out, notices_out, sums_out,
-        ],
-    )
+    validate_output_paths(args.out_dir, [*artifacts, sums_out])
 
     shutil.copy2(args.firmware, firmware_out)
     shutil.copy2(source_attestation, attestation_out)
@@ -292,11 +298,8 @@ def main(argv: list[str] | None = None) -> int:
     except AttestationError as exc:
         raise SystemExit(f"copied build attestation validation failed: {exc}") from exc
     write_sidecar(metadata_out, firmware_out, board)
-    with zipfile.ZipFile(sdcard_out, "w", compression=zipfile.ZIP_DEFLATED,
-                         compresslevel=9) as archive:
-        for path in sorted(args.sdcard.rglob("*")):
-            if path.is_file():
-                archive.write(path, Path("sdcard") / path.relative_to(args.sdcard))
+    if args.sdcard_archive is None:
+        write_sdcard_archive(args.sdcard, sdcard_path)
     write_firmware_notices(dependencies_out, notices_out, version)
 
     release_manifest = {
@@ -312,8 +315,8 @@ def main(argv: list[str] | None = None) -> int:
         "firmware_sidecar_sha256": sha256(metadata_out),
         "firmware_attestation": attestation_out.name,
         "firmware_attestation_sha256": sha256(attestation_out),
-        "sdcard": sdcard_out.name,
-        "sdcard_sha256": sha256(sdcard_out),
+        "sdcard": sdcard_path.name,
+        "sdcard_sha256": sha256(sdcard_path),
         "flash_address": f"0x{firmware_partition['offset']:08X}",
         "flash_layout_sha256": flash_layout_sha256(board),
         "flash_layout": flash_layout,
@@ -338,10 +341,6 @@ def main(argv: list[str] | None = None) -> int:
         encoding="utf-8",
         newline="\n",
     )
-    artifacts = [
-        firmware_out, attestation_out, sdcard_out, dependencies_out, notices_out
-    ]
-    artifacts.extend((metadata_out, release_manifest_out))
     sums_out.write_text(
         "".join(f"{sha256(path)}  {path.name}\n" for path in artifacts),
         encoding="ascii")

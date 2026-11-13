@@ -5,21 +5,21 @@ previously enrolled faces on the device and assigns an ID from 01 to 10.
 
 ## Install the models
 
-Copy the bundled FACE DETECT model from `sdcard/hackylens.kmodels/detect.kmodel`
-to `/hackylens.kmodels/detect.kmodel` on a FAT32 microSD card. Put the two files
-from the [01Studio CanMV K210 face-recognition example][canmv] in
-`/hackylens.kmodels/faces/`. The [01Studio resource package][resources] contains
-the example files.
+Copy the contents of `sdcard/` to the root of a FAT32 microSD card. The shared
+SD-card release ZIP contains the same directory. FACE RECOG uses the bundled
+FACE DETECT model at `/hackylens.kmodels/detect.kmodel` and these two models in
+`/hackylens.kmodels/faces/`.
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
 | `ld5.kmodel` | 159,768 | `521e67a5901b3f5a31be14d4f52c25e3d4a9ff5ff8e0f48bbf6134cdc712d49e` |
 | `feature_extraction.kmodel` | 1,108,368 | `994a7ea039ab25e759c8249d1ade2d2ce3d528e22d4a80c75dd2bf0203598f3d` |
 
-The firmware validates the exact landmark and feature models by CRC32 and
-tensor contract. These two weight files are supplied separately from the
-firmware. The public example describes their use but does not specify a
-separate license for the pretrained weights.
+The firmware validates the landmark and feature models by CRC32 and tensor
+contract. Both files come from Canaan's [CanMV examples][canmv_models] at
+revision `4dddecbf3948d35224be88cb6593ef95293a60fc`. The
+[upstream license](../sdcard/hackylens.kmodels/faces/LICENSE.CanMV) accompanies
+both models in the SD-card archive.
 
 ## Learn, recognize and forget
 
@@ -78,6 +78,6 @@ OK on each board. Both showed FACE SAVED and reported repeated matches before
 reset. Both reloaded ID01 from their cards after a hardware reset.
 
 [canmv]: https://wiki.01studio.cc/en/docs/canmv_k210/machine_vision/face_recognition/
-[resources]: https://wiki.01studio.cc/en/docs/canmv_k210/download/
+[canmv_models]: https://github.com/kendryte/canmv_examples/tree/4dddecbf3948d35224be88cb6593ef95293a60fc/01-K210/98-KPU_NEW/face_recognization
 [maixpy]: https://wiki.sipeed.com/soft/maixpy/en/course/ai/image/face_recognization.html
 [husky]: https://wiki.dfrobot.com/sen0305/docs/22612
