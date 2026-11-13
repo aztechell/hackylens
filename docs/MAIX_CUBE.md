@@ -831,6 +831,15 @@ duplicated edges. A fresh LCD screenshot at 160 × 120 confirmed the
 correction on Cube. Captures and the renderer comparison are under
 `build/camera-160-diagnostics/`.
 
+The same target reproduced broken diagonals and doubled vertical edges on
+SEN0305 at 160 × 120. Replaying its captured frame through the corrected
+preview removed both artifacts. After flashing the fix, the maintainer
+confirmed the correction on the SEN0305 LCD.
+
+CAMERA photo export and MicroPython's `camera_save()` now apply the same
+RGB565 pixel ordering when encoding a photo. Host checks cover the
+snapshot pixel reader at all three camera sizes on both board profiles.
+
 ## Python launcher checks (2026-11-12)
 
 The full launcher builds booted on both boards and accepted `VPTEST.py` over

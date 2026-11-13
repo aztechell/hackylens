@@ -36,6 +36,7 @@
 #endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "micropython_camera_codes.h"
+#include "../../core/camera_pixel_order.h"
 #include "../../services/camera_client.h"
 #include "../../services/camera_photo_encode.h"
 #include "../../services/camera_vision_client.h"
@@ -533,9 +534,9 @@ static micropython_binding_result_t binding_storage_result(script_sd_result_t re
 static uint16_t binding_save_pixel(void *context, uint32_t x, uint32_t y)
 {
     const camera_preview_frame_t *frame = context;
-    uint32_t offset = frame->rotate ?
-        (frame->height - 1U - x) * frame->width + y : y * frame->width + x;
-    return frame->pixels[offset];
+    const uint32_t src_x = frame->rotate ? y : x;
+    const uint32_t src_y = frame->rotate ? frame->height - 1U - x : y;
+    return frame->pixels[src_y * frame->width + (src_x ^ camera_dvp_pair_xor(frame->width))];
 }
 
 typedef struct

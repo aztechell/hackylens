@@ -14,7 +14,8 @@
 
 static camera_size_t requested_size;
 static uint16_t capture_width, capture_height;
-static uint16_t pixels[1];
+static uint16_t pixels[641];
+static const uint16_t *snapshot_pixels;
 static unsigned released, capture_calls, init_calls, probe_calls, config_calls, light_restores;
 static hk_result_t init_result, probe_result, config_result;
 static uint8_t wrong_id, control_available = 1;
@@ -61,7 +62,7 @@ uint8_t camera_capture_start(uint16_t width, uint16_t height, uint8_t burst, cam
 uint8_t camera_capture_acquire(camera_capture_frame_t *frame)
 { *frame = (camera_capture_frame_t){pixels, 1, 1}; return 1; }
 void camera_capture_release(uint32_t lease_id) { assert(lease_id == 1); released++; }
-const uint16_t *camera_capture_snapshot_pixels(void) { return NULL; }
+const uint16_t *camera_capture_snapshot_pixels(void) { return snapshot_pixels; }
 hk_result_t camera_sensor_init_bus(uint32_t *xclk, uint32_t *sccb)
 { init_calls++; *xclk = 22000000; *sccb = 100000; return init_result; }
 hk_result_t camera_sensor_probe_id(uint16_t *mid, uint16_t *pid)
@@ -105,6 +106,25 @@ int main(int argc, char **argv)
                 assert(capture_width == frame.width && capture_height == frame.height);
                 camera_service_preview_release(&frame);
                 assert(frame.lease_id == 0);
+
+                /* The photo reader must undo the packed order, even at row edges.
+                 * The raw snapshot API still exposes the original DVP buffer. */
+                const uint8_t *raw = NULL;
+                pixels[0] = 0x07e0U;
+                pixels[1] = 0xf800U;
+                pixels[expected_width - 2U] = 0xffffU;
+                pixels[expected_width - 1U] = 0x001fU;
+                pixels[expected_width] = 0x1234U;
+                snapshot_pixels = pixels;
+                assert(camera_service_frame_snapshot(1U, &raw, NULL, NULL, NULL));
+                assert(raw == (const uint8_t *)pixels && pixels[0] == 0x07e0U);
+                assert(camera_service_frame_pixel(0U, 0U) == 0xf800U);
+                assert(camera_service_frame_pixel(1U, 0U) == 0x07e0U);
+                assert(camera_service_frame_pixel(expected_width - 2U, 0U) == 0x001fU);
+                assert(camera_service_frame_pixel(expected_width - 1U, 0U) == 0xffffU);
+                assert(camera_service_frame_pixel(1U, 1U) == 0x1234U);
+                camera_service_frame_snapshot_done(1U);
+                snapshot_pixels = NULL;
                 camera_stop();
                 assert(!camera_session_ready());
                 camera_service_clear_mode();

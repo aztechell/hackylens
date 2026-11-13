@@ -2,13 +2,15 @@
 
 #include "camera_capture.h"
 #include "internal/camera_session_state.h"
+#include "../core/camera_pixel_order.h"
 
 uint16_t camera_service_frame_pixel(uint32_t x, uint32_t y)
 {
     const uint16_t *src = camera_capture_snapshot_pixels();
     if(!src)
         return 0;
-    return src[y * camera_session_width() + x];
+    const uint32_t width = camera_session_width();
+    return src[y * width + (x ^ camera_dvp_pair_xor(width))];
 }
 
 void camera_service_frame_info(uint16_t *width, uint16_t *height)

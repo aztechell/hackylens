@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "../config/display_config.h"
+#include "../core/camera_pixel_order.h"
 
 #include "../ui/display_binding.h"
 
@@ -177,7 +178,7 @@ uint8_t camera_view_compose_frame(const camera_view_frame_t *frame, camera_view_
         memset(surface.rgb565_be, 0, (uint32_t)surface.stride_bytes * surface.height);
     /* Undo the DVP's pixel pairing in sensor coordinates, before rotation
      * and scaling reach the LCD. Camera capture widths are even. */
-    const uint32_t pair_xor = (frame->width & 1U) == 0U;
+    const uint32_t pair_xor = camera_dvp_pair_xor(frame->width);
     if(!camera_view_compose_direct(frame, &surface, &viewport, pair_xor))
     {
         camera_view_prepare_maps(&viewport);

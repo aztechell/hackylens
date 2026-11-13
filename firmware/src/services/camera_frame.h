@@ -13,6 +13,7 @@ typedef struct
     uint32_t sequence;
 } camera_preview_frame_t;
 
+/* Read a snapshot pixel in logical sensor order, before mounting rotation. */
 uint16_t camera_service_frame_pixel(uint32_t x, uint32_t y);
 void camera_service_frame_info(uint16_t *width, uint16_t *height);
 uint8_t camera_service_preview_acquire(camera_preview_frame_t *frame);

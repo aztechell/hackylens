@@ -1,5 +1,7 @@
 #include "qr_luma.h"
 
+#include "../core/camera_pixel_order.h"
+
 static uint8_t qr_rgb565_luma(uint16_t color)
 {
     uint8_t r = (uint8_t)((color >> 8) & 0xF8U);
@@ -72,8 +74,7 @@ void qr_luma_fill_image(const volatile uint16_t *src,
     uint8_t min = stats ? stats->min : 0;
     uint8_t max = stats ? stats->max : 0;
     uint16_t range = max > min ? (uint16_t)(max - min) : 0;
-    /* K210 DVP stores the right pixel in the low half of each RGB565 word. */
-    const uint16_t pair_xor = (mode & QR_LUMA_DVP_PAIRS) != 0U && (src_stride & 1U) == 0U;
+    const uint32_t pair_xor = (mode & QR_LUMA_DVP_PAIRS) ? camera_dvp_pair_xor(src_stride) : 0U;
 
     if(update_stats)
     {
