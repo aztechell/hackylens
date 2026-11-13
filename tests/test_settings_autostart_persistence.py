@@ -29,7 +29,8 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="hackylens-settings-autostart-") as directory:
             temporary = Path(directory)
             (temporary / "hk_config.h").write_text(
-                "#define HK_ENABLE_CAMERA_FEATURE 0\n", encoding="utf-8"
+                "#define HK_ENABLE_CAMERA_FEATURE 0\n"
+                "#define HACKYLENS_VERSION \"host\"\n", encoding="utf-8"
             )
             executable = temporary / (
                 "settings_autostart.exe" if os.name == "nt" else "settings_autostart"
@@ -40,11 +41,18 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware/src/services'}",
                 f"-I{ROOT / 'firmware/src/storage'}",
                 f"-I{ROOT / 'firmware/src/config'}",
+                f"-I{ROOT / 'sdk/include'}",
+                f"-I{ROOT / 'firmware/include'}",
                 f"-I{gen_board.board_config_include_dir()}",
                 str(ROOT / "tests/settings_autostart_persistence_harness.c"),
                 str(ROOT / "firmware/src/storage/settings_store.c"),
                 str(ROOT / "firmware/src/services/settings_payload_codec.c"),
+                str(ROOT / "firmware/src/services/settings_persistence.c"),
+                str(ROOT / "firmware/src/services/settings_service.c"),
+                str(ROOT / "firmware/src/apps/settings/settings_menu.c"),
+                str(ROOT / "firmware/src/controllers/settings_menu_controller.c"),
                 str(ROOT / "firmware/src/core/hk_binary.c"),
+                str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(

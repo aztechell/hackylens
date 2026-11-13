@@ -39,7 +39,7 @@ void apriltag_view_compose_results(camera_view_present_t *present,
     view.fit = CAMERA_PREVIEW_FIT;
     for(uint8_t i = 0U; i < count; i++)
         camera_view_compose_rects(present, &view, &rects[i], 1U,
-                                  selected && selected[i] ? APRILTAG_SELECTED_COLOR : COLOR_TERM_GREEN);
+                                  selected && selected[i] ? APRILTAG_SELECTED_COLOR : hk_ui_accent());
 
     for(uint8_t i = 0; i < count; i++)
     {
@@ -66,7 +66,7 @@ void apriltag_view_compose_results(camera_view_present_t *present,
         if(label_y + HACKYLENS_FONT_H > present->height)
             label_y = present->height > HACKYLENS_FONT_H ? present->height - HACKYLENS_FONT_H : 0;
         camera_view_compose_text_at(present, label_x, label_y, label,
-                                    selected && selected[i] ? APRILTAG_SELECTED_COLOR : COLOR_TERM_GREEN,
+                                    selected && selected[i] ? APRILTAG_SELECTED_COLOR : hk_ui_accent(),
                                     COLOR_BLACK);
     }
     camera_view_compose_crosshair(present, present->width / 2U, present->height / 2U, COLOR_WHITE);

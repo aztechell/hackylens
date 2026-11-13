@@ -5,6 +5,7 @@
 #include "app_runtime_host_support.h"
 #include "../firmware/src/apps/settings/settings_app.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
+#include "../firmware/src/storage/fat32_volume.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
@@ -39,6 +40,33 @@ static const settings_menu_definition_t s_definition = {
 const settings_menu_definition_t *settings_app_menu_definition(void)
 {
     return &s_definition;
+}
+
+const settings_menu_definition_t *settings_app_page_definition(settings_page_t page)
+{
+    (void)page;
+    return &s_definition;
+}
+
+const settings_menu_definition_t *settings_app_startup_choices(settings_startup_choices_t *choices)
+{
+    (void)choices;
+    return &s_definition;
+}
+
+uint8_t topbar_sd_mounted(void)
+{
+    return 1U;
+}
+
+void sd_service_watch_usage(uint8_t watch)
+{
+    (void)watch;
+}
+
+fat32_usage_t fat32_usage(void)
+{
+    return (fat32_usage_t){0};
 }
 
 void settings_menu_view_open(const char *title)

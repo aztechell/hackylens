@@ -14,6 +14,7 @@ static uint16_t g_fill_h;
 static uint16_t g_fill_color;
 static uint8_t g_fill_count;
 static uint8_t g_centered_count;
+static uint16_t g_centered_foreground;
 
 /* Menu icon drawing is linked but is not part of this title-only fixture. */
 uint8_t hk_ui_display_frame_acquire(hk_ui_display_surface_t *surface)
@@ -77,8 +78,8 @@ void hk_ui_display_draw_text_centered(uint16_t y, const char *text,
 {
     (void)y;
     (void)text;
-    (void)foreground;
     (void)background;
+    g_centered_foreground = foreground;
     g_centered_count++;
 }
 
@@ -99,6 +100,13 @@ int main(void)
     assert(g_fill_h >= HACKYLENS_FONT_H);
     assert(g_fill_color == COLOR_BLACK);
     assert(g_centered_count == 1U);
+    assert(g_centered_foreground == 0x07e0U);
+    hk_ui_preview_color(HK_UI_COLOR_AMBER);
+    menu_draw_title("SETTINGS");
+    assert(g_centered_foreground == 0xfd60U);
+    hk_ui_preview_color(UINT8_MAX);
+    menu_draw_title("CAMERA");
+    assert(g_centered_foreground == 0x07e0U);
     puts("MENU_TITLE_HOST_OK old_object_detect_glyphs_cleared=1");
     return 0;
 }

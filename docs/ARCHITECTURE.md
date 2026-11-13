@@ -159,7 +159,27 @@ without reserving another frame-pool slot. `services/core1_executor.*`
 similarly owns the one reusable core-1 loop and accepts one bounded job at a
 time; feature modules do not replace each other's core-1 entry point.
 
-The shared `settings_menu` controller is an instance-based UI state machine driven by a constant item descriptor table and owner callbacks. Its passive view owns only LCD rendering. It has no camera, application, storage, persistence, or screen-navigation dependencies; owner controllers retain opening/closing lifecycle and all settings side effects. CAMERA, QR, APRILTAG, OBJECT DETECT, and the system SETTINGS app supply separate descriptor adapters. Cycle-on-OK and edit-on-OK rows share navigation, partial redraw, hold-repeat, commit lifecycle, and optional dynamic choice providers without sharing their data models.
+The shared `settings_menu` controller handles rows, navigation, hold-repeat and
+dynamic choices. CAMERA, QR, APRILTAG, OBJECT DETECT and SETTINGS supply their
+own descriptors and side effects. SETTINGS uses the App SDK panel and groups
+the rows under Screen, Lights, Connection, Startup and Device. Boards with
+audio also show Sound. Range and choice edits in SETTINGS use a draft. Lighting
+and Screen → UI Color preview edits live. OK saves the value and BACK restores
+the previous setting. UI Color selects the accent used by the launcher and
+built-in views. Camera frames, saved media and explicit script drawing colors
+retain their own colors. Auto Sleep can be disabled and applies while the
+launcher is idle. Grove Baud is shown in UART mode.
+
+Device shows the total space of the mounted FAT32 data area and the progress
+of the used-space scan. The SD service counts FAT entries in batches while
+Device is open and displays the used space once the scan completes. It caches
+the count for the mounted card. FAT writes adjust the count for sectors
+already scanned.
+
+SETTINGS → Startup can select an eligible built-in app or a pinned MicroPython
+script. The script name is stored in userfs and the boot controller opens it
+through the launcher shortcut path. Unpinning or deleting the selected script
+clears the target. An unavailable target returns to the launcher.
 
 Backlight, illumination, and RGB writes cross the public Lights capability. Its
 fixed K210 provider owns exclusive overlapping channel masks, validates

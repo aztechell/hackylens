@@ -2,16 +2,21 @@
 #include <stdint.h>
 
 #include "sd_service.h"
+#include "../firmware/src/config/sd_config.h"
 
 static unsigned probes;
 static unsigned removed;
 static uint8_t healthy = 1U;
 static uint8_t mounted = 1U;
+static unsigned usage_steps;
+static unsigned usage_retries;
 
 uint8_t hk_sd_present(void) { return mounted; }
 uint8_t hk_fat_mounted(void) { return mounted; }
 uint8_t file_mount_if_needed(void) { return mounted; }
 void fat32_set_probe_silent(uint8_t silent) { (void)silent; }
+void fat32_usage_retry(void) { usage_retries++; }
+uint8_t fat32_usage_scan_step(void) { usage_steps++; return 1U; }
 
 uint8_t fat32_health_check(void)
 {
@@ -42,6 +47,12 @@ static hk_sd_event_t next_probe(void)
 int main(void)
 {
     assert(next_probe() == HK_SD_EVENT_NONE);
+    assert(sd_service_tick() == HK_SD_EVENT_NONE && usage_steps == 0U);
+    sd_service_watch_usage(1U);
+    assert(sd_service_tick() == HK_SD_EVENT_NONE && usage_steps == SD_USAGE_SECTORS_PER_TICK);
+    sd_service_watch_usage(0U);
+    assert(sd_service_tick() == HK_SD_EVENT_NONE && usage_steps == SD_USAGE_SECTORS_PER_TICK);
+    assert(usage_retries == 1U);
     healthy = 0U;
     assert(next_probe() == HK_SD_EVENT_NONE);
     assert(next_probe() == HK_SD_EVENT_NONE);

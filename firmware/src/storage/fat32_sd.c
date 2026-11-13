@@ -52,9 +52,17 @@ uint8_t fat32_mount(void)
        total_sectors == 0)
         return 0;
 
+    uint64_t metadata_sectors = reserved + (uint64_t)fats * sectors_per_fat;
+    if(!reserved || metadata_sectors >= total_sectors ||
+       (uint64_t)bpb_lba + total_sectors - 1U > UINT32_MAX)
+        return 0;
     fat_begin = bpb_lba + reserved;
-    data_begin = fat_begin + (uint32_t)fats * sectors_per_fat;
-    data_sectors = total_sectors - (data_begin - bpb_lba);
+    data_begin = bpb_lba + (uint32_t)metadata_sectors;
+    data_sectors = total_sectors - (uint32_t)metadata_sectors;
+    uint32_t clusters = data_sectors / sectors_per_cluster;
+    if(clusters >= 0x0ffffff0U - 2U || root_cluster - 2U >= clusters ||
+       (uint64_t)(clusters + 2U) * 4U > (uint64_t)sectors_per_fat * SD_BLOCK_SIZE)
+        return 0;
 
     fat32_mount_info_t mount = {
         .lba_begin = bpb_lba,
@@ -63,7 +71,7 @@ uint8_t fat32_mount(void)
         .root_cluster = root_cluster,
         .sectors_per_fat = sectors_per_fat,
         .total_sectors = total_sectors,
-        .cluster_count = data_sectors / sectors_per_cluster,
+        .cluster_count = clusters,
         .sectors_per_cluster = sectors_per_cluster,
         .fat_count = fats,
     };

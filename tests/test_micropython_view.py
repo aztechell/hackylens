@@ -35,6 +35,7 @@ class MicroPythonViewTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'include'}",
                 f"-I{ROOT / 'firmware' / 'assets'}",
                 str(ROOT / "tests" / "micropython_view_harness.c"),
+                str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                 str(
                     ROOT
                     / "firmware"

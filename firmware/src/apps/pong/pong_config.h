@@ -13,7 +13,6 @@ extern uint16_t pong_display_height;
 #define PONG_MENU_LINE 2
 #define PONG_COLOR_BLACK 0x0000
 #define PONG_COLOR_WHITE 0xFFFF
-#define PONG_COLOR_GREEN 0x07E0
 
 #define PONG_FIELD_X 2
 #define PONG_FIELD_Y (PONG_MENU_BAR_H + 2)

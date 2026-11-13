@@ -56,7 +56,13 @@ uint8_t fat_write_entry(uint32_t cluster, uint32_t value)
         old_value = rd32(&sector_data[offset]);
         wr32(&sector_data[offset], (old_value & 0xF0000000UL) | (value & 0x0FFFFFFFUL));
         if(!sd_card_write_block(sector, sector_data))
+        {
+            if(copy == 0U)
+                fat32_usage_invalidate();
             return 0;
+        }
+        if(copy == 0U)
+            fat32_usage_note_entry(cluster, old_value, value);
     }
 
     return 1;
@@ -147,11 +153,19 @@ static uint8_t fat_write_run(uint32_t first, uint32_t end, uint8_t clear)
             {
                 uint8_t *entry = sector + (cluster % per_sector) * 4U;
                 uint32_t next = cluster + 1U == end ? FAT32_EOC : cluster + 1U;
-                wr32(entry, (rd32(entry) & 0xf0000000UL) | (clear ? 0U : next));
+                uint32_t old_value = rd32(entry);
+                uint32_t value = clear ? 0U : next;
+                if(copy == 0U)
+                    fat32_usage_note_entry(cluster, old_value, value);
+                wr32(entry, (old_value & 0xf0000000UL) | value);
                 cluster++;
             } while(cluster < end && cluster / per_sector == index);
             if(!sd_card_write_block(base + index, sector))
+            {
+                if(copy == 0U)
+                    fat32_usage_invalidate();
                 return 0U;
+            }
         }
     }
     return 1U;

@@ -20,6 +20,13 @@ const fat32_geometry_t *fat32_geometry(void) { return &geometry; }
 uint8_t *fat32_sector_scratch(void) { return scratch; }
 uint8_t fat32_sectors_per_cluster(void) { return geometry.sectors_per_cluster; }
 void fat32_set_alloc_hint(uint32_t cluster) { geometry.alloc_hint = cluster; }
+void fat32_usage_invalidate(void) {}
+void fat32_usage_note_entry(uint32_t cluster, uint32_t old_value, uint32_t new_value)
+{
+    (void)cluster;
+    (void)old_value;
+    (void)new_value;
+}
 
 uint8_t sd_card_read_block(uint32_t lba, uint8_t *dst)
 {

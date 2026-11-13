@@ -125,6 +125,8 @@ class SettingsAppTests(unittest.TestCase):
                         / "settings_menu_controller.c"
                     ),
                     str(ROOT / "firmware" / "src" / "apps" / "settings" / "settings_view.c"),
+                    str(ROOT / "firmware" / "src" / "ui" / "app_panel.c"),
+                    str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                     "-o",
                     str(executable),
                 ],

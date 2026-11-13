@@ -1,156 +1,92 @@
 #include "settings_view.h"
+#include "../../core/hk_ui_colors.h"
 
+#include <hackylens/app/panel.h>
 #include <string.h>
 
 #include "settings_view_assets.h"
 
-static hk_result_t fill_rect(
-    hk_app_surface_t *surface,
-    int32_t x,
-    int32_t y,
-    uint32_t width,
-    uint32_t height,
-    uint16_t rgb565)
+static void draw_value(hk_app_panel_t *panel, uint16_t y, const char *title,
+                       const char *value, uint8_t selected, uint8_t editing)
 {
-    hk_display_rect_t rect = {x, y, width, height};
+    const uint16_t width = panel->width - 28U;
+    uint16_t value_width = (uint16_t)strlen(value) * HACKYLENS_FONT_W;
+    const uint16_t title_width = (uint16_t)strlen(title) * HACKYLENS_FONT_W;
+    const uint16_t color = selected && !editing ? HK_PANEL_BLACK : hk_ui_accent();
 
-    return hk_app_surface_fill_rect(surface, &rect, rgb565);
-}
-
-static hk_result_t draw_text(
-    hk_app_surface_t *surface,
-    int32_t x,
-    int32_t y,
-    uint32_t width,
-    const char *text,
-    uint16_t rgb565)
-{
-    hk_display_rect_t bounds = {x, y, width, HACKYLENS_FONT_H};
-
-    return hk_app_surface_text(
-        surface, &bounds, text, (uint32_t)strlen(text), rgb565);
-}
-
-static hk_result_t draw_chrome(
-    hk_app_surface_t *surface, const hk_display_info_t *info, const char *title)
-{
-    uint32_t title_px;
-    int32_t title_x;
-    hk_result_t result;
-
-    result = fill_rect(surface, 0, 0, info->width, MENU_LINE, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    result = fill_rect(
-        surface, 0, (int32_t)info->height - (int32_t)MENU_LINE,
-        info->width, MENU_LINE, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    result = fill_rect(
-        surface, 0, 0, MENU_LINE, info->height, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    result = fill_rect(
-        surface, (int32_t)info->width - (int32_t)MENU_LINE, 0,
-        MENU_LINE, info->height, COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    result = fill_rect(
-        surface, 0, MENU_BAR_H - MENU_LINE, info->width, MENU_LINE,
-        COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    result = draw_text(
-        surface, 4, 3, 3U * HACKYLENS_FONT_W, "<o>", COLOR_TERM_GREEN);
-    if(result != HK_OK)
-        return result;
-    title_px = (uint32_t)strlen(title) * HACKYLENS_FONT_W;
-    title_x = title_px < info->width ?
-        (int32_t)((info->width - title_px) / 2U) : 0;
-    if(title_px == 0U)
-        title_px = HACKYLENS_FONT_W;
-    return draw_text(
-        surface, title_x, 3, title_px, title, COLOR_TERM_GREEN);
-}
-
-hk_result_t settings_view_render(
-    hk_app_surface_t *surface, const settings_menu_session_t *session)
-{
-    hk_display_info_t info = {0};
-    hk_display_rect_t row;
-    const char *title = "SETTINGS";
-    uint8_t slot;
-    hk_result_t result;
-
-    if(!surface || !session)
-        return HK_ERR_INVALID_ARGUMENT;
-    result = hk_app_surface_get_info(surface, &info);
-    if(result != HK_OK)
-        return result;
-    result = hk_app_surface_clear(surface, COLOR_BLACK);
-    if(result != HK_OK)
-        return result;
-    if(session->definition && session->definition->title)
-        title = session->definition->title;
-    result = draw_chrome(surface, &info, title);
-    if(result != HK_OK)
-        return result;
-    for(slot = 0U; slot < SETTINGS_MENU_VISIBLE_ROWS; slot++)
+    if(selected && !editing)
+        hk_app_panel_fill(panel, 6U, y, panel->width - 12U,
+                          SETTINGS_MENU_ROW_H - 3U, hk_ui_accent());
+    if(value_width && title_width + value_width + HACKYLENS_FONT_W > width)
+        value_width = title_width + HACKYLENS_FONT_W < width ?
+            (uint16_t)(width - title_width - HACKYLENS_FONT_W) : 0U;
+    const uint16_t gap = value_width ? HACKYLENS_FONT_W : 0U;
+    hk_app_panel_label(panel, 14U, y + 3U, width - value_width - gap,
+                       title, color, HK_PANEL_LEFT);
+    if(value_width)
     {
-        const char *row_title = "";
-        char value[SETTINGS_MENU_VALUE_SIZE];
-        uint8_t selected = 0U;
-        uint8_t editing = 0U;
-        uint16_t fg;
-        uint16_t bg;
-        int32_t y;
-        int32_t value_x;
-        uint32_t row_width;
-        uint32_t title_width;
-        size_t value_length;
-
-        if(!settings_menu_visible_slot(
-               session, slot, &row_title, value, sizeof(value),
-               &selected, &editing))
-            continue;
-        fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
-        bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
-        y = SETTINGS_MENU_ROW_Y0 + slot * SETTINGS_MENU_ROW_H;
-        row_width = info.width > 12U ? info.width - 12U : info.width;
-        row = (hk_display_rect_t){
-            6, y, row_width, SETTINGS_MENU_ROW_H - 2,
-        };
-        result = hk_app_surface_fill_rect(surface, &row, bg);
-        if(result != HK_OK)
-            return result;
-        value_length = strlen(value);
-        value_x = (int32_t)info.width - 10 -
-                  (int32_t)(value_length * HACKYLENS_FONT_W);
+        const uint16_t x = panel->width - 14U - value_width;
+        hk_app_panel_label(panel, x, y + 3U, value_width, value, color, HK_PANEL_RIGHT);
         if(editing)
-            value_x -= HACKYLENS_FONT_W;
-        if(value_x < 10)
-            value_x = 10;
-        title_width = value_x > 12 ? (uint32_t)(value_x - 12) : 0U;
-        result = draw_text(
-            surface, 10, y + 3, title_width,
-            row_title ? row_title : "", fg);
-        if(result != HK_OK)
-            return result;
-        if(editing)
-        {
-            result = draw_text(
-                surface, value_x, y + 3, HACKYLENS_FONT_W, "*", fg);
-            if(result != HK_OK)
-                return result;
-            value_x += HACKYLENS_FONT_W;
-        }
-        result = draw_text(
-            surface, value_x, y + 3,
-            info.width > (uint32_t)value_x ?
-                info.width - (uint32_t)value_x : 0U,
-            value, fg);
-        if(result != HK_OK)
-            return result;
+            hk_app_panel_fill(panel, x - 3U, y + SETTINGS_MENU_ROW_H - 4U,
+                              value_width + 6U, 2U, hk_ui_accent());
     }
-    return HK_OK;
+}
+
+static void draw_startup_value(hk_app_panel_t *panel, const char *value, uint8_t editing)
+{
+    const uint16_t width = panel->width - 28U;
+    const uint16_t y = SETTINGS_MENU_ROW_Y0 + SETTINGS_MENU_ROW_H + 14U;
+    hk_app_panel_label(panel, 14U + HACKYLENS_FONT_W, y, width - 2U * HACKYLENS_FONT_W,
+                       value, hk_ui_accent(), HK_PANEL_CENTER);
+    if(editing)
+    {
+        hk_app_panel_label(panel, 14U, y, HACKYLENS_FONT_W, "<", hk_ui_accent(), HK_PANEL_LEFT);
+        hk_app_panel_label(panel, panel->width - 14U - HACKYLENS_FONT_W, y,
+                           HACKYLENS_FONT_W, ">", hk_ui_accent(), HK_PANEL_LEFT);
+    }
+}
+
+static void draw_rgb_sample(hk_app_panel_t *panel, const settings_menu_session_t *menu)
+{
+    uint16_t red = (uint16_t)settings_menu_display_value(menu, SETTINGS_RGB_RED);
+    uint16_t green = (uint16_t)settings_menu_display_value(menu, SETTINGS_RGB_GREEN);
+    uint16_t blue = (uint16_t)settings_menu_display_value(menu, SETTINGS_RGB_BLUE);
+    uint16_t color = (uint16_t)(((red * 31U / 100U) << 11) |
+                               ((green * 63U / 100U) << 5) | (blue * 31U / 100U));
+
+    hk_app_panel_fill(panel, 14U, 151U, panel->width - 28U, 52U, hk_ui_accent());
+    hk_app_panel_fill(panel, 16U, 153U, panel->width - 32U, 48U, color);
+}
+
+hk_result_t settings_view_render(hk_app_surface_t *surface, const settings_state_t *state)
+{
+    if(!surface || !state || !state->menu.definition)
+        return HK_ERR_INVALID_ARGUMENT;
+    const settings_menu_session_t *menu = &state->menu;
+    hk_app_panel_t panel = hk_app_panel_begin(surface);
+    hk_app_panel_chrome(&panel, menu->definition->title);
+
+    for(uint8_t slot = 0U; slot < SETTINGS_MENU_VISIBLE_ROWS; slot++)
+    {
+        const char *title;
+        char value[SETTINGS_MENU_VALUE_SIZE];
+        uint8_t selected;
+        uint8_t editing;
+        if(!settings_menu_visible_slot(menu, slot, &title, value, sizeof(value),
+                                       &selected, &editing))
+            continue;
+        if(state->page == SETTINGS_PAGE_STARTUP)
+        {
+            draw_value(&panel, SETTINGS_MENU_ROW_Y0, title, "", selected, 0U);
+            draw_startup_value(&panel, value, editing);
+        }
+        else
+            draw_value(&panel, SETTINGS_MENU_ROW_Y0 + slot * SETTINGS_MENU_ROW_H,
+                       title, value, selected, editing);
+    }
+
+    if(state->page == SETTINGS_PAGE_RGB)
+        draw_rgb_sample(&panel, menu);
+    return panel.result;
 }

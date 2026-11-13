@@ -1,4 +1,5 @@
 #include "accelerometer_app.h"
+#include "../../core/hk_ui_colors.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -147,9 +148,9 @@ static void draw_tabs(hk_app_panel_t *panel, page_t page)
     {
         hk_display_rect_t tab = tab_bounds(panel->width, (page_t)i);
         if(i == page)
-            hk_app_panel_fill(panel, tab.x, tab.y, tab.width, tab.height, HK_PANEL_GREEN);
+            hk_app_panel_fill(panel, tab.x, tab.y, tab.width, tab.height, hk_ui_accent());
         hk_app_panel_label(panel, tab.x, tab.y + 2U, tab.width, page_names[i],
-                           i == page ? HK_PANEL_BLACK : HK_PANEL_GREEN, HK_PANEL_CENTER);
+                           i == page ? HK_PANEL_BLACK : hk_ui_accent(), HK_PANEL_CENTER);
     }
 }
 
@@ -174,16 +175,16 @@ static void draw_level(hk_app_panel_t *panel, const int16_t gravity[3])
     const uint16_t middle = 133U;
     const hk_display_rect_t border = {center - 49U, middle - 49U, 99U, 99U};
     if(panel->result == HK_OK)
-        panel->result = hk_app_surface_stroke_rect(panel->surface, &border, HK_PANEL_TRACK);
-    hk_app_panel_fill(panel, center - 48U, middle, 97U, 1U, HK_PANEL_TRACK);
-    hk_app_panel_fill(panel, center, middle - 48U, 1U, 97U, HK_PANEL_TRACK);
+        panel->result = hk_app_surface_stroke_rect(panel->surface, &border, hk_ui_accent_dim());
+    hk_app_panel_fill(panel, center - 48U, middle, 97U, 1U, hk_ui_accent_dim());
+    hk_app_panel_fill(panel, center, middle - 48U, 1U, 97U, hk_ui_accent_dim());
     const hk_display_rect_t target = {center - 6U, middle - 6U, 13U, 13U};
     if(panel->result == HK_OK)
-        panel->result = hk_app_surface_stroke_rect(panel->surface, &target, HK_PANEL_GREEN);
+        panel->result = hk_app_surface_stroke_rect(panel->surface, &target, hk_ui_accent());
     uint16_t px = (uint16_t)(center + x * 44 / 1250);
     uint16_t py = (uint16_t)(middle - y * 44 / 1250);
-    hk_app_panel_fill(panel, px - 4U, py - 2U, 9U, 5U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, px - 2U, py - 4U, 5U, 9U, HK_PANEL_GREEN);
+    hk_app_panel_fill(panel, px - 4U, py - 2U, 9U, 5U, hk_ui_accent());
+    hk_app_panel_fill(panel, px - 2U, py - 4U, 5U, 9U, hk_ui_accent());
     char angles[28];
     (void)snprintf(angles, sizeof(angles), "X%+d Y%+d DEG",
                    tilt_degrees(x, y, z), tilt_degrees(y, x, z));
@@ -226,28 +227,28 @@ static void raster_label(hk_display_surface_t *pixels, unsigned x, unsigned y,
 
 static void trace_header(hk_display_surface_t *pixels)
 {
-    raster_fill(pixels, 0U, 0U, pixels->width, pixels->height, HK_PANEL_GREEN);
+    raster_fill(pixels, 0U, 0U, pixels->width, pixels->height, hk_ui_accent());
     raster_fill(pixels, 2U, 2U, pixels->width - 4U, pixels->height - 4U, HK_PANEL_BLACK);
-    raster_fill(pixels, 0U, MENU_BAR_H - MENU_LINE, pixels->width, MENU_LINE, HK_PANEL_GREEN);
-    raster_label(pixels, 24U, 3U, pixels->width - 48U, "ACCELEROMETER", HK_PANEL_GREEN);
+    raster_fill(pixels, 0U, MENU_BAR_H - MENU_LINE, pixels->width, MENU_LINE, hk_ui_accent());
+    raster_label(pixels, 24U, 3U, pixels->width - 48U, "ACCELEROMETER", hk_ui_accent());
     if(topbar_sd_mounted())
     {
         unsigned x = pixels->width - 23U;
-        raster_fill(pixels, x + 2U, 7U, 10U, 2U, HK_PANEL_GREEN);
-        raster_fill(pixels, x + 12U, 9U, 2U, 10U, HK_PANEL_GREEN);
-        raster_fill(pixels, x, 10U, 2U, 11U, HK_PANEL_GREEN);
-        raster_fill(pixels, x + 2U, 19U, 12U, 2U, HK_PANEL_GREEN);
-        raster_fill(pixels, x + 9U, 7U, 2U, 5U, HK_PANEL_GREEN);
+        raster_fill(pixels, x + 2U, 7U, 10U, 2U, hk_ui_accent());
+        raster_fill(pixels, x + 12U, 9U, 2U, 10U, hk_ui_accent());
+        raster_fill(pixels, x, 10U, 2U, 11U, hk_ui_accent());
+        raster_fill(pixels, x + 2U, 19U, 12U, 2U, hk_ui_accent());
+        raster_fill(pixels, x + 9U, 7U, 2U, 5U, hk_ui_accent());
         for(unsigned i = 0U; i < 4U; i++)
-            raster_fill(pixels, x + 3U + i * 2U, 16U, 2U, 3U, HK_PANEL_GREEN);
+            raster_fill(pixels, x + 3U + i * 2U, 16U, 2U, 3U, hk_ui_accent());
     }
     for(uint8_t i = 0U; i < PAGE_COUNT; i++)
     {
         hk_display_rect_t tab = tab_bounds((uint16_t)pixels->width, (page_t)i);
         if(i == TRACE)
-            raster_fill(pixels, tab.x, tab.y, tab.width, tab.height, HK_PANEL_GREEN);
+            raster_fill(pixels, tab.x, tab.y, tab.width, tab.height, hk_ui_accent());
         raster_label(pixels, tab.x, tab.y + 2U, tab.width, page_names[i],
-                     i == TRACE ? HK_PANEL_BLACK : HK_PANEL_GREEN);
+                     i == TRACE ? HK_PANEL_BLACK : hk_ui_accent());
     }
 }
 
@@ -256,7 +257,7 @@ static void draw_trace(hk_display_surface_t *pixels, const accelerometer_state_t
     uint16_t width = (pixels->width - 16U) / 3U;
     uint8_t latest = (state->next_sample + TRACE_SAMPLES - 1U) % TRACE_SAMPLES;
     const uint16_t origin = 10U, right = pixels->width - 10U, middle = 163U;
-    raster_fill(pixels, origin, middle, right - origin, 1U, HK_PANEL_TRACK);
+    raster_fill(pixels, origin, middle, right - origin, 1U, hk_ui_accent_dim());
     for(uint8_t axis = 0U; axis < 3U; axis++)
     {
         int value = state->history[latest][axis];
@@ -292,7 +293,7 @@ static void draw_trace(hk_display_surface_t *pixels, const accelerometer_state_t
             previous_y = py;
         }
     }
-    raster_label(pixels, 12U, 208U, pixels->width - 24U, "+/-2G / 5 SEC", HK_PANEL_GREEN);
+    raster_label(pixels, 12U, 208U, pixels->width - 24U, "+/-2G / 5 SEC", hk_ui_accent());
 }
 
 static hk_result_t render_trace(hk_app_surface_t *surface, accelerometer_state_t *state)
@@ -317,7 +318,7 @@ static hk_result_t render_trace(hk_app_surface_t *surface, accelerometer_state_t
         draw_trace(&pixels, state);
     else
         raster_label(&pixels, 12U, 106U, pixels.width - 24U,
-                     state->status == HK_PENDING ? "STARTING" : "SENSOR ERROR", HK_PANEL_GREEN);
+                     state->status == HK_PENDING ? "STARTING" : "SENSOR ERROR", hk_ui_accent());
     result = hk_app_surface_invalidate(surface, state->full_redraw ? NULL : &body);
     if(result == HK_OK)
     {
@@ -342,9 +343,9 @@ static void draw_events(hk_app_panel_t *panel, const accelerometer_state_t *stat
     if(state->orientation_valid)
     {
         hk_app_panel_label(panel, 12U, 74U, panel->width - 24U,
-                           poses[state->motion.orientation], HK_PANEL_GREEN, HK_PANEL_LEFT);
+                           poses[state->motion.orientation], hk_ui_accent(), HK_PANEL_LEFT);
         hk_app_panel_label(panel, 12U, 74U, panel->width - 24U,
-                           state->motion.face_down ? "DOWN" : "UP", HK_PANEL_GREEN, HK_PANEL_RIGHT);
+                           state->motion.face_down ? "DOWN" : "UP", hk_ui_accent(), HK_PANEL_RIGHT);
     }
     else
         hk_app_panel_status(panel, 74U, "TURN CUBE");
@@ -352,9 +353,9 @@ static void draw_events(hk_app_panel_t *panel, const accelerometer_state_t *stat
     {
         uint16_t y = 103U + i * 26U;
         uint8_t live = state->motion.flags & flags[i];
-        uint16_t color = live ? HK_PANEL_BLACK : HK_PANEL_GREEN;
+        uint16_t color = live ? HK_PANEL_BLACK : hk_ui_accent();
         if(live)
-            hk_app_panel_fill(panel, 8U, y, panel->width - 16U, 25U, HK_PANEL_GREEN);
+            hk_app_panel_fill(panel, 8U, y, panel->width - 16U, 25U, hk_ui_accent());
         hk_app_panel_label(panel, 12U, y, panel->width - 24U, names[i], color, HK_PANEL_LEFT);
         hk_app_panel_label(panel, 12U, y, panel->width - 24U,
                            live ? "LIVE" : (state->seen & flags[i] ? "SEEN" : "--"),

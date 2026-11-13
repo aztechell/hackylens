@@ -37,7 +37,7 @@ static void files_view_enter_impl(void)
 static void files_view_draw_status_impl(const char *line)
 {
     menu_draw_chrome("FILES");
-    hk_ui_display_draw_text_centered(96, line, COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(96, line, hk_ui_accent(), COLOR_BLACK);
 }
 
 static void files_view_draw_file_status_impl(const char *name, const char *status)
@@ -47,8 +47,8 @@ static void files_view_draw_file_status_impl(const char *name, const char *statu
         return;
     menu_draw_chrome("FILES");
     hk_ui_display_draw_text_clipped_at(10, 91, HK_DISPLAY_REQUIRED_WIDTH - 20,
-                                       name, COLOR_TERM_GREEN, COLOR_BLACK);
-    hk_ui_display_draw_text_at(10, 121, status, COLOR_TERM_GREEN, COLOR_BLACK);
+                                       name, hk_ui_accent(), COLOR_BLACK);
+    hk_ui_display_draw_text_at(10, 121, status, hk_ui_accent(), COLOR_BLACK);
     (void)hk_ui_display_frame_present(surface.lease_id);
 }
 
@@ -75,8 +75,8 @@ static void files_view_draw_row_impl(uint8_t row, const file_list_item_t *items,
     uint8_t entry_index = (uint8_t)(top + row);
     uint16_t y = FILES_ROW_Y0 + row * FILES_ROW_H;
     uint8_t selected = entry_index == index;
-    uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
-    uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
+    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
+    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
     hk_ui_display_fill_rect(6, y, HK_DISPLAY_REQUIRED_WIDTH - 12, FILES_ROW_H - 2, bg);
     if(entry_index >= count)
         return;
@@ -104,11 +104,11 @@ static void files_view_render_list_impl(uint8_t sd_present, uint8_t fat_mounted,
         return;
     menu_draw_chrome("FILES");
     if(!sd_present)
-        hk_ui_display_draw_text_centered(96, "NO SD", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "NO SD", hk_ui_accent(), COLOR_BLACK);
     else if(!fat_mounted)
-        hk_ui_display_draw_text_centered(96, "FAT32 ONLY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "FAT32 ONLY", hk_ui_accent(), COLOR_BLACK);
     else if(count == 0)
-        hk_ui_display_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "EMPTY", hk_ui_accent(), COLOR_BLACK);
     else
         for(uint8_t row = 0; row < FILES_ROWS; row++)
             files_view_draw_row_impl(row, items, count, top, index);
@@ -123,7 +123,7 @@ static void files_view_render_preview_impl(const char *preview, uint16_t len, ui
     menu_draw_chrome("PREVIEW");
     if(len == 0)
     {
-        hk_ui_display_draw_text_centered(96, "EMPTY", COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_centered(96, "EMPTY", hk_ui_accent(), COLOR_BLACK);
         return;
     }
 
@@ -135,7 +135,7 @@ static void files_view_render_preview_impl(const char *preview, uint16_t len, ui
         line[TERM_COLS] = '\0';
         for(uint8_t col = 0; col < TERM_COLS && offset + col < len; col++)
             line[col] = preview[offset + col];
-        hk_ui_display_draw_text_at(0, FILES_ROW_Y0 + row * HACKYLENS_FONT_H, line, COLOR_TERM_GREEN, COLOR_BLACK);
+        hk_ui_display_draw_text_at(0, FILES_ROW_Y0 + row * HACKYLENS_FONT_H, line, hk_ui_accent(), COLOR_BLACK);
     }
 }
 
@@ -410,10 +410,10 @@ static void files_view_animation_end_impl(void)
 static void files_view_draw_delete_confirm_impl(const char *name)
 {
     menu_draw_chrome("DELETE");
-    hk_ui_display_draw_text_centered(68, "do u want delete?", COLOR_TERM_GREEN, COLOR_BLACK);
-    hk_ui_display_draw_text_centered(104, name, COLOR_TERM_GREEN, COLOR_BLACK);
-    hk_ui_display_draw_text_centered(152, "OK DELETE", COLOR_TERM_GREEN, COLOR_BLACK);
-    hk_ui_display_draw_text_centered(182, "BACK CANCEL", COLOR_TERM_GREEN, COLOR_BLACK);
+    hk_ui_display_draw_text_centered(68, "do u want delete?", hk_ui_accent(), COLOR_BLACK);
+    hk_ui_display_draw_text_centered(104, name, hk_ui_accent(), COLOR_BLACK);
+    hk_ui_display_draw_text_centered(152, "OK DELETE", hk_ui_accent(), COLOR_BLACK);
+    hk_ui_display_draw_text_centered(182, "BACK CANCEL", hk_ui_accent(), COLOR_BLACK);
 }
 
 void files_view_init(void)

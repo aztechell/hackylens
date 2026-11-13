@@ -25,6 +25,7 @@ class PowerOffTests(unittest.TestCase):
                 f"-I{temp}", f"-I{ROOT / 'firmware/assets'}", f"-I{ROOT / 'firmware/include'}", f"-I{ROOT / 'sdk/include'}", f"-I{ROOT / 'platforms/k210/hal'}",
                 str(ROOT / "tests/power_off_harness.c"),
                 str(ROOT / "firmware/src/apps/sleep/power_app.c"),
+                str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                 str(ROOT / "firmware/src/capabilities/power.c"),
                 str(ROOT / "firmware/src/services/power_shutdown.c"),
                 str(ROOT / "platforms/k210/capabilities/power_adapter.c"),
@@ -50,7 +51,8 @@ class PowerOffTests(unittest.TestCase):
                     "platforms/k210/capabilities/display_adapter.c","firmware/src/services/frame_pool.c",
                     "firmware/src/capabilities/display.c","firmware/src/ui/hk_font.c",
                     "firmware/src/app_runtime/surface.c","firmware/src/apps/sleep/power_app.c",
-                    "firmware/src/ui/ui_menu.c","firmware/src/ui/display_binding.c"]
+                    "firmware/src/ui/ui_menu.c","firmware/src/ui/display_binding.c",
+                    "firmware/src/core/hk_ui_colors.c"]
                 subprocess.run([compiler,"-std=c11","-O1","-Wall","-Wextra","-Werror","-DK210_DISPLAY_ADAPTER_TESTING","-Wno-sign-compare","-ffunction-sections","-fdata-sections","-Wl,--gc-sections",
                     *[f"-I{p}" for p in includes],*[str(ROOT / p) for p in sources],"-o",str(executable)],check=True,cwd=ROOT)
                 result=subprocess.run([str(executable)],check=True,capture_output=True,text=True,cwd=ROOT,timeout=30)

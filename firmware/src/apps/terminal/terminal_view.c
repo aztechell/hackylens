@@ -70,7 +70,7 @@ static uint8_t terminal_indicator_pixel(uint16_t x,
     {
         if(y >= track_y + track_h - 4U)
         {
-            *color = COLOR_TERM_GREEN;
+            *color = hk_ui_accent();
             return 1U;
         }
         return 0U;
@@ -87,12 +87,12 @@ static uint8_t terminal_indicator_pixel(uint16_t x,
                          status->max_scroll_offset);
     if(y >= thumb_y && y < thumb_y + thumb_h)
     {
-        *color = status->auto_follow ? COLOR_TERM_GREEN : COLOR_WHITE;
+        *color = status->auto_follow ? hk_ui_accent() : COLOR_WHITE;
         return 1U;
     }
     if(x == indicator_x && (y == track_y || y == track_y + track_h - 1U))
     {
-        *color = COLOR_TERM_GREEN;
+        *color = hk_ui_accent();
         return 1U;
     }
     return 0U;
@@ -154,7 +154,7 @@ hk_result_t terminal_view_render(
                                     x % geometry.cell_width,
                                     y % geometry.cell_height,
                                     scale))
-                color = COLOR_TERM_GREEN;
+                color = hk_ui_accent();
             terminal_indicator_pixel(
                 x, y, content_width, width, height, &status, &color);
             terminal_write_pixel(row, x, color);

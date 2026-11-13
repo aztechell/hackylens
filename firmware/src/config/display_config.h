@@ -3,6 +3,7 @@
 
 #include "hackylens_font_1bpp.h"
 #include "hackylens_font_cyrillic_1bpp.h"
+#include "../core/hk_ui_colors.h"
 
 #if defined(__has_include)
 #if __has_include("board_config.h")
@@ -18,7 +19,6 @@
 
 #define COLOR_BLACK 0x0000
 #define COLOR_WHITE 0xFFFF
-#define COLOR_TERM_GREEN 0x07E0
 
 #define TERM_COLS (HK_DISPLAY_REQUIRED_WIDTH / HACKYLENS_FONT_W)
 

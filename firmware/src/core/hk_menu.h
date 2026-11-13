@@ -18,6 +18,7 @@ const hk_app_t *hk_menu_active_app(void);
 void menu_render(void);
 void shell_show_menu(void);
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input);
+uint8_t shell_open_shortcut(const char *name, const hk_input_snapshot_t *input);
 void shell_open_selected(const hk_input_snapshot_t *input);
 void menu_select_delta(int8_t delta);
 void menu_select_vertical(void);

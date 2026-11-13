@@ -26,7 +26,7 @@ void face_detect_view_draw_boxes(uint16_t width, uint16_t height,
     view.height = height;
     view.rotate = CAMERA_PREVIEW_ROTATE;
     view.fit = CAMERA_PREVIEW_FIT;
-    camera_view_draw_rects(&view, rects, count, COLOR_TERM_GREEN);
+    camera_view_draw_rects(&view, rects, count, hk_ui_accent());
 }
 
 void face_detect_view_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)

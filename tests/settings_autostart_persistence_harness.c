@@ -2,11 +2,17 @@
 #include <string.h>
 
 #include "../firmware/src/config/settings_config.h"
+#include "../firmware/src/config/input_config.h"
+#include "../firmware/src/apps/settings/settings_menu.h"
+#include "../firmware/src/core/hk_ui_colors.h"
 #include "../firmware/src/core/hk_app_registry.h"
 #include "../firmware/src/core/hk_binary.h"
 #include "../firmware/src/services/settings_payload_codec.h"
+#include "../firmware/src/services/settings_persistence.h"
+#include "../firmware/src/services/settings_service.h"
 #include "../firmware/src/storage/internal_flash.h"
 #include "../firmware/src/storage/settings_store.h"
+#include "../firmware/src/storage/fat32_volume.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
@@ -51,6 +57,85 @@ typedef struct
 } fixture_record_v4_t;
 
 static uint8_t s_flash[2][SETTINGS_FLASH_SLOT_SIZE];
+static fat32_usage_t s_usage;
+
+uint8_t hk_app_autostart_count(void) { return 0U; }
+const hk_app_t *hk_app_autostart_at(uint8_t index) { (void)index; return NULL; }
+uint8_t hk_sd_present(void) { return s_usage.status != FAT32_USAGE_UNAVAILABLE; }
+uint8_t hk_fat_mounted(void) { return hk_sd_present(); }
+fat32_usage_t fat32_usage(void) { return s_usage; }
+uint8_t audio_service_available(void) { return 0U; }
+hk_result_t audio_service_set_volume(uint8_t percent) { (void)percent; return HK_OK; }
+void external_link_service_set_transport(external_link_transport_t transport) { (void)transport; }
+void external_link_service_set_uart_baud(uint32_t baud) { (void)baud; }
+void activity_note(void) {}
+void rgb_led_apply(void) {}
+void illum_led_apply(void) {}
+void screen_brightness_apply(void) {}
+void settings_backlight_preview(uint8_t percent) { (void)percent; }
+void settings_illumination_preview(uint8_t percent) { (void)percent; }
+void settings_rgb_preview(uint8_t red, uint8_t green, uint8_t blue)
+{
+    (void)red;
+    (void)green;
+    (void)blue;
+}
+void settings_menu_view_open(const char *title) { (void)title; }
+void settings_menu_view_clear_rows(void) {}
+void settings_menu_view_draw_row(uint8_t slot, const char *title, const char *value,
+                                 uint8_t selected, uint8_t editing)
+{
+    (void)slot;
+    (void)title;
+    (void)value;
+    (void)selected;
+    (void)editing;
+}
+
+static void press(settings_menu_session_t *menu, uint32_t button)
+{
+    const hk_input_snapshot_t input = {button, button, button};
+    (void)settings_menu_handle_input(menu, &input);
+}
+
+static int test_screen_and_device(void)
+{
+    settings_menu_session_t menu = {0};
+    const char *title;
+    char value[24];
+    CHECK(settings_menu_bind(&menu, settings_app_page_definition(SETTINGS_PAGE_SCREEN)));
+    press(&menu, HK_INPUT_BUTTON_RIGHT);
+    CHECK(settings_menu_visible_slot(&menu, 1U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "UI Color") == 0 && strcmp(value, "Green") == 0);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    press(&menu, HK_INPUT_BUTTON_RIGHT);
+    CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0x07ffU);
+    CHECK(settings_menu_visible_slot(&menu, 1U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "Cyan") == 0);
+    press(&menu, HK_INPUT_BUTTON_BACK);
+    CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0x07e0U);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    press(&menu, HK_INPUT_BUTTON_LEFT);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    CHECK(settings_ui_color() == HK_UI_COLOR_BLUE && hk_ui_accent() == 0x5dffU);
+    settings_storage_init();
+    CHECK(settings_ui_color() == HK_UI_COLOR_BLUE && hk_ui_accent() == 0x5dffU);
+
+    CHECK(settings_menu_bind(&menu, settings_app_page_definition(SETTINGS_PAGE_DEVICE)));
+    CHECK(settings_menu_visible_slot(&menu, 3U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Used") == 0 && strcmp(value, "-") == 0);
+    s_usage = (fat32_usage_t){.status = FAT32_USAGE_SCANNING, .progress = 36U,
+                              .total_bytes = UINT64_C(64) << 30};
+    CHECK(settings_menu_visible_slot(&menu, 3U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "SCAN 30%") == 0);
+    CHECK(settings_menu_visible_slot(&menu, 4U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Total") == 0 && strcmp(value, "64.0 GiB") == 0);
+    s_usage.status = FAT32_USAGE_READY;
+    s_usage.used_bytes = UINT64_C(17) << 29;
+    CHECK(settings_menu_visible_slot(&menu, 3U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "8.5 GiB") == 0);
+    return 0;
+}
 
 static uint32_t fixture_v4_crc(const fixture_record_v4_t *record)
 {
@@ -147,6 +232,7 @@ int main(void)
     memset(&input, 0, sizeof(input));
     input.autostart_id = 300U;
     input.audio_volume = 30U;
+    input.ui_color = HK_UI_COLOR_AMBER;
     payload = settings_payload_encode(&input);
     CHECK(payload.autostart_id == 300U);
 
@@ -158,6 +244,8 @@ int main(void)
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.autostart_id == 300U);
     CHECK(output.audio_volume == 30U);
+    CHECK(output.ui_color == HK_UI_COLOR_AMBER);
+    CHECK(output.auto_sleep_minutes == 0U);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
     settings_record_t v5 = {
@@ -173,6 +261,18 @@ int main(void)
     CHECK(loaded.has_payload && loaded.payload.autostart_id == 300U);
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.audio_volume == SETTINGS_AUDIO_VOLUME_DEFAULT);
+    CHECK(output.ui_color == HK_UI_COLOR_GREEN);
+
+    settings_record_t v6 = v5;
+    v6.version = SETTINGS_STORAGE_V6_VERSION;
+    v6.payload_size = sizeof(v6.payload);
+    v6.crc32 = crc32_update(0U, (const uint8_t *)&v6, 12U + v6.payload_size);
+    memcpy(s_flash[0], &v6, sizeof(v6));
+    settings_store_init(&loaded);
+    CHECK(loaded.has_payload);
+    settings_payload_decode(&loaded.payload, &output);
+    CHECK(output.autostart_id == 300U && output.audio_volume == 30U);
+    CHECK(output.ui_color == HK_UI_COLOR_GREEN);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&v4, 0, sizeof(v4));
@@ -187,6 +287,12 @@ int main(void)
     CHECK(loaded.has_payload && loaded.payload.autostart_id == 10U);
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.autostart_id == 10U);
+    CHECK(output.ui_color == HK_UI_COLOR_GREEN);
+
+    settings_storage_init();
+    CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0x07e0U);
+    CHECK(test_screen_and_device() == 0);
+    CHECK(settings_autostart_id() == 10U);
 
     puts("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=124");
     return 0;

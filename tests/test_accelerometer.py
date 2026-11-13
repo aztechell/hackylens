@@ -44,6 +44,7 @@ class AccelerometerTests(unittest.TestCase):
             "platforms/k210/capabilities/display_adapter.c",
             "firmware/src/capabilities/display.c", "firmware/src/services/frame_pool.c",
             "firmware/src/app_runtime/surface.c", "firmware/src/ui/app_panel.c",
+            "firmware/src/core/hk_ui_colors.c",
             "firmware/src/ui/hk_font.c", "firmware/src/core/hk_string.c",
             "firmware/src/apps/accelerometer/accelerometer_app.c",
         )

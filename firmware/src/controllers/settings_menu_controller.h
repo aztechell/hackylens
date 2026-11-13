@@ -30,6 +30,8 @@ typedef enum
 enum
 {
     SETTINGS_MENU_ITEM_WRAP = 0x01U,
+    SETTINGS_MENU_ITEM_PERCENT = 0x02U,
+    SETTINGS_MENU_ITEM_MINUTES = 0x04U,
 };
 
 typedef struct
@@ -74,6 +76,8 @@ typedef struct
     settings_menu_choice_label_fn choice_label;
     settings_menu_changed_fn changed;
     settings_menu_committed_fn committed;
+    void (*preview)(void *context, uint16_t id, int32_t value);
+    uint8_t defer_edits;
 } settings_menu_definition_t;
 
 typedef struct
@@ -86,6 +90,7 @@ typedef struct
     uint32_t repeat_button;
     uint8_t repeat_ticks;
     uint8_t headless;
+    int32_t edit_value;
 } settings_menu_session_t;
 
 uint8_t settings_menu_open(settings_menu_session_t *session,
@@ -94,6 +99,7 @@ uint8_t settings_menu_bind(settings_menu_session_t *session,
                            const settings_menu_definition_t *definition);
 void settings_menu_close(settings_menu_session_t *session);
 uint8_t settings_menu_active(const settings_menu_session_t *session);
+int32_t settings_menu_display_value(const settings_menu_session_t *session, uint16_t id);
 settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *session,
                                                  const hk_input_snapshot_t *input);
 void settings_menu_tick(settings_menu_session_t *session, const hk_input_snapshot_t *input);

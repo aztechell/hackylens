@@ -175,6 +175,24 @@ void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks)
         memset(&s_owner_hooks, 0, sizeof(s_owner_hooks));
 }
 
+uint8_t shell_open_shortcut(const char *name, const hk_input_snapshot_t *input)
+{
+    if(!name || !s_owner_hooks.open_shortcut)
+        return 0U;
+    for(uint8_t index = MENU_ITEM_COUNT, count = menu_item_count(); index < count; index++)
+    {
+        const char *shortcut = menu_shortcut_name(index);
+        if(shortcut && strcmp(shortcut, name) == 0)
+        {
+            printf("[MENU] run %s\r\n", shortcut);
+            uint8_t opened = s_owner_hooks.open_shortcut(shortcut, input);
+            s_menu_index = index;
+            return opened;
+        }
+    }
+    return 0U;
+}
+
 void shell_open_selected(const hk_input_snapshot_t *input)
 {
     if(menu_item_count() != s_rendered_count)
@@ -187,16 +205,8 @@ void shell_open_selected(const hk_input_snapshot_t *input)
         (void)shell_open_app(g_menu_items[s_menu_index], input);
         return;
     }
-    const char *name = menu_shortcut_name(s_menu_index);
-    if(name && s_owner_hooks.open_shortcut)
-    {
-        uint8_t index = s_menu_index;
-        printf("[MENU] run %s\r\n", name);
-        uint8_t opened = s_owner_hooks.open_shortcut(name, input);
-        s_menu_index = index;
-        if(!opened)
-            menu_render();
-    }
+    if(!shell_open_shortcut(menu_shortcut_name(s_menu_index), input))
+        menu_render();
 }
 
 void menu_select_delta(int8_t delta)

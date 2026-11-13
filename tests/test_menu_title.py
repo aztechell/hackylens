@@ -42,6 +42,7 @@ class MenuTitleHostTests(unittest.TestCase):
                 f"-I{gen_board.board_config_include_dir()}",
                 str(ROOT / "tests" / "menu_title_harness.c"),
                 str(ROOT / "firmware" / "src" / "ui" / "ui_menu.c"),
+                str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                 "-o",
                 str(executable),
             ]

@@ -27,6 +27,7 @@ enum
 static int32_t s_values[ITEM_COUNT];
 static unsigned s_commits;
 static unsigned s_view_calls;
+static int32_t s_preview;
 
 void settings_menu_view_open(const char *title)
 {
@@ -73,6 +74,13 @@ static void committed(void *context, uint16_t id)
     (void)context;
     (void)id;
     s_commits++;
+}
+
+static void preview(void *context, uint16_t id, int32_t value)
+{
+    (void)context;
+    (void)id;
+    s_preview = value;
 }
 
 static const char *const s_choices[] = {"A", "B", "C"};
@@ -141,6 +149,18 @@ static uint8_t selected_id(const settings_state_t *state)
     return 0xFFU;
 }
 
+const settings_menu_definition_t *settings_app_page_definition(settings_page_t page)
+{
+    (void)page;
+    return NULL;
+}
+
+const settings_menu_definition_t *settings_app_startup_choices(settings_startup_choices_t *choices)
+{
+    (void)choices;
+    return NULL;
+}
+
 int main(void)
 {
     settings_state_t state;
@@ -202,6 +222,30 @@ int main(void)
               &selected, &editing) == 1U);
     CHECK(strcmp(value, "ON") == 0);
     CHECK(s_view_calls == 0U);
+
+    settings_menu_definition_t deferred = s_definition;
+    deferred.defer_edits = 1U;
+    deferred.preview = preview;
+    settings_controller_reset(&state, &deferred);
+    event = press(HK_INPUT_BUTTON_RIGHT);
+    settings_controller_handle_input(&state, &event);
+    event = press(HK_INPUT_BUTTON_OK);
+    settings_controller_handle_input(&state, &event);
+    event = press(HK_INPUT_BUTTON_LEFT);
+    settings_controller_handle_input(&state, &event);
+    CHECK(s_values[ITEM_RANGE] == 4 && s_preview == 3);
+    CHECK(settings_menu_display_value(&state.menu, ITEM_RANGE) == 3);
+    event = press(HK_INPUT_BUTTON_BACK);
+    settings_controller_handle_input(&state, &event);
+    CHECK(!state.menu.editing && !state.close_requested && s_preview == 4);
+    CHECK(s_values[ITEM_RANGE] == 4 && s_commits == 1U);
+    event = press(HK_INPUT_BUTTON_OK);
+    settings_controller_handle_input(&state, &event);
+    event = press(HK_INPUT_BUTTON_LEFT);
+    settings_controller_handle_input(&state, &event);
+    event = press(HK_INPUT_BUTTON_OK);
+    settings_controller_handle_input(&state, &event);
+    CHECK(s_values[ITEM_RANGE] == 3 && s_commits == 2U);
 
     printf("SETTINGS_CONTROLLER_OK nav=1 change=1 save=1 reopen=1\n");
     return 0;

@@ -171,6 +171,7 @@ class AppManifestSchemaTests(unittest.TestCase):
             ('tick_ms = 10', 'tick_ms = 10\nlifecycle = "legacy"', "unknown=lifecycle"),
             ("menu_order = 10", "menu_order = 0", "menu_order: outside"),
             ("autostart_id = 42", "autostart_id = 65536", "autostart_id: outside"),
+            ("autostart_id = 42", "autostart_id = 65535", "autostart_id: outside"),
         )
         for old, new, expected in mutations:
             with self.subTest(old=old, new=new):

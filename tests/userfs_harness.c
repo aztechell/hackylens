@@ -223,6 +223,18 @@ int main(void)
     require(userfs_set_startup("main.py") == USERFS_OK, "set startup");
     require(userfs_get_startup(startup, sizeof(startup)) == USERFS_OK &&
             strcmp(startup, "main.py") == 0, "get startup");
+    require(userfs_set_boot_shortcut("main.py") == USERFS_OK, "set boot shortcut");
+    require(userfs_set_startup("") == USERFS_OK, "clear IDE startup");
+    require(userfs_get_boot_shortcut(startup, sizeof(startup)) == USERFS_OK &&
+            strcmp(startup, "main.py") == 0, "independent boot shortcut");
+    require(userfs_set_pinned("main.py", 0U) == USERFS_OK &&
+            userfs_get_boot_shortcut(startup, sizeof(startup)) == USERFS_ERROR_NOT_FOUND,
+            "skip unpinned boot shortcut");
+    require(userfs_set_pinned("main.py", 1U) == USERFS_OK, "restore launcher pin");
+    require(userfs_get_boot_shortcut(startup, sizeof(startup)) == USERFS_ERROR_NOT_FOUND,
+            "repinning does not restore cleared boot shortcut");
+    require(userfs_set_boot_shortcut("main.py") == USERFS_OK, "restore boot shortcut");
+    require(userfs_set_startup("main.py") == USERFS_OK, "restore IDE startup");
     require(userfs_list(list_count, &listed) == USERFS_OK && listed == 1U,
             "list scripts");
     require(read_file("main.py", readback, new_size + 1U) == old_size &&
@@ -237,6 +249,8 @@ int main(void)
     memcpy(g_flash, snapshot, sizeof(g_flash));
     userfs_test_power_cycle();
     require(userfs_mount() == USERFS_OK, "mount mutation counter");
+    require(userfs_get_boot_shortcut(startup, sizeof(startup)) == USERFS_OK &&
+            strcmp(startup, "main.py") == 0, "boot shortcut survives remount");
     g_fail_after = -1;
     g_mutations = 0U;
     require(try_replacement(new_script, new_size) == USERFS_OK,

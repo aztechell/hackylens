@@ -98,6 +98,7 @@ class ButtonsAppTests(unittest.TestCase):
                     str(ROOT / "firmware" / "src" / "apps" / "buttons" / "buttons_app.c"),
                     str(ROOT / "firmware" / "src" / "apps" / "buttons" / "buttons_controller.c"),
                     str(ROOT / "firmware" / "src" / "apps" / "buttons" / "buttons_view.c"),
+                    str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                     "-o",
                     str(executable),
                 ],

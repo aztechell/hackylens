@@ -28,57 +28,48 @@ static void settings_light_release(settings_light_session_t *light)
     (void)hk_lights_close(&light->handle, HK_DEADLINE_IMMEDIATE);
 }
 
+void settings_backlight_preview(uint8_t percent)
+{
+    if(settings_light_acquire(&s_backlight) == HK_OK)
+        (void)hk_lights_set_level(&s_backlight.handle, HK_LIGHTS_CHANNEL_BACKLIGHT,
+            (uint16_t)percent * 10U, HK_DEADLINE_IMMEDIATE, NULL);
+}
+
 void screen_brightness_apply(void)
 {
-    settings_set_screen_brightness(settings_screen_brightness());
-    if(settings_light_acquire(&s_backlight) == HK_OK)
-        (void)hk_lights_set_level(
-            &s_backlight.handle,
-            HK_LIGHTS_CHANNEL_BACKLIGHT,
-            (uint16_t)settings_screen_brightness() * 10U,
-            HK_DEADLINE_IMMEDIATE, NULL);
+    settings_backlight_preview(settings_screen_brightness());
 }
 
 void screen_brightness_off(void)
 {
-    if(settings_light_acquire(&s_backlight) == HK_OK)
-        (void)hk_lights_set_level(
-            &s_backlight.handle,
-            HK_LIGHTS_CHANNEL_BACKLIGHT, 0U,
-            HK_DEADLINE_IMMEDIATE, NULL);
+    settings_backlight_preview(0U);
+}
+
+void settings_illumination_preview(uint8_t percent)
+{
+    if(settings_light_acquire(&s_illumination) == HK_OK)
+        (void)hk_lights_set_level(&s_illumination.handle, HK_LIGHTS_CHANNEL_ILLUMINATION,
+            (uint16_t)percent * 10U, HK_DEADLINE_IMMEDIATE, NULL);
 }
 
 void illum_led_apply(void)
 {
-    uint16_t level;
+    settings_illumination_preview(settings_led_enabled() ? settings_led_brightness() : 0U);
+}
 
-    settings_set_led_brightness(settings_led_brightness());
-    level = settings_led_enabled() ?
-            (uint16_t)settings_led_brightness() * 10U : 0U;
-    if(settings_light_acquire(&s_illumination) == HK_OK)
-        (void)hk_lights_set_level(
-            &s_illumination.handle,
-            HK_LIGHTS_CHANNEL_ILLUMINATION, level,
-            HK_DEADLINE_IMMEDIATE, NULL);
+void settings_rgb_preview(uint8_t red, uint8_t green, uint8_t blue)
+{
+    if(settings_light_acquire(&s_rgb) == HK_OK)
+        (void)hk_lights_set_rgb(&s_rgb.handle, (uint16_t)red * 10U,
+            (uint16_t)green * 10U, (uint16_t)blue * 10U, HK_DEADLINE_IMMEDIATE, NULL);
 }
 
 void rgb_led_apply(void)
 {
-    uint16_t red;
-    uint16_t green;
-    uint16_t blue;
-
-    settings_set_rgb_red(settings_rgb_red());
-    settings_set_rgb_green(settings_rgb_green());
-    settings_set_rgb_blue(settings_rgb_blue());
-    red = settings_rgb_enabled() ? (uint16_t)settings_rgb_red() * 10U : 0U;
-    green = settings_rgb_enabled() ?
-            (uint16_t)settings_rgb_green() * 10U : 0U;
-    blue = settings_rgb_enabled() ? (uint16_t)settings_rgb_blue() * 10U : 0U;
-    if(settings_light_acquire(&s_rgb) == HK_OK)
-        (void)hk_lights_set_rgb(
-            &s_rgb.handle, red, green, blue,
-            HK_DEADLINE_IMMEDIATE, NULL);
+    if(settings_rgb_enabled())
+        settings_rgb_preview(settings_rgb_red(), settings_rgb_green(), settings_rgb_blue());
+    else
+        settings_rgb_preview(0U, 0U, 0U);
 }
 
 void settings_lights_suspend(uint32_t channels)

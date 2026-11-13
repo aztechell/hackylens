@@ -1,11 +1,11 @@
 #include "buttons_view.h"
+#include "../../core/hk_ui_colors.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define BUTTONS_COLOR_BLACK 0x0000
 #define BUTTONS_COLOR_WHITE 0xFFFF
-#define BUTTONS_COLOR_GREEN 0x07E0
 #define BUTTONS_BAR_H 30
 #define BUTTONS_LINE 2
 #define BUTTONS_ROW_H 32
@@ -69,25 +69,25 @@ hk_result_t buttons_view_render(
     if(result != HK_OK)
         return result;
     bar = (hk_display_rect_t){0, 0, info.width, BUTTONS_BAR_H};
-    result = hk_app_surface_stroke_rect(surface, &bar, BUTTONS_COLOR_GREEN);
+    result = hk_app_surface_stroke_rect(surface, &bar, hk_ui_accent());
     if(result != HK_OK)
         return result;
     rule = (hk_display_rect_t){
         0, BUTTONS_BAR_H - BUTTONS_LINE, info.width, BUTTONS_LINE,
     };
-    result = hk_app_surface_fill_rect(surface, &rule, BUTTONS_COLOR_GREEN);
+    result = hk_app_surface_fill_rect(surface, &rule, hk_ui_accent());
     if(result != HK_OK)
         return result;
     result = draw_text(
         surface, 12, 6, info.width - 24U, 16U, "BUTTON TEST",
-        BUTTONS_COLOR_GREEN);
+        hk_ui_accent());
     if(result != HK_OK)
         return result;
     for(index = 0U; index < 4U; index++)
     {
         uint32_t mask = s_button_masks[index];
         uint16_t color = (state->repeat_error & mask) ?
-            BUTTONS_COLOR_WHITE : BUTTONS_COLOR_GREEN;
+            BUTTONS_COLOR_WHITE : hk_ui_accent();
 
         if(info.width < 320U)
             snprintf(line, sizeof(line), "%s %u/%u %s", s_button_names[index],
@@ -114,12 +114,12 @@ hk_result_t buttons_view_render(
         line, sizeof(line), "RESULT: %u/4%s", (unsigned)passed,
         state->repeat_error ? "  REPEAT ERROR" : "");
     result = draw_text(
-        surface, 12, 184, info.width - 24U, 16U, line, BUTTONS_COLOR_GREEN);
+        surface, 12, 184, info.width - 24U, 16U, line, hk_ui_accent());
     if(result != HK_OK)
         return result;
     return draw_text(
         surface, 12, 207, info.width - 24U, 16U,
         (state->pulse_buttons & HK_INPUT_BUTTON_BACK) ? "BACK: EXIT" :
         (info.width < 320U ? "BACK 2S: EXIT" : "HOLD BACK 2S TO EXIT"),
-        BUTTONS_COLOR_GREEN);
+        hk_ui_accent());
 }

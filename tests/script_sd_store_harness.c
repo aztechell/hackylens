@@ -8,6 +8,7 @@
 #include "../firmware/src/services/resource_cleanup.h"
 #include "../firmware/src/services/script_sd_store.h"
 #include "../firmware/src/storage/fat32_file.h"
+#include "../firmware/src/storage/fat32_allocation.h"
 #include "../firmware/src/storage/fat32_volume.h"
 #include "../firmware/src/storage/file_path.h"
 #include "../firmware/src/storage/internal/fat32_state_private.h"
@@ -20,6 +21,8 @@
 static uint8_t disk[DATA_SECTOR + 4U * CLUSTERS][SECTOR_BYTES];
 static uint8_t replacement[sizeof(disk)];
 static uint8_t fail_data_write;
+static uint8_t fail_fat_read;
+static uint8_t fail_fat_write;
 static uint16_t last_run_count;
 static const fat32_mount_info_t geometry = {
     .fat_begin = FAT_SECTOR, .data_begin = DATA_SECTOR, .root_cluster = 2U,
@@ -30,7 +33,7 @@ static const fat32_mount_info_t geometry = {
 uint8_t sd_card_read_block(uint32_t lba, uint8_t *data)
 {
     assert(lba < sizeof(disk) / SECTOR_BYTES);
-    if(!hk_fat_mounted())
+    if(!hk_fat_mounted() || (lba == FAT_SECTOR && fail_fat_read))
         return 0U;
     memcpy(data, disk[lba], SECTOR_BYTES);
     return 1U;
@@ -39,7 +42,7 @@ uint8_t sd_card_read_block(uint32_t lba, uint8_t *data)
 uint8_t sd_card_write_block(uint32_t lba, const uint8_t *data)
 {
     assert(lba < sizeof(disk) / SECTOR_BYTES);
-    if(!hk_fat_mounted())
+    if(!hk_fat_mounted() || (lba == FAT_SECTOR && fail_fat_write))
         return 0U;
     memcpy(disk[lba], data, SECTOR_BYTES);
     return 1U;
@@ -67,6 +70,51 @@ static void mount_blank(void)
     memset(disk, 0, sizeof(disk));
     wr32(disk[FAT_SECTOR] + 2U * 4U, FAT32_EOC);
     fat32_set_mounted(&geometry);
+}
+
+static void test_volume_usage(void)
+{
+    fat32_mount_info_t two_sectors = geometry;
+    two_sectors.sectors_per_fat = 2U;
+    two_sectors.data_begin = FAT_SECTOR + 2U;
+    two_sectors.cluster_count = 129U;
+    two_sectors.sectors_per_cluster = 64U;
+    two_sectors.total_sectors = two_sectors.data_begin + 129U * 64U;
+    memset(disk, 0, sizeof(disk));
+    wr32(disk[FAT_SECTOR], FAT32_EOC); /* Reserved entries are outside capacity. */
+    wr32(disk[FAT_SECTOR] + 8U, FAT32_EOC);
+    wr32(disk[FAT_SECTOR] + 12U, 0xa0000000U); /* Only the low 28 bits count. */
+    wr32(disk[FAT_SECTOR + 1U] + 12U, FAT32_EOC); /* Past the last cluster. */
+    fat32_set_mounted(&two_sectors);
+    fat32_usage_t usage = fat32_usage();
+    assert(usage.status == FAT32_USAGE_SCANNING && usage.total_bytes == 129U * 32768U);
+    assert(fat32_usage_scan_step());
+    assert(fat32_usage().progress == 97U && fat32_usage().used_bytes == 0U);
+    assert(fat_write_entry(3U, FAT32_EOC)); /* Already counted sector. */
+    assert(fat_write_entry(128U, FAT32_EOC)); /* Sector still to scan. */
+    fail_fat_read = 1U;
+    assert(!fat32_usage_scan_step() && fat32_usage().status == FAT32_USAGE_READY);
+    fail_fat_read = 0U;
+    assert(fat32_usage().used_bytes == 3U * 32768U);
+    assert(fat_write_entry(128U, 0U) && fat32_usage().used_bytes == 2U * 32768U);
+    uint32_t first = 0U;
+    assert(fat_alloc_chain(4U, &first) && fat32_usage().used_bytes == 6U * 32768U);
+    assert(fat_free_chain(first) && fat32_usage().used_bytes == 2U * 32768U);
+
+    fail_fat_write = 1U;
+    assert(!fat_write_entry(3U, 0U) && fat32_usage().status == FAT32_USAGE_SCANNING);
+    fail_fat_write = 0U;
+    fail_fat_read = 1U;
+    assert(!fat32_usage_scan_step() && fat32_usage().status == FAT32_USAGE_ERROR);
+    fail_fat_read = 0U;
+    fat32_usage_retry();
+    assert(fat32_usage_scan_step());
+    assert(!fat32_usage_scan_step() && fat32_usage().used_bytes == 2U * 32768U);
+    fat32_mark_removed();
+    assert(fat32_usage().status == FAT32_USAGE_UNAVAILABLE);
+    mount_blank();
+    assert(!fat32_usage_scan_step());
+    assert(fat32_usage().used_bytes == SECTOR_BYTES);
 }
 
 static script_sd_result_t begin(const char *name, uint8_t bmp)
@@ -229,6 +277,7 @@ int main(void)
     assert(file_path_find("/PYDATA/RUN.BIN", &entry) == FILE_PATH_OK);
     assert(entry.size == sizeof(payload) && fat_file_read_at(&entry, 0U, readback, entry.size));
     assert(memcmp(readback, payload, sizeof(payload)) == 0);
+    test_volume_usage();
     puts("SCRIPT_SD_STORE_OK");
     return 0;
 }

@@ -1,4 +1,5 @@
 #include "hk_config.h"
+#include "../core/hk_ui_colors.h"
 
 #if HK_ENABLE_AUDIO_FEATURE
 #include "audio_player_view.h"
@@ -33,24 +34,24 @@ hk_result_t audio_player_draw(hk_app_surface_t *surface, const audio_player_view
     if(full)
     {
         hk_app_panel_chrome(&panel, "WAV PLAYER");
-        hk_app_panel_label(&panel, 12U, 39U, width, player->name, HK_PANEL_GREEN, HK_PANEL_CENTER);
+        hk_app_panel_label(&panel, 12U, 39U, width, player->name, hk_ui_accent(), HK_PANEL_CENTER);
     }
     else
         hk_app_panel_fill(&panel, 2U, PLAYER_BODY_Y, panel.width - 4U, PLAYER_BODY_H, HK_PANEL_BLACK);
 
     char time[16];
     time_label(time, player->position);
-    hk_app_panel_label(&panel, 12U, 76U, width / 2U, time, HK_PANEL_GREEN, HK_PANEL_LEFT);
+    hk_app_panel_label(&panel, 12U, 76U, width / 2U, time, hk_ui_accent(), HK_PANEL_LEFT);
     time_label(time, player->duration);
     hk_app_panel_label(&panel, 12U + width / 2U, 76U, width / 2U, time,
-                       HK_PANEL_GREEN, HK_PANEL_RIGHT);
+                       hk_ui_accent(), HK_PANEL_RIGHT);
 
-    hk_app_panel_fill(&panel, 12U, 105U, width, 8U, HK_PANEL_TRACK);
+    hk_app_panel_fill(&panel, 12U, 105U, width, 8U, hk_ui_accent_dim());
     if(player->duration)
     {
         uint32_t elapsed = player->position < player->duration ? player->position : player->duration;
         hk_app_panel_fill(&panel, 12U, 105U, (uint16_t)((uint64_t)width * elapsed / player->duration),
-                          8U, HK_PANEL_GREEN);
+                          8U, hk_ui_accent());
     }
 
     hk_app_panel_status(&panel, 126U, message && *message ? message : player->status);

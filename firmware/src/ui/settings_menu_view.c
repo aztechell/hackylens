@@ -45,8 +45,8 @@ void settings_menu_view_draw_row(uint8_t slot,
     title = title ? title : "";
     value = value ? value : "";
     selected = selected ? 1U : 0U;
-    fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
-    bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
+    fg = selected ? COLOR_BLACK : hk_ui_accent();
+    bg = selected ? hk_ui_accent() : COLOR_BLACK;
     y = SETTINGS_MENU_ROW_Y0 + slot * SETTINGS_MENU_ROW_H;
     value_length = strlen(value);
     {

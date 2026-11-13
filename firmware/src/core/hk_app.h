@@ -13,6 +13,7 @@ typedef uint16_t hk_autostart_id_t;
 enum
 {
     HK_AUTOSTART_OFF = 0,
+    HK_AUTOSTART_PINNED_SCRIPT = 0xFFFF,
 };
 
 typedef struct

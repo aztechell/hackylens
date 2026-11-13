@@ -34,6 +34,7 @@ class MenuIconTests(unittest.TestCase):
             masks[app] = data
         sources = [
             "tests/menu_icons_harness.c", "firmware/src/ui/ui_menu.c",
+            "firmware/src/core/hk_ui_colors.c",
             "firmware/src/apps/camera/camera_view.c",
             "firmware/src/apps/face_detect/face_detect_view.c",
             "firmware/src/apps/face_recognition/face_recognition_icon.c",

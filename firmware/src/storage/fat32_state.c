@@ -21,6 +21,9 @@ static uint32_t g_fat_cluster_count;
 static uint32_t g_fat_alloc_hint = 2;
 static uint8_t g_fat_sectors_per_cluster;
 static uint8_t g_fat_count;
+static uint32_t g_usage_scanned;
+static uint32_t g_usage_allocated;
+static uint8_t g_usage_error;
 static uint8_t g_sd_sector[SD_BLOCK_SIZE] __attribute__((aligned(4)));
 static uint8_t g_sd_verify_sector[SD_BLOCK_SIZE] __attribute__((aligned(4)));
 
@@ -52,6 +55,74 @@ uint8_t fat32_sectors_per_cluster(void)
 uint32_t fat32_cluster_size(void)
 {
     return (uint32_t)g_fat_sectors_per_cluster * SD_BLOCK_SIZE;
+}
+
+void fat32_usage_invalidate(void)
+{
+    g_usage_scanned = 0U;
+    g_usage_allocated = 0U;
+    g_usage_error = 0U;
+}
+
+void fat32_usage_retry(void)
+{
+    g_usage_error = 0U;
+}
+
+void fat32_usage_note_entry(uint32_t cluster, uint32_t old_value, uint32_t new_value)
+{
+    uint32_t old_allocated = (old_value & 0x0fffffffU) != 0U;
+    uint32_t new_allocated = (new_value & 0x0fffffffU) != 0U;
+    if(old_allocated == new_allocated)
+        return;
+    if(cluster - 2U < g_usage_scanned)
+        g_usage_allocated = g_usage_allocated - old_allocated + new_allocated;
+}
+
+fat32_usage_t fat32_usage(void)
+{
+    fat32_usage_t usage = {0};
+    if(!g_fat_mounted || !g_fat_cluster_count)
+        return usage;
+
+    usage.total_bytes = (uint64_t)g_fat_cluster_count * fat32_cluster_size();
+    if(g_usage_scanned == g_fat_cluster_count)
+    {
+        usage.status = FAT32_USAGE_READY;
+        usage.progress = 100U;
+        usage.used_bytes = (uint64_t)g_usage_allocated * fat32_cluster_size();
+    }
+    else
+    {
+        usage.status = g_usage_error ? FAT32_USAGE_ERROR : FAT32_USAGE_SCANNING;
+        usage.progress = (uint8_t)((uint64_t)g_usage_scanned * 100U /
+                                   g_fat_cluster_count);
+    }
+    return usage;
+}
+
+uint8_t fat32_usage_scan_step(void)
+{
+    const uint32_t entries_per_sector = SD_BLOCK_SIZE / 4U;
+    if(!g_fat_mounted || g_usage_error || g_usage_scanned == g_fat_cluster_count)
+        return 0U;
+
+    uint32_t cluster = g_usage_scanned + 2U;
+    uint32_t sector = cluster / entries_per_sector;
+    if(sector >= g_fat_sectors_per_fat ||
+       !sd_card_read_block(g_fat_fat_begin + sector, g_sd_sector))
+    {
+        g_usage_error = 1U;
+        return 0U;
+    }
+
+    for(uint32_t i = cluster % entries_per_sector;
+        i < entries_per_sector && g_usage_scanned < g_fat_cluster_count; i++)
+    {
+        g_usage_allocated += (rd32(g_sd_sector + i * 4U) & 0x0fffffffU) != 0U;
+        g_usage_scanned++;
+    }
+    return g_usage_scanned < g_fat_cluster_count;
 }
 
 uint8_t *fat32_sector_scratch(void)
@@ -127,6 +198,7 @@ void fat32_set_mounted(const fat32_mount_info_t *mount)
     g_fat_sectors_per_cluster = mount->sectors_per_cluster;
     g_fat_count = mount->fat_count;
     g_fat_alloc_hint = 2;
+    fat32_usage_invalidate();
     g_fat_mount_generation++;
     g_fat_mounted = 1;
 }

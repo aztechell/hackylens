@@ -179,7 +179,8 @@ static uint8_t settings_record_valid(const settings_record_t *record)
 {
     if(record->magic != SETTINGS_MAGIC)
         return 0;
-    if(!((record->version == SETTINGS_STORAGE_VERSION &&
+    if(!(((record->version == SETTINGS_STORAGE_VERSION ||
+           record->version == SETTINGS_STORAGE_V6_VERSION) &&
           record->payload_size == sizeof(settings_payload_t)) ||
          (record->version == SETTINGS_STORAGE_V5_VERSION &&
           record->payload_size == offsetof(settings_payload_t, audio_volume))))
@@ -318,9 +319,10 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
     }
     else
         memcpy(payload, &slot->legacy.payload, sizeof(slot->legacy.payload));
-    if(slot->current.version != SETTINGS_STORAGE_VERSION)
+    if(slot->current.version < SETTINGS_STORAGE_V6_VERSION)
         payload->audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
-    payload->reserved = 0U;
+    if(slot->current.version < SETTINGS_STORAGE_VERSION)
+        payload->ui_color = 0U;
 }
 
 void settings_store_init(settings_store_load_t *result)

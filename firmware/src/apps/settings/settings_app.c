@@ -5,6 +5,8 @@
 #include "settings_controller.h"
 #include "settings_menu.h"
 #include "settings_view.h"
+#include "../../services/sd_service.h"
+#include "../../storage/fat32_volume.h"
 
 static _Alignas(HK_APP_STATE_ALIGNMENT) uint8_t s_state_storage[1024];
 
@@ -82,7 +84,10 @@ static hk_result_t settings_event(
         return HK_ERR_INVALID_ARGUMENT;
     if(event->kind == HK_APP_EVENT_INPUT)
     {
+        settings_page_t previous = state->page;
         settings_controller_handle_input(state, &event->data.input);
+        if(previous != state->page)
+            sd_service_watch_usage(state->page == SETTINGS_PAGE_DEVICE);
         return settings_finish_work(ctx, state);
     }
     if(event->kind == HK_APP_EVENT_TIMER)
@@ -90,6 +95,27 @@ static hk_result_t settings_event(
         if(hk_input_get_state(state->input, &buttons) != HK_OK)
             return HK_ERR_INTERNAL;
         settings_controller_tick(state, buttons);
+        if(state->page == SETTINGS_PAGE_DEVICE)
+        {
+            fat32_usage_t usage = fat32_usage();
+            uint8_t progress = usage.progress / SETTINGS_SD_PROGRESS_STEP;
+            if(state->sd_usage_status != usage.status ||
+               state->sd_usage_progress != progress ||
+               state->sd_used_bytes != usage.used_bytes ||
+               state->sd_total_bytes != usage.total_bytes)
+            {
+                state->sd_usage_status = usage.status;
+                state->sd_usage_progress = progress;
+                state->sd_used_bytes = usage.used_bytes;
+                state->sd_total_bytes = usage.total_bytes;
+                state->dirty = 1U;
+            }
+        }
+        return settings_finish_work(ctx, state);
+    }
+    if(event->kind == HK_APP_EVENT_MEDIA)
+    {
+        state->dirty = 1U;
         return settings_finish_work(ctx, state);
     }
     return HK_OK;
@@ -103,7 +129,7 @@ static hk_result_t settings_render(
 
     if(result != HK_OK)
         return result;
-    return settings_view_render(surface, &state->menu);
+    return settings_view_render(surface, state);
 }
 
 static hk_result_t settings_stop(const hk_app_context_t *ctx)
@@ -114,6 +140,7 @@ static hk_result_t settings_stop(const hk_app_context_t *ctx)
 
     if(result == HK_OK)
         settings_controller_exit(state);
+    sd_service_watch_usage(0U);
     return hk_app_context_teardown_deadline(ctx, &deadline);
 }
 

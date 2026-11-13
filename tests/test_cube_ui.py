@@ -43,6 +43,7 @@ class CubeUiTests(unittest.TestCase):
     def test_native_layout_and_camera_coordinate_mapping(self):
         output = self.compile_and_run("layout", [
             "tests/cube_layout_harness.c", "firmware/src/ui/camera_view.c",
+            "firmware/src/core/hk_ui_colors.c",
             "firmware/src/ui/image_fit.c", "firmware/src/core/hk_menu.c",
             "firmware/src/core/image_viewport.c",
             "firmware/src/apps/apriltag/apriltag_view.c",

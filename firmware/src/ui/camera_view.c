@@ -114,6 +114,7 @@ static void camera_view_compose_overlay(hk_ui_display_surface_t *surface,
         return;
     clipped_w = box_x + box_w > surface->width ? surface->width - box_x : box_w;
     clipped_h = box_y + box_h > surface->height ? surface->height - box_y : box_h;
+    uint16_t color = hk_ui_accent();
     for(uint16_t y = 0; y < clipped_h; y++)
         memset(surface->rgb565_be + (uint32_t)(box_y + y) * surface->stride_bytes + box_x * 2U,
                0,
@@ -133,7 +134,7 @@ static void camera_view_compose_overlay(hk_ui_display_surface_t *surface,
                 {
                     uint8_t *dst = surface->rgb565_be +
                         (uint32_t)(text_y + y) * surface->stride_bytes + (glyph_x0 + x) * 2U;
-                    camera_view_write_pixel(dst, COLOR_TERM_GREEN);
+                    camera_view_write_pixel(dst, color);
                 }
             }
         }

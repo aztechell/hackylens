@@ -337,7 +337,7 @@ static void draw_overlay(camera_view_present_t *present, uint16_t width,
         const vision_result_item_t *item = &app->shown[i];
         camera_view_rect_t source = {item->x0, item->y0, item->x1 - item->x0, item->y1 - item->y0};
         camera_view_rect_t mapped;
-        uint16_t color = item->id ? COLOR_TERM_GREEN : COLOR_WHITE;
+        uint16_t color = item->id ? hk_ui_accent() : COLOR_WHITE;
         camera_view_compose_rects(present, &frame, &source, 1U, color);
         if(camera_view_map_rect(&frame, &source, &mapped))
         {

@@ -1,10 +1,10 @@
 #include "audio_service.h"
 
 #include "board_config.h"
-#if HK_BOARD_AUDIO_ES8374
-#include "hal_audio.h"
 #include "settings_persistence.h"
 #include "settings_service.h"
+#if HK_BOARD_AUDIO_ES8374
+#include "hal_audio.h"
 
 #define AUDIO_OWNER_PYTHON 3U
 static uint8_t s_owner;
@@ -126,6 +126,8 @@ void audio_stream_cancel(hk_audio_owner_t owner)
     (void)audio_cancel_owner(owner);
 }
 
+#endif
+
 uint8_t audio_service_volume(void)
 {
     return settings_audio_volume();
@@ -135,6 +137,7 @@ hk_result_t audio_service_set_volume(uint8_t percent)
 {
     if(percent > 100U)
         return HK_ERR_INVALID_ARGUMENT;
+#if HK_BOARD_AUDIO_ES8374
     if(percent == settings_audio_volume())
         return HK_OK;
     hk_result_t result = hal_audio_set_volume(percent);
@@ -144,5 +147,7 @@ hk_result_t audio_service_set_volume(uint8_t percent)
         settings_mark_dirty(0U);
     }
     return result;
-}
+#else
+    return HK_ERR_FEATURE_UNAVAILABLE;
 #endif
+}

@@ -19,6 +19,11 @@ The native **MICRO-PYTHON** app is a script manager. It lists USERFS `.py`
 files, previews source without loading the whole file, runs the selected file,
 shows scrollable output, changes startup selection, and deletes only after an
 explicit confirmation. Opening the app does not run the selected startup file.
+
+For power-on launch, pin a script to the menu, then select it under
+**SETTINGS → Startup**. It runs with the same lifecycle as the menu shortcut.
+BACK at boot skips autostart, and a watchdog reset also skips the script.
+The startup selection in MICRO-PYTHON remains available for the debug command.
 That selection remains the HMPY/default program used when `RUN` omits a name.
 
 Select a saved script in MICRO-PYTHON and choose **PIN TO MENU**. Up to eight

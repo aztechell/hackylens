@@ -128,6 +128,7 @@ class TerminalAppTests(unittest.TestCase):
                         / "terminal_buffer.c"
                     ),
                     str(ROOT / "firmware" / "src" / "apps" / "terminal" / "terminal_view.c"),
+                    str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                     str(ROOT / "firmware" / "src" / "ui" / "hk_font.c"),
                     str(ROOT / "firmware" / "src" / "core" / "hk_log.c"),
                     "-o",

@@ -14,6 +14,7 @@
 #define USERFS_LOOKAHEAD_SIZE 32U
 #define USERFS_BLOCK_CYCLES 500
 #define USERFS_STARTUP_FILE ".startup"
+#define USERFS_BOOT_SHORTCUT_FILE ".bootpin"
 #define USERFS_META_TEMP ".meta-upload"
 #define USERFS_UPLOAD_PREFIX ".upload-"
 #define USERFS_PIN_ATTR 1U
@@ -187,6 +188,16 @@ static uint8_t userfs_valid_name(const char *name, uint8_t allow_hidden)
 static const char *userfs_normal_name(const char *name)
 {
     return name && name[0] == '/' ? name + 1 : name;
+}
+
+static int userfs_clear_boot_shortcut_for(const char *name)
+{
+    char selected[USERFS_NAME_MAX + 1U];
+    if(userfs_get_boot_shortcut(selected, sizeof(selected)) != USERFS_OK ||
+       strcmp(userfs_normal_name(name), selected) != 0)
+        return 0;
+    int result = lfs_remove(&g_lfs, USERFS_BOOT_SHORTCUT_FILE);
+    return result == LFS_ERR_NOENT ? 0 : result;
 }
 
 static uint8_t userfs_blank_media(void)
@@ -492,6 +503,12 @@ userfs_result_t userfs_set_pinned(const char *name, uint8_t pinned)
         return userfs_remember(USERFS_OK);
     if(pinned && g_pin_count == USERFS_PIN_MAX)
         return userfs_remember(USERFS_ERROR_NO_SPACE);
+    if(!pinned)
+    {
+        int result = userfs_clear_boot_shortcut_for(name);
+        if(result < 0)
+            return userfs_remember(userfs_from_lfs(result));
+    }
     const char *normal = userfs_normal_name(name);
     int error = pinned ? lfs_setattr(&g_lfs, normal, USERFS_PIN_ATTR, &pinned, sizeof(pinned)) :
                          lfs_removeattr(&g_lfs, normal, USERFS_PIN_ATTR);
@@ -562,6 +579,9 @@ userfs_result_t userfs_remove(const char *name)
         if(result < 0 && result != LFS_ERR_NOENT)
             return userfs_remember(userfs_from_lfs(result));
     }
+    result = userfs_clear_boot_shortcut_for(name);
+    if(result < 0)
+        return userfs_remember(userfs_from_lfs(result));
     result = lfs_remove(&g_lfs, userfs_normal_name(name));
     if(result == 0 && userfs_is_pinned(name))
         g_pins_loaded = 0U;
@@ -701,7 +721,7 @@ userfs_result_t userfs_upload_abort(uint32_t upload_id)
     return userfs_remember(USERFS_OK);
 }
 
-static userfs_result_t userfs_atomic_metadata(const char *data, size_t size)
+static userfs_result_t userfs_atomic_metadata(const char *path, const char *data, size_t size)
 {
     lfs_file_t file;
     lfs_ssize_t written;
@@ -726,11 +746,11 @@ static userfs_result_t userfs_atomic_metadata(const char *data, size_t size)
             result = close_result;
     }
     if(result == 0)
-        result = lfs_rename(&g_lfs, USERFS_META_TEMP, USERFS_STARTUP_FILE);
+        result = lfs_rename(&g_lfs, USERFS_META_TEMP, path);
     return userfs_from_lfs(result);
 }
 
-userfs_result_t userfs_set_startup(const char *name)
+static userfs_result_t userfs_set_selection(const char *path, const char *name)
 {
     struct lfs_info info;
     const char *normal;
@@ -742,7 +762,7 @@ userfs_result_t userfs_set_startup(const char *name)
         return userfs_remember(USERFS_ERROR_BUSY);
     if(!name || !name[0])
     {
-        result = lfs_remove(&g_lfs, USERFS_STARTUP_FILE);
+        result = lfs_remove(&g_lfs, path);
         if(result == LFS_ERR_NOENT)
             result = 0;
         return userfs_remember(userfs_from_lfs(result));
@@ -753,10 +773,10 @@ userfs_result_t userfs_set_startup(const char *name)
     result = lfs_stat(&g_lfs, normal, &info);
     if(result < 0 || info.type != LFS_TYPE_REG)
         return userfs_remember(USERFS_ERROR_NOT_FOUND);
-    return userfs_remember(userfs_atomic_metadata(normal, strlen(normal)));
+    return userfs_remember(userfs_atomic_metadata(path, normal, strlen(normal)));
 }
 
-userfs_result_t userfs_get_startup(char *name, size_t capacity)
+static userfs_result_t userfs_get_selection(const char *path, char *name, size_t capacity)
 {
     lfs_file_t file;
     lfs_ssize_t count;
@@ -766,7 +786,7 @@ userfs_result_t userfs_get_startup(char *name, size_t capacity)
         return userfs_remember(USERFS_ERROR_NOT_MOUNTED);
     if(!name || capacity < 2U)
         return userfs_remember(USERFS_ERROR_INVALID_ARGUMENT);
-    result = userfs_file_open(&file, USERFS_STARTUP_FILE, LFS_O_RDONLY);
+    result = userfs_file_open(&file, path, LFS_O_RDONLY);
     if(result < 0)
         return userfs_remember(userfs_from_lfs(result));
     count = lfs_file_read(&g_lfs, &file, name, capacity - 1U);
@@ -777,6 +797,33 @@ userfs_result_t userfs_get_startup(char *name, size_t capacity)
     if(!userfs_valid_name(name, 0U))
         return userfs_remember(USERFS_ERROR_CORRUPT);
     return userfs_remember(USERFS_OK);
+}
+
+userfs_result_t userfs_set_startup(const char *name)
+{
+    return userfs_set_selection(USERFS_STARTUP_FILE, name);
+}
+
+userfs_result_t userfs_get_startup(char *name, size_t capacity)
+{
+    return userfs_get_selection(USERFS_STARTUP_FILE, name, capacity);
+}
+
+userfs_result_t userfs_set_boot_shortcut(const char *name)
+{
+    if(name && name[0] && !userfs_valid_name(name, 0U))
+        return userfs_remember(USERFS_ERROR_INVALID_ARGUMENT);
+    if(name && name[0] && !userfs_is_pinned(name))
+        return userfs_remember(USERFS_ERROR_NOT_FOUND);
+    return userfs_set_selection(USERFS_BOOT_SHORTCUT_FILE, name);
+}
+
+userfs_result_t userfs_get_boot_shortcut(char *name, size_t capacity)
+{
+    userfs_result_t result = userfs_get_selection(USERFS_BOOT_SHORTCUT_FILE, name, capacity);
+    if(result == USERFS_OK && !userfs_is_pinned(name))
+        return userfs_remember(USERFS_ERROR_NOT_FOUND);
+    return result;
 }
 
 const char *userfs_result_name(userfs_result_t result)

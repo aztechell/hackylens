@@ -72,6 +72,8 @@ userfs_result_t userfs_upload_abort(uint32_t upload_id);
 
 userfs_result_t userfs_set_startup(const char *name);
 userfs_result_t userfs_get_startup(char *name, size_t capacity);
+userfs_result_t userfs_set_boot_shortcut(const char *name);
+userfs_result_t userfs_get_boot_shortcut(char *name, size_t capacity);
 
 /* Launcher pins belong to saved files and follow atomic replacements. */
 uint8_t userfs_pin_count(void);

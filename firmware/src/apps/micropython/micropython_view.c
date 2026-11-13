@@ -285,7 +285,7 @@ static void draw_info(const micropython_view_state_t *ui,
     fitted_text(clipped, sizeof(clipped), line, PY_TEXT_COLUMNS);
     draw_small_text(PY_TEXT_X, 31U,
                     HK_DISPLAY_REQUIRED_WIDTH - PY_TEXT_X * 2U, clipped,
-                    COLOR_TERM_GREEN, COLOR_BLACK);
+                    hk_ui_accent(), COLOR_BLACK);
 }
 
 static void draw_list_row(const micropython_view_state_t *ui, uint8_t row)
@@ -293,8 +293,8 @@ static void draw_list_row(const micropython_view_state_t *ui, uint8_t row)
     uint16_t y = (uint16_t)(PY_BODY_Y + row * PY_LIST_ROW_PITCH);
     uint8_t selected = row < ui->visible_count &&
                        ui->list_top + row == ui->selected_index;
-    uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
-    uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
+    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
+    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
     char name[USERFS_NAME_MAX + 1U];
     char size[12];
     char line[96];
@@ -318,8 +318,8 @@ static void draw_action_row(const micropython_view_state_t *ui, uint8_t row)
 {
     uint16_t y = (uint16_t)(PY_ACTION_ROW_Y0 + row * PY_ACTION_ROW_PITCH);
     uint8_t selected = row == ui->action_index;
-    uint16_t fg = selected ? COLOR_BLACK : COLOR_TERM_GREEN;
-    uint16_t bg = selected ? COLOR_TERM_GREEN : COLOR_BLACK;
+    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
+    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
 
     hk_ui_display_fill_rect(20U, y, HK_DISPLAY_REQUIRED_WIDTH - 40U,
                             PY_ACTION_ROW_H, bg);
@@ -338,7 +338,7 @@ static void draw_body(const micropython_view_state_t *ui,
        ui->mode != MICROPYTHON_UI_CONSOLE)
     {
         draw_small_centered(94U, "STORAGE NOT READY",
-                            COLOR_TERM_GREEN, COLOR_BLACK);
+                            hk_ui_accent(), COLOR_BLACK);
         return;
     }
     if(ui->mode == MICROPYTHON_UI_LIST)
@@ -346,7 +346,7 @@ static void draw_body(const micropython_view_state_t *ui,
         if(!ui->file_count)
         {
             draw_small_centered(84U, "NO PYTHON FILES",
-                                COLOR_TERM_GREEN, COLOR_BLACK);
+                                hk_ui_accent(), COLOR_BLACK);
             draw_small_centered(112U, "UPLOAD .PY FROM PC",
                                 COLOR_WHITE, COLOR_BLACK);
             draw_small_centered(140U, "WITH HKPY TOOL",
@@ -373,7 +373,7 @@ static void draw_body(const micropython_view_state_t *ui,
             draw_small_text(
                 PY_TEXT_X, (uint16_t)(PY_BODY_Y + row * PY_TEXT_ROW_PITCH),
                 HK_DISPLAY_REQUIRED_WIDTH - PY_TEXT_X * 2U,
-                line, COLOR_TERM_GREEN, COLOR_BLACK);
+                line, hk_ui_accent(), COLOR_BLACK);
         }
         return;
     }
@@ -383,13 +383,13 @@ static void draw_body(const micropython_view_state_t *ui,
             draw_small_text(
                 PY_TEXT_X, (uint16_t)(PY_BODY_Y + row * PY_TEXT_ROW_PITCH),
                 HK_DISPLAY_REQUIRED_WIDTH - PY_TEXT_X * 2U,
-                ui->log_lines[row], COLOR_TERM_GREEN, COLOR_BLACK);
+                ui->log_lines[row], hk_ui_accent(), COLOR_BLACK);
         return;
     }
     draw_small_centered(76U, "DELETE THIS SCRIPT?",
                         COLOR_WHITE, COLOR_BLACK);
     fitted_text(line, sizeof(line), ui->selected_name, PY_TEXT_COLUMNS);
-    draw_small_centered(108U, line, COLOR_TERM_GREEN, COLOR_BLACK);
+    draw_small_centered(108U, line, hk_ui_accent(), COLOR_BLACK);
     if(ui->startup[0] && strcmp(ui->startup, ui->selected_name) == 0)
         draw_small_centered(140U, "STARTUP WILL BE CLEARED",
                             COLOR_WHITE, COLOR_BLACK);

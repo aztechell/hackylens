@@ -29,6 +29,7 @@ typedef struct
 #endif
     uint8_t qr_decode_rate;
     uint8_t audio_volume;
+    uint8_t ui_color;
 } settings_snapshot_t;
 
 void settings_snapshot_capture(settings_snapshot_t *snapshot);

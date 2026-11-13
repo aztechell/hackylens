@@ -48,6 +48,17 @@ static int32_t settings_menu_read_value(const settings_menu_session_t *session,
     return session->definition->read(session->definition->context, item->id);
 }
 
+int32_t settings_menu_display_value(const settings_menu_session_t *session, uint16_t id)
+{
+    if(!session || !session->definition)
+        return 0;
+    const settings_menu_item_t *item = settings_menu_current(session);
+    if(item && item->id == id && session->editing && session->definition->defer_edits)
+        return session->edit_value;
+    return session->definition->read ?
+           session->definition->read(session->definition->context, id) : 0;
+}
+
 static uint8_t settings_menu_choice_count(const settings_menu_session_t *session,
                                           const settings_menu_item_t *item)
 {
@@ -84,12 +95,13 @@ static void settings_menu_format_value(const settings_menu_session_t *session,
     int32_t current;
 
     value[0] = '\0';
-    if(session->definition->format &&
+    if(!(session->editing && session->definition->defer_edits &&
+         item == settings_menu_current(session)) && session->definition->format &&
        session->definition->format(session->definition->context,
                                    item->id, value, value_size))
         return;
 
-    current = settings_menu_read_value(session, item);
+    current = settings_menu_display_value(session, item->id);
     if(item->kind == SETTINGS_MENU_ITEM_TOGGLE)
         snprintf(value, value_size, "%s", current ? "ON" : "OFF");
     else if(item->kind == SETTINGS_MENU_ITEM_CHOICE)
@@ -101,7 +113,19 @@ static void settings_menu_format_value(const settings_menu_session_t *session,
             snprintf(value, value_size, "%s", label);
     }
     else if(item->kind == SETTINGS_MENU_ITEM_RANGE)
-        snprintf(value, value_size, "%ld", (long)current);
+    {
+        if(item->flags & SETTINGS_MENU_ITEM_PERCENT)
+            snprintf(value, value_size, "%ld%%", (long)current);
+        else if(item->flags & SETTINGS_MENU_ITEM_MINUTES)
+        {
+            if(current)
+                snprintf(value, value_size, "%ld min", (long)current);
+            else
+                snprintf(value, value_size, "OFF");
+        }
+        else
+            snprintf(value, value_size, "%ld", (long)current);
+    }
 }
 
 static void settings_menu_draw_index(settings_menu_session_t *session, uint8_t index)
@@ -151,7 +175,12 @@ void settings_menu_redraw_item(settings_menu_session_t *session, uint16_t id)
     }
 }
 
-static void settings_menu_finish_edit(settings_menu_session_t *session, uint8_t redraw)
+static uint8_t settings_menu_write_value(settings_menu_session_t *session,
+                                         const settings_menu_item_t *item,
+                                         int32_t value);
+
+static void settings_menu_finish_edit(settings_menu_session_t *session, uint8_t redraw,
+                                      uint8_t accept)
 {
     const settings_menu_item_t *item;
 
@@ -160,8 +189,20 @@ static void settings_menu_finish_edit(settings_menu_session_t *session, uint8_t 
     item = settings_menu_current(session);
     session->editing = 0U;
     settings_menu_repeat_reset(session);
-    if(item && session->definition->committed)
-        session->definition->committed(session->definition->context, item->id);
+    if(item)
+    {
+        uint8_t committed = 1U;
+        if(session->definition->defer_edits)
+        {
+            int32_t original = settings_menu_read_value(session, item);
+            committed = accept && session->edit_value != original &&
+                        settings_menu_write_value(session, item, session->edit_value);
+            if(!committed && session->definition->preview)
+                session->definition->preview(session->definition->context, item->id, original);
+        }
+        if(committed && session->definition->committed)
+            session->definition->committed(session->definition->context, item->id);
+    }
     if(redraw)
         settings_menu_draw_index(session, session->index);
 }
@@ -199,7 +240,7 @@ void settings_menu_close(settings_menu_session_t *session)
 {
     if(!session)
         return;
-    settings_menu_finish_edit(session, 0U);
+    settings_menu_finish_edit(session, 0U, 0U);
     session->active = 0U;
     settings_menu_repeat_reset(session);
 }
@@ -241,6 +282,8 @@ static int32_t settings_menu_adjusted_value(const settings_menu_session_t *sessi
 
     if(step <= 0 || maximum < minimum)
         return current;
+    if(current < minimum && session->definition->defer_edits)
+        return delta < 0 ? maximum : minimum;
     if(current < minimum)
         current = minimum;
     else if(current > maximum)
@@ -281,9 +324,18 @@ static void settings_menu_adjust(settings_menu_session_t *session, int8_t delta)
     if(!item || (item->kind != SETTINGS_MENU_ITEM_CHOICE &&
                  item->kind != SETTINGS_MENU_ITEM_RANGE))
         return;
-    current = settings_menu_read_value(session, item);
+    current = settings_menu_display_value(session, item->id);
     next = settings_menu_adjusted_value(session, item, current, delta);
-    if(next != current)
+    if(next == current)
+        return;
+    if(session->editing && session->definition->defer_edits)
+    {
+        session->edit_value = next;
+        if(session->definition->preview)
+            session->definition->preview(session->definition->context, item->id, next);
+        settings_menu_draw_index(session, session->index);
+    }
+    else
         settings_menu_write_value(session, item, next);
 }
 
@@ -307,6 +359,7 @@ static void settings_menu_activate(settings_menu_session_t *session)
        (item->kind == SETTINGS_MENU_ITEM_CHOICE || item->kind == SETTINGS_MENU_ITEM_RANGE))
     {
         session->editing = 1U;
+        session->edit_value = settings_menu_read_value(session, item);
         settings_menu_repeat_reset(session);
         settings_menu_draw_index(session, session->index);
         return;
@@ -326,7 +379,7 @@ settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *sessio
     {
         if(session->editing)
         {
-            settings_menu_finish_edit(session, 1U);
+            settings_menu_finish_edit(session, 1U, 0U);
             return SETTINGS_MENU_EVENT_NONE;
         }
         return SETTINGS_MENU_EVENT_CLOSE_REQUESTED;
@@ -334,7 +387,7 @@ settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *sessio
     if(input->pressed & BUTTON_OK)
     {
         if(session->editing)
-            settings_menu_finish_edit(session, 1U);
+            settings_menu_finish_edit(session, 1U, 1U);
         else
             settings_menu_activate(session);
         return SETTINGS_MENU_EVENT_NONE;

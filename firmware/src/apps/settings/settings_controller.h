@@ -8,9 +8,17 @@
 typedef struct
 {
     settings_menu_session_t menu;
+    settings_startup_choices_t startup;
     const hk_input_t *input;
     uint8_t close_requested;
     uint8_t dirty;
+    settings_page_t page;
+    uint8_t root_index;
+    uint8_t parent_index;
+    uint8_t sd_usage_status;
+    uint8_t sd_usage_progress;
+    uint64_t sd_used_bytes;
+    uint64_t sd_total_bytes;
 } settings_state_t;
 
 void settings_controller_reset(

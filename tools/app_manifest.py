@@ -264,7 +264,7 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
 
     if "autostart_id" in table:
         autostart_id = _integer(
-            table["autostart_id"], f"{path}: autostart_id", 0, 0xFFFF
+            table["autostart_id"], f"{path}: autostart_id", 0, 0xFFFE
         )
     else:
         autostart_id = 0

@@ -5,6 +5,7 @@
 #include "../core/photo_types.h"
 #include "../core/hk_app.h"
 #include "../core/hk_app_registry.h"
+#include "../core/hk_ui_colors.h"
 
 #include "../config/camera_config.h"
 #include "../config/settings_config.h"
@@ -29,7 +30,7 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
 #if HK_ENABLE_CAMERA_FEATURE
     payload.camera_review_after_shot = snapshot->camera.review_after_shot ? 1 : 0;
 #endif
-    payload.auto_sleep_minutes = (uint8_t)(clamp_u8(snapshot->auto_sleep_minutes, 1, 30) |
+    payload.auto_sleep_minutes = (uint8_t)(clamp_u8(snapshot->auto_sleep_minutes, 0, 30) |
                                            ((snapshot->feature_flags & SETTINGS_FEATURE_FLAGS_MASK) <<
                                             SETTINGS_PAYLOAD_FEATURE_SHIFT));
 #if HK_ENABLE_CAMERA_FEATURE
@@ -62,6 +63,7 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
                                snapshot->autostart_id) ?
                            snapshot->autostart_id : HK_AUTOSTART_OFF;
     payload.audio_volume = clamp_u8(snapshot->audio_volume, 0U, 100U);
+    payload.ui_color = hk_ui_color_normalize(snapshot->ui_color);
     return payload;
 }
 
@@ -86,6 +88,7 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
 
     memset(snapshot, 0, sizeof(*snapshot));
     snapshot->audio_volume = clamp_u8(payload->audio_volume, 0U, 100U);
+    snapshot->ui_color = hk_ui_color_normalize(payload->ui_color);
     memcpy(snapshot->app_data, payload->app_data, sizeof(snapshot->app_data));
     snapshot->autostart_id = hk_app_autostart_id_is_persistable(
                                  payload->autostart_id) ?
@@ -111,8 +114,7 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
 #if HK_ENABLE_CAMERA_FEATURE
     camera.review_after_shot = payload->camera_review_after_shot ? 1 : 0;
 #endif
-    snapshot->auto_sleep_minutes = (payload->auto_sleep_minutes & SETTINGS_PAYLOAD_AUTO_SLEEP_MASK) >= 1 &&
-                                   (payload->auto_sleep_minutes & SETTINGS_PAYLOAD_AUTO_SLEEP_MASK) <= 30 ?
+    snapshot->auto_sleep_minutes = (payload->auto_sleep_minutes & SETTINGS_PAYLOAD_AUTO_SLEEP_MASK) <= 30 ?
                                    (uint8_t)(payload->auto_sleep_minutes & SETTINGS_PAYLOAD_AUTO_SLEEP_MASK) : 1;
     snapshot->feature_flags = (uint8_t)((payload->auto_sleep_minutes >> SETTINGS_PAYLOAD_FEATURE_SHIFT) &
                                         SETTINGS_FEATURE_FLAGS_MASK);

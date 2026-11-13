@@ -6,12 +6,22 @@
 
 #include "../config/settings_config.h"
 #include "../core/hk_app_registry.h"
+#include "../core/hk_ui_colors.h"
 #include "settings_service.h"
 #include "settings_app_data.h"
 #include "hk_config.h"
 #if HK_ENABLE_CAMERA_FEATURE
 #include "camera_persist_settings.h"
 #endif
+
+const char *settings_board_label(void)
+{
+    if(strcmp(HK_BOARD_ID, "sipeed-maix-cube") == 0)
+        return "Maix Cube";
+    if(strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0)
+        return "SEN0305";
+    return HK_BOARD_ID;
+}
 
 static uint8_t g_led_enabled = 0;
 static uint8_t g_led_brightness = 20;
@@ -27,6 +37,18 @@ static uint8_t g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
 static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
 static uint8_t g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
+static uint8_t g_ui_color = HK_UI_COLOR_GREEN;
+
+uint8_t settings_ui_color(void)
+{
+    return g_ui_color;
+}
+
+void settings_set_ui_color(uint8_t color)
+{
+    g_ui_color = hk_ui_color_normalize(color);
+    hk_ui_preview_color(g_ui_color);
+}
 
 uint8_t settings_audio_volume(void)
 {
@@ -137,7 +159,7 @@ void settings_set_screen_brightness(uint8_t brightness)
 
 void settings_set_auto_sleep_minutes(uint8_t minutes)
 {
-    g_auto_sleep_minutes = clamp_u8(minutes, 1, 30);
+    g_auto_sleep_minutes = clamp_u8(minutes, 0, 30);
 }
 
 void settings_set_feature_flags(uint8_t flags)
@@ -216,6 +238,7 @@ void settings_defaults(void)
     g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
     g_autostart_id = HK_AUTOSTART_OFF;
     g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
+    settings_set_ui_color(HK_UI_COLOR_GREEN);
     memset(g_app_data, 0, sizeof(g_app_data));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
@@ -235,7 +258,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->rgb_green = clamp_u8(g_rgb_green, 0, 100);
     snapshot->rgb_blue = clamp_u8(g_rgb_blue, 0, 100);
     snapshot->screen_brightness = clamp_u8(g_screen_brightness, 10, 100);
-    snapshot->auto_sleep_minutes = clamp_u8(g_auto_sleep_minutes, 1, 30);
+    snapshot->auto_sleep_minutes = g_auto_sleep_minutes;
     snapshot->feature_flags = g_feature_flags & SETTINGS_FEATURE_FLAGS_MASK;
     snapshot->external_link_uart_speed = (uint8_t)g_external_link_uart_speed;
     snapshot->autostart_id = g_autostart_id;
@@ -245,6 +268,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
 #endif
     snapshot->qr_decode_rate = g_qr_decode_rate;
     snapshot->audio_volume = g_audio_volume;
+    snapshot->ui_color = g_ui_color;
 }
 
 void settings_snapshot_apply(const settings_snapshot_t *snapshot)
@@ -269,4 +293,5 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
 #endif
     settings_set_qr_decode_rate(snapshot->qr_decode_rate);
     settings_set_audio_volume(snapshot->audio_volume);
+    settings_set_ui_color(snapshot->ui_color);
 }

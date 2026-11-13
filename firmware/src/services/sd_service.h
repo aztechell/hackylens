@@ -5,5 +5,6 @@
 
 
 hk_sd_event_t sd_service_tick(void);
+void sd_service_watch_usage(uint8_t watch);
 
 #endif

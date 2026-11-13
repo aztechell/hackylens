@@ -6,6 +6,7 @@
 #include "../firmware/src/app_runtime/surface_private.h"
 #include "../firmware/src/apps/pong/pong_controller.h"
 #include "../firmware/src/apps/pong/pong_view.h"
+#include "../firmware/src/core/hk_ui_colors.h"
 
 typedef struct
 {
@@ -241,7 +242,7 @@ static void test_dirty_rendering(void)
         assert(call->w < (uint32_t)PONG_FIELD_W);
         assert(call->h < (uint32_t)PONG_FIELD_H);
         black_calls += call->color == PONG_COLOR_BLACK;
-        green_calls += call->color == PONG_COLOR_GREEN;
+        green_calls += call->color == hk_ui_accent();
         white_calls += call->color == PONG_BALL_COLOR;
     }
     assert(black_calls > 0U);

@@ -1,4 +1,5 @@
 #include "sleep_app.h"
+#include "../../core/hk_ui_colors.h"
 #include "sleep_controller.h"
 #include "sleep_view.h"
 #include "sleep_firmware.h"
@@ -165,12 +166,12 @@ static hk_result_t power_render(const hk_app_context_t *ctx, hk_app_surface_t *s
        (uint64_t)pixels.pixels.stride_bytes*pixels.height > pixels.pixels.size_bytes)
         return HK_ERR_INVALID_ARGUMENT;
     DRAW(power_rect(&pixels,0,0,info.width,info.height,0U));
-    DRAW(power_rect(&pixels,0,28,info.width,2,0x07e0));
-    DRAW(power_text_scaled(&pixels,12,2,info.width-24,"POWER",0x07e0,1U));
+    DRAW(power_rect(&pixels,0,28,info.width,2,hk_ui_accent()));
+    DRAW(power_text_scaled(&pixels,12,2,info.width-24,"POWER",hk_ui_accent(),1U));
     /* 70px icon/label block plus symmetric 8px frame padding. */
     block_y = 30 + ((int)info.height - 30 - 70) / 2;
     for(i=0;i<3U;i++) {
-        uint16_t color = power_available(i) ? 0x07e0U : 0x4208U;
+        uint16_t color = power_available(i) ? hk_ui_accent() : 0x4208U;
         int center = (int)((2U*i+1U)*info.width/6U);
         hk_display_rect_t box = {center-38,block_y-8,76,86};
         if(i == state->selected) {
@@ -187,7 +188,7 @@ static hk_result_t power_render(const hk_app_context_t *ctx, hk_app_surface_t *s
             state->waiting ? "STOPPING..." : "NOT SUPPORTED";
         unsigned text_width = (unsigned)strlen(status)*7U;
         DRAW(power_text(&pixels,((int)info.width-(int)text_width)/2,
-            (int)info.height-24,text_width,status,0x07e0));
+            (int)info.height-24,text_width,status,hk_ui_accent()));
     }
     return hk_app_surface_invalidate(surface,NULL);
 }

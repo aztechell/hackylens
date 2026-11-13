@@ -3,8 +3,11 @@
 
 #include <stdint.h>
 
+const char *settings_board_label(void);
 uint8_t settings_audio_volume(void);
 void settings_set_audio_volume(uint8_t percent);
+uint8_t settings_ui_color(void);
+void settings_set_ui_color(uint8_t color);
 
 #include "../core/hk_app.h"
 #include "external_link_types.h"

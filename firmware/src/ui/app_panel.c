@@ -1,4 +1,5 @@
 #include <hackylens/app/panel.h>
+#include "../core/hk_ui_colors.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -80,22 +81,22 @@ void hk_app_panel_chrome(hk_app_panel_t *panel, const char *title)
     const hk_display_rect_t outer = {0, 0, panel->width, panel->height};
     const hk_display_rect_t inner = {1, 1, panel->width - 2U, panel->height - 2U};
     if(panel->result == HK_OK)
-        panel->result = hk_app_surface_stroke_rect(panel->surface, &outer, HK_PANEL_GREEN);
+        panel->result = hk_app_surface_stroke_rect(panel->surface, &outer, hk_ui_accent());
     if(panel->result == HK_OK)
-        panel->result = hk_app_surface_stroke_rect(panel->surface, &inner, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, 0, MENU_BAR_H - MENU_LINE, panel->width, MENU_LINE, HK_PANEL_GREEN);
-    hk_app_panel_label(panel, 24U, 3U, panel->width - 48U, title, HK_PANEL_GREEN, HK_PANEL_CENTER);
+        panel->result = hk_app_surface_stroke_rect(panel->surface, &inner, hk_ui_accent());
+    hk_app_panel_fill(panel, 0, MENU_BAR_H - MENU_LINE, panel->width, MENU_LINE, hk_ui_accent());
+    hk_app_panel_label(panel, 24U, 3U, panel->width - 48U, title, hk_ui_accent(), HK_PANEL_CENTER);
     if(!topbar_sd_mounted())
         return;
     uint16_t x = panel->width - 23U;
-    hk_app_panel_fill(panel, x + 2U, 7U, 10U, 2U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, x + 12U, 9U, 2U, 10U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, x, 10U, 2U, 11U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, x + 2U, 19U, 12U, 2U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, x + 9U, 7U, 2U, 5U, HK_PANEL_GREEN);
-    hk_app_panel_fill(panel, x + 11U, 11U, 3U, 2U, HK_PANEL_GREEN);
+    hk_app_panel_fill(panel, x + 2U, 7U, 10U, 2U, hk_ui_accent());
+    hk_app_panel_fill(panel, x + 12U, 9U, 2U, 10U, hk_ui_accent());
+    hk_app_panel_fill(panel, x, 10U, 2U, 11U, hk_ui_accent());
+    hk_app_panel_fill(panel, x + 2U, 19U, 12U, 2U, hk_ui_accent());
+    hk_app_panel_fill(panel, x + 9U, 7U, 2U, 5U, hk_ui_accent());
+    hk_app_panel_fill(panel, x + 11U, 11U, 3U, 2U, hk_ui_accent());
     for(uint8_t i = 0U; i < 4U; i++)
-        hk_app_panel_fill(panel, x + 3U + i * 3U, 16U, 2U, 3U, HK_PANEL_GREEN);
+        hk_app_panel_fill(panel, x + 3U + i * 3U, 16U, 2U, 3U, hk_ui_accent());
 }
 
 void hk_app_panel_status(hk_app_panel_t *panel, uint16_t y, const char *status)
@@ -106,7 +107,7 @@ void hk_app_panel_status(hk_app_panel_t *panel, uint16_t y, const char *status)
     size_t columns = width / HACKYLENS_FONT_W;
     if(strlen(status) <= columns)
     {
-        hk_app_panel_label(panel, 12U, y, width, status, HK_PANEL_GREEN, HK_PANEL_CENTER);
+        hk_app_panel_label(panel, 12U, y, width, status, hk_ui_accent(), HK_PANEL_CENTER);
         return;
     }
     /* Recorder and player status messages are ASCII. */
@@ -120,12 +121,12 @@ void hk_app_panel_status(hk_app_panel_t *panel, uint16_t y, const char *status)
         split = sizeof(first) - 1U;
     memcpy(first, status, split);
     first[split] = '\0';
-    hk_app_panel_label(panel, 12U, y, width, first, HK_PANEL_GREEN, HK_PANEL_CENTER);
+    hk_app_panel_label(panel, 12U, y, width, first, hk_ui_accent(), HK_PANEL_CENTER);
     status += split;
     while(*status == ' ')
         status++;
     hk_app_panel_label(panel, 12U, y + HACKYLENS_FONT_H, width, status,
-                       HK_PANEL_GREEN, HK_PANEL_CENTER);
+                       hk_ui_accent(), HK_PANEL_CENTER);
 }
 
 void hk_app_panel_volume(hk_app_panel_t *panel, uint16_t y, uint8_t volume)
@@ -135,13 +136,13 @@ void hk_app_panel_volume(hk_app_panel_t *panel, uint16_t y, uint8_t volume)
     char level[8];
     uint16_t width = panel->width - 24U;
     (void)snprintf(level, sizeof(level), "%u%%", (unsigned)volume);
-    hk_app_panel_label(panel, 12U, y, width, "VOLUME", HK_PANEL_GREEN, HK_PANEL_LEFT);
-    hk_app_panel_label(panel, 12U, y, width, level, HK_PANEL_GREEN, HK_PANEL_RIGHT);
+    hk_app_panel_label(panel, 12U, y, width, "VOLUME", hk_ui_accent(), HK_PANEL_LEFT);
+    hk_app_panel_label(panel, 12U, y, width, level, hk_ui_accent(), HK_PANEL_RIGHT);
     for(uint8_t i = 0U; i < 10U; i++)
     {
         uint16_t left = 12U + width * i / 10U;
         uint16_t right = 12U + width * (i + 1U) / 10U;
         hk_app_panel_fill(panel, left, y + 30U, right - left - 2U, 8U,
-                          volume > i * 10U ? HK_PANEL_GREEN : HK_PANEL_TRACK);
+                          volume > i * 10U ? hk_ui_accent() : hk_ui_accent_dim());
     }
 }

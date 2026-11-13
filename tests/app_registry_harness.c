@@ -399,7 +399,8 @@ int main(void)
     CHECK(hk_app_autostart_id_is_persistable(HK_AUTOSTART_OFF) == 1U);
     CHECK(hk_app_autostart_id_is_persistable(10U) == 1U);
     CHECK(hk_app_autostart_id_is_persistable(11U) == 0U);
-    CHECK(hk_app_autostart_id_is_persistable(65535U) == 0U);
+    CHECK(hk_app_autostart_id_is_persistable(HK_AUTOSTART_PINNED_SCRIPT) == 1U);
+    CHECK(hk_app_for_autostart_id(HK_AUTOSTART_PINNED_SCRIPT) == NULL);
     CHECK(strcmp(g_hk_generated_apps[0]->id,
                  HK_ENABLE_APP_ACCELEROMETER ? "accelerometer" : "apriltag") == 0);
     CHECK(strcmp(g_hk_generated_apps[g_hk_generated_app_count - 1U]->id,

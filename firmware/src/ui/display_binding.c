@@ -378,6 +378,7 @@ void hk_ui_display_draw_boot_logo(void)
         logo_w = HACKYLENS_BOOT_LOGO_W * logo_h / HACKYLENS_BOOT_LOGO_H;
     logo_x0 = (HK_UI_DISPLAY_WIDTH - logo_w) / 2U;
     logo_y0 = (HK_UI_DISPLAY_HEIGHT - logo_h) / 2U;
+    const uint16_t accent = hk_ui_accent();
     for(uint16_t y = 0U; y < HK_UI_DISPLAY_HEIGHT; y++)
     {
         uint8_t *row = (uint8_t *)surface.pixels.data +
@@ -394,7 +395,7 @@ void hk_ui_display_draw_boot_logo(void)
                     logo_y * HACKYLENS_BOOT_LOGO_ROW_BYTES + logo_x / 8U] &
                     (uint8_t)(0x80U >> (logo_x & 7U));
             }
-            uint16_t color = bit ? COLOR_TERM_GREEN : COLOR_BLACK;
+            uint16_t color = bit ? accent : COLOR_BLACK;
             row[x * 2U] = (uint8_t)(color >> 8);
             row[x * 2U + 1U] = (uint8_t)color;
         }

@@ -12,6 +12,7 @@
 #include "hk_config.h"
 #if HK_ENABLE_APP_MICROPYTHON
 #include "hal_watchdog.h"
+#include "../storage/userfs.h"
 #endif
 
 void autostart_controller_start(void)
@@ -33,6 +34,20 @@ void autostart_controller_start(void)
         shell_show_menu();
         return;
     }
+
+#if HK_ENABLE_APP_MICROPYTHON
+    if(id == HK_AUTOSTART_PINNED_SCRIPT)
+    {
+        char name[USERFS_NAME_MAX + 1U];
+        if(!hal_watchdog_reset_detected() &&
+           userfs_get_boot_shortcut(name, sizeof(name)) == USERFS_OK &&
+           shell_open_shortcut(name, &startup_input))
+            return;
+        printf("[BOOT] pinned autostart unavailable, fallback=MENU\r\n");
+        shell_show_menu();
+        return;
+    }
+#endif
 
     app = hk_app_for_autostart_id(id);
     if(!app)

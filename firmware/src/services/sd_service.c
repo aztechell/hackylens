@@ -12,6 +12,14 @@
 
 static uint8_t g_sd_service_poll_ticks;
 static uint8_t g_sd_failed_probes;
+static uint8_t g_watch_usage;
+
+void sd_service_watch_usage(uint8_t watch)
+{
+    if(watch && !g_watch_usage)
+        fat32_usage_retry();
+    g_watch_usage = watch;
+}
 
 hk_sd_event_t sd_service_tick(void)
 {
@@ -20,6 +28,9 @@ hk_sd_event_t sd_service_tick(void)
     if(g_sd_service_poll_ticks > 0)
     {
         g_sd_service_poll_ticks--;
+        if(g_watch_usage && !g_sd_failed_probes)
+            for(uint8_t i = 0; i < SD_USAGE_SECTORS_PER_TICK && fat32_usage_scan_step(); i++)
+                ;
         return HK_SD_EVENT_NONE;
     }
 

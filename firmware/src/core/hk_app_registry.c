@@ -31,7 +31,7 @@ const hk_app_t *hk_app_for_autostart_id(hk_autostart_id_t id)
 
 uint8_t hk_app_autostart_id_is_persistable(hk_autostart_id_t id)
 {
-    if(id == HK_AUTOSTART_OFF)
+    if(id == HK_AUTOSTART_OFF || id == HK_AUTOSTART_PINNED_SCRIPT)
         return 1U;
     for(uint8_t i = 0U; i < g_hk_reserved_autostart_id_count; i++)
     {

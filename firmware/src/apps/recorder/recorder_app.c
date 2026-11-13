@@ -1,4 +1,5 @@
 #include "recorder_app.h"
+#include "../../core/hk_ui_colors.h"
 
 #include <stddef.h>
 #include <stdio.h>
@@ -51,9 +52,9 @@ static void copy_status(char text[32], const char *status)
 static void choice(hk_app_panel_t *panel, uint16_t y, const char *text, uint8_t selected)
 {
     if(selected)
-        hk_app_panel_fill(panel, 6U, y, panel->width - 12U, 26U, HK_PANEL_GREEN);
+        hk_app_panel_fill(panel, 6U, y, panel->width - 12U, 26U, hk_ui_accent());
     hk_app_panel_label(panel, 10U, y + 1U, panel->width - 20U, text,
-                       selected ? HK_PANEL_BLACK : HK_PANEL_GREEN, HK_PANEL_LEFT);
+                       selected ? HK_PANEL_BLACK : hk_ui_accent(), HK_PANEL_LEFT);
 }
 
 static void draw_capture(hk_app_panel_t *panel, const hk_recorder_info_t *info, uint8_t full)
@@ -61,13 +62,13 @@ static void draw_capture(hk_app_panel_t *panel, const hk_recorder_info_t *info, 
     char time[16];
     if(!full)
         hk_app_panel_fill(panel, 2U, 44U, panel->width - 4U, 132U, HK_PANEL_BLACK);
-    uint16_t color = info->preparing || info->saving ? HK_PANEL_GREEN : RECORDER_RED;
+    uint16_t color = info->preparing || info->saving ? hk_ui_accent() : RECORDER_RED;
     hk_app_panel_fill(panel, panel->width / 2U - 4U, 52U, 8U, 8U, color);
     (void)snprintf(time, sizeof(time), "%02lu:%02lu",
                    (unsigned long)(info->recorded_seconds / 60U),
                    (unsigned long)(info->recorded_seconds % 60U));
     hk_app_panel_label(panel, 12U, 81U, panel->width - 24U, time,
-                       HK_PANEL_GREEN, HK_PANEL_CENTER);
+                       hk_ui_accent(), HK_PANEL_CENTER);
     hk_app_panel_status(panel, 123U, info->record_status);
 }
 
@@ -88,7 +89,7 @@ static void draw_recordings(const hk_app_context_t *ctx, hk_app_panel_t *panel,
                        (unsigned)(count + RECORDER_LIST_ROWS - 1U) / RECORDER_LIST_ROWS);
         hk_app_panel_label(panel, 12U, 208U, panel->width - 24U,
                            *state->message ? state->message : pages,
-                           HK_PANEL_GREEN, HK_PANEL_CENTER);
+                           hk_ui_accent(), HK_PANEL_CENTER);
     }
 }
 

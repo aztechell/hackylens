@@ -41,7 +41,7 @@ Every production manifest declares:
 | `optional` | no | non-empty short-name array of optional hardware services with named fallbacks |
 | `private_includes` | no | non-empty app-relative private include directories; omit when empty |
 | `menu_order` | no | positive uint16 menu order; omit to hide the app |
-| `autostart_id` | no | stable uint16 autostart identity; omit or `0` means ineligible |
+| `autostart_id` | no | Stable app identity from 1 to 65534. Omit or use `0` for ineligible apps. The system reserves 65535 for pinned scripts. |
 | `tick_ms` | yes | positive tick period in milliseconds, at most 60_000 |
 | `tick_budget_ms` | no | callback budget, 1–5000 ms; defaults to `tick_ms`, independent of cadence |
 | `debug_entry` | no | C symbol of the explicitly addressed diagnostic handler |

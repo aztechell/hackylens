@@ -27,6 +27,8 @@ typedef struct {
 } fat32_mount_info_t;
 
 const fat32_geometry_t *fat32_geometry(void);
+void fat32_usage_invalidate(void);
+void fat32_usage_note_entry(uint32_t cluster, uint32_t old_value, uint32_t new_value);
 void fat32_set_mounted(const fat32_mount_info_t *mount);
 void fat32_set_alloc_hint(uint32_t cluster);
 uint8_t fat32_card_is_sdhc(void);

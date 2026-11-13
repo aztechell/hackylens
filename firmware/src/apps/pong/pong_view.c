@@ -1,4 +1,5 @@
 #include "pong_view.h"
+#include "../../core/hk_ui_colors.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -186,7 +187,7 @@ static hk_result_t pong_view_draw_title(
         return result;
     bounds = pong_to_display_rect(bar);
     return hk_app_surface_text(
-        surface, &bounds, title, (uint32_t)strlen(title), PONG_COLOR_GREEN);
+        surface, &bounds, title, (uint32_t)strlen(title), hk_ui_accent());
 }
 
 static hk_result_t pong_view_draw_chrome(
@@ -204,7 +205,7 @@ static hk_result_t pong_view_draw_chrome(
 
     for(index = 0U; index < (uint8_t)(sizeof(edges) / sizeof(edges[0])); index++)
     {
-        result = pong_fill_shape(surface, edges[index], clip, PONG_COLOR_GREEN);
+        result = pong_fill_shape(surface, edges[index], clip, hk_ui_accent());
         if(result != HK_OK)
             return result;
     }
@@ -227,7 +228,7 @@ static hk_result_t pong_view_draw_border(
 
     for(index = 0U; index < (uint8_t)(sizeof(edges) / sizeof(edges[0])); index++)
     {
-        result = pong_fill_shape(surface, edges[index], clip, PONG_COLOR_GREEN);
+        result = pong_fill_shape(surface, edges[index], clip, hk_ui_accent());
         if(result != HK_OK)
             return result;
     }
@@ -246,7 +247,7 @@ static hk_result_t pong_view_draw_midline(
 
     /* One fill keeps the first frame inside the K210 32-command BASE batch.
      * A dashed line used 19 segments and overflowed on launch. */
-    return pong_fill_shape(surface, line, clip, PONG_COLOR_GREEN);
+    return pong_fill_shape(surface, line, clip, hk_ui_accent());
 }
 
 static pong_rect_t pong_view_trail_rect(pong_view_state_t state, uint8_t index)
@@ -342,7 +343,7 @@ static hk_result_t pong_view_draw_dynamic(
     if(result != HK_OK)
         return result;
     result = pong_view_draw_objects(
-        surface, state, PONG_COLOR_GREEN, PONG_BALL_COLOR, clip);
+        surface, state, hk_ui_accent(), PONG_BALL_COLOR, clip);
     if(result != HK_OK)
         return result;
     return pong_view_draw_flash(surface, state, PONG_FLASH_COLOR, clip);
