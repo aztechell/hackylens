@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.7.0" src="https://img.shields.io/badge/firmware-v0.7.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.8.0" src="https://img.shields.io/badge/firmware-v0.8.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <a href="docs/MAIX_CUBE.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
@@ -26,7 +26,7 @@ HackyLens provides a compact on-device environment for camera experiments, QR sc
 
 ## Hardware
 
-HackyLens v0.7.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
+HackyLens v0.8.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 | Board | Camera | Display |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ HackyLens v0.7.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 Use the firmware package for your board. For other revisions, verify the board,
 flash layout and pin mapping before flashing. See the
-[v0.7.0 release notes](docs/releases/v0.7.0.md) for the hardware checks.
+[v0.8.0 release notes](docs/releases/v0.8.0.md) for the hardware checks.
 
 ## Features
 
@@ -81,7 +81,8 @@ The firmware's UART screenshot protocol captured these images directly from the
 Maix Cube adds `RECORDER` for recording to a FAT32 microSD card and playing
 recordings. Its `FILES` app also plays compatible WAV files from the card.
 See the [Cube audio controls](docs/MAIX_CUBE.md#recorder-and-wav-playback).
-Its `ACCELEROMETER` app shows live X/Y/Z readings from the built-in MSA301.
+Its `ACCELEROMETER` app shows tilt, plots live X/Y/Z readings and reports
+events from the built-in MSA301.
 
 ## SD models
 
@@ -138,25 +139,28 @@ feature-disabled builds are not release-qualified.
 
 Tagged releases are automated by `.github/workflows/release.yml`. A pushed
 `vX.Y.Z` tag must match `VERSION`; CI builds full firmware for SEN0305 and Maix
-Cube. The release contains two firmware ZIPs,
-`hackylens-huskylens-sen0305-v<version>.zip` and
-`hackylens-sipeed-maix-cube-v<version>.zip`, one shared
-`hackylens-sdcard-v<version>.zip` and `SHA256SUMS.txt` covering all three.
-Each firmware ZIP contains the binary, same-stem flasher JSON, build attestation,
-release manifest, dependency manifest, third-party notices ZIP and internal
-SHA-256 checksums. Extract the board ZIP and keep the `.bin` and its same-stem
-`.json` together when flashing. Copy the contents of `sdcard/` from the shared
-ZIP to the root of a FAT32 card for either board.
+Cube. Download the `.bin` and its same-stem `.json` for your board and keep
+them together when flashing.
+
+| Board | Firmware | Flasher metadata |
+| --- | --- | --- |
+| SEN0305 | `hackylens-huskylens-sen0305-v<version>.bin` | `hackylens-huskylens-sen0305-v<version>.json` |
+| Maix Cube | `hackylens-sipeed-maix-cube-v<version>.bin` | `hackylens-sipeed-maix-cube-v<version>.json` |
+
+Copy the contents of `sdcard/` from the shared `hackylens-sdcard-v<version>.zip`
+to the root of a FAT32 card for either board. `THIRD_PARTY_NOTICES.txt` contains
+the firmware licenses. `SHA256SUMS.txt` verifies the firmware pairs, SD archive
+and notices.
 
 After building both full images, create this payload locally with:
 
 ```powershell
-python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.7.0
+python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.8.0
 ```
 
-Verified firmware packages are staged under `build\release-stage\<board>`.
-`dist\release` contains the three public ZIPs and their checksums. Packaging
-refuses unexpected files in either output. The existing `package_release.py
+Board staging directories under `build\release-stage\<board>` hold the
+attestations and manifests. `dist\release` holds the public files listed above.
+Packaging refuses unexpected artifacts. The existing `package_release.py
 --board <board> --out-dir <directory>` interface remains available for flat
 packages. Release notes come from `docs/releases/<tag>.md` when present.
 

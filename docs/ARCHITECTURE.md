@@ -1,6 +1,6 @@
 # Architecture
 
-HackyLens 0.7.0 is modular firmware built from common `firmware/src` layers,
+HackyLens 0.8.0 is modular firmware built from common `firmware/src` layers,
 the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
 > HackyLens is a layered K210 reference firmware and MicroPython technology
@@ -281,7 +281,7 @@ Both include FACE RECOG and embedded MicroPython. SEN0305 has thirteen apps.
 Cube has fifteen and also supports WAV playback in FILES. Its additional apps are RECORDER
 and ACCELEROMETER. The latter uses the same read-only typed binding as
 MicroPython. The board provider owns the internal I²C1 transactions. See the
-[v0.7.0 release notes](releases/v0.7.0.md) for the current hardware coverage.
+[v0.8.0 release notes](releases/v0.8.0.md) for the current hardware coverage.
 Each build explicitly selects a board. Its `board.toml`
 owns wiring, defaults, flash layout and programming metadata. On Cube,
 settings and userfs writes require JEDEC to report exactly 16 MiB of flash.
@@ -361,6 +361,6 @@ rendering path. Run `python -m pytest tests -q` for the current test count and
 results, and `python tools/check_arch.py` for the layer/dependency guard.
 CI builds the full firmware for both boards and checks each app composition.
 It also checks reduced SEN0305 builds. On a release tag, CI validates each
-full image against its board-specific sidecar and attestation, then packages
-one firmware ZIP per board and one shared SD-card ZIP with
+full image against its board-specific sidecar and attestation, then prepares
+each firmware and sidecar as individual downloads alongside one shared SD-card ZIP with
 `tools/package_release_bundles.py`.

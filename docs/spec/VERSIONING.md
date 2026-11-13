@@ -6,7 +6,7 @@ experimental; a version number alone does not imply a stability promise.
 
 | Interface | Version | Source |
 |---|---|---|
-| Firmware | 0.7.0 | `VERSION` |
+| Firmware | 0.8.0 | `VERSION` |
 | App Runtime | 0.2.0 | [App Runtime](APP_RUNTIME.md) |
 | App SDK | 0.3.0 | SDK headers and [App SDK](APP_SDK.md) |
 | Native App Manifest | 0.1.0; schema 1 | [App Manifest](APP_MANIFEST.md) |

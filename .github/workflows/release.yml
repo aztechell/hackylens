@@ -164,6 +164,17 @@ jobs:
           path: dist/release/
           if-no-files-found: error
 
+      - name: Retain release verification records
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: actions/upload-artifact@v6
+        with:
+          name: hackylens-verification-${{ github.ref_name }}
+          path: |
+            build/release-stage/*/*-attestation.json
+            build/release-stage/*/*-release.json
+            build/release-stage/*/*-third-party.json
+          if-no-files-found: error
+
   release:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: validate

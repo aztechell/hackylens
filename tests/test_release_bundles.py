@@ -69,41 +69,43 @@ class ReleaseBundleTests(unittest.TestCase):
     def update_outer_sums(self):
         (self.output / "SHA256SUMS.txt").write_text("".join(
             f"{bundles.package_release.sha256(self.output / name)}  {name}\n"
-            for name in sorted(bundles.bundle_names(self.version) | {bundles.sdcard_name(self.version)})
+            for name in sorted(bundles.public_names(self.version))
         ), encoding="ascii")
 
-    def test_complete_board_packages_reference_one_shared_sdcard_archive(self):
+    def test_public_firmware_pairs_share_one_sdcard_archive(self):
         self.assertEqual(self.package(), 0)
         shared = bundles.sdcard_name(self.version)
         shared_hash = bundles.package_release.sha256(self.output / shared)
-        self.assertEqual({p.name for p in self.output.iterdir()},
-                         bundles.bundle_names(self.version) | {shared, "SHA256SUMS.txt"})
-        self.assertEqual(len(bundles.verify_public(self.output, self.version)), 4)
+        expected = {shared, "SHA256SUMS.txt", "THIRD_PARTY_NOTICES.txt"}
+        for identifier in bundles.RELEASE_BOARDS:
+            expected.update(f"hackylens-{identifier}-v{self.version}{suffix}"
+                            for suffix in (".bin", ".json"))
+        self.assertEqual({p.name for p in self.output.iterdir()}, expected)
+        self.assertEqual(len(bundles.verify_public(self.output, self.version, self.sdcard)), 7)
+        notices = (self.output / "THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
+        for dependency in ("MicroPython", "littlefs", "quirc", "AprilTag", "Kendryte standalone SDK"):
+            self.assertIn(dependency, notices)
         with zipfile.ZipFile(self.output / shared) as archive:
             self.assertEqual(archive.namelist(), ["sdcard/model.txt"])
             self.assertEqual(archive.read("sdcard/model.txt"), b"model fixture")
         for identifier in bundles.RELEASE_BOARDS:
             stem = f"hackylens-{identifier}-v{self.version}"
-            with zipfile.ZipFile(self.output / f"{stem}.zip") as archive:
-                self.assertEqual(set(archive.namelist()), {
-                    f"{stem}.bin", f"{stem}.json", f"{stem}-attestation.json",
-                    f"{stem}-release.json", f"{stem}-third-party.json",
-                    f"{stem}-third-party-notices.zip", "SHA256SUMS.txt",
-                })
-                for name in archive.namelist():
-                    self.assertEqual(archive.read(name), (self.stage / identifier / name).read_bytes())
-                metadata = json.loads(archive.read(f"{stem}.json"))
-                self.assertEqual(metadata["board_id"], identifier)
-                self.assertEqual(metadata["image"], f"{stem}.bin")
-                attestation = json.loads(archive.read(f"{stem}-attestation.json"))
-                self.assertTrue(attestation["release_qualified"])
-                self.assertEqual(attestation["composition"]["disabled_apps"],
-                                 ["accelerometer", "recorder"] if identifier == "huskylens-sen0305" else [])
-                manifest = json.loads(archive.read(f"{stem}-release.json"))
-                self.assertEqual(manifest["board_id"], identifier)
-                self.assertEqual(manifest["version"], self.version)
-                self.assertEqual(manifest["sdcard"], shared)
-                self.assertEqual(manifest["sdcard_sha256"], shared_hash)
+            stage = self.stage / identifier
+            for suffix in (".bin", ".json"):
+                name = stem + suffix
+                self.assertEqual((self.output / name).read_bytes(), (stage / name).read_bytes())
+            metadata = json.loads((self.output / f"{stem}.json").read_bytes())
+            self.assertEqual(metadata["board_id"], identifier)
+            self.assertEqual(metadata["image"], f"{stem}.bin")
+            attestation = json.loads((stage / f"{stem}-attestation.json").read_bytes())
+            self.assertTrue(attestation["release_qualified"])
+            self.assertEqual(attestation["composition"]["disabled_apps"],
+                             ["accelerometer", "recorder"] if identifier == "huskylens-sen0305" else [])
+            manifest = json.loads((stage / f"{stem}-release.json").read_bytes())
+            self.assertEqual(manifest["board_id"], identifier)
+            self.assertEqual(manifest["version"], self.version)
+            self.assertEqual(manifest["sdcard"], shared)
+            self.assertEqual(manifest["sdcard_sha256"], shared_hash)
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(bundles.main([*self.args(), "--verify-only"]), 0)
 
@@ -140,38 +142,32 @@ class ReleaseBundleTests(unittest.TestCase):
         stray = self.output / "extra.txt"
         stray.write_text("extra", encoding="utf-8")
         with self.assertRaisesRegex(SystemExit, "unexpected files"):
-            bundles.verify_public(self.output, self.version)
+            bundles.verify_public(self.output, self.version, self.sdcard)
         stray.unlink()
-        path = self.output / sorted(bundles.bundle_names(self.version))[0]
+        path = self.output / bundles.sdcard_name(self.version)
         original = path.read_bytes()
         path.unlink()
         with self.assertRaisesRegex(SystemExit, "allowlist"):
-            bundles.verify_public(self.output, self.version)
+            bundles.verify_public(self.output, self.version, self.sdcard)
         path.write_bytes(original + b"corruption")
-        with self.assertRaisesRegex(SystemExit, "bundle checksum mismatch"):
-            bundles.verify_public(self.output, self.version)
+        with self.assertRaisesRegex(SystemExit, "release file checksum mismatch"):
+            bundles.verify_public(self.output, self.version, self.sdcard)
 
-    def test_verify_checks_inner_hashes_even_when_outer_checksum_matches(self):
+    def test_verify_checks_sidecar_even_when_outer_checksum_matches(self):
         self.package()
-        path = self.output / sorted(bundles.bundle_names(self.version))[0]
-        with zipfile.ZipFile(path) as archive:
-            members = {name: archive.read(name) for name in archive.namelist()}
-        binary = next(name for name in members if name.endswith(".bin"))
-        members[binary] += b"tampered"
-        with zipfile.ZipFile(path, "w") as archive:
-            for name, data in members.items():
-                archive.writestr(name, data)
+        path = self.output / f"{bundles.firmware_stem(bundles.RELEASE_BOARDS[0], self.version)}.bin"
+        path.write_bytes(path.read_bytes() + b"tampered")
         self.update_outer_sums()
-        with self.assertRaisesRegex(SystemExit, "member checksum mismatch"):
-            bundles.verify_public(self.output, self.version)
+        with self.assertRaisesRegex(SystemExit, "published firmware sidecar validation failed"):
+            bundles.verify_public(self.output, self.version, self.sdcard)
 
     def test_verify_rejects_sdcard_replacement_even_when_outer_checksum_matches(self):
         self.package()
         with zipfile.ZipFile(self.output / bundles.sdcard_name(self.version), "w") as archive:
             archive.writestr("sdcard/model.txt", "different model")
         self.update_outer_sums()
-        with self.assertRaisesRegex(SystemExit, "manifest does not match shared SD-card archive"):
-            bundles.verify_public(self.output, self.version)
+        with self.assertRaisesRegex(SystemExit, "shared SD-card archive member mismatch"):
+            bundles.verify_public(self.output, self.version, self.sdcard)
 
     def test_both_boards_and_matching_tag_are_required(self):
         with contextlib.redirect_stderr(io.StringIO()):
