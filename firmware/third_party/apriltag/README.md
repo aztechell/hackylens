@@ -5,3 +5,7 @@ This directory contains the TAG36H11-only subset of the OpenMV AprilTag fork at 
 Upstream: <https://github.com/openmv/apriltag>
 
 The retained sources are distributed under the BSD 2-Clause license in `LICENSE.md`. Embedded configuration in `common/config.h` disables pthreads, image I/O, debug output, profiling, and tag families other than TAG36H11. `tools/build_firmware.py` stages this directory only when the APRILTAG app is enabled.
+
+HackyLens uses single-precision arithmetic for edge refinement on the K210.
+The refinement keeps bilinear gradient sampling and fractional corner
+coordinates.

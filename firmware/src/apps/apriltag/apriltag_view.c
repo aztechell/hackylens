@@ -20,26 +20,26 @@ void apriltag_view_compose_results(camera_view_present_t *present,
                                    uint8_t count)
 {
     camera_view_frame_t view = {0};
-    camera_view_rect_t rects[APRILTAG_RESULT_MAX];
 
     if(!present || !results)
         return;
     if(count > APRILTAG_RESULT_MAX)
         count = APRILTAG_RESULT_MAX;
-    for(uint8_t i = 0; i < count; i++)
-    {
-        rects[i].x = results[i].x;
-        rects[i].y = results[i].y;
-        rects[i].w = results[i].w;
-        rects[i].h = results[i].h;
-    }
     view.width = width;
     view.height = height;
     view.rotate = CAMERA_PREVIEW_ROTATE;
     view.fit = CAMERA_PREVIEW_FIT;
     for(uint8_t i = 0U; i < count; i++)
-        camera_view_compose_rects(present, &view, &rects[i], 1U,
-                                  selected && selected[i] ? APRILTAG_SELECTED_COLOR : hk_ui_accent());
+    {
+        float corners[4][2];
+        for(uint8_t corner = 0; corner < 4U; corner++)
+        {
+            corners[corner][0] = results[i].corners[corner][0] * width / APRILTAG_INPUT_W;
+            corners[corner][1] = results[i].corners[corner][1] * height / APRILTAG_INPUT_H;
+        }
+        camera_view_compose_quad(present, &view, corners,
+                                 selected && selected[i] ? APRILTAG_SELECTED_COLOR : hk_ui_accent());
+    }
 
     for(uint8_t i = 0; i < count; i++)
     {

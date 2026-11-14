@@ -4,6 +4,8 @@
 
 #include "apriltag_config.h"
 #include "apriltag_detector.h"
+#include "apriltag_distance.h"
+#include "../../core/hk_binary.h"
 #include "../../core/camera_types.h"
 #include "../../services/camera_light.h"
 #include "../../services/camera_session_preferences.h"
@@ -22,6 +24,8 @@
 #define APRILTAG_FLAG_REFINE 0x01U
 #define APRILTAG_FLAG_SELECTED_OUTPUT 0x02U
 #define APRILTAG_FLAG_FPS 0x04U
+#define APRILTAG_FLAG_FAR_SEARCH 0x08U
+#define APRILTAG_SEN0305_DEFAULT_FOCAL_MPX 154000U
 
 _Static_assert(APRILTAG_DATA_BYTES <= SETTINGS_APP_DATA_V2_SIZE,
                "APRILTAG settings overlap another app-data partition");
@@ -29,6 +33,61 @@ _Static_assert(APRILTAG_DATA_BYTES <= SETTINGS_APP_DATA_V2_SIZE,
 static apriltag_preferences_t g_preferences;
 static uint8_t g_selected[APRILTAG_SELECTED_BYTES];
 static uint8_t g_loaded;
+static apriltag_distance_settings_t g_distance;
+static uint8_t g_distance_loaded;
+
+apriltag_distance_settings_t *apriltag_settings_distance(void)
+{
+    if(!g_distance_loaded)
+    {
+        uint8_t data[SETTINGS_TAG_DISTANCE_BYTES];
+        settings_tag_distance_read(data);
+        g_distance = (apriltag_distance_settings_t){
+            .tag_mm = APRILTAG_DISTANCE_TAG_DEFAULT_MM,
+            .reference_mm = APRILTAG_DISTANCE_REFERENCE_DEFAULT_MM,
+            .focal_millipixels = strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0 ?
+                                  APRILTAG_SEN0305_DEFAULT_FOCAL_MPX : 0U,
+        };
+        if(data[0] == 1U)
+        {
+            g_distance.enabled = (data[1] & 1U) != 0U;
+            g_distance.level = (data[1] & 2U) != 0U;
+            uint16_t side = rd16(data + 2U), reference = rd16(data + 4U);
+            uint32_t focal = rd32(data + 6U);
+            if(side >= 20U && side <= 150U)
+                g_distance.tag_mm = side;
+            if(reference >= 100U && reference <= 1000U)
+                g_distance.reference_mm = reference;
+            if(focal >= APRILTAG_DISTANCE_FOCAL_MIN_MPX &&
+               focal <= APRILTAG_DISTANCE_FOCAL_MAX_MPX)
+                g_distance.focal_millipixels = (focal + 5U) / 10U * 10U;
+            for(unsigned i = 0; i < 3U; i++)
+            {
+                g_distance.upright[i] = (int16_t)rd16(data + 10U + i * 2U);
+                g_distance.lens_down[i] = (int16_t)rd16(data + 16U + i * 2U);
+            }
+        }
+        g_distance_loaded = 1U;
+    }
+    return &g_distance;
+}
+
+void apriltag_settings_save_distance(void)
+{
+    uint8_t data[SETTINGS_TAG_DISTANCE_BYTES] = {1U};
+    const apriltag_distance_settings_t *distance = apriltag_settings_distance();
+    data[1] = distance->enabled | (distance->level << 1U);
+    wr16(data + 2U, distance->tag_mm);
+    wr16(data + 4U, distance->reference_mm);
+    wr32(data + 6U, distance->focal_millipixels);
+    for(unsigned i = 0; i < 3U; i++)
+    {
+        wr16(data + 10U + i * 2U, (uint16_t)distance->upright[i]);
+        wr16(data + 16U + i * 2U, (uint16_t)distance->lens_down[i]);
+    }
+    settings_tag_distance_write(data);
+    settings_mark_dirty(1U);
+}
 
 static uint8_t clamp_percent(uint8_t value)
 {
@@ -58,7 +117,8 @@ static void apriltag_settings_save(void)
     data[APRILTAG_DATA_FLAGS] =
         (g_preferences.refine_edges ? APRILTAG_FLAG_REFINE : 0U) |
         (g_preferences.output_mode == APRILTAG_OUTPUT_SELECTED ? APRILTAG_FLAG_SELECTED_OUTPUT : 0U) |
-        (g_preferences.fps_enabled ? APRILTAG_FLAG_FPS : 0U);
+        (g_preferences.fps_enabled ? APRILTAG_FLAG_FPS : 0U) |
+        (g_preferences.far_search ? APRILTAG_FLAG_FAR_SEARCH : 0U);
     data[APRILTAG_DATA_LIGHT] = g_preferences.light_mode;
     data[APRILTAG_DATA_RED] = g_preferences.rgb_red;
     data[APRILTAG_DATA_GREEN] = g_preferences.rgb_green;
@@ -86,6 +146,7 @@ void apriltag_settings_load(void)
     g_preferences.output_mode = (flags & APRILTAG_FLAG_SELECTED_OUTPUT) ?
                                 APRILTAG_OUTPUT_SELECTED : APRILTAG_OUTPUT_ALL;
     g_preferences.fps_enabled = (flags & APRILTAG_FLAG_FPS) ? 1U : 0U;
+    g_preferences.far_search = (flags & APRILTAG_FLAG_FAR_SEARCH) ? 1U : 0U;
     g_preferences.light_mode = data[APRILTAG_DATA_LIGHT] == CAMERA_LIGHT_RGB ?
                                CAMERA_LIGHT_RGB : CAMERA_LIGHT_LED;
     g_preferences.rgb_red = clamp_percent(data[APRILTAG_DATA_RED]);
@@ -186,6 +247,17 @@ uint8_t apriltag_settings_set_fps(uint8_t enabled)
     if(g_preferences.fps_enabled == enabled)
         return 0U;
     g_preferences.fps_enabled = enabled;
+    apriltag_settings_save();
+    return 1U;
+}
+
+uint8_t apriltag_settings_set_far_search(uint8_t enabled)
+{
+    apriltag_settings_load();
+    enabled = enabled != 0U;
+    if(g_preferences.far_search == enabled)
+        return 0U;
+    g_preferences.far_search = enabled;
     apriltag_settings_save();
     return 1U;
 }

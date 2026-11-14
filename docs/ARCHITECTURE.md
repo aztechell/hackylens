@@ -181,6 +181,14 @@ script. The script name is stored in userfs and the boot controller opens it
 through the launcher shortcut path. Unpinning or deleting the selected script
 clears the target. An unavailable target returns to the launcher.
 
+APRILTAG Distance keeps fractional corner coordinates in the unrotated 160×120
+full-frame coordinate system and uses a planar pose estimate to recover translation in
+millimeters. It stores the known tag side and a per-device focal calibration.
+The initial calibration assumes square pixels and a centered principal point.
+On Maix Cube, the optional accelerometer can project that translation onto the
+horizontal plane after two gravity references are captured. See the
+[measurement procedure](../examples/markers/README.md#distance-measurements).
+
 Backlight, illumination, and RGB writes cross the public Lights capability. Its
 fixed K210 provider owns exclusive overlapping channel masks, validates
 cancellation/deadlines before register writes, and performs safe-off cleanup.
@@ -266,7 +274,26 @@ They load `/hackylens.kmodels/detect.kmodel` from microSD. [FACE RECOG](FACE_REC
 keeps two companion models resident under the same KPU lease, runs one
 inference at a time and publishes matching IDs through the shared vision API.
 
-APRILTAG owns its settings/selection model and descriptor adapter, stabilized in-frame result overlay, icon, and `HKTAG`/`HKTAGINFO` commands. It shares the TAG36H11 decoder and grayscale downsampler with MicroPython. Its descriptor adapter uses the shared camera-independent `settings_menu`, while APRILTAG retains persistence and camera pause/resume policy. It reuses the shared 320x240 camera runtime and publishes native tag IDs through `vision_result_service` as BLOCK results. Core 0 downsamples a leased camera frame only when the single uncached 160x120 luma handoff and shared core-1 executor are free, then immediately releases the frame. Frames seen while detection is busy are discarded instead of queued, preventing stale-result latency. Core-1 create/detect/destroy jobs atomically publish completed result banks and leave the executor available to other apps. `refine_edges` is a persisted runtime request applied before the next detection rather than a detector restart. The app uses camera session overrides for its independent FPS and LED/RGB profile, leaving CAMERA and QR settings unchanged. Its `ALL/SELECTED` filter is applied before the shared result snapshot, so the UART/I2C wire format remains unchanged. Preview overlays are composed into the LCD shadow before the full-frame transfer, so rectangles are not temporarily erased by the following camera frame. The detector does not use a KPU model. The BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag` only when this feature is enabled.
+APRILTAG owns its settings and selection model, settings menu adapter, result
+overlay, icon, and `HKTAG`/`HKTAGINFO` commands. It shares the TAG36H11 decoder
+with MicroPython and uses the shared 320×240 camera runtime. Core 0 fills a
+single uncached 160×120 luma buffer when the core-1 executor is available.
+Frames that arrive while the decoder is busy are skipped. Core-1 jobs publish
+completed result banks. The app processes each completion once and presents
+the LCD preview on a separate cadence of up to approximately 12 updates per
+second. The on-screen FPS counter reports LCD updates.
+
+NEAR downsamples the whole frame. FAR uses a native 160×120 window and
+maps corners back to the same full-frame calibration coordinates. The window
+starts centered, follows detections and shrinks to 64×64 for small tags during
+full-detail tracking. The app periodically searches the full frame
+after misses. FAR can retry the window without decimation. Both modes compose
+the corner contour into the rotated LCD preview and publish native tag IDs
+and capture-space bounding boxes through `vision_result_service`. The
+`ALL/SELECTED` filter applies to the shared BLOCK snapshot. Refine Edges,
+the FPS display and the illumination profile are app preferences. The
+BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag`
+when the feature is enabled.
 
 OBJECT DETECT owns its VOC20 labels, settings adapter, overlay, icon, and
 `HKOBJECT`/`HKOBJECTINFO` commands. It shares the YOLOv2 decoder and NMS

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <hackylens/app/accelerometer.h>
 
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
@@ -16,7 +17,7 @@
 
 uint8_t apriltag_handle_debug_command(const char *cmd)
 {
-    char line[512];
+    char line[640];
 
     if(str_eq_ci(cmd, "HKTAG"))
     {
@@ -32,17 +33,27 @@ uint8_t apriltag_handle_debug_command(const char *cmd)
     {
         size_t length = strlen(line);
         const apriltag_preferences_t *preferences = apriltag_settings_preferences();
+        const apriltag_distance_settings_t *distance = apriltag_settings_distance();
+        uint32_t previews, reads;
+        apriltag_controller_stats(&previews, &reads);
 
         while(length && (line[length - 1U] == '\r' || line[length - 1U] == '\n'))
             line[--length] = '\0';
         snprintf(line + length, sizeof(line) - length,
-                 " output=%s selected=%u target=%d fps=%u light=%s rgb=%u/%u/%u\r\n",
+                 " output=%s selected=%u target=%d fps=%u light=%s rgb=%u/%u/%u "
+                 "range_mm=%u horizontal_mm=%u distance=%u tag_mm=%u focal_mpx=%u level=%u "
+                 "previews=%u reads=%u search_mode=%s\r\n",
                  apriltag_settings_output_label(),
                  (unsigned)apriltag_settings_selected_count(),
                  (int)apriltag_controller_target_id(),
                  preferences->fps_enabled,
                  preferences->light_mode ? "RGB" : "LED",
-                 preferences->rgb_red, preferences->rgb_green, preferences->rgb_blue);
+                 preferences->rgb_red, preferences->rgb_green, preferences->rgb_blue,
+                 (unsigned)apriltag_controller_range_mm(),
+                 (unsigned)apriltag_controller_horizontal_mm(),
+                 distance->enabled, distance->tag_mm, (unsigned)distance->focal_millipixels,
+                 distance->level, (unsigned)previews, (unsigned)reads,
+                 preferences->far_search ? "FAR" : "NEAR");
     }
     debug_console_write_text(line);
     return 1;
@@ -77,7 +88,9 @@ static hk_result_t app_start(const hk_app_context_t *ctx)
        hk_app_context_input(ctx, &state->input) != HK_OK ||
        hk_input_get_state(state->input, &input.state) != HK_OK)
         return HK_ERR_INTERNAL;
-    apriltag_controller_enter(&input);
+    const hk_accelerometer_t *sensor = NULL;
+    (void)hk_app_context_accelerometer(ctx, &sensor);
+    apriltag_controller_enter(&input, sensor);
     return HK_OK;
 }
 

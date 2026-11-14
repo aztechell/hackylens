@@ -44,6 +44,10 @@ void camera_view_compose_rects(camera_view_present_t *present,
                                const camera_view_rect_t *rects,
                                uint8_t count,
                                uint16_t color);
+/* Corners are cyclic and in unrotated source image coordinates. */
+void camera_view_compose_quad(camera_view_present_t *present,
+                              const camera_view_frame_t *frame,
+                              const float corners[4][2], uint16_t color);
 void camera_view_compose_text_at(camera_view_present_t *present,
                                  uint16_t x,
                                  uint16_t y,

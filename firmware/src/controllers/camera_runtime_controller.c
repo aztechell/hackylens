@@ -26,6 +26,7 @@
 
 static uint32_t g_camera_light_repeat_button;
 static uint64_t g_camera_light_repeat_deadline_us;
+static uint64_t g_paced_preview_due_us;
 
 #if HK_BOARD_LCD_PARALLEL8
 #define CAMERA_PREVIEW_PANEL_GAP_US 4000ULL
@@ -70,7 +71,8 @@ static void camera_light_repeat_tick(uint32_t button_state)
 static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t consumer,
                                               void *consumer_context,
                                               camera_runtime_frame_overlay_t overlay,
-                                              void *overlay_context)
+                                              void *overlay_context,
+                                              uint32_t preview_interval_us)
 {
     camera_preview_frame_t service_frame;
     camera_view_frame_t view_frame;
@@ -78,16 +80,33 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     uint64_t compose_started_us;
     uint64_t compose_finished_us;
     uint64_t present_finished_us;
+    uint64_t preview_started_us = preview_interval_us ? hal_time_us() : 0U;
 
 #if HK_BOARD_LCD_PARALLEL8
     /* Space successive camera updates on the parallel panel. Time already
      * spent outside the preview counts toward the gap. */
     uint64_t now = hal_time_us();
-    if(now < g_camera_preview_panel_ready_us)
+    if(!preview_interval_us && now < g_camera_preview_panel_ready_us)
         hal_sleep_ms((uint32_t)((g_camera_preview_panel_ready_us - now + 999U) / 1000U));
 #endif
     if(!camera_service_preview_acquire(&service_frame))
         return 0;
+    if(preview_interval_us)
+    {
+        if(service_frame.lease_id && consumer)
+            consumer(service_frame.pixels, service_frame.width, service_frame.height,
+                     service_frame.sequence, consumer_context);
+        if(!service_frame.lease_id || preview_started_us < g_paced_preview_due_us
+#if HK_BOARD_LCD_PARALLEL8
+           || preview_started_us < g_camera_preview_panel_ready_us
+#endif
+        )
+        {
+            camera_service_preview_release(&service_frame);
+            return 0;
+        }
+        consumer = NULL;
+    }
 #if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
     camera_ai_input_prepare_preview(service_frame.pixels, service_frame.width,
                                     service_frame.height, service_frame.sequence);
@@ -118,6 +137,8 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
     camera_service_preview_release(&service_frame);
     if(!camera_view_present(&present))
         return 0;
+    if(preview_interval_us)
+        g_paced_preview_due_us = preview_started_us + preview_interval_us;
     present_finished_us = hal_time_us();
 #if HK_BOARD_LCD_PARALLEL8
     g_camera_preview_panel_ready_us = present_finished_us + CAMERA_PREVIEW_PANEL_GAP_US;
@@ -129,7 +150,7 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
 
 void camera_runtime_redraw_preview(void)
 {
-    (void)camera_runtime_present_preview(NULL, NULL, NULL, NULL);
+    (void)camera_runtime_present_preview(NULL, NULL, NULL, NULL, 0U);
 }
 
 void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t *input)
@@ -147,6 +168,7 @@ void camera_runtime_enter(camera_runtime_mode_t mode, const hk_input_snapshot_t 
          (object_mode ? "OBJECT FAIL" : "CAMERA FAIL")));
 
     camera_service_set_qvga_mode(face_mode || apriltag_mode || object_mode);
+    g_paced_preview_due_us = 0U;
     hk_back_exit_set_armed(0);
     camera_light_repeat_reset();
     camera_service_enter_begin(qr_mode, (button_state & BUTTON_OK) ? 1 : 0);
@@ -180,6 +202,17 @@ uint8_t camera_runtime_tick_with_pipeline(const hk_input_snapshot_t *input,
                                           camera_runtime_frame_overlay_t overlay,
                                           void *overlay_context)
 {
+    return camera_runtime_tick_paced(input, consumer, consumer_context, overlay,
+                                     overlay_context, 0U);
+}
+
+uint8_t camera_runtime_tick_paced(const hk_input_snapshot_t *input,
+                                 camera_runtime_frame_consumer_t consumer,
+                                 void *consumer_context,
+                                 camera_runtime_frame_overlay_t overlay,
+                                 void *overlay_context,
+                                 uint32_t preview_interval_us)
+{
     if(!input)
         return 0;
 
@@ -189,7 +222,8 @@ uint8_t camera_runtime_tick_with_pipeline(const hk_input_snapshot_t *input,
 
     if(camera_service_capture_frame_tick())
     {
-        if(camera_runtime_present_preview(consumer, consumer_context, overlay, overlay_context))
+        if(camera_runtime_present_preview(consumer, consumer_context, overlay, overlay_context,
+                                          preview_interval_us))
         {
             camera_service_fps_on_frame();
             return 1;

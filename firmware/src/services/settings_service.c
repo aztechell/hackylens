@@ -36,6 +36,7 @@ static external_link_uart_speed_t g_external_link_uart_speed = EXTERNAL_LINK_UAR
 static uint8_t g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
 static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
+static uint8_t g_tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
 static uint8_t g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
 static uint8_t g_ui_color = HK_UI_COLOR_GREEN;
 
@@ -75,6 +76,16 @@ void settings_app_data_write(const uint8_t data[SETTINGS_APP_DATA_SIZE])
 uint8_t hk_auto_sleep_minutes(void)
 {
     return g_auto_sleep_minutes;
+}
+
+void settings_tag_distance_read(uint8_t data[SETTINGS_TAG_DISTANCE_BYTES])
+{
+    memcpy(data, g_tag_distance, sizeof(g_tag_distance));
+}
+
+void settings_tag_distance_write(const uint8_t data[SETTINGS_TAG_DISTANCE_BYTES])
+{
+    memcpy(g_tag_distance, data, sizeof(g_tag_distance));
 }
 
 uint8_t settings_led_enabled(void)
@@ -240,6 +251,7 @@ void settings_defaults(void)
     g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
     settings_set_ui_color(HK_UI_COLOR_GREEN);
     memset(g_app_data, 0, sizeof(g_app_data));
+    memset(g_tag_distance, 0, sizeof(g_tag_distance));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
 #endif
@@ -263,6 +275,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->external_link_uart_speed = (uint8_t)g_external_link_uart_speed;
     snapshot->autostart_id = g_autostart_id;
     memcpy(snapshot->app_data, g_app_data, sizeof(snapshot->app_data));
+    memcpy(snapshot->tag_distance, g_tag_distance, sizeof(snapshot->tag_distance));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
@@ -288,6 +301,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     settings_set_external_link_uart_speed((external_link_uart_speed_t)snapshot->external_link_uart_speed);
     settings_set_autostart_id(snapshot->autostart_id);
     memcpy(g_app_data, snapshot->app_data, sizeof(g_app_data));
+    memcpy(g_tag_distance, snapshot->tag_distance, sizeof(g_tag_distance));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif

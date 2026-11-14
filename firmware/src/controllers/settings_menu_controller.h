@@ -32,6 +32,8 @@ enum
     SETTINGS_MENU_ITEM_WRAP = 0x01U,
     SETTINGS_MENU_ITEM_PERCENT = 0x02U,
     SETTINGS_MENU_ITEM_MINUTES = 0x04U,
+    SETTINGS_MENU_ITEM_CENTIPIXELS = 0x08U,
+    SETTINGS_MENU_ITEM_ACCELERATE = 0x10U,
 };
 
 typedef struct
@@ -46,6 +48,7 @@ typedef struct
     const char *const *choices;
     uint8_t choice_count;
     uint8_t flags;
+    int32_t edit_initial; /* Used when a saved range value is below its minimum. */
 } settings_menu_item_t;
 
 typedef int32_t (*settings_menu_read_fn)(void *context, uint16_t id);
@@ -89,6 +92,7 @@ typedef struct
     uint8_t editing;
     uint32_t repeat_button;
     uint8_t repeat_ticks;
+    uint8_t repeat_steps;
     uint8_t headless;
     int32_t edit_value;
 } settings_menu_session_t;

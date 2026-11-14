@@ -8,5 +8,7 @@
 
 void settings_app_data_read(uint8_t data[SETTINGS_APP_DATA_SIZE]);
 void settings_app_data_write(const uint8_t data[SETTINGS_APP_DATA_SIZE]);
+void settings_tag_distance_read(uint8_t data[SETTINGS_TAG_DISTANCE_BYTES]);
+void settings_tag_distance_write(const uint8_t data[SETTINGS_TAG_DISTANCE_BYTES]);
 
 #endif

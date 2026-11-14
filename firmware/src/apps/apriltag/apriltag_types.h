@@ -16,6 +16,7 @@ typedef struct
     uint8_t refine_edges;
     apriltag_output_mode_t output_mode;
     uint8_t fps_enabled;
+    uint8_t far_search;
     uint8_t light_mode;
     uint8_t rgb_red;
     uint8_t rgb_green;

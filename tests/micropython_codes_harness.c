@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,8 @@
 #include "common/pnm.h"
 #include "tag36h11.h"
 #include "../firmware/src/adapters/micropython/micropython_camera_codes.h"
+#include "../firmware/src/apps/apriltag/apriltag_distance.h"
+#include "../firmware/src/services/apriltag_decoder.h"
 #include "../firmware/src/services/camera_client.h"
 #include "../firmware/src/services/qr_luma.h"
 #include "qr_fixture.h"
@@ -66,15 +69,15 @@ micropython_binding_result_t micropython_binding_call(
     return MICROPYTHON_BINDING_OK;
 }
 
-static void draw_tag(uint32_t id)
+static void draw_tag(uint32_t id, int left, int top, int edge)
 {
     apriltag_family_t *family = tag36h11_create();
     image_u8_t *image = apriltag_to_image(family, id);
     memset(pixels, 0xff, sizeof(pixels));
-    for(int y = 0; y < image->height * 12; y++)
-        for(int x = 0; x < image->width * 12; x++)
-            if(!image->buf[(y / 12) * image->stride + x / 12])
-                pixels[(y + 48) * 320 + x + 88] = 0U;
+    for(int y = 0; y < edge; y++)
+        for(int x = 0; x < edge; x++)
+            if(!image->buf[(1 + y * 8 / edge) * image->stride + 1 + x * 8 / edge])
+                pixels[(top + y) * 320 + left + x] = 0U;
     image_u8_destroy(image);
     tag36h11_destroy(family);
 }
@@ -161,7 +164,8 @@ int main(void)
     assert(result.count == 1U && result.qr_length == 2U);
     assert(memcmp(result.qr_payload, "HL", 2U) == 0);
 
-    draw_tag(42U);
+    draw_tag(42U, 100, 60, 96);
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
     rotate = 0U;
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_APRILTAG, &result) ==
            MICROPYTHON_BINDING_OK);
@@ -173,6 +177,31 @@ int main(void)
            MICROPYTHON_BINDING_OK);
     assert_rotation(original, result.items[0]);
     micropython_camera_codes_cleanup();
+
+    apriltag_decoder_t decoder = {0};
+    apriltag_result_t tags[APRILTAG_RESULT_MAX];
+    assert(apriltag_decoder_open(&decoder));
+    apriltag_decoder_fill(pixels, 320U, 240U, NULL);
+    assert(apriltag_decoder_scan(&decoder, 320U, 240U, 1U, NULL, tags) == 1U);
+    assert(tags[0].id == 42U);
+    apriltag_vector_t pose;
+    assert(apriltag_distance_pose(tags[0].corners, 60U, 120.0f, 0U, &pose));
+    /* An eight-module black edge is 48 detector pixels at this scale. */
+    assert(fabsf(pose.z - 150.0f) < 5.0f);
+
+    /* Native detail recovers a 16 px tag from an off-center odd-aligned
+     * crop and maps the same corners to capture and calibration coordinates. */
+    draw_tag(42U, 201, 157, 16);
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
+    const apriltag_scan_region_t region = {179U, 131U, 64U, 64U, 1U};
+    apriltag_decoder_fill(pixels, 320U, 240U, &region);
+    assert(apriltag_decoder_scan(&decoder, 320U, 240U, 1U, &region, tags) == 1U);
+    assert(tags[0].id == 42U && tags[0].native_resolution);
+    assert(abs(tags[0].center_x - 209) <= 1 && abs(tags[0].center_y - 165) <= 1);
+    assert(apriltag_distance_pose(tags[0].corners, 100U, 154.0f, 1U, &pose));
+    assert(fabsf(pose.z - 1925.0f) < 125.0f);
+    apriltag_decoder_close(&decoder);
+
     memset(pixels, 0xff, sizeof(pixels));
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_APRILTAG, &result) ==
            MICROPYTHON_BINDING_OK);

@@ -53,6 +53,11 @@ static volatile uint32_t g_published_sequence;
 static volatile uint32_t g_request_epoch;
 static volatile uint16_t g_request_width;
 static volatile uint16_t g_request_height;
+static apriltag_scan_region_t g_request_region;
+static uint8_t g_request_native;
+static volatile uint8_t g_last_decimate = 2U;
+static volatile uint16_t g_last_input_width = APRILTAG_INPUT_W;
+static volatile uint16_t g_last_input_height = APRILTAG_INPUT_H;
 static volatile uint32_t g_frame_count;
 static volatile uint32_t g_submit_count;
 static volatile uint32_t g_busy_drop_count;
@@ -119,8 +124,12 @@ static void detector_run(uint32_t request_sequence, uint32_t request_epoch,
     bank->epoch = request_epoch;
 
     uint64_t started_us = apriltag_time_now_us();
+    const apriltag_scan_region_t *region = g_request_native ? &g_request_region : NULL;
     bank->count = apriltag_decoder_scan(&g_decoder, width, height,
-                                        g_refine_edges_requested, bank->items);
+                                        g_refine_edges_requested, region, bank->items);
+    g_last_decimate = region && region->full_detail ? 1U : 2U;
+    g_last_input_width = region ? region->width : APRILTAG_INPUT_W;
+    g_last_input_height = region ? region->height : APRILTAG_INPUT_H;
     g_last_us = (uint32_t)(apriltag_time_now_us() - started_us);
     g_last_quads = g_decoder.detector->nquads;
     g_last_preprocess_us = g_decoder.detector->profile_preprocess_us;
@@ -293,12 +302,17 @@ void apriltag_detector_deinit(void)
         (void)resource_cleanup_schedule(RESOURCE_CLEANUP_CORE1, finish_cleanup);
 }
 
-uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width, uint16_t height)
+uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width, uint16_t height,
+                                 const apriltag_scan_region_t *region)
 {
     uint32_t request_sequence;
 
     apriltag_detector_service_tick();
     if(!pixels || !width || !height || !g_active)
+        return 0;
+    if(region && (!region->width || !region->height ||
+                  region->width > APRILTAG_INPUT_W || region->height > APRILTAG_INPUT_H ||
+                  region->x + region->width > width || region->y + region->height > height))
         return 0;
     if(g_worker_state != APRILTAG_WORKER_READY ||
        g_request_sequence != g_complete_sequence || g_job_ticket)
@@ -310,10 +324,13 @@ uint8_t apriltag_detector_submit(const volatile uint16_t *pixels, uint16_t width
     request_sequence = g_request_sequence + 1U;
     if(request_sequence == 0U)
         request_sequence = 1U;
-    apriltag_decoder_fill(pixels, width, height);
+    apriltag_decoder_fill(pixels, width, height, region);
 
     g_request_width = width;
     g_request_height = height;
+    g_request_native = region != NULL;
+    if(region)
+        g_request_region = *region;
     g_request_epoch = g_session_epoch;
     g_job_kind = APRILTAG_JOB_DETECT;
     __sync_synchronize();
@@ -336,7 +353,7 @@ void apriltag_detector_set_refine_edges(uint8_t enabled)
     __sync_synchronize();
 }
 
-const apriltag_result_t *apriltag_detector_results(uint8_t *count)
+const apriltag_result_t *apriltag_detector_results(uint8_t *count, uint32_t *sequence)
 {
     uint32_t published_sequence = g_published_sequence;
     apriltag_result_bank_t *bank;
@@ -345,18 +362,24 @@ const apriltag_result_t *apriltag_detector_results(uint8_t *count)
     bank = shared_result_bank((uint8_t)published_sequence);
     if(!g_active || published_sequence == 0U || bank->epoch != g_session_epoch)
     {
+        if(sequence)
+            *sequence = 0U;
         if(count)
             *count = 0;
         return bank->items;
     }
     if(count)
         *count = bank->count > APRILTAG_RESULT_MAX ? APRILTAG_RESULT_MAX : bank->count;
+    if(sequence)
+        *sequence = published_sequence;
     return bank->items;
 }
 
-uint32_t apriltag_detector_result_sequence(void)
+void apriltag_detector_discard_results(void)
 {
-    return g_published_sequence;
+    if(++g_session_epoch == 0U)
+        g_session_epoch++;
+    __sync_synchronize();
 }
 
 void apriltag_detector_format_info(char *line, size_t line_size)
@@ -365,14 +388,14 @@ void apriltag_detector_format_info(char *line, size_t line_size)
     uint8_t state = g_worker_state;
     uint8_t count = 0;
 
-    (void)apriltag_detector_results(&count);
+    (void)apriltag_detector_results(&count, NULL);
     if(state >= sizeof(states) / sizeof(states[0]))
         state = APRILTAG_WORKER_ERROR;
     snprintf(line, line_size,
-             "HKTAGINFO state=%s core=1 family=TAG36H11 input=%ux%u decimate=2 edge_refine=%u frames=%u submitted=%u "
+             "HKTAGINFO state=%s core=1 family=TAG36H11 input=%ux%u decimate=%u edge_refine=%u frames=%u submitted=%u "
              "busy_drop=%u us=%u quads=%u tags=%u pre=%u search=%u decode=%u refine=%u homo=%u "
              "payload=%u result=%u reconcile=%u cleanup=%u\r\n",
-             states[state], APRILTAG_INPUT_W, APRILTAG_INPUT_H, g_refine_edges_requested,
+             states[state], g_last_input_width, g_last_input_height, g_last_decimate, g_refine_edges_requested,
              (unsigned)g_frame_count, (unsigned)g_submit_count, (unsigned)g_busy_drop_count,
              (unsigned)g_last_us, (unsigned)g_last_quads, (unsigned)count,
              (unsigned)g_last_preprocess_us, (unsigned)g_last_quad_search_us,

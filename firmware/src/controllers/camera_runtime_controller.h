@@ -40,6 +40,13 @@ uint8_t camera_runtime_tick_with_pipeline(const hk_input_snapshot_t *input,
                                           void *consumer_context,
                                           camera_runtime_frame_overlay_t overlay,
                                           void *overlay_context);
+/* Consume each new capture once. The LCD interval only gates presentation. */
+uint8_t camera_runtime_tick_paced(const hk_input_snapshot_t *input,
+                                 camera_runtime_frame_consumer_t consumer,
+                                 void *consumer_context,
+                                 camera_runtime_frame_overlay_t overlay,
+                                 void *overlay_context,
+                                 uint32_t preview_interval_us);
 camera_runtime_input_event_t camera_runtime_handle_input(const hk_input_snapshot_t *input);
 uint8_t camera_runtime_ok_hold_triggered(const hk_input_snapshot_t *input);
 void camera_runtime_redraw_preview(void);

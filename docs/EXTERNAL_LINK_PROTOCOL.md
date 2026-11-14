@@ -99,11 +99,18 @@ Each result is a fixed 16-byte item:
 For a BLOCK, `(x0,y0)` and `(x1,y1)` are the top-left and bottom-right corners.
 For an ARROW they are the start and end points. Coordinates use the `width` by
 `height` source canvas returned in the same message. FACE DETECT currently
-publishes up to eight BLOCK items and clears them on app exit. APRILTAG uses
-the native tag ID. OBJECT DETECT uses the VOC20 class ID `0..19` and reports
+publishes up to eight BLOCK items and clears them on app exit. OBJECT DETECT
+uses the VOC20 class ID `0..19` and reports
 confidence on the existing `0..1000` scale; the item layout is unchanged.
 QR publishes a bounding BLOCK for a decoded code with ID and confidence set
 to zero. Its payload bytes are available through the
 [local C and MicroPython API](MICROPYTHON_API.md#vision-results).
 FACE RECOG uses ID zero for unknown faces and 1–10 for learned faces.
 Confidence is the nonnegative cosine similarity scaled to 0–1000.
+
+APRILTAG returns its latest snapshot in response to `GET_RESULTS` over
+UART or I2C. Both NEAR and FAR report the native tag ID, Hamming distance,
+confidence and bounding rectangle in the 320×240 capture. The app's Output
+setting controls whether the snapshot includes all detections or selected IDs.
+The USB debug command `HKTAGINFO` reports optical and horizontal range in
+millimeters. External Link v1 carries the bounding rectangle and tag metadata.

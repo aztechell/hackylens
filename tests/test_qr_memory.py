@@ -28,6 +28,7 @@ class QrMemoryTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware/include'}", f"-I{quirc}", f"-I{apriltag}",
                 str(ROOT / "tests/micropython_codes_harness.c"),
                 str(ROOT / "firmware/src/adapters/micropython/micropython_camera_codes.c"),
+                str(ROOT / "firmware/src/apps/apriltag/apriltag_distance.c"),
                 *(str(services / name) for name in (
                     "qr_decoder_engine.c", "qr_luma.c", "apriltag_decoder.c",
                     "vision_result_service.c",

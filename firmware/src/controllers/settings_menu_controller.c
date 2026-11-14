@@ -19,12 +19,14 @@ static void settings_menu_repeat_reset(settings_menu_session_t *session)
 {
     session->repeat_button = 0U;
     session->repeat_ticks = 0U;
+    session->repeat_steps = 0U;
 }
 
 static void settings_menu_repeat_start(settings_menu_session_t *session, uint32_t button)
 {
     session->repeat_button = button;
     session->repeat_ticks = SETTINGS_MENU_REPEAT_INITIAL_TICKS;
+    session->repeat_steps = 0U;
 }
 
 static void settings_menu_ensure_visible(settings_menu_session_t *session)
@@ -123,6 +125,9 @@ static void settings_menu_format_value(const settings_menu_session_t *session,
             else
                 snprintf(value, value_size, "OFF");
         }
+        else if(item->flags & SETTINGS_MENU_ITEM_CENTIPIXELS)
+            snprintf(value, value_size, "%ld.%02ld px",
+                     (long)(current / 100), (long)(current % 100));
         else
             snprintf(value, value_size, "%ld", (long)current);
     }
@@ -279,6 +284,15 @@ static int32_t settings_menu_adjusted_value(const settings_menu_session_t *sessi
     int32_t maximum = item->kind == SETTINGS_MENU_ITEM_CHOICE ?
                       (int32_t)settings_menu_choice_count(session, item) - 1 : item->maximum;
     int32_t step = item->kind == SETTINGS_MENU_ITEM_CHOICE ? 1 : item->step;
+    if(item->flags & SETTINGS_MENU_ITEM_ACCELERATE)
+    {
+        if(session->repeat_steps >= 30U)
+            step *= 1000;
+        else if(session->repeat_steps >= 18U)
+            step *= 100;
+        else if(session->repeat_steps >= 8U)
+            step *= 10;
+    }
 
     if(step <= 0 || maximum < minimum)
         return current;
@@ -360,6 +374,9 @@ static void settings_menu_activate(settings_menu_session_t *session)
     {
         session->editing = 1U;
         session->edit_value = settings_menu_read_value(session, item);
+        if(item->kind == SETTINGS_MENU_ITEM_RANGE && item->edit_initial &&
+           session->edit_value < item->minimum)
+            session->edit_value = item->edit_initial;
         settings_menu_repeat_reset(session);
         settings_menu_draw_index(session, session->index);
         return;
@@ -396,13 +413,13 @@ settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *sessio
     {
         if(input->pressed & BUTTON_LEFT)
         {
-            settings_menu_adjust(session, -1);
             settings_menu_repeat_start(session, BUTTON_LEFT);
+            settings_menu_adjust(session, -1);
         }
         else if(input->pressed & BUTTON_RIGHT)
         {
-            settings_menu_adjust(session, 1);
             settings_menu_repeat_start(session, BUTTON_RIGHT);
+            settings_menu_adjust(session, 1);
         }
         return SETTINGS_MENU_EVENT_NONE;
     }
@@ -432,6 +449,8 @@ void settings_menu_tick(settings_menu_session_t *session, const hk_input_snapsho
         session->repeat_ticks--;
         return;
     }
+    if(session->repeat_steps < UINT8_MAX)
+        session->repeat_steps++;
     settings_menu_adjust(session, session->repeat_button == BUTTON_LEFT ? -1 : 1);
     session->repeat_ticks = SETTINGS_MENU_REPEAT_NEXT_TICKS;
 }

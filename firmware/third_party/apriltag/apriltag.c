@@ -782,15 +782,18 @@ static float quad_decode(apriltag_detector_t* td, apriltag_family_t *family, ima
 
 void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *quad)
 {
-    double lines[4][4]; // for each line, [Ex Ey nx ny]
+    // The K210 executes single-precision arithmetic in hardware.
+    float lines[4][4]; // for each line, [Ex Ey nx ny]
 
     for (int edge = 0; edge < 4; edge++) {
         int a = edge, b = (edge + 1) & 3; // indices of the end points.
 
         // compute the normal to the current line estimate
-        double nx = quad->p[b][1] - quad->p[a][1];
-        double ny = -quad->p[b][0] + quad->p[a][0];
-        double mag = sqrt(nx*nx + ny*ny);
+        float nx = quad->p[b][1] - quad->p[a][1];
+        float ny = -quad->p[b][0] + quad->p[a][0];
+        float mag = sqrtf(nx*nx + ny*ny);
+        if (mag == 0.0f)
+            return;
         nx /= mag;
         ny /= mag;
 
@@ -805,21 +808,21 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
         int nsamples = imax(16, mag / 8); // XXX tunable
 
         // stats for fitting a line...
-        double Mx = 0, My = 0, Mxx = 0, Mxy = 0, Myy = 0, N = 0;
+        float Mx = 0, My = 0, Mxx = 0, Mxy = 0, Myy = 0, N = 0;
 
         for (int s = 0; s < nsamples; s++) {
             // compute a point along the line... Note, we're avoiding
             // sampling *right* at the corners, since those points are
             // the least reliable.
-            double alpha = (1.0 + s) / (nsamples + 1);
-            double x0 = alpha*quad->p[a][0] + (1-alpha)*quad->p[b][0];
-            double y0 = alpha*quad->p[a][1] + (1-alpha)*quad->p[b][1];
+            float alpha = (1.0f + s) / (nsamples + 1);
+            float x0 = alpha*quad->p[a][0] + (1-alpha)*quad->p[b][0];
+            float y0 = alpha*quad->p[a][1] + (1-alpha)*quad->p[b][1];
 
             // search along the normal to this line, looking at the
             // gradients along the way. We're looking for a strong
             // response.
-            double Mn = 0;
-            double Mcount = 0;
+            float Mn = 0;
+            float Mcount = 0;
 
             // XXX tunable: how far to search?  We want to search far
             // enough that we find the best edge, but not so far that
@@ -835,13 +838,13 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
             // To reduce the overhead of bilinear interpolation, we can
             // reduce the number of steps per unit.
             int steps_per_unit = 4;
-            double step_length = 1.0 / steps_per_unit;
+            float step_length = 1.0f / steps_per_unit;
             int max_steps = 2 * steps_per_unit * range + 1;
-            double delta = 0.5;
+            float delta = 0.5f;
 
             // XXX tunable step size.
             for (int step = 0; step < max_steps; ++step) {
-                double n = -range + step_length * step;
+                float n = -range + step_length * step;
                 // Because of the guaranteed winding order of the
                 // points in the quad, we will start inside the white
                 // portion of the quad and work our way outward.
@@ -850,41 +853,35 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
                 // how far +/- to look? Small values compute the
                 // gradient more precisely, but are more sensitive to
                 // noise.
-                double grange = 1;
+                const float grange = 1.0f;
 
-                double x1 = x0 + (n + grange)*nx - delta;
-                double y1 = y0 + (n + grange)*ny - delta;
-                double x1i_d, y1i_d, a1, b1;
-                a1 = modf(x1, &x1i_d);
-                b1 = modf(y1, &y1i_d);
-                int x1i = x1i_d, y1i = y1i_d;
-
-                if (x1i < 0 || x1i + 1 >= im_orig->width || y1i < 0 || y1i + 1 >= im_orig->height)
+                float x1 = x0 + (n + grange)*nx - delta;
+                float y1 = y0 + (n + grange)*ny - delta;
+                if (x1 < 0 || x1 >= im_orig->width - 1 || y1 < 0 || y1 >= im_orig->height - 1)
                     continue;
+                int x1i = (int)x1, y1i = (int)y1;
+                float a1 = x1 - x1i, b1 = y1 - y1i;
 
-                double x2 = x0 + (n - grange)*nx - delta;
-                double y2 = y0 + (n - grange)*ny - delta;
-                double x2i_d, y2i_d, a2, b2;
-                a2 = modf(x2, &x2i_d);
-                b2 = modf(y2, &y2i_d);
-                int x2i = x2i_d, y2i = y2i_d;
-
-                if (x2i < 0 || x2i + 1 >= im_orig->width || y2i < 0 || y2i + 1 >= im_orig->height)
+                float x2 = x0 + (n - grange)*nx - delta;
+                float y2 = y0 + (n - grange)*ny - delta;
+                if (x2 < 0 || x2 >= im_orig->width - 1 || y2 < 0 || y2 >= im_orig->height - 1)
                     continue;
+                int x2i = (int)x2, y2i = (int)y2;
+                float a2 = x2 - x2i, b2 = y2 - y2i;
 
                 // interpolate
-                double g1 = (1 - a1) * (1 - b1) * im_orig->buf[y1i*im_orig->stride + x1i] +
+                float g1 = (1 - a1) * (1 - b1) * im_orig->buf[y1i*im_orig->stride + x1i] +
                                   a1 * (1 - b1) * im_orig->buf[y1i*im_orig->stride + x1i + 1] +
                             (1 - a1) *    b1    * im_orig->buf[(y1i + 1)*im_orig->stride + x1i] +
                                   a1 *    b1    * im_orig->buf[(y1i + 1)*im_orig->stride + x1i + 1];
-                double g2 = (1 - a2) * (1 - b2) * im_orig->buf[y2i*im_orig->stride + x2i] +
+                float g2 = (1 - a2) * (1 - b2) * im_orig->buf[y2i*im_orig->stride + x2i] +
                                   a2 * (1 - b2) * im_orig->buf[y2i*im_orig->stride + x2i + 1] +
                             (1 - a2) *    b2    * im_orig->buf[(y2i + 1)*im_orig->stride + x2i] +
                                   a2 *    b2    * im_orig->buf[(y2i + 1)*im_orig->stride + x2i + 1];
                 if (g1 < g2) // reject points whose gradient is "backwards". They can only hurt us.
                     continue;
 
-                double weight = (g2 - g1)*(g2 - g1); // XXX tunable. What shape for weight=f(g2-g1)?
+                float weight = (g2 - g1)*(g2 - g1); // XXX tunable. What shape for weight=f(g2-g1)?
 
                 // compute weighted average of the gradient at this point.
                 Mn += weight*n;
@@ -895,11 +892,11 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
             if (Mcount == 0)
                 continue;
 
-            double n0 = Mn / Mcount;
+            float n0 = Mn / Mcount;
 
             // where is the point along the line?
-            double bestx = x0 + n0*nx;
-            double besty = y0 + n0*ny;
+            float bestx = x0 + n0*nx;
+            float besty = y0 + n0*ny;
 
             // update our line fit statistics
             Mx += bestx;
@@ -911,13 +908,15 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
         }
 
         // fit a line
-        double Ex = Mx / N, Ey = My / N;
-        double Cxx = Mxx / N - Ex*Ex;
-        double Cxy = Mxy / N - Ex*Ey;
-        double Cyy = Myy / N - Ey*Ey;
+        if (N < 2.0f)
+            return;
+        float Ex = Mx / N, Ey = My / N;
+        float Cxx = Mxx / N - Ex*Ex;
+        float Cxy = Mxy / N - Ex*Ey;
+        float Cyy = Myy / N - Ey*Ey;
 
         // TODO: Can replace this with same code as in fit_line.
-        double normal_theta = .5 * atan2f(-2*Cxy, (Cyy - Cxx));
+        float normal_theta = .5f * atan2f(-2*Cxy, Cyy - Cxx);
         nx = cosf(normal_theta);
         ny = sinf(normal_theta);
         lines[edge][0] = Ex;
@@ -930,19 +929,19 @@ void refine_edges(apriltag_detector_t *td, image_u8_t *im_orig, struct quad *qua
     for (int i = 0; i < 4; i++) {
 
         // solve for the intersection of lines (i) and (i+1)&3.
-        double A00 =  lines[i][3],  A01 = -lines[(i+1)&3][3];
-        double A10 =  -lines[i][2],  A11 = lines[(i+1)&3][2];
-        double B0 = -lines[i][0] + lines[(i+1)&3][0];
-        double B1 = -lines[i][1] + lines[(i+1)&3][1];
+        float A00 =  lines[i][3],  A01 = -lines[(i+1)&3][3];
+        float A10 =  -lines[i][2],  A11 = lines[(i+1)&3][2];
+        float B0 = -lines[i][0] + lines[(i+1)&3][0];
+        float B1 = -lines[i][1] + lines[(i+1)&3][1];
 
-        double det = A00 * A11 - A10 * A01;
+        float det = A00 * A11 - A10 * A01;
 
         // inverse.
-        if (fabs(det) > 0.001) {
+        if (fabsf(det) > 0.001f) {
             // solve
-            double W00 = A11 / det, W01 = -A01 / det;
+            float W00 = A11 / det, W01 = -A01 / det;
 
-            double L0 = W00*B0 + W01*B1;
+            float L0 = W00*B0 + W01*B1;
 
             // Compute intersection. Note that line i represents the line from corner i to (i+1)&3, so
 	    // the intersection of line i with line (i+1)&3 represents corner (i+1)&3.

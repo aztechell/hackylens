@@ -3,12 +3,16 @@
 
 #include "../firmware/src/config/settings_config.h"
 #include "../firmware/src/config/input_config.h"
+#include "../firmware/src/apps/apriltag/apriltag_settings.h"
+#include "../firmware/src/apps/apriltag/apriltag_settings_menu.h"
+#include "../firmware/src/services/camera_session_preferences.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
 #include "../firmware/src/core/hk_ui_colors.h"
 #include "../firmware/src/core/hk_app_registry.h"
 #include "../firmware/src/core/hk_binary.h"
 #include "../firmware/src/services/settings_payload_codec.h"
 #include "../firmware/src/services/settings_persistence.h"
+#include "../firmware/src/services/settings_app_data.h"
 #include "../firmware/src/services/settings_service.h"
 #include "../firmware/src/storage/internal_flash.h"
 #include "../firmware/src/storage/settings_store.h"
@@ -80,6 +84,17 @@ void settings_rgb_preview(uint8_t red, uint8_t green, uint8_t blue)
     (void)green;
     (void)blue;
 }
+void camera_session_preferences_override(const camera_session_preferences_t *preferences)
+{
+    (void)preferences;
+}
+void apriltag_detector_set_refine_edges(uint8_t enabled) { (void)enabled; }
+void camera_light_apply(void) {}
+uint8_t apriltag_controller_arm_calibration(void) { return 0U; }
+uint8_t apriltag_controller_calibration_armed(void) { return 0U; }
+void apriltag_controller_cancel_calibration(void) {}
+uint8_t apriltag_controller_has_accelerometer(void) { return 0U; }
+uint8_t apriltag_controller_capture_gravity(uint8_t lens_down) { (void)lens_down; return 0U; }
 void settings_menu_view_open(const char *title) { (void)title; }
 void settings_menu_view_clear_rows(void) {}
 void settings_menu_view_draw_row(uint8_t slot, const char *title, const char *value,
@@ -134,6 +149,60 @@ static int test_screen_and_device(void)
     s_usage.used_bytes = UINT64_C(17) << 29;
     CHECK(settings_menu_visible_slot(&menu, 3U, NULL, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(value, "8.5 GiB") == 0);
+    return 0;
+}
+
+static int test_tag_focal_editor(void)
+{
+    settings_menu_session_t menu = {0};
+    const char *title;
+    char value[24];
+    const uint8_t sen0305 = strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0;
+    const uint32_t default_focal = sen0305 ? 154000U : 0U;
+    const uint32_t editor_focal = sen0305 ? 154000U : 120000U;
+    const apriltag_distance_settings_t *distance = apriltag_settings_distance();
+    CHECK(settings_menu_bind(&menu, apriltag_settings_menu_definition(&menu)));
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Search") == 0 && strcmp(value, "NEAR") == 0);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    CHECK(settings_menu_visible_slot(&menu, 0U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "FAR") == 0 && apriltag_settings_preferences()->far_search);
+    for(uint8_t i = 0; i < 5U; i++)
+        press(&menu, HK_INPUT_BUTTON_RIGHT);
+    CHECK(settings_menu_visible_slot(&menu, 5U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Focal") == 0);
+    CHECK(strcmp(value, sen0305 ? "154.00 px" : "UNSET") == 0);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    CHECK(settings_menu_visible_slot(&menu, 5U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, sen0305 ? "154.00 px" : "120.00 px") == 0);
+    press(&menu, HK_INPUT_BUTTON_BACK);
+    CHECK(distance->focal_millipixels == default_focal);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    CHECK(distance->focal_millipixels == editor_focal);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    const hk_input_snapshot_t left_held = {HK_INPUT_BUTTON_LEFT, 0U, 0U};
+    press(&menu, HK_INPUT_BUTTON_LEFT);
+    for(unsigned i = 0; i < 200U; i++)
+        settings_menu_tick(&menu, &left_held);
+    int32_t accelerated = menu.edit_value;
+    CHECK(accelerated < (int32_t)(editor_focal / 10U) - 1000);
+    press(&menu, HK_INPUT_BUTTON_RIGHT);
+    CHECK(menu.edit_value == accelerated + 1);
+    press(&menu, HK_INPUT_BUTTON_BACK);
+    apriltag_settings_distance()->focal_millipixels = 153640U;
+    press(&menu, HK_INPUT_BUTTON_OK);
+    for(unsigned i = 0U; i < 4U; i++)
+        press(&menu, HK_INPUT_BUTTON_LEFT);
+    CHECK(settings_menu_visible_slot(&menu, 5U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "153.60 px") == 0);
+    press(&menu, HK_INPUT_BUTTON_OK);
+    CHECK(distance->focal_millipixels == 153600U);
+    settings_storage_save_now();
+    settings_store_load_t loaded;
+    settings_store_init(&loaded);
+    CHECK(loaded.has_payload && rd32(loaded.payload.tag_distance + 6U) == 153600U);
+    CHECK(loaded.payload.app_data[1] & 0x08U);
     return 0;
 }
 
@@ -215,8 +284,16 @@ const char *internal_flash_result_name(internal_flash_result_t result)
     return result == INTERNAL_FLASH_OK ? "ok" : "error";
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if(argc == 2 && strcmp(argv[1], "--legacy-focal") == 0)
+    {
+        uint8_t stored[SETTINGS_TAG_DISTANCE_BYTES] = {1U};
+        wr32(stored + 6U, 153945U);
+        settings_tag_distance_write(stored);
+        CHECK(apriltag_settings_distance()->focal_millipixels == 153950U);
+        return 0;
+    }
     settings_store_load_t loaded;
     settings_snapshot_t input;
     settings_snapshot_t output;
@@ -233,6 +310,8 @@ int main(void)
     input.autostart_id = 300U;
     input.audio_volume = 30U;
     input.ui_color = HK_UI_COLOR_AMBER;
+    input.tag_distance[0] = 1U;
+    input.tag_distance[21] = 37U;
     payload = settings_payload_encode(&input);
     CHECK(payload.autostart_id == 300U);
 
@@ -245,6 +324,7 @@ int main(void)
     CHECK(output.autostart_id == 300U);
     CHECK(output.audio_volume == 30U);
     CHECK(output.ui_color == HK_UI_COLOR_AMBER);
+    CHECK(output.tag_distance[0] == 1U && output.tag_distance[21] == 37U);
     CHECK(output.auto_sleep_minutes == 0U);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
@@ -255,7 +335,7 @@ int main(void)
         .sequence = 76U,
         .payload = payload,
     };
-    v5.crc32 = crc32_update(0U, (const uint8_t *)&v5, 12U + v5.payload_size);
+    wr32((uint8_t *)&v5 + 120U, crc32_update(0U, (const uint8_t *)&v5, 12U + v5.payload_size));
     memcpy(s_flash[0], &v5, sizeof(v5));
     settings_store_init(&loaded);
     CHECK(loaded.has_payload && loaded.payload.autostart_id == 300U);
@@ -265,14 +345,21 @@ int main(void)
 
     settings_record_t v6 = v5;
     v6.version = SETTINGS_STORAGE_V6_VERSION;
-    v6.payload_size = sizeof(v6.payload);
-    v6.crc32 = crc32_update(0U, (const uint8_t *)&v6, 12U + v6.payload_size);
+    v6.payload_size = 108U;
+    wr32((uint8_t *)&v6 + 120U, crc32_update(0U, (const uint8_t *)&v6, 12U + v6.payload_size));
     memcpy(s_flash[0], &v6, sizeof(v6));
     settings_store_init(&loaded);
     CHECK(loaded.has_payload);
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.autostart_id == 300U && output.audio_volume == 30U);
     CHECK(output.ui_color == HK_UI_COLOR_GREEN);
+    v6.version = SETTINGS_STORAGE_V7_VERSION;
+    wr32((uint8_t *)&v6 + 120U, crc32_update(0U, (const uint8_t *)&v6, 12U + v6.payload_size));
+    memcpy(s_flash[0], &v6, sizeof(v6));
+    settings_store_init(&loaded);
+    CHECK(loaded.has_payload);
+    settings_payload_decode(&loaded.payload, &output);
+    CHECK(output.ui_color == HK_UI_COLOR_AMBER && output.tag_distance[0] == 0U);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&v4, 0, sizeof(v4));
@@ -292,8 +379,9 @@ int main(void)
     settings_storage_init();
     CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0x07e0U);
     CHECK(test_screen_and_device() == 0);
+    CHECK(test_tag_focal_editor() == 0);
     CHECK(settings_autostart_id() == 10U);
 
-    puts("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=124");
+    puts("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=152");
     return 0;
 }

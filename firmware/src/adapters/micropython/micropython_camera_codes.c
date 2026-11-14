@@ -51,7 +51,7 @@ hk_result_t micropython_camera_codes_stage(const void *owner, uint32_t lease,
 #endif
 #if HK_ENABLE_APP_APRILTAG
     case VISION_SOURCE_APRILTAG:
-        apriltag_decoder_fill(frame.pixels, frame.width, frame.height);
+        apriltag_decoder_fill(frame.pixels, frame.width, frame.height, NULL);
         break;
 #endif
     default:
@@ -138,7 +138,7 @@ micropython_binding_result_t micropython_camera_codes_scan(
             return MICROPYTHON_BINDING_ERROR_IO;
         apriltag_result_t tags[APRILTAG_RESULT_MAX];
         uint8_t count = apriltag_decoder_scan(&s_apriltag, frame.width, frame.height,
-                                               APRILTAG_REFINE_EDGES, tags);
+                                               APRILTAG_REFINE_EDGES, NULL, tags);
         for(uint8_t i = 0U; i < count && i < VISION_RESULT_MAX_ITEMS; i++)
         {
             const apriltag_result_t *tag = &tags[i];

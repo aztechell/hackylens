@@ -177,15 +177,21 @@ static uint32_t settings_record_crc(const settings_record_t *record)
 
 static uint8_t settings_record_valid(const settings_record_t *record)
 {
+    const size_t legacy_size = offsetof(settings_payload_t, tag_distance);
+    const uint8_t *bytes = (const uint8_t *)record;
     if(record->magic != SETTINGS_MAGIC)
         return 0;
-    if(!(((record->version == SETTINGS_STORAGE_VERSION ||
-           record->version == SETTINGS_STORAGE_V6_VERSION) &&
-          record->payload_size == sizeof(settings_payload_t)) ||
-         (record->version == SETTINGS_STORAGE_V5_VERSION &&
-          record->payload_size == offsetof(settings_payload_t, audio_volume))))
-        return 0;
-    return record->crc32 == settings_record_crc(record);
+    if(record->version == SETTINGS_STORAGE_VERSION)
+        return record->payload_size == sizeof(settings_payload_t) &&
+               record->crc32 == settings_record_crc(record);
+    if(((record->version == SETTINGS_STORAGE_V7_VERSION ||
+         record->version == SETTINGS_STORAGE_V6_VERSION) &&
+        record->payload_size == legacy_size) ||
+       (record->version == SETTINGS_STORAGE_V5_VERSION &&
+        record->payload_size == offsetof(settings_payload_t, audio_volume)))
+        return rd32(bytes + offsetof(settings_record_t, payload) + legacy_size) ==
+               settings_record_crc(record);
+    return 0;
 }
 
 static uint32_t settings_record_v1_crc(const settings_record_v1_t *record)
@@ -294,7 +300,7 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
 {
     memset(payload, 0, sizeof(*payload));
     if(slot->current.version >= SETTINGS_STORAGE_V5_VERSION)
-        *payload = slot->current.payload;
+        memcpy(payload, &slot->current.payload, slot->current.payload_size);
     else if(slot->v4.version == SETTINGS_STORAGE_V4_VERSION)
     {
         memcpy(payload, &slot->v4.payload, sizeof(settings_payload_v1_t));
@@ -321,7 +327,7 @@ static void settings_slot_payload(const settings_slot_t *slot, settings_payload_
         memcpy(payload, &slot->legacy.payload, sizeof(slot->legacy.payload));
     if(slot->current.version < SETTINGS_STORAGE_V6_VERSION)
         payload->audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
-    if(slot->current.version < SETTINGS_STORAGE_VERSION)
+    if(slot->current.version < SETTINGS_STORAGE_V7_VERSION)
         payload->ui_color = 0U;
 }
 

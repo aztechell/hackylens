@@ -391,7 +391,8 @@ int main(void)
                 self.assertEqual(app["autostart"]["id"], expected_autostart[app_id])
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
-                    {"micropython": 5000, "accelerometer": 100_000}.get(app_id, 20000),
+                    {"micropython": 5000, "apriltag": 5000,
+                     "accelerometer": 100_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],

@@ -132,12 +132,21 @@ int main(void)
     const apriltag_result_t tag = {
         .id = 7, .x = 80, .y = 40, .w = 80, .h = 40,
         .center_x = 120, .center_y = 60,
+        .corners = {{40, 30}, {60, 20}, {80, 30}, {60, 40}},
     };
     const uint8_t selected = 1;
     apriltag_view_compose_results(&present, 320, 240, &tag, &selected, 1);
-    assert(pixel(160, 40) == 0xffe0 && pixel(199, 119) == 0xffe0);
+    assert(pixel(180, 40) == 0xffe0 && pixel(190, 60) == 0xffe0);
+    assert(pixel(160, 40) == 0x001f && pixel(199, 119) == 0x001f);
     assert(pixel(172, 68) == 0xffe0); /* centered ID in display coordinates */
     assert(pixel(124, 120) == 0xffff); /* crosshair at display center */
+
+    /* A slanted edge survives the center crop even when its first corner
+     * is outside the viewport. The border follows the edge through the crop. */
+    const float clipped_quad[4][2] = {{20, 40}, {60, 80}, {80, 60}, {40, 20}};
+    assert(camera_view_compose_frame(&frame, &present));
+    camera_view_compose_quad(&present, &frame, clipped_quad, 0xffe0U);
+    assert(pixel(180, 0) == 0xffe0 && pixel(170, 10) == 0xffe0);
 
     assert(camera_view_compose_frame(&frame, &present));
     const object_detect_result_t object = {

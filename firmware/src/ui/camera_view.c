@@ -1,5 +1,6 @@
 #include "camera_view.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "../config/display_config.h"
@@ -352,6 +353,72 @@ void camera_view_compose_rects(camera_view_present_t *present,
         camera_view_compose_rect(present, mapped.x, mapped.y,
                                  mapped.w, mapped.h,
                                  2U, color);
+    }
+}
+
+static void camera_view_compose_edge(camera_view_present_t *present,
+                                     const image_viewport_t *viewport,
+                                     int x, int y, int end_x, int end_y, uint16_t color)
+{
+    const int dx = abs(end_x - x);
+    const int dy = -abs(end_y - y);
+    const int step_x = x < end_x ? 1 : -1;
+    const int step_y = y < end_y ? 1 : -1;
+    int error = dx + dy;
+    for(;;)
+    {
+        if(x >= viewport->dst_x && x < viewport->dst_x + viewport->dst_w &&
+           y >= viewport->dst_y && y < viewport->dst_y + viewport->dst_h)
+            camera_view_write_pixel(present->rgb565_be + (uint32_t)y * present->stride_bytes +
+                                    (uint32_t)x * 2U, color);
+        if(x == end_x && y == end_y)
+            break;
+        int twice = 2 * error;
+        if(twice >= dy)
+        {
+            error += dy;
+            x += step_x;
+        }
+        if(twice <= dx)
+        {
+            error += dx;
+            y += step_y;
+        }
+    }
+}
+
+void camera_view_compose_quad(camera_view_present_t *present,
+                              const camera_view_frame_t *frame,
+                              const float corners[4][2], uint16_t color)
+{
+    image_viewport_t viewport;
+    if(!present || !present->lease_id || !present->rgb565_be || !frame ||
+       !camera_view_viewport(frame, &viewport) ||
+       viewport.dst_x + viewport.dst_w > present->width ||
+       viewport.dst_y + viewport.dst_h > present->height)
+        return;
+
+    int x[4], y[4];
+    for(uint8_t i = 0; i < 4U; i++)
+    {
+        float sx = corners[i][0], sy = corners[i][1];
+        /* Bound malformed coordinates before rasterizing the clipped edges. */
+        if(!(sx >= -(float)frame->width && sx <= 2.0f * frame->width &&
+             sy >= -(float)frame->height && sy <= 2.0f * frame->height))
+            return;
+        if(frame->rotate)
+        {
+            float rotated_x = frame->height - sy;
+            sy = sx;
+            sx = rotated_x;
+        }
+        x[i] = (int)(viewport.dst_x + (sx - viewport.src_x) * viewport.dst_w / viewport.src_w);
+        y[i] = (int)(viewport.dst_y + (sy - viewport.src_y) * viewport.dst_h / viewport.src_h);
+    }
+    for(uint8_t i = 0; i < 4U; i++)
+    {
+        uint8_t next = (i + 1U) % 4U;
+        camera_view_compose_edge(present, &viewport, x[i], y[i], x[next], y[next], color);
     }
 }
 

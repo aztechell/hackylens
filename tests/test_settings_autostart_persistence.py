@@ -50,6 +50,8 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 str(ROOT / "firmware/src/services/settings_persistence.c"),
                 str(ROOT / "firmware/src/services/settings_service.c"),
                 str(ROOT / "firmware/src/apps/settings/settings_menu.c"),
+                str(ROOT / "firmware/src/apps/apriltag/apriltag_settings.c"),
+                str(ROOT / "firmware/src/apps/apriltag/apriltag_settings_menu.c"),
                 str(ROOT / "firmware/src/controllers/settings_menu_controller.c"),
                 str(ROOT / "firmware/src/core/hk_binary.c"),
                 str(ROOT / "firmware/src/core/hk_ui_colors.c"),
@@ -59,8 +61,9 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 [str(executable)], check=True, cwd=ROOT, text=True,
                 capture_output=True, timeout=30,
             )
+            subprocess.run([str(executable), "--legacy-focal"], check=True, timeout=30)
         self.assertIn(
-            "SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=124",
+            "SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=152",
             result.stdout,
         )
 

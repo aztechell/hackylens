@@ -30,6 +30,7 @@ typedef struct
     uint8_t qr_decode_rate;
     uint8_t audio_volume;
     uint8_t ui_color;
+    uint8_t tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
 } settings_snapshot_t;
 
 void settings_snapshot_capture(settings_snapshot_t *snapshot);
