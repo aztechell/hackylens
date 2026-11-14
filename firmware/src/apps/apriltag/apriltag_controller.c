@@ -42,6 +42,7 @@ static uint8_t g_far_small_tag;
 static uint64_t g_far_detail_due_us;
 static int16_t g_target_id = -1;
 static settings_menu_session_t g_settings_menu;
+static uint64_t g_settings_repeat_due_us;
 static const hk_accelerometer_t *g_sensor;
 static uint8_t g_calibration_armed;
 static uint8_t g_calibration_count;
@@ -428,7 +429,7 @@ static void apriltag_compose_overlay(camera_view_present_t *present,
         draw_measurement(present);
     if(apriltag_settings_preferences()->far_search)
         camera_view_compose_text_at(present, present->width - 4U - 3U * HACKYLENS_FONT_W,
-                                    present->height - HACKYLENS_FONT_H,
+                                    present->height - 2U * HACKYLENS_FONT_H,
                                     "FAR", hk_ui_accent(), COLOR_BLACK);
 }
 
@@ -488,7 +489,12 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
     }
     if(settings_menu_active(&g_settings_menu))
     {
-        settings_menu_tick(&g_settings_menu, input);
+        uint64_t now;
+        if(hk_time_now_us(hk_time_service(), &now) == HK_OK && now >= g_settings_repeat_due_us)
+        {
+            settings_menu_tick(&g_settings_menu, input);
+            g_settings_repeat_due_us = now + APRILTAG_SETTINGS_REPEAT_INTERVAL_US;
+        }
         return;
     }
     if(camera_runtime_ok_hold_triggered(input))
@@ -498,6 +504,7 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
         apriltag_detector_discard_results();
         vision_result_clear(VISION_SOURCE_APRILTAG);
         camera_service_freeze(1U);
+        g_settings_repeat_due_us = 0U;
         (void)settings_menu_open(&g_settings_menu, apriltag_settings_menu_definition(&g_settings_menu));
         return;
     }

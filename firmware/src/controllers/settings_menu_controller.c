@@ -286,10 +286,8 @@ static int32_t settings_menu_adjusted_value(const settings_menu_session_t *sessi
     int32_t step = item->kind == SETTINGS_MENU_ITEM_CHOICE ? 1 : item->step;
     if(item->flags & SETTINGS_MENU_ITEM_ACCELERATE)
     {
-        if(session->repeat_steps >= 30U)
-            step *= 1000;
-        else if(session->repeat_steps >= 18U)
-            step *= 100;
+        if(session->repeat_steps >= 18U)
+            step *= 50;
         else if(session->repeat_steps >= 8U)
             step *= 10;
     }

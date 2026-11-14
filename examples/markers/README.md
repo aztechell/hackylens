@@ -82,11 +82,11 @@ keep its white margin. Use one sheet at a time because both cards are ID 42.
    the camera view. Hold the setup still while five consistent detections
    are collected. A centimeter reading confirms calibration. **Focal** in
    TAG SETTINGS shows the value in detector pixels. SEN0305 defaults to
-   154.00 px. Press OK to edit, tap LEFT/RIGHT to change it in 0.01 px steps
-   or hold to move faster, then press OK to save or BACK to cancel. On Cube,
-   the unset editor starts at 120.00 px and saves it only on OK.
-   If the 60 mm
-   square is too small at 300 mm, use the 100 mm sheet or a closer measured
+   154.00 px and Maix Cube defaults to 145.00 px. Press OK to edit and tap
+   LEFT/RIGHT to change it in 0.01 px steps. Holding a button increases the
+   step to 0.10 px, then to a maximum of 0.50 px per repeat. Press OK to save
+   or BACK to cancel. If the 60 mm square is too small at 300 mm, use the
+   100 mm sheet or a closer measured
    reference distance and update both inputs as needed. A short OK cancels
    an armed calibration. The saved focal value can be reused with another
    tag size by changing **Tag mm**.

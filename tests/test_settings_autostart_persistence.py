@@ -26,6 +26,11 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
         return compiler
 
     def test_uint16_round_trip_and_v4_migration(self) -> None:
+        for board in ("huskylens-sen0305", "sipeed-maix-cube"):
+            with self.subTest(board=board):
+                self.check_settings(board)
+
+    def check_settings(self, board: str) -> None:
         with tempfile.TemporaryDirectory(prefix="hackylens-settings-autostart-") as directory:
             temporary = Path(directory)
             (temporary / "hk_config.h").write_text(
@@ -43,7 +48,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware/src/config'}",
                 f"-I{ROOT / 'sdk/include'}",
                 f"-I{ROOT / 'firmware/include'}",
-                f"-I{gen_board.board_config_include_dir()}",
+                f"-I{gen_board.board_config_include_dir(board)}",
                 str(ROOT / "tests/settings_autostart_persistence_harness.c"),
                 str(ROOT / "firmware/src/storage/settings_store.c"),
                 str(ROOT / "firmware/src/services/settings_payload_codec.c"),
@@ -62,6 +67,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 capture_output=True, timeout=30,
             )
             subprocess.run([str(executable), "--legacy-focal"], check=True, timeout=30)
+            subprocess.run([str(executable), "--unset-focal"], check=True, timeout=30)
         self.assertIn(
             "SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=152",
             result.stdout,

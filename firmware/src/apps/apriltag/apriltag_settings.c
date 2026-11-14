@@ -26,6 +26,7 @@
 #define APRILTAG_FLAG_FPS 0x04U
 #define APRILTAG_FLAG_FAR_SEARCH 0x08U
 #define APRILTAG_SEN0305_DEFAULT_FOCAL_MPX 154000U
+#define APRILTAG_CUBE_DEFAULT_FOCAL_MPX 145000U
 
 _Static_assert(APRILTAG_DATA_BYTES <= SETTINGS_APP_DATA_V2_SIZE,
                "APRILTAG settings overlap another app-data partition");
@@ -48,6 +49,8 @@ apriltag_distance_settings_t *apriltag_settings_distance(void)
             .focal_millipixels = strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0 ?
                                   APRILTAG_SEN0305_DEFAULT_FOCAL_MPX : 0U,
         };
+        if(strcmp(HK_BOARD_ID, "sipeed-maix-cube") == 0)
+            g_distance.focal_millipixels = APRILTAG_CUBE_DEFAULT_FOCAL_MPX;
         if(data[0] == 1U)
         {
             g_distance.enabled = (data[1] & 1U) != 0U;

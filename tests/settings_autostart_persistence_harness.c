@@ -161,8 +161,8 @@ static int test_tag_focal_editor(void)
     const char *title;
     char value[24];
     const uint8_t sen0305 = strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0;
-    const uint32_t default_focal = sen0305 ? 154000U : 0U;
-    const uint32_t editor_focal = sen0305 ? 154000U : 120000U;
+    const uint32_t default_focal = sen0305 ? 154000U : 145000U;
+    const char *default_label = sen0305 ? "154.00 px" : "145.00 px";
     const apriltag_distance_settings_t *distance = apriltag_settings_distance();
     CHECK(settings_menu_bind(&menu, apriltag_settings_menu_definition(&menu)));
     CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
@@ -174,22 +174,30 @@ static int test_tag_focal_editor(void)
         press(&menu, HK_INPUT_BUTTON_RIGHT);
     CHECK(settings_menu_visible_slot(&menu, 5U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Focal") == 0);
-    CHECK(strcmp(value, sen0305 ? "154.00 px" : "UNSET") == 0);
+    CHECK(strcmp(value, default_label) == 0);
     press(&menu, HK_INPUT_BUTTON_OK);
     CHECK(settings_menu_visible_slot(&menu, 5U, NULL, value, sizeof(value), NULL, NULL));
-    CHECK(strcmp(value, sen0305 ? "154.00 px" : "120.00 px") == 0);
+    CHECK(strcmp(value, default_label) == 0);
     press(&menu, HK_INPUT_BUTTON_BACK);
     CHECK(distance->focal_millipixels == default_focal);
     press(&menu, HK_INPUT_BUTTON_OK);
     press(&menu, HK_INPUT_BUTTON_OK);
-    CHECK(distance->focal_millipixels == editor_focal);
+    CHECK(distance->focal_millipixels == default_focal);
     press(&menu, HK_INPUT_BUTTON_OK);
     const hk_input_snapshot_t left_held = {HK_INPUT_BUTTON_LEFT, 0U, 0U};
     press(&menu, HK_INPUT_BUTTON_LEFT);
-    for(unsigned i = 0; i < 200U; i++)
+    int32_t largest_step = 0;
+    for(unsigned i = 0; i < 250U; i++)
+    {
+        int32_t before = menu.edit_value;
         settings_menu_tick(&menu, &left_held);
+        int32_t step = before - menu.edit_value;
+        CHECK(step >= 0 && step <= 50);
+        if(step > largest_step)
+            largest_step = step;
+    }
+    CHECK(largest_step == 50);
     int32_t accelerated = menu.edit_value;
-    CHECK(accelerated < (int32_t)(editor_focal / 10U) - 1000);
     press(&menu, HK_INPUT_BUTTON_RIGHT);
     CHECK(menu.edit_value == accelerated + 1);
     press(&menu, HK_INPUT_BUTTON_BACK);
@@ -289,12 +297,18 @@ const char *internal_flash_result_name(internal_flash_result_t result)
 
 int main(int argc, char **argv)
 {
-    if(argc == 2 && strcmp(argv[1], "--legacy-focal") == 0)
+    if(argc == 2)
     {
+        const uint32_t default_focal =
+            strcmp(HK_BOARD_ID, "huskylens-sen0305") == 0 ? 154000U : 145000U;
         uint8_t stored[SETTINGS_TAG_DISTANCE_BYTES] = {1U};
-        wr32(stored + 6U, 153945U);
+        uint8_t unset = strcmp(argv[1], "--unset-focal") == 0;
+        CHECK(unset || strcmp(argv[1], "--legacy-focal") == 0);
+        if(!unset)
+            wr32(stored + 6U, 153945U);
         settings_tag_distance_write(stored);
-        CHECK(apriltag_settings_distance()->focal_millipixels == 153950U);
+        CHECK(apriltag_settings_distance()->focal_millipixels ==
+              (unset ? default_focal : 153950U));
         return 0;
     }
     settings_store_load_t loaded;
