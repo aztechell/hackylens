@@ -7,8 +7,10 @@ import argparse
 import binascii
 import hashlib
 from pathlib import Path
+import re
 import struct
 import sys
+import tempfile
 import time
 
 
@@ -41,6 +43,14 @@ OP_FLASH_STATUS = 0xD9
 
 
 class ProtocolError(RuntimeError):
+    pass
+
+
+PHOTO_NAME = re.compile(r"IMG[0-9]{5}\.(BMP|RAW|PPM)", re.ASCII | re.IGNORECASE)
+PHOTO_CHUNK_BYTES = 1024
+
+
+class PhotoDeviceError(ProtocolError):
     pass
 
 
@@ -718,6 +728,140 @@ def cmd_screenshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def send_photo_command(ser, command: str) -> None:
+    ser.write((command + "\n").encode("ascii"))
+    ser.flush()
+
+
+def photo_response(ser, prefix: bytes, timeout: float) -> bytes:
+    deadline = time.monotonic() + timeout
+    while (remaining := deadline - time.monotonic()) > 0:
+        line = read_serial_line(ser, remaining)
+        if line.startswith(b"HKPHOTO ERR "):
+            raise PhotoDeviceError(line.removeprefix(b"HKPHOTO ERR ").decode("ascii", "replace"))
+        if line.startswith(prefix):
+            return line.removeprefix(prefix)
+    raise TimeoutError("photo command timed out")
+
+
+def list_sd_photos(ser, timeout: float) -> list[tuple[str, int]]:
+    send_photo_command(ser, "HKPHOTOS")
+    entries = []
+    while True:
+        entry = photo_response(ser, b"HKPHOTOS ", timeout)
+        if entry == b"END":
+            return sorted(entries, key=lambda item: item[0], reverse=True)
+        match = re.fullmatch(rb"ITEM (\S+) ([0-9]+)", entry)
+        if not match:
+            raise ProtocolError("invalid photo directory response")
+        name = match[1].decode("ascii", "replace")
+        if not PHOTO_NAME.fullmatch(name):
+            raise ProtocolError(f"invalid photo name: {name!r}")
+        entries.append((name.upper(), int(match[2])))
+
+
+def read_photo_chunk(ser, offset: int, count: int, timeout: float) -> bytes:
+    send_photo_command(ser, f"HKPHOTOREAD {offset}")
+    line = photo_response(ser, b"HKPHOTO DATA ", timeout)
+    chunk = re.fullmatch(rb"([0-9]+) ([0-9]+) ([0-9A-Fa-f]{8})", line)
+    if not chunk or (int(chunk[1]), int(chunk[2])) != (offset, count):
+        raise ProtocolError(f"unexpected chunk header at byte {offset}")
+    data = bytearray()
+    deadline = time.monotonic() + timeout
+    while len(data) < count and time.monotonic() < deadline:
+        data.extend(ser.read(count - len(data)))
+    if len(data) != count:
+        raise TimeoutError(f"short chunk at byte {offset}")
+    if binascii.crc32(data) != int(chunk[3], 16):
+        raise ProtocolError(f"CRC mismatch at byte {offset}")
+    return bytes(data)
+
+
+def download_sd_photo(ser, name: str, out: Path, timeout: float) -> None:
+    send_photo_command(ser, f"HKPHOTO {name}")
+    header = photo_response(ser, b"HKPHOTO BEGIN ", timeout)
+    match = re.fullmatch(rb"(\S+) ([0-9]+)", header)
+    if not match or match[1].upper() != name.encode("ascii"):
+        raise ProtocolError("unexpected photo download header")
+    size = int(match[2])
+    if not 0 < size <= 0xFFFFFFFF:
+        raise ProtocolError("invalid photo size")
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary = tempfile.NamedTemporaryFile(dir=out.parent, suffix=".part", delete=False)
+    partial = Path(temporary.name)
+    try:
+        offset = 0
+        with temporary:
+            while offset < size:
+                count = min(size - offset, PHOTO_CHUNK_BYTES)
+                for attempt in range(3):
+                    try:
+                        data = read_photo_chunk(ser, offset, count, timeout)
+                        break
+                    except PhotoDeviceError:
+                        raise
+                    except (TimeoutError, ProtocolError):
+                        if attempt == 2:
+                            raise
+                        clear_serial_buffers(ser)
+                temporary.write(data)
+                offset += count
+                if offset % 8192 == 0 or offset == size:
+                    progress(f"[PHOTO] {name}", offset, size)
+        # Claim the destination exclusively before publishing the verified file.
+        with out.open("xb"):
+            pass
+        try:
+            partial.replace(out)
+        except OSError:
+            out.unlink()
+            raise
+    finally:
+        partial.unlink(missing_ok=True)
+
+
+def cmd_photos(args: argparse.Namespace) -> int:
+    if args.name and not PHOTO_NAME.fullmatch(args.name):
+        print("[ERR] expected IMGxxxxx.BMP, IMGxxxxx.RAW, or IMGxxxxx.PPM", file=sys.stderr)
+        return 2
+
+    serial = require_serial()
+    port = resolve_port(args, serial)
+    try:
+        with open_runtime_serial(serial, port, args.baud, dtr=args.runtime_dtr,
+                                 rts=args.runtime_rts) as ser:
+            time.sleep(args.send_delay)
+            clear_serial_buffers(ser)
+            if args.name:
+                names = [args.name.upper()]
+            else:
+                entries = list_sd_photos(ser, args.timeout)
+                if args.list_only:
+                    for name, size in entries:
+                        print(f"{name}\t{size} bytes")
+                    if not entries:
+                        print("No saved camera photos.")
+                    return 0
+                names = [name for name, _ in (entries if args.all else entries[:1])]
+                if not names:
+                    print("No saved camera photos.")
+                    return 0
+            for name in names:
+                out = args.output_dir / name
+                if out.exists():
+                    if not args.all:
+                        raise FileExistsError(f"destination already exists: {out}")
+                    print(f"[SKIP] {out}")
+                    continue
+                download_sd_photo(ser, name, out, args.timeout)
+                print(f"[OK] photo saved: {out}")
+    except (OSError, ProtocolError) as exc:
+        print(f"[ERR] {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def cmd_uart_cmd(args: argparse.Namespace) -> int:
     serial = require_serial()
     port = resolve_port(args, serial)
@@ -1015,6 +1159,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_screenshot.add_argument("--runtime-rts", action="store_true", help="Keep RTS high while opening the runtime UART. Default keeps RTS low to avoid reset/boot glitches.")
     p_screenshot.add_argument("--verbose", action="store_true", help="Print non-HKSHOT UART lines seen while waiting")
     p_screenshot.set_defaults(func=cmd_screenshot)
+
+    p_photos = sub.add_parser("photos", help="Download saved camera photos from the board's microSD")
+    add_common_port_args(p_photos)
+    selection = p_photos.add_mutually_exclusive_group()
+    selection.add_argument("--list", dest="list_only", action="store_true", help="List saved photos")
+    selection.add_argument("--all", action="store_true", help="Download all photos, skipping existing files")
+    selection.add_argument("--name", help="Download one named photo. The default is the newest numbered photo")
+    p_photos.add_argument("-o", "--output-dir", type=Path, default=Path("photos"), help="Destination directory (default: photos)")
+    p_photos.add_argument("--baud", type=int, help="Firmware debug UART baudrate")
+    p_photos.add_argument("--timeout", type=float, default=5.0, help="Seconds to wait for a photo response or chunk")
+    p_photos.add_argument("--send-delay", type=float, default=3.0, help="Seconds to wait after opening UART")
+    p_photos.add_argument("--runtime-dtr", action="store_true", help="Keep DTR high while opening UART")
+    p_photos.add_argument("--runtime-rts", action="store_true", help="Keep RTS high while opening UART")
+    p_photos.set_defaults(func=cmd_photos)
 
     p_cmd = sub.add_parser("cmd", help="Send a text command to running HackyLens firmware")
     add_common_port_args(p_cmd)

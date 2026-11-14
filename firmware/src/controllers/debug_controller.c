@@ -13,6 +13,7 @@
 #include "debug_camera_controller.h"
 #endif
 #include "../services/debug_console_service.h"
+#include "../services/debug_photo_transfer.h"
 #include "../services/screenshot_source.h"
 #include "../services/debug_screenshot_stream.h"
 #include "../services/external_link_service.h"
@@ -42,6 +43,11 @@ void debug_uart_handle_command(const char *cmd)
 #endif
     if(external_link_service_handle_debug_command(cmd))
         return;
+    if(debug_photo_handle_command(cmd))
+    {
+        activity_note();
+        return;
+    }
     if(str_eq_ci(cmd, "HKSHOT") || str_eq_ci(cmd, "SHOT") || str_eq_ci(cmd, "SCREENSHOT"))
     {
         activity_note();
@@ -95,6 +101,7 @@ void debug_uart_handle_command(const char *cmd)
 #else
         debug_console_write_text("HKHELP HKSHOT ");
 #endif
+        debug_console_write_text("HKPHOTOS HKPHOTO <name> HKPHOTOREAD <offset> ");
         for(uint8_t i = 0; i < g_menu_item_count; i++)
         {
             const hk_app_t *app = g_menu_items[i];

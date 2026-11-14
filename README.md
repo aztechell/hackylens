@@ -290,6 +290,18 @@ Capture the current LCD contents without a camera or screen-grabber:
 python tools\hkflash.py screenshot --board huskylens-sen0305 --port COM10 --output screen.bmp
 ```
 
+Download the newest numbered CAMERA photo from the board's microSD over USB:
+
+```powershell
+python tools\hkflash.py photos --board sipeed-maix-cube --port COM15 -o photos
+```
+
+Install a firmware build with `HKPHOTOS` support and close any IDE session
+using the serial port. The command reads BMP, RAW and PPM photos already saved
+in `hackylens.photo`. Use `--list` to see filenames, `--name IMG00001.BMP` to
+select one or `--all` to copy all photos. Existing destination files are
+skipped in `--all` mode. Transfers use the USB console's default 115200 baud.
+
 Debug commands can also open firmware screens directly; for example:
 
 ```powershell

@@ -64,7 +64,8 @@ static uint8_t photo_ensure_dir(void)
     file_dir_scan_result_t result;
 
     g_photo_dir_cluster = 0;
-    result = file_dir_find_directory(hk_fat_root_cluster(), PHOTO_DIR_LONG_NAME, "HACKY~1.PHO", &g_photo_dir_cluster);
+    result = file_dir_find_directory(hk_fat_root_cluster(), PHOTO_DIR_LONG_NAME,
+                                     PHOTO_DIR_SHORT_NAME, &g_photo_dir_cluster);
     if(result == FILE_DIR_SCAN_ERROR)
     {
         file_write_set_error("ROOT READ");

@@ -2,6 +2,7 @@
 #define HK_CAMERA_APP_CONFIG_H
 
 #define CAMERA_REVIEW_MS 2500U
-#define PHOTO_DIR_LONG_NAME "hackylens.photo"
+
+#include "../../config/photo_config.h"
 
 #endif
