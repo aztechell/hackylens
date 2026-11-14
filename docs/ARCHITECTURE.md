@@ -166,7 +166,8 @@ the rows under Screen, Lights, Connection, Startup and Device. Boards with
 audio also show Sound. Range and choice edits in SETTINGS use a draft. Lighting
 and Screen → UI Color preview edits live. OK saves the value and BACK restores
 the previous setting. UI Color selects the accent used by the launcher and
-built-in views. Camera frames, saved media and explicit script drawing colors
+built-in views. The palette includes Green, Cyan, Amber, Pink, Blue and White.
+Camera frames, saved media and explicit script drawing colors
 retain their own colors. Auto Sleep can be disabled and applies while the
 launcher is idle. Grove Baud is shown in UART mode.
 

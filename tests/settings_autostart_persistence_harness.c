@@ -131,10 +131,13 @@ static int test_screen_and_device(void)
     CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0x07e0U);
     press(&menu, HK_INPUT_BUTTON_OK);
     press(&menu, HK_INPUT_BUTTON_LEFT);
+    CHECK(settings_ui_color() == HK_UI_COLOR_GREEN && hk_ui_accent() == 0xffffU);
+    CHECK(settings_menu_visible_slot(&menu, 1U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(value, "White") == 0);
     press(&menu, HK_INPUT_BUTTON_OK);
-    CHECK(settings_ui_color() == HK_UI_COLOR_BLUE && hk_ui_accent() == 0x5dffU);
+    CHECK(settings_ui_color() == HK_UI_COLOR_WHITE);
     settings_storage_init();
-    CHECK(settings_ui_color() == HK_UI_COLOR_BLUE && hk_ui_accent() == 0x5dffU);
+    CHECK(settings_ui_color() == HK_UI_COLOR_WHITE && hk_ui_accent() == 0xffffU);
 
     CHECK(settings_menu_bind(&menu, settings_app_page_definition(SETTINGS_PAGE_DEVICE)));
     CHECK(settings_menu_visible_slot(&menu, 3U, &title, value, sizeof(value), NULL, NULL));

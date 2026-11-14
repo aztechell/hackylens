@@ -32,6 +32,7 @@ static const char *const ui_color_choices[HK_UI_COLOR_COUNT] = {
     [HK_UI_COLOR_AMBER] = "Amber",
     [HK_UI_COLOR_PINK] = "Pink",
     [HK_UI_COLOR_BLUE] = "Blue",
+    [HK_UI_COLOR_WHITE] = "White",
 };
 
 #define PAGE(id_, label_) { .id = id_, .title = label_, .kind = SETTINGS_MENU_ITEM_ACTION }

@@ -22,6 +22,7 @@ void hk_ui_preview_color(uint8_t color)
         [HK_UI_COLOR_AMBER] = 0xfd60U,
         [HK_UI_COLOR_PINK] = 0xfb1aU,
         [HK_UI_COLOR_BLUE] = 0x5dffU,
+        [HK_UI_COLOR_WHITE] = 0xffffU,
     };
     s_accent = colors[hk_ui_color_normalize(color)];
 }

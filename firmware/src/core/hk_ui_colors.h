@@ -10,6 +10,7 @@ typedef enum
     HK_UI_COLOR_AMBER,
     HK_UI_COLOR_PINK,
     HK_UI_COLOR_BLUE,
+    HK_UI_COLOR_WHITE,
     HK_UI_COLOR_COUNT,
 } hk_ui_color_t;
 
