@@ -149,7 +149,7 @@ static hk_result_t service_configure(void)
         const hk_external_link_i2c_target_config_t config = {
             sizeof(hk_external_link_i2c_target_config_t),
             HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION,
-            EXTERNAL_LINK_I2C_ADDRESS, 0U, 0U,
+            EXTERNAL_LINK_I2C_ADDRESS, HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE, 0U,
         };
         return hk_external_link_configure_i2c_target(
             &g_link, &config);

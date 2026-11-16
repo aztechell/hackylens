@@ -486,6 +486,65 @@ static int run_target_handoff_tests(void)
     return 0;
 }
 
+static int run_target_stream_tests(void)
+{
+    hk_external_link_t link = {0};
+    hk_external_link_i2c_target_config_t target = {
+        sizeof(target), HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION,
+        0x32U, HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE, 0U,
+    };
+    uint8_t bytes[64] = {0};
+    uint8_t request[] = {0x48U, 0x4bU};
+    uint8_t response[64];
+    hk_external_link_target_event_t event;
+    hk_buffer_view_t rx = {bytes, sizeof(bytes), 0U, HK_BUFFER_ACCESS_WRITABLE};
+    hk_buffer_view_t tx = {response, sizeof(response), 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_buffer_view_t next_tx = {request, sizeof(request), 0U, HK_BUFFER_ACCESS_READABLE};
+    hk_buffer_view_t clear = {NULL, 0U, 0U, HK_BUFFER_ACCESS_READABLE};
+    for(size_t i = 0; i < sizeof(response); i++)
+        response[i] = (uint8_t)(i + 1U);
+    backend_reset();
+    HARNESS_CHECK(hk_external_link_open(hk_external_link_service(), HK_EXTERNAL_LINK_FEATURE_I2C_TARGET, &link) == HK_OK);
+    HARNESS_CHECK(hk_external_link_configure_i2c_target(&link, &target) == HK_OK);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
+    backend_target_read(bytes, 8U);
+    backend_target_read(bytes + 8U, 24U);
+    backend_target_read(bytes + 32U, 32U);
+    HARNESS_CHECK(memcmp(bytes, response, sizeof(bytes)) == 0);
+    backend_target_read(bytes, 2U);
+    HARNESS_CHECK(bytes[0] == 0U && bytes[1] == 0U);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_PENDING);
+
+    /* A replacement or clear never mutates an active READ's snapshot. */
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
+    HARNESS_CHECK(s_target_callbacks->transmit() == response[0]);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &next_tx) == HK_OK);
+    HARNESS_CHECK(s_target_callbacks->transmit() == response[1]);
+    s_target_callbacks->event(HAL_EXTERNAL_I2C_EVENT_STOP);
+    backend_target_read(bytes, 3U);
+    HARNESS_CHECK(memcmp(bytes, request, sizeof(request)) == 0 && bytes[2] == 0U);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
+    HARNESS_CHECK(s_target_callbacks->transmit() == response[0]);
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &clear) == HK_OK);
+    HARNESS_CHECK(s_target_callbacks->transmit() == response[1]);
+    s_target_callbacks->event(HAL_EXTERNAL_I2C_EVENT_STOP);
+    backend_target_read(bytes, 1U);
+    HARNESS_CHECK(bytes[0] == 0U);
+
+    /* A new WRITE clears the response cursor, even if it cannot be decoded. */
+    HARNESS_CHECK(hk_external_link_i2c_target_preload_response(&link, &tx) == HK_OK);
+    backend_target_read(bytes, 8U);
+    backend_target_write(request, sizeof(request));
+    backend_target_read(bytes, 1U);
+    HARNESS_CHECK(bytes[0] == 0U);
+    HARNESS_CHECK(hk_external_link_i2c_target_poll(&link, &rx, &event) == HK_OK);
+    HARNESS_CHECK(event.type == HK_EXTERNAL_LINK_TARGET_EVENT_WRITE);
+    HARNESS_CHECK(event.received_bytes == sizeof(request));
+    HARNESS_CHECK(memcmp(bytes, request, sizeof(request)) == 0);
+    HARNESS_CHECK(hk_external_link_close(&link, (hk_deadline_t){1000U}) == HK_OK);
+    return 0;
+}
+
 int main(void)
 {
     const external_link_normative_backend_t backend = {
@@ -500,6 +559,8 @@ int main(void)
     if(run_uart_loopback_capture_tests() != 0)
         return 1;
     if(run_target_handoff_tests() != 0)
+        return 1;
+    if(run_target_stream_tests() != 0)
         return 1;
     if(external_link_normative_suite_run(&backend) != 0)
         return 1;

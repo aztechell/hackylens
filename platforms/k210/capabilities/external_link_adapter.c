@@ -70,6 +70,9 @@ typedef struct
     volatile uint16_t target_response_size[2];
     volatile uint32_t target_read_index;
     volatile uint16_t target_read_size;
+    volatile uint16_t target_preload_offset;
+    uint8_t target_stream_response;
+    volatile uint8_t target_resume_read;
     volatile uint8_t target_preload_slot;
     volatile uint8_t target_active_slot;
     volatile uint8_t target_rx_slot;
@@ -114,6 +117,9 @@ static void clear_target(k210_external_state_t *state)
     state->target_response_size[1] = 0U;
     state->target_read_index = 0U;
     state->target_read_size = 0U;
+    state->target_preload_offset = 0U;
+    state->target_stream_response = 0U;
+    state->target_resume_read = 0U;
     state->target_preload_slot = 0U;
     state->target_active_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
     state->target_rx_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
@@ -415,6 +421,12 @@ static void target_receive(uint8_t byte)
 {
     uint16_t size;
 
+    /* A new request abandons any unread response bytes before allocating RX. */
+    if(s_external.target_stream_response && !s_external.target_rx_active)
+    {
+        s_external.target_preload_active = 0U;
+        s_external.target_resume_read = 0U;
+    }
     if(s_external.target_event_overflow || s_external.target_rx_discard)
     {
         s_external.target_rx_discard = 1U;
@@ -460,7 +472,10 @@ static uint8_t target_transmit(void)
             K210_EXTERNAL_TARGET_BUFFER_NONE;
         s_external.target_read_size = s_external.target_preload_active ?
             s_external.target_response_size[s_external.target_preload_slot] : 0U;
-        s_external.target_read_index = 0U;
+        s_external.target_read_index = s_external.target_preload_active ?
+            s_external.target_preload_offset : 0U;
+        s_external.target_resume_read =
+            s_external.target_stream_response && s_external.target_preload_active;
         s_external.target_preload_active = 0U;
         s_external.target_read_active = 1U;
     }
@@ -480,13 +495,23 @@ static void target_event(hal_external_i2c_event_t event)
     {
         uint8_t active_slot = s_external.target_active_slot;
 
-        (void)target_queue_event(
-            HK_EXTERNAL_LINK_TARGET_EVENT_READ, 0U,
-            s_external.target_read_index,
-            K210_EXTERNAL_TARGET_BUFFER_NONE);
-        if(active_slot != K210_EXTERNAL_TARGET_BUFFER_NONE)
+        if(!s_external.target_stream_response)
+            (void)target_queue_event(
+                HK_EXTERNAL_LINK_TARGET_EVENT_READ, 0U,
+                s_external.target_read_index,
+                K210_EXTERNAL_TARGET_BUFFER_NONE);
+        if(s_external.target_resume_read &&
+           s_external.target_read_index < s_external.target_read_size)
+        {
+            s_external.target_preload_slot = active_slot;
+            s_external.target_preload_offset =
+                (uint16_t)s_external.target_read_index;
+            s_external.target_preload_active = 1U;
+        }
+        else if(active_slot != K210_EXTERNAL_TARGET_BUFFER_NONE)
             s_external.target_response_size[active_slot] = 0U;
         s_external.target_read_active = 0U;
+        s_external.target_resume_read = 0U;
         s_external.target_read_index = 0U;
         s_external.target_read_size = 0U;
         s_external.target_active_slot = K210_EXTERNAL_TARGET_BUFFER_NONE;
@@ -528,6 +553,8 @@ static hk_result_t k210_external_configure_i2c_target(
     result = set_mode(state, HK_EXTERNAL_LINK_MODE_I2C_TARGET);
     if(result != HK_OK)
         return result;
+    state->target_stream_response =
+        (config->flags & HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE) != 0U;
     hal_external_i2c_init((uint8_t)config->address, &s_target_callbacks);
     return HK_OK;
 }
@@ -920,12 +947,11 @@ static hk_result_t k210_external_target_preload(
                    sizeof(state->target_buffer[slot]));
         }
         state->target_preload_active = 0U;
+        state->target_resume_read = 0U;
         hal_external_i2c_target_unlock(irq_state);
         return HK_OK;
     }
-    if(state->target_read_active)
-        slot = target_find_free_buffer();
-    else if(state->target_preload_active)
+    if(state->target_preload_active)
         slot = state->target_preload_slot;
     else
         slot = target_find_free_buffer();
@@ -946,6 +972,8 @@ static hk_result_t k210_external_target_preload(
         memcpy(state->target_buffer[slot], tx->data, tx->size_bytes);
     state->target_response_size[slot] = (uint16_t)tx->size_bytes;
     state->target_preload_slot = slot;
+    state->target_preload_offset = 0U;
+    state->target_resume_read = 0U;
     __sync_synchronize();
     state->target_preload_active = (uint8_t)(tx->size_bytes != 0U);
     hal_external_i2c_target_unlock(irq_state);

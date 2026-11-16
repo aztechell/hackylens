@@ -33,6 +33,7 @@ extern "C" {
 #define HK_EXTERNAL_LINK_TARGET_EVENT_WRITE UINT32_C(1)
 #define HK_EXTERNAL_LINK_TARGET_EVENT_READ UINT32_C(2)
 #define HK_EXTERNAL_LINK_TARGET_FILL_BYTE UINT8_C(0x00)
+#define HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE UINT16_C(1)
 
 #define HK_EXTERNAL_LINK_INFO_VERSION 1U
 #define HK_EXTERNAL_LINK_UART_CONFIG_VERSION 1U
@@ -80,7 +81,7 @@ typedef struct
     uint16_t struct_size;
     uint16_t struct_version;
     uint16_t address;
-    uint16_t reserved0;
+    uint16_t flags;
     uint32_t reserved1;
 } hk_external_link_i2c_target_config_t;
 

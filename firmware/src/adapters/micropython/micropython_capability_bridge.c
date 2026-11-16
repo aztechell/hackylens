@@ -1331,13 +1331,31 @@ static void binding_external_operation_progress(
         return;
     cancelled = binding_request_cancelled(
         control, ticket, g_external_operation.run_id);
-    result = cancelled ?
-        hk_external_link_cancel(
-            &g_external,
-            &g_external_operation.operation, &progress) :
-        hk_external_link_poll(
+    if(cancelled)
+        result = hk_external_link_cancel(
             &g_external,
             &g_external_operation.operation, &progress);
+    else
+    {
+        uint32_t reported_bytes = 0U;
+
+        /* I2C hardware progresses between ticks. Drain available progress
+         * without waiting for more wire activity or extending its deadline. */
+        for(;;)
+        {
+            result = hk_external_link_poll(
+                &g_external, &g_external_operation.operation, &progress);
+            if(result != HK_PENDING ||
+               g_external_operation.binding_operation ==
+                   MICROPYTHON_BINDING_OP_UART_WRITE)
+                break;
+            uint32_t completed_bytes =
+                progress.tx_completed_bytes + progress.rx_completed_bytes;
+            if(completed_bytes <= reported_bytes)
+                break;
+            reported_bytes = completed_bytes;
+        }
+    }
     if(result == HK_PENDING)
         return;
     if(result == HK_OK &&

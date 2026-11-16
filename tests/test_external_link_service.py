@@ -38,6 +38,8 @@ class ExternalLinkServiceTests(unittest.TestCase):
                     "external_link_service.c"),
                 str(ROOT / "firmware" / "src" / "services" /
                     "external_link_protocol.c"),
+                str(ROOT / "firmware" / "src" / "services" /
+                    "vision_result_service.c"),
                 "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run(
@@ -46,7 +48,7 @@ class ExternalLinkServiceTests(unittest.TestCase):
             )
         self.assertIn(
             "EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 "
-            "uart_async=1 target=1",
+            "uart_async=1 target=1 vision_results=1",
             result.stdout,
         )
 

@@ -362,12 +362,12 @@ static void test_uart_completion_waits_for_transmitter_drain(void)
 
 static void test_i2c_controller_binding_uses_public_provider(void)
 {
-    static const uint8_t prefix[20] = {
+    static const uint8_t prefix[MICROPYTHON_BINDING_DATA_MAX] = {
         0U, 1U, 2U, 3U, 4U, 5U, 6U, 7U, 8U, 9U,
         10U, 11U, 12U, 13U, 14U, 15U, 16U, 17U, 18U, 19U,
     };
-    uint32_t arguments[6] = {0x50U, 40U, 0U, 0U, 0U, 0U};
-    uint8_t output[40] = {0};
+    uint8_t output[MICROPYTHON_BINDING_DATA_MAX] = {0};
+    uint32_t arguments[6] = {0x50U, sizeof(output), 0U, 0U, 0U, 0U};
     size_t output_length = 0U;
 
     reset_run();
@@ -390,6 +390,8 @@ static void test_i2c_controller_binding_uses_public_provider(void)
     require_true(g_external_tx_done == sizeof(prefix) &&
                  g_external_rx_done == sizeof(output),
                  "one provider operation must own the whole I2C transaction");
+    require_true(g_sleep_calls == 1U,
+                 "one bridge tick must drain all available I2C progress");
 }
 
 static void test_display_stages_until_present(void)

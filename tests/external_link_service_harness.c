@@ -116,7 +116,8 @@ hk_result_t hk_external_link_configure_i2c_target(
     const hk_external_link_t *handle,
     const hk_external_link_i2c_target_config_t *config)
 {
-    if(!handle || !config || config->address != 0x32U)
+    if(!handle || !config || config->address != 0x32U ||
+       config->flags != HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE)
         return HK_ERR_INVALID_ARGUMENT;
     s_target_configs++;
     return HK_OK;
@@ -261,11 +262,6 @@ void settings_mark_dirty(uint8_t immediate)
     (void)immediate;
 }
 
-void hk_vision_read(vision_result_snapshot_t *snapshot)
-{
-    memset(snapshot, 0, sizeof(*snapshot));
-}
-
 uint8_t str_eq_ci(const char *left, const char *right)
 {
     return (uint8_t)(left && right && strcmp(left, right) == 0);
@@ -274,6 +270,74 @@ uint8_t str_eq_ci(const char *left, const char *right)
 void debug_console_write_text(const char *text)
 {
     (void)text;
+}
+
+static int check_i2c_vision_results(void)
+{
+    static const vision_source_t sources[] = {
+        VISION_SOURCE_FACE, VISION_SOURCE_QR, VISION_SOURCE_APRILTAG,
+        VISION_SOURCE_OBJECT_DETECT, VISION_SOURCE_FACE_RECOGNITION,
+        VISION_SOURCE_USER, VISION_SOURCE_NONE,
+    };
+    static const uint8_t block_wire[] = {
+        1U, 2U, 0x34U, 0x12U, 19U, 0U, 31U, 0U,
+        4U, 1U, 201U, 0U, 0xe8U, 3U, 0U, 0U,
+    };
+    vision_result_item_t items[VISION_RESULT_MAX_ITEMS + 1U];
+    size_t request_size = hk_link_frame_encode(
+        HK_LINK_GET_RESULTS, 0xabcdU, NULL, 0U, s_target_rx, sizeof(s_target_rx));
+
+    for(size_t i = 0U; i < sizeof(items) / sizeof(items[0]); i++)
+        items[i] = vision_result_block(0x1234U, 2U, 1000U, 19U, 31U,
+                                       260U, 201U, 240U, 0U);
+    for(size_t i = 0U; i < sizeof(sources) / sizeof(sources[0]); i++)
+    {
+        hk_link_message_t message;
+        vision_source_t source = sources[i];
+        uint8_t count = 1U;
+        uint8_t kind = VISION_ITEM_BLOCK;
+        if(source == VISION_SOURCE_NONE)
+        {
+            vision_result_clear(VISION_SOURCE_USER);
+            count = 0U;
+        }
+        else if(source == VISION_SOURCE_QR)
+            vision_result_publish_qr(320U, 240U, items, (const uint8_t *)"HL", 2U);
+        else if(source == VISION_SOURCE_USER)
+        {
+            kind = VISION_ITEM_ARROW;
+            count = VISION_RESULT_MAX_ITEMS;
+            items[0].kind = kind;
+            vision_result_publish(source, 320U, 240U, items,
+                                  VISION_RESULT_MAX_ITEMS + 1U);
+        }
+        else
+            vision_result_publish(source, 320U, 240U, items, 1U);
+
+        s_target_event = (hk_external_link_target_event_t){
+            sizeof(s_target_event), HK_EXTERNAL_LINK_TARGET_EVENT_VERSION,
+            HK_EXTERNAL_LINK_TARGET_EVENT_WRITE, (uint32_t)request_size, 0U, 0U,
+        };
+        s_target_pending = 1U;
+        external_link_service_tick();
+        CHECK(hk_link_frame_decode(s_target_tx, s_target_tx_size, &message));
+        CHECK(message.type == HK_LINK_RESULTS && message.sequence == 0xabcdU);
+        CHECK(message.payload_length == 10U + count * sizeof(block_wire));
+        CHECK(message.payload[0] == i + 1U && message.payload[1] == 0U &&
+              message.payload[2] == 0U && message.payload[3] == 0U);
+        CHECK(message.payload[4] == source && message.payload[5] == count);
+        CHECK(message.payload[6] == (count ? 64U : 0U) &&
+              message.payload[7] == (count ? 1U : 0U) &&
+              message.payload[8] == (count ? 240U : 0U) &&
+              message.payload[9] == 0U);
+        for(uint8_t j = 0U; j < count; j++)
+        {
+            const uint8_t *item = message.payload + 10U + j * sizeof(block_wire);
+            CHECK(item[0] == (j == 0U ? kind : VISION_ITEM_BLOCK));
+            CHECK(memcmp(item + 1U, block_wire + 1U, sizeof(block_wire) - 1U) == 0);
+        }
+    }
+    return 0;
 }
 
 int main(void)
@@ -406,6 +470,7 @@ int main(void)
     external_link_service_tick();
     CHECK(s_target_tx_size == expected_size);
     CHECK(memcmp(s_target_tx, expected, expected_size) == 0);
+    CHECK(check_i2c_vision_results() == 0);
 
     external_link_service_suspend();
     external_link_service_suspend();
@@ -416,6 +481,6 @@ int main(void)
     CHECK(!external_link_service_suspended());
     CHECK(s_acquires >= 2U && s_target_configs >= 2U);
     CHECK(s_cancel_calls == 0U);
-    puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 coalesced=1 fragmented=1 reset=1");
+    puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 vision_results=1 coalesced=1 fragmented=1 reset=1");
     return 0;
 }

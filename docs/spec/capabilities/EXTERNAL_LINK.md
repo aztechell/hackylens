@@ -149,20 +149,28 @@ master READ has begun. Polling is synchronous and non-blocking and returns
 when the caller's writable buffer can hold the complete bounded payload.
 
 `hk_external_link_i2c_target_preload_response` synchronously copies a bounded
-readable buffer and arms it as the one-shot response for the next master READ
+readable buffer and arms it as the response for the next master READ
 that has not begun. A later preload atomically replaces an unread preload; a
 zero-length preload clears it. A READ snapshots the then-current preload. It
-serves `min(preload_size, requested_bytes)` bytes, pads a longer request with
-`0x00` (`HK_EXTERNAL_LINK_TARGET_FILL_BYTE`), and discards an unused preload
-tail when the transaction ends. A READ with no preload returns only `0x00`.
-The preload is consumed by exactly one READ.
+serves `min(preload_size, requested_bytes)` bytes and pads a longer request
+with `0x00` (`HK_EXTERNAL_LINK_TARGET_FILL_BYTE`). A READ with no preload
+returns only `0x00`. By default, a READ consumes the preload and discards any
+unused tail when the transaction ends.
 
-A READ event is queued after that master transaction completes and reports its
-actual `requested_bytes`; it is notification, not a pending request that
-`preload_response` can complete. Preloading after a WRITE is therefore the
-normal request/next-read flow. If a preload call races with a READ already in
-progress, the active READ retains its snapshot and the new preload belongs to
-the following READ. Mode reconfiguration, mode change, close, and retirement discard unread preload and queued target events.
+By default, a READ event reports the actual `requested_bytes` after the master
+completes the transaction. Preload after a WRITE to prepare the response for
+the next READ. If a preload call races with a READ already in progress, the
+active READ retains its snapshot and the new preload belongs to the following
+READ. Mode reconfiguration, mode change, close, and retirement discard unread
+preloads and queued target events.
+
+Target configuration with `HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE` set in
+`flags` continues from the first unread byte of a preload across successive
+READ transactions. Each READ sees a stable snapshot. A replacement or
+zero-length preload issued during that READ takes effect on the following
+READ. Receiving a new WRITE payload discards the previous response tail.
+In stream mode, only WRITE events are queued. Reads after the response has
+been consumed return the same zero fill byte. All other flag bits must be zero.
 
 The K210 handoff has two bounded completed-event slots backed by two reusable
 payload buffers; READ notifications do not reserve a payload buffer. ISR and
@@ -174,9 +182,9 @@ event window; a write already being discarded remains ignored through its
 STOP. The next transaction completed after that boundary is the first
 observable event. This is the explicit resynchronization state: no prefix or
 queued event from before the overflow is replayed. Mode change, release, and
-session retirement clear both the queued window and the overflow latch. An active
-READ keeps its one-shot preload snapshot, and a racing preload still arms the
-following READ exactly as above.
+session retirement clear both the queued window and the overflow latch. An
+active READ keeps its preload snapshot, and a racing preload still arms the
+following READ.
 
 ## Deadline and buffer ownership
 

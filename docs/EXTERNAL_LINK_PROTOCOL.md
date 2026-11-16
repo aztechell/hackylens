@@ -13,23 +13,26 @@ original HUSKYLENS command set or packet layout.
 
 ## Physical port
 
-The four-pin `T R - +` connector is independent from the UART3 debug/PC
-connection. Reverse engineering maps the signal pins as follows:
+The external connector is independent from the UART3 debug/PC connection.
+Use the cable that matches the board. The SEN0305 has a four-pin Gravity
+connector. The Maix Cube has a four-pin Grove connector with a 2.0 mm pitch
+and different contact positions.
 
-| Connector | Descriptor route roles | UART mode | I2C mode |
-|---|---|---|---|
-| `T` | `IO_EXTERNAL_UART_T` / `IO_EXTERNAL_I2C_T` | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
-| `R` | `IO_EXTERNAL_UART_R` / `IO_EXTERNAL_I2C_R` | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
-| `-` | — | Ground | Ground |
-| `+` | — | 3.3–5.0 V power input | 3.3–5.0 V power input |
+| SEN0305 Gravity | Maix Cube Grove | Descriptor route roles | UART mode | I2C mode |
+|---|---|---|---|---|
+| `T` | `25` | `IO_EXTERNAL_UART_T` / `IO_EXTERNAL_I2C_T` | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
+| `R` | `24` | `IO_EXTERNAL_UART_R` / `IO_EXTERNAL_I2C_R` | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
+| `-` | `G` | — | Ground | Ground |
+| `+` (power input) | `V` (3.3 V) | — | Board-specific supply | Board-specific supply |
 
 The selected board descriptor is the sole source of physical pin numbers.
-The signal mapping has medium confidence from the recovered board setup. Treat
-the signal lines as 3.3 V logic. DFRobot specifies a 3.3–5.0 V supply range and
-typical consumption of 320 mA at 3.3 V or 230 mA at 5 V. Its automatic source
-selector permits USB and four-pin power simultaneously and gives USB priority;
-therefore `+` is a supply input and is not expected to source voltage under USB
-power.
+Use 3.3 V logic. For a USB-powered I2C test fixture, connect SDA, SCL and the
+common ground. Leave the connector supply disconnected. For SEN0305, DFRobot
+specifies a 3.3–5.0 V supply range and typical consumption of 320 mA at 3.3 V or
+230 mA at 5 V. The SEN0305 power selector gives USB priority over its `+` input.
+See the [SEN0305 pinout](https://wiki.dfrobot.com/sen0305/#pinout) and the
+[Maix Cube pinout](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/ProductSpecification/Sipeed%20Maix%20Cube%20Datasheet%20V1.0.pdf#page=3).
+
 I2C mode uses the camera as a 7-bit slave at address `0x32`. UART is the default.
 Select the mode through Settings / External Link or through the PC debug UART
 with `HKLINKUART` and `HKLINKI2C`. Settings / UART Speed selects 9600, 115200,
@@ -54,13 +57,21 @@ frame:
 CRC parameters are polynomial `0x1021`, initial value `0xFFFF`, no reflection,
 and no final XOR.
 
-UART is a byte stream; the device resynchronizes on `HK`. For I2C, the master
-writes one complete request transaction and waits at least 20 ms after its
-write STOP. Read the 8-byte header, then the declared payload plus
-the 2-byte CRC. The response cursor continues across multiple I2C read
-transactions, allowing masters with 32-byte Wire buffers to read in chunks.
-A new valid request prepares a new response and resets the cursor to byte zero;
-bytes clocked after the complete response are zero.
+UART is a byte stream and the device resynchronizes on `HK`. For I2C, the master
+writes one complete request transaction with STOP. Wait 20 ms before the
+first 8-byte header read. If all eight bytes are zero, retry the header in
+a separate READ without rewriting the request. Keep one request outstanding
+and use a response deadline. Display updates and loading a model from microSD
+can delay the response. The master must also honor clock stretching during
+I2C transfers.
+
+When the header arrives, check the magic, version, sequence and payload length.
+Read the declared payload plus the 2-byte CRC. The response cursor continues
+across multiple I2C read transactions, allowing masters with 32-byte Wire
+buffers to read in chunks.
+A new write with a payload discards any unread portion of the previous
+response. A valid frame prepares a new response at byte zero. Reads before
+the response is ready and bytes clocked after it is complete return zero.
 
 ## Commands
 
@@ -69,7 +80,9 @@ bytes clocked after the complete response are zero.
 | `0x01 GET_INFO` | `0x81 INFO` | none |
 | `0x02 GET_RESULTS` | `0x82 RESULTS` | none |
 | `0x03 PING` | `0x83 PONG` | arbitrary bytes, echoed |
-| unsupported/malformed | `0xFF ERROR` | one-byte error code |
+| Unsupported type or unexpected payload on a valid frame | `0xFF ERROR` | one-byte error code |
+
+Frames with an invalid header, length, version, or CRC are dropped.
 
 `INFO` contains `capabilities:u16`, `max_items:u8`, `active_transport:u8`
 (`0=UART`, `1=I2C`), `i2c_address:u8`, one reserved byte, and `uart_baud:u32`.
@@ -114,3 +127,19 @@ confidence and bounding rectangle in the 320×240 capture. The app's Output
 setting controls whether the snapshot includes all detections or selected IDs.
 The USB debug command `HKTAGINFO` reports optical and horizontal range in
 millimeters. External Link v1 carries the bounding rectangle and tag metadata.
+
+## SEN0305 I2C hardware verification
+
+An ESP8266 controller completed 114 exchanges at approximately 10 kHz,
+1,140 at approximately 100 kHz, and 1,368 at approximately 404 kHz. The
+100 kHz and 404 kHz runs continued through automatic sleep. In ten further
+trials the controller interrupted a read, issued nine clock pulses and a
+STOP, and then received a valid response to a new request without restarting
+the SEN0305.
+
+On SEN0305, replayed input frames were processed by the native QR, AprilTag,
+FACE DETECT, FACE RECOG, and OBJECT DETECT apps. Each app sent populated
+`GET_RESULTS` replies over the physical I2C connector at approximately 100
+and 400 kHz. Leaving each app cleared the result. The replay exercised result
+production and transport with known inputs. The Maix Cube physical I2C
+exchange remains to be verified.

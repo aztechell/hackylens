@@ -184,7 +184,8 @@ hk_result_t hk_external_link_configure_i2c_target(
         HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION);
     if(result != HK_OK)
         return result;
-    if(config->reserved0 != 0U || config->reserved1 != 0U ||
+    if((config->flags & ~HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE) != 0U ||
+       config->reserved1 != 0U ||
        config->address > UINT16_C(0x7f))
         return HK_ERR_INVALID_ARGUMENT;
     EXTERNAL_CALL(configure_i2c_target, config);

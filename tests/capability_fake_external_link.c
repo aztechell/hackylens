@@ -47,6 +47,7 @@ typedef struct
     uint8_t session_active;
     uint8_t target_event_pending;
     uint8_t target_preload_active;
+    uint8_t target_stream_response;
     uint8_t quarantined;
     const hk_external_link_t *claimant;
     hk_fake_external_link_operation_t operation;
@@ -141,6 +142,7 @@ static void clear_target_state(void)
     g_fake.target_event_received_bytes = 0U;
     g_fake.target_event_requested_bytes = 0U;
     g_fake.target_preload_active = 0U;
+    g_fake.target_stream_response = 0U;
     g_fake.target_preload_size = 0U;
     g_fake.target_read_size = 0U;
     memset(g_fake.target_event_data, 0, sizeof(g_fake.target_event_data));
@@ -411,7 +413,9 @@ hk_result_t hk_fake_external_link_push_target_event(
     if (!g_fake.session_active ||
         g_fake.mode != HK_EXTERNAL_LINK_MODE_I2C_TARGET)
         return remember(HK_ERR_INVALID_STATE);
-    if (g_fake.target_event_pending)
+    if (g_fake.target_event_pending &&
+        !(g_fake.target_stream_response &&
+          type == HK_EXTERNAL_LINK_TARGET_EVENT_READ))
         return remember(HK_ERR_BUSY);
     if ((type != HK_EXTERNAL_LINK_TARGET_EVENT_WRITE &&
          type != HK_EXTERNAL_LINK_TARGET_EVENT_READ) ||
@@ -423,7 +427,14 @@ hk_result_t hk_fake_external_link_push_target_event(
          (received_bytes != 0U || requested_bytes == 0U)))
         return remember(HK_ERR_INVALID_ARGUMENT);
     if (received_bytes != 0U)
+    {
+        if (g_fake.target_stream_response)
+        {
+            g_fake.target_preload_active = 0U;
+            g_fake.target_preload_size = 0U;
+        }
         memcpy(g_fake.target_event_data, bytes, received_bytes);
+    }
     if (type == HK_EXTERNAL_LINK_TARGET_EVENT_READ)
     {
         captured = requested_bytes;
@@ -456,6 +467,15 @@ hk_result_t hk_fake_external_link_push_target_event(
             requested_bytes,
             HK_OK,
             HK_DEADLINE_IMMEDIATE);
+        if (g_fake.target_stream_response)
+        {
+            g_fake.target_preload_size -= prefix;
+            g_fake.target_preload_active =
+                (uint8_t)(g_fake.target_preload_size != 0U);
+            memmove(g_fake.target_preload, g_fake.target_preload + prefix,
+                    g_fake.target_preload_size);
+            return remember(HK_OK);
+        }
         g_fake.target_preload_active = 0U;
         g_fake.target_preload_size = 0U;
         memset(g_fake.target_preload, 0, sizeof(g_fake.target_preload));
@@ -659,7 +679,8 @@ hk_result_t hk_external_link_configure_i2c_target(
         (uint16_t)sizeof(*config),
         config->struct_version,
         HK_EXTERNAL_LINK_I2C_TARGET_CONFIG_VERSION);
-    if (result != HK_OK || config->reserved0 != 0U ||
+    if (result != HK_OK ||
+        (config->flags & ~HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE) != 0U ||
         config->reserved1 != 0U || config->address > UINT16_C(0x7f))
         return remember(result == HK_OK ? HK_ERR_INVALID_ARGUMENT : result);
     result = validate_handle(handle);
@@ -667,6 +688,9 @@ hk_result_t hk_external_link_configure_i2c_target(
         result = validate_mode_feature(HK_EXTERNAL_LINK_FEATURE_I2C_TARGET);
     if (result == HK_OK)
         result = set_mode(HK_EXTERNAL_LINK_MODE_I2C_TARGET);
+    if (result == HK_OK)
+        g_fake.target_stream_response =
+            (config->flags & HK_EXTERNAL_LINK_TARGET_STREAM_RESPONSE) != 0U;
     return remember(result);
 }
 
