@@ -183,8 +183,11 @@ through the launcher shortcut path. Unpinning or deleting the selected script
 clears the target. An unavailable target returns to the launcher.
 
 APRILTAG Distance keeps fractional corner coordinates in the unrotated 160×120
-full-frame coordinate system and uses a planar pose estimate to recover translation in
-millimeters. It stores the known tag side and a per-device focal calibration.
+full-frame coordinate system and estimates translation in millimeters from
+the known tag side and a per-device focal calibration. Small native-resolution
+tags near the center can use the apparent scale of their averaged edges.
+The display filters recent readings per target and briefly retains the
+number across rejected measurements.
 The initial calibration assumes square pixels and a centered principal point.
 On Maix Cube, the optional accelerometer can project that translation onto the
 horizontal plane after two gravity references are captured. See the

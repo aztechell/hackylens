@@ -17,13 +17,33 @@ typedef struct
     float z;
 } apriltag_vector_t;
 
+typedef enum
+{
+    APRILTAG_RANGE_NONE = 0,
+    APRILTAG_RANGE_POSE,
+    APRILTAG_RANGE_APPROXIMATE,
+} apriltag_range_quality_t;
+
+typedef struct
+{
+    uint64_t updated_us;
+    uint32_t samples[3];
+    uint8_t count;
+    uint8_t next;
+    uint8_t approximate;
+} apriltag_range_filter_t;
+
 /* Coordinates are in the 160x120 detector image. The prototype assumes square
  * pixels and a centered principal point. All translations are in millimeters. */
 uint8_t apriltag_distance_calibrate(const float corners[4][2], uint16_t tag_mm,
                                    uint16_t reference_mm, float *focal_px);
-uint8_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
-                              float focal_px, uint8_t native_resolution,
-                              apriltag_vector_t *translation);
+apriltag_range_quality_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
+                                               float focal_px, uint8_t native_resolution,
+                                               apriltag_vector_t *translation);
+void apriltag_range_filter_add(apriltag_range_filter_t *filter, uint64_t now_us,
+                              uint32_t mm, apriltag_range_quality_t quality);
+uint8_t apriltag_range_filter_read(const apriltag_range_filter_t *filter, uint64_t now_us,
+                                   uint32_t *mm);
 float apriltag_distance_norm(apriltag_vector_t v);
 uint8_t apriltag_distance_horizontal(apriltag_vector_t translation,
                                      const int16_t upright[3], const int16_t lens_down[3],

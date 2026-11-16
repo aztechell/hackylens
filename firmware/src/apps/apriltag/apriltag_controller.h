@@ -17,5 +17,6 @@ void apriltag_controller_cancel_calibration(void);
 uint32_t apriltag_controller_range_mm(void);
 uint32_t apriltag_controller_horizontal_mm(void);
 void apriltag_controller_stats(uint32_t *preview_count, uint32_t *read_count);
+void apriltag_controller_range_stats(uint32_t *range_count, uint32_t *approximate_count);
 
 #endif

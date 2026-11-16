@@ -62,6 +62,12 @@ selected tag nearest the middle of the image and shows its ID with the
 straight-line range. During calibration, the selected tag must be under the
 crosshair.
 
+Range is displayed in whole centimeters. A `~` marks an approximate
+reading from a small tag near the center of the camera image in FAR mode.
+The display uses the median once it has three recent readings for the
+current tag. The number dims 0.3 seconds after the last valid reading and
+clears after 0.8 seconds.
+
 Generate the two-page print PDF with Python, Pillow and ReportLab.
 
 ```powershell
@@ -96,7 +102,9 @@ keep its white margin. Use one sheet at a time because both cards are ID 42.
    about 20° and 35° while keeping its center fixed. Repeat a centered
    and an off-center case. Record absolute error, spread and how often the
    app can still read the ID but has no valid range. Use **HKTAGINFO** to
-   record `range_mm` over USB. A zero field means no valid reading.
+   record `range_mm` over USB. A zero field means the latest decoded frame
+   had no valid reading. The `ranges` and `approx` counters report the
+   number of accepted ranges and approximate ranges for the app session.
 4. Calibrate the Cube optics independently. For **Level range**, hold
    the Cube upright with the camera pointing horizontally and select
    **Set upright**. Pitch the Cube straight down by 90° without rolling
@@ -142,3 +150,25 @@ measurements after acquisition.
 
 With Focal set to 154.00 px, the 1.5 m trial reported 1533–1613 mm in
 the sampled range readings. Distance was disabled for the other two holds.
+
+Before the range estimator change, a handheld trial on Maix Cube used the
+100 mm ID 42 print, Focal set to 145.00 px and Refine Edges off. The table
+records about 20–22 seconds per FAR hold. Range availability counts nonzero
+`range_mm` values in the USB samples. The median uses those nonzero values.
+
+| Lens to tag | FAR reads / processed frames | Range availability | Median range |
+| --- | ---: | ---: | ---: |
+| 1 m | 190 / 191 | 89 / 105 | 988 mm |
+| 1.5 m | 292 / 295 | 96 / 103 | 1485 mm |
+| 2 m | 366 / 380 | 25 / 112 | 1930 mm |
+
+NEAR read 9 of 101 processed frames in a roughly 12-second window at 1 m.
+No detection was observed at 1.5 m. The 2 m NEAR hold was skipped.
+FAR resumed reading after losses during the holds. The exact moment the
+tag re-entered view was uninstrumented, so these logs give no acquisition
+latency measurement.
+
+Five Cube photos taken at 2 m were replayed at 320×240 with four sampling
+offsets and both Refine Edges settings. The revised estimator returned a
+range in all 40 cases, compared with 10 of 40 with the previous estimator.
+The revised estimates spanned 1937–2074 mm.

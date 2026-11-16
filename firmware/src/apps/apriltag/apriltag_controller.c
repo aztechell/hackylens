@@ -51,7 +51,10 @@ static int16_t g_calibration_id;
 static uint32_t g_range_mm;
 static uint32_t g_horizontal_mm;
 static int16_t g_measured_id = -1;
-static uint8_t g_level_ready;
+static apriltag_range_filter_t g_range_display;
+static apriltag_range_filter_t g_horizontal_display;
+static uint32_t g_range_count;
+static uint32_t g_approximate_count;
 static uint8_t g_level_steady;
 static uint64_t g_gravity_due_us;
 static int16_t g_gravity[3];
@@ -61,7 +64,8 @@ static void clear_measurement(void)
     g_range_mm = 0U;
     g_horizontal_mm = 0U;
     g_measured_id = -1;
-    g_level_ready = 0U;
+    g_range_display = (apriltag_range_filter_t){0};
+    g_horizontal_display = (apriltag_range_filter_t){0};
     g_calibration_count = 0U;
 }
 
@@ -88,6 +92,7 @@ static void track_gravity(void)
     if(!sample_gravity(sample))
     {
         g_level_steady = 0U;
+        g_horizontal_display = (apriltag_range_filter_t){0};
         return;
     }
     int32_t change = 0;
@@ -98,18 +103,28 @@ static void track_gravity(void)
     }
     memcpy(g_gravity, sample, sizeof(g_gravity));
     if(change > 45L * 45L)
+    {
         g_level_steady = 1U;
+        g_horizontal_display = (apriltag_range_filter_t){0};
+    }
     else if(g_level_steady < 5U)
         g_level_steady++;
 }
 
-static void measure(const apriltag_result_t *tag)
+static void measure(const apriltag_result_t *tag, uint64_t now_us)
 {
     apriltag_distance_settings_t *settings = apriltag_settings_distance();
+    g_range_mm = 0U;
+    g_horizontal_mm = 0U;
     if(!tag || !apriltag_settings_selected(tag->id))
     {
-        clear_measurement();
+        g_calibration_count = 0U;
         return;
+    }
+    if(g_measured_id != (int16_t)tag->id)
+    {
+        clear_measurement();
+        g_measured_id = (int16_t)tag->id;
     }
     if(g_calibration_armed)
     {
@@ -138,17 +153,16 @@ static void measure(const apriltag_result_t *tag)
     }
 
     apriltag_vector_t translation;
-    if(!apriltag_distance_pose(tag->corners, settings->tag_mm,
-            settings->focal_millipixels / 1000.0f, tag->native_resolution, &translation))
-    {
-        clear_measurement();
+    apriltag_range_quality_t quality = apriltag_distance_pose(
+        tag->corners, settings->tag_mm, settings->focal_millipixels / 1000.0f,
+        tag->native_resolution, &translation);
+    if(quality == APRILTAG_RANGE_NONE)
         return;
-    }
 
-    g_measured_id = (int16_t)tag->id;
     g_range_mm = (uint32_t)(apriltag_distance_norm(translation) + 0.5f);
-    g_horizontal_mm = 0U;
-    g_level_ready = 0U;
+    apriltag_range_filter_add(&g_range_display, now_us, g_range_mm, quality);
+    g_range_count++;
+    g_approximate_count += quality == APRILTAG_RANGE_APPROXIMATE;
     if(settings->level && g_level_steady == 5U)
     {
         float horizontal;
@@ -159,16 +173,18 @@ static void measure(const apriltag_result_t *tag)
                                        settings->lens_down, g_gravity, &horizontal))
         {
             g_horizontal_mm = (uint32_t)(horizontal + 0.5f);
-            g_level_ready = 1U;
+            apriltag_range_filter_add(&g_horizontal_display, now_us, g_horizontal_mm, quality);
         }
     }
 }
 
-static void draw_measurement(camera_view_present_t *present)
+static void draw_measurement(camera_view_present_t *present, uint64_t now_us)
 {
     const apriltag_distance_settings_t *settings = apriltag_settings_distance();
     const char *label;
     char text[32];
+    uint32_t range_mm;
+    uint16_t color = hk_ui_accent();
     if(g_calibration_armed)
     {
         if(apriltag_settings_selected_count() == 0U)
@@ -182,26 +198,42 @@ static void draw_measurement(camera_view_present_t *present)
     }
     else if(!settings->focal_millipixels)
         label = "CALIBRATE FIRST";
-    else if(g_range_mm)
+    else if(apriltag_range_filter_read(&g_range_display, now_us, &range_mm))
     {
-        snprintf(text, sizeof(text), "#%u %u.%u cm",
-                 (unsigned)g_measured_id, (unsigned)(g_range_mm / 10U),
-                 (unsigned)(g_range_mm % 10U));
+        snprintf(text, sizeof(text), "#%u %c%3u cm", (unsigned)g_measured_id,
+                 g_range_display.approximate ? '~' : ' ', (unsigned)((range_mm + 5U) / 10U));
+        if(now_us - g_range_display.updated_us >= APRILTAG_RANGE_DIM_US)
+            color = hk_ui_accent_dim();
+        label = text;
+    }
+    else if(apriltag_settings_selected_count() == 0U)
+        label = "SELECT A TAG";
+    else if(g_measured_id >= 0)
+    {
+        snprintf(text, sizeof(text), "#%u   -- cm", (unsigned)g_measured_id);
         label = text;
     }
     else
-        label = "SELECTED TAG --";
+        label = "RANGE -- cm";
     uint16_t y = present->height - HACKYLENS_FONT_H;
-    camera_view_compose_text_at(present, 4U, y, label, hk_ui_accent(), COLOR_BLACK);
-    if(settings->level && g_sensor && g_range_mm)
+    camera_view_compose_text_at(present, 4U, y, label, color, COLOR_BLACK);
+    if(settings->level && g_sensor && !g_calibration_armed)
     {
-        if(g_level_ready && g_level_steady == 5U)
-            snprintf(text, sizeof(text), "H %u.%u cm", (unsigned)(g_horizontal_mm / 10U),
-                     (unsigned)(g_horizontal_mm % 10U));
+        uint32_t horizontal;
+        color = hk_ui_accent();
+        if(g_level_steady == 5U &&
+           apriltag_range_filter_read(&g_horizontal_display, now_us, &horizontal))
+        {
+            snprintf(text, sizeof(text), "H %c%3u cm",
+                     g_horizontal_display.approximate ? '~' : ' ',
+                     (unsigned)((horizontal + 5U) / 10U));
+            if(now_us - g_horizontal_display.updated_us >= APRILTAG_RANGE_DIM_US)
+                color = hk_ui_accent_dim();
+        }
         else
-            snprintf(text, sizeof(text), "H --");
+            snprintf(text, sizeof(text), "H   -- cm");
         camera_view_compose_text_at(present, 4U, y - HACKYLENS_FONT_H,
-                                    text, hk_ui_accent(), COLOR_BLACK);
+                                    text, color, COLOR_BLACK);
     }
 }
 
@@ -270,7 +302,7 @@ static const apriltag_result_t *apriltag_update_target(uint16_t width, uint16_t 
     return selected;
 }
 
-static void apriltag_update_results(void)
+static void apriltag_update_results(uint64_t now_us)
 {
     uint32_t sequence;
     uint8_t count;
@@ -336,10 +368,10 @@ static void apriltag_update_results(void)
         g_display_misses = 0U;
         const apriltag_result_t *selected = apriltag_update_target(width, height);
         if(apriltag_settings_distance()->enabled)
-            measure(selected);
+            measure(selected, now_us);
         return;
     }
-    clear_measurement();
+    measure(NULL, now_us);
     g_target_id = -1;
     if(g_display_count && g_display_misses < APRILTAG_DISPLAY_HOLD_MISSES)
     {
@@ -418,7 +450,6 @@ static void apriltag_compose_overlay(camera_view_present_t *present,
 {
     uint8_t selected[APRILTAG_RESULT_MAX] = {0};
 
-    (void)context;
     (void)sequence;
     uint8_t distance_enabled = apriltag_settings_distance()->enabled;
     for(uint8_t i = 0U; i < g_display_count; i++)
@@ -426,7 +457,7 @@ static void apriltag_compose_overlay(camera_view_present_t *present,
     apriltag_view_compose_results(present, width, height,
                                   g_display_results, selected, g_display_count);
     if(distance_enabled)
-        draw_measurement(present);
+        draw_measurement(present, *(const uint64_t *)context);
     if(apriltag_settings_preferences()->far_search)
         camera_view_compose_text_at(present, present->width - 4U - 3U * HACKYLENS_FONT_W,
                                     present->height - 2U * HACKYLENS_FONT_H,
@@ -440,6 +471,8 @@ void apriltag_controller_enter(const hk_input_snapshot_t *input, const hk_accele
     g_gravity_due_us = 0U;
     g_preview_count = 0U;
     g_read_count = 0U;
+    g_range_count = 0U;
+    g_approximate_count = 0U;
     g_calibration_armed = 0U;
     apriltag_display_reset();
     settings_menu_close(&g_settings_menu);
@@ -512,16 +545,17 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
     if(g_error)
         return;
     const apriltag_distance_settings_t *distance = apriltag_settings_distance();
-    uint64_t now;
+    uint64_t now = 0U;
+    hk_result_t clock = hk_time_now_us(hk_time_service(), &now);
     if(g_sensor && distance->enabled && distance->level &&
-       hk_time_now_us(hk_time_service(), &now) == HK_OK && now >= g_gravity_due_us)
+       clock == HK_OK && now >= g_gravity_due_us)
     {
         track_gravity();
         g_gravity_due_us = now + APRILTAG_GRAVITY_INTERVAL_US;
     }
-    apriltag_update_results();
+    apriltag_update_results(now);
     if(camera_runtime_tick_paced(input, apriltag_consume_frame, NULL,
-                                 apriltag_compose_overlay, NULL, APRILTAG_PREVIEW_INTERVAL_US))
+                                 apriltag_compose_overlay, &now, APRILTAG_PREVIEW_INTERVAL_US))
         g_preview_count++;
 }
 
@@ -611,11 +645,17 @@ uint32_t apriltag_controller_range_mm(void)
 
 uint32_t apriltag_controller_horizontal_mm(void)
 {
-    return g_level_ready && g_level_steady == 5U ? g_horizontal_mm : 0U;
+    return g_level_steady == 5U ? g_horizontal_mm : 0U;
 }
 
 void apriltag_controller_stats(uint32_t *preview_count, uint32_t *read_count)
 {
     *preview_count = g_preview_count;
     *read_count = g_read_count;
+}
+
+void apriltag_controller_range_stats(uint32_t *range_count, uint32_t *approximate_count)
+{
+    *range_count = g_range_count;
+    *approximate_count = g_approximate_count;
 }

@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "../firmware/src/apps/apriltag/apriltag_distance.h"
+#include "../firmware/src/apps/apriltag/apriltag_config.h"
 
 static void project(float corners[4][2], float side, float focal,
                     apriltag_vector_t center, float yaw, float pitch)
@@ -43,11 +44,39 @@ int main(void)
     assert(!apriltag_distance_pose(corners, 60U, focal, 0U, &pose));
     project(corners, 100.0f, 154.0f, (apriltag_vector_t){0.0f, 0.0f, 2000.0f}, 0.0f, 0.0f);
     assert(!apriltag_distance_pose(corners, 100U, 154.0f, 0U, &pose));
-    assert(apriltag_distance_pose(corners, 100U, 154.0f, 1U, &pose));
+    assert(apriltag_distance_pose(corners, 100U, 154.0f, 1U, &pose) ==
+           APRILTAG_RANGE_APPROXIMATE);
     assert(fabsf(pose.z - 2000.0f) < 0.1f);
     assert(!apriltag_distance_calibrate(corners, 100U, 1000U, &focal));
     project(corners, 100.0f, focal, (apriltag_vector_t){0.0f, 0.0f, 300.0f}, 0.7f, 0.0f);
     assert(!apriltag_distance_calibrate(corners, 100U, 300U, &focal));
+
+    project(corners, 100.0f, 145.0f, (apriltag_vector_t){30.0f, 15.0f, 2000.0f},
+            0.35f, 0.12f);
+    /* One noisy corner in the native frame used to invalidate the pose. */
+    corners[2][0] += 0.60f;
+    corners[2][1] += 0.20f;
+    assert(apriltag_distance_pose(corners, 100U, 145.0f, 1U, &pose) ==
+           APRILTAG_RANGE_APPROXIMATE);
+    assert(fabsf(pose.z - 2000.0f) < 140.0f);
+    corners[2][0] = corners[1][0];
+    corners[2][1] = corners[1][1];
+    assert(apriltag_distance_pose(corners, 100U, 145.0f, 1U, &pose) ==
+           APRILTAG_RANGE_NONE);
+
+    apriltag_range_filter_t filter = {0};
+    uint32_t mm;
+    assert(!apriltag_range_filter_read(&filter, 0U, &mm));
+    apriltag_range_filter_add(&filter, 10000U, 2000U, APRILTAG_RANGE_APPROXIMATE);
+    apriltag_range_filter_add(&filter, 20000U, 1420U, APRILTAG_RANGE_POSE);
+    apriltag_range_filter_add(&filter, 30000U, 1990U, APRILTAG_RANGE_POSE);
+    assert(filter.approximate && apriltag_range_filter_read(&filter, 40000U, &mm) && mm == 1990U);
+    assert(apriltag_range_filter_read(&filter, 30000U + APRILTAG_RANGE_HOLD_US - 1U, &mm) &&
+           mm == 1990U);
+    assert(!apriltag_range_filter_read(&filter, 30000U + APRILTAG_RANGE_HOLD_US, &mm));
+    apriltag_range_filter_add(&filter, 30000U + APRILTAG_RANGE_HOLD_US, 1250U, APRILTAG_RANGE_POSE);
+    assert(!filter.approximate);
+    assert(apriltag_range_filter_read(&filter, 30000U + APRILTAG_RANGE_HOLD_US, &mm) && mm == 1250U);
 
     const int16_t upright[] = {-1000, 0, 0}, lens_down[] = {0, 1000, 0};
     const int16_t inclined[] = {-800, 600, 0}, moving[] = {-1600, 800, 0};

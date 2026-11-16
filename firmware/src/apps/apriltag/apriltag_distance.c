@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "../../services/apriltag_decoder.h"
+#include "apriltag_config.h"
 
 #define CENTER_X ((APRILTAG_INPUT_W - 1U) * 0.5f)
 #define CENTER_Y ((APRILTAG_INPUT_H - 1U) * 0.5f)
@@ -103,9 +104,43 @@ uint8_t apriltag_distance_calibrate(const float corners[4][2], uint16_t tag_mm,
     return 1U;
 }
 
-uint8_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
-                              float focal_px, uint8_t native_resolution,
-                              apriltag_vector_t *translation)
+/* A small distant tag is nearly affine. Its unforeshortened scale is the
+ * largest singular value of the averaged edge vectors. This avoids using
+ * subpixel differences between opposite edges to infer a steep tilt. */
+static uint8_t estimate_small_tag(const float corners[4][2], uint16_t tag_mm,
+                                  float focal_px, apriltag_vector_t *translation)
+{
+    const float *a = corners[0], *b = corners[1], *c = corners[2], *d = corners[3];
+    apriltag_vector_t u = {(b[0] - a[0] + c[0] - d[0]) * 0.5f,
+                           (b[1] - a[1] + c[1] - d[1]) * 0.5f, 0.0f};
+    apriltag_vector_t v = {(d[0] - a[0] + c[0] - b[0]) * 0.5f,
+                           (d[1] - a[1] + c[1] - b[1]) * 0.5f, 0.0f};
+    const float uu = dot(u, u), vv = dot(v, v), uv = dot(u, v);
+    const float spread = hypotf(uu - vv, 2.0f * uv);
+    const float large = (uu + vv + spread) * 0.5f;
+    const float small = (uu + vv - spread) * 0.5f;
+    const float skew_x = a[0] + c[0] - b[0] - d[0];
+    const float skew_y = a[1] + c[1] - b[1] - d[1];
+    if(large > 16.0f * 16.0f || small < 0.36f * large ||
+       skew_x * skew_x + skew_y * skew_y > 0.04f * large)
+        return 0U;
+
+    apriltag_vector_t ray = {
+        ((a[0] + b[0] + c[0] + d[0]) * 0.25f - CENTER_X) / focal_px,
+        ((a[1] + b[1] + c[1] + d[1]) * 0.25f - CENTER_Y) / focal_px,
+        1.0f,
+    };
+    /* Away from the center, perspective contributes to the apparent scale
+     * even for a distant tilted tag. Use the perspective fit there. */
+    if(ray.x * ray.x + ray.y * ray.y > 0.0625f)
+        return 0U;
+    *translation = scale(ray, focal_px * tag_mm / sqrtf(large));
+    return 1U;
+}
+
+apriltag_range_quality_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
+                                               float focal_px, uint8_t native_resolution,
+                                               apriltag_vector_t *translation)
 {
     tag_projection_t p;
     /* A native 320x240 window retains twice the samples per unit in the
@@ -114,7 +149,9 @@ uint8_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
     if(!tag_mm || !(focal_px >= APRILTAG_DISTANCE_FOCAL_MIN_PX &&
                     focal_px <= APRILTAG_DISTANCE_FOCAL_MAX_PX) ||
        !projection(corners, min_edge_px, &p))
-        return 0U;
+        return APRILTAG_RANGE_NONE;
+    if(native_resolution && estimate_small_tag(corners, tag_mm, focal_px, translation))
+        return APRILTAG_RANGE_APPROXIMATE;
     p.u.x /= focal_px;
     p.u.y /= focal_px;
     p.v.x /= focal_px;
@@ -127,8 +164,45 @@ uint8_t apriltag_distance_pose(const float corners[4][2], uint16_t tag_mm,
     if(u <= 0.0f || v <= 0.0f ||
        fabsf(dot(p.u, p.v)) > 0.25f * u * v ||
        fabsf(u - v) > 0.14f * (u + v))
-        return 0U;
+        return APRILTAG_RANGE_NONE;
     *translation = scale(p.center, 2.0f * tag_mm / (u + v));
+    return APRILTAG_RANGE_POSE;
+}
+
+void apriltag_range_filter_add(apriltag_range_filter_t *filter, uint64_t now_us,
+                              uint32_t mm, apriltag_range_quality_t quality)
+{
+    if(filter->count && now_us - filter->updated_us >= APRILTAG_RANGE_HOLD_US)
+        filter->count = filter->next = filter->approximate = 0U;
+    const uint8_t bit = (uint8_t)(1U << filter->next);
+    filter->approximate &= (uint8_t)~bit;
+    if(quality == APRILTAG_RANGE_APPROXIMATE)
+        filter->approximate |= bit;
+    filter->samples[filter->next] = mm;
+    filter->next = (filter->next + 1U) % 3U;
+    if(filter->count < 3U)
+        filter->count++;
+    filter->updated_us = now_us;
+}
+
+uint8_t apriltag_range_filter_read(const apriltag_range_filter_t *filter, uint64_t now_us,
+                                   uint32_t *mm)
+{
+    if(!filter->count || now_us - filter->updated_us >= APRILTAG_RANGE_HOLD_US)
+        return 0U;
+    const uint32_t a = filter->samples[0];
+    const uint32_t b = filter->samples[1];
+    if(filter->count == 1U)
+        *mm = a;
+    else if(filter->count == 2U)
+        *mm = (a + b) / 2U;
+    else
+    {
+        const uint32_t c = filter->samples[2];
+        const uint32_t low = a < b ? a : b;
+        const uint32_t high = a > b ? a : b;
+        *mm = c < low ? low : c > high ? high : c;
+    }
     return 1U;
 }
 

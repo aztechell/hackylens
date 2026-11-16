@@ -36,13 +36,15 @@ uint8_t apriltag_handle_debug_command(const char *cmd)
         const apriltag_distance_settings_t *distance = apriltag_settings_distance();
         uint32_t previews, reads;
         apriltag_controller_stats(&previews, &reads);
+        uint32_t ranges, approximate;
+        apriltag_controller_range_stats(&ranges, &approximate);
 
         while(length && (line[length - 1U] == '\r' || line[length - 1U] == '\n'))
             line[--length] = '\0';
         snprintf(line + length, sizeof(line) - length,
                  " output=%s selected=%u target=%d fps=%u light=%s rgb=%u/%u/%u "
                  "range_mm=%u horizontal_mm=%u distance=%u tag_mm=%u focal_mpx=%u level=%u "
-                 "previews=%u reads=%u search_mode=%s\r\n",
+                 "previews=%u reads=%u search_mode=%s ranges=%u approx=%u\r\n",
                  apriltag_settings_output_label(),
                  (unsigned)apriltag_settings_selected_count(),
                  (int)apriltag_controller_target_id(),
@@ -53,7 +55,8 @@ uint8_t apriltag_handle_debug_command(const char *cmd)
                  (unsigned)apriltag_controller_horizontal_mm(),
                  distance->enabled, distance->tag_mm, (unsigned)distance->focal_millipixels,
                  distance->level, (unsigned)previews, (unsigned)reads,
-                 preferences->far_search ? "FAR" : "NEAR");
+                 preferences->far_search ? "FAR" : "NEAR",
+                 (unsigned)ranges, (unsigned)approximate);
     }
     debug_console_write_text(line);
     return 1;
