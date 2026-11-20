@@ -60,6 +60,15 @@ class CubeUiTests(unittest.TestCase):
         ])
         self.assertIn("IMAGE_VIEWPORT_OK", output)
 
+    def test_back_clamps_on_short_rows_and_restores_the_column(self):
+        for board in ("huskylens-sen0305", "sipeed-maix-cube"):
+            with self.subTest(board=board):
+                output = self.compile_and_run("menu-back", [
+                    "tests/menu_back_harness.c", "firmware/src/core/hk_menu.c",
+                    "firmware/src/core/hk_dispatch.c",
+                ], board_id=board)
+                self.assertIn("MENU_BACK_OK", output)
+
     def test_camera_restarts_apply_mounting_rotation_and_keep_capture_dimensions(self):
         for board_id, rotate in (("sipeed-maix-cube", "1"), ("huskylens-sen0305", "0")):
             with self.subTest(board=board_id):

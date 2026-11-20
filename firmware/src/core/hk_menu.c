@@ -13,6 +13,7 @@
 #include "hk_screen.h"
 
 static uint8_t s_menu_index;
+static uint8_t s_menu_column;
 static uint8_t s_rendered_count;
 static hk_menu_item_t s_items[HK_MENU_ORDER_CAPACITY];
 static const hk_app_t *s_active_app;
@@ -94,6 +95,12 @@ uint8_t hk_menu_get_items(hk_menu_item_t items[HK_MENU_ORDER_CAPACITY])
     return filled;
 }
 
+static void menu_set_index(uint8_t index)
+{
+    s_menu_index = index;
+    s_menu_column = index % MENU_GRID_COLS;
+}
+
 static void menu_select_app(const hk_app_t *app)
 {
     if(!app)
@@ -102,7 +109,8 @@ static void menu_select_app(const hk_app_t *app)
     {
         if(s_items[i].app == app)
         {
-            s_menu_index = i;
+            if(i != s_menu_index)
+                menu_set_index(i);
             return;
         }
     }
@@ -186,7 +194,7 @@ void menu_render(void)
     s_rendered_count = count;
     hk_back_exit_set_armed(0);
     if(s_menu_index >= count)
-        s_menu_index = 0U;
+        menu_set_index(0U);
     if(count == 0U)
     {
         menu_draw_chrome_if_ready("NO APPS");
@@ -257,9 +265,11 @@ uint8_t shell_open_shortcut(const char *name, const hk_input_snapshot_t *input)
         const char *shortcut = s_items[index].shortcut;
         if(shortcut && strcmp(shortcut, name) == 0)
         {
+            uint8_t column = index == s_menu_index ? s_menu_column : index % MENU_GRID_COLS;
             printf("[MENU] run %s\r\n", shortcut);
             uint8_t opened = s_owner_hooks.open_shortcut(shortcut, input);
             s_menu_index = index;
+            s_menu_column = column;
             return opened;
         }
     }
@@ -295,9 +305,9 @@ void menu_select_delta(int8_t delta)
 
     uint8_t previous = s_menu_index;
     if(delta < 0)
-        s_menu_index = s_menu_index == 0 ? count - 1 : s_menu_index - 1;
+        menu_set_index(previous == 0U ? count - 1U : previous - 1U);
     else if(delta > 0)
-        s_menu_index = (uint8_t)((s_menu_index + 1) % count);
+        menu_set_index((uint8_t)((previous + 1U) % count));
 
     if(previous != s_menu_index)
     {
@@ -314,7 +324,12 @@ void menu_select_vertical(void)
     if(count == 0U)
         return;
     uint8_t previous = s_menu_index;
-    s_menu_index = (uint8_t)((s_menu_index + MENU_GRID_COLS) % count);
+    uint8_t row_start = (previous / MENU_GRID_COLS + 1U) * MENU_GRID_COLS;
+    if(row_start >= count)
+        row_start = 0U;
+    uint8_t target = row_start + s_menu_column;
+    /* Clamp the selection on a short row and keep the requested column. */
+    s_menu_index = target < count ? target : count - 1U;
     if(previous != s_menu_index)
     {
         menu_draw_selection(previous);
@@ -338,7 +353,7 @@ void menu_tick(const hk_input_snapshot_t *input)
 {
     uint32_t buttons = input->state;
 
-    if(hk_screen_get() != SCREEN_MENU)
+    if(hk_screen_get() != SCREEN_MENU || (buttons & BUTTON_BACK))
     {
         menu_repeat_reset();
         return;

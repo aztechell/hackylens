@@ -78,6 +78,11 @@ The firmware's UART screenshot protocol captured these images directly from the
 
 `POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 
+In the launcher, **BACK** moves down one row and wraps from the last row to the
+first. When the next row is shorter, it selects that row's last icon and returns
+to the original column on the following move. **LEFT** and **RIGHT** set a new
+column.
+
 Open **SETTINGS → Menu Order** to rearrange the launcher icons, including pinned
 MicroPython scripts. Select an icon with **LEFT** or **RIGHT**, press **OK** to
 pick it up, move it, then press **OK** again to save its position. Hold **LEFT**
