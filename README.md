@@ -78,6 +78,12 @@ The firmware's UART screenshot protocol captured these images directly from the
 
 `POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 
+Open **SETTINGS → Menu Order** to rearrange the launcher icons, including pinned
+MicroPython scripts. Select an icon with **LEFT** or **RIGHT**, press **OK** to
+pick it up, move it, then press **OK** again to save its position. Hold **LEFT**
+or **RIGHT** to keep moving one position at a time at a steady pace. **BACK**
+cancels a move. The order is saved across restarts.
+
 Maix Cube adds `RECORDER` for recording to a FAT32 microSD card and playing
 recordings. Its `FILES` app also plays compatible WAV files from the card.
 See the [Cube audio controls](docs/MAIX_CUBE.md#recorder-and-wav-playback).

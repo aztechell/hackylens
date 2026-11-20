@@ -7,7 +7,7 @@
 
 typedef enum
 {
-    ITEM_LED_SWITCH = 8,
+    ITEM_LED_SWITCH = SETTINGS_PAGE_MENU_ORDER + 1,
     ITEM_LED_BRIGHTNESS,
     ITEM_RGB_SWITCH,
     ITEM_BRIGHTNESS,
@@ -53,6 +53,7 @@ static const settings_menu_item_t root_items[] = {
     PAGE(SETTINGS_PAGE_CONNECTION, "Connection"),
     PAGE(SETTINGS_PAGE_STARTUP, "Startup"),
     PAGE(SETTINGS_PAGE_DEVICE, "Device"),
+    PAGE(SETTINGS_PAGE_MENU_ORDER, "Menu Order"),
     PAGE(SETTINGS_PAGE_SOUND, "Sound"),
 };
 
@@ -249,6 +250,7 @@ static uint8_t settings_app_format(void *context, uint16_t id, char *value, size
     case SETTINGS_PAGE_CONNECTION:
     case SETTINGS_PAGE_STARTUP:
     case SETTINGS_PAGE_DEVICE:
+    case SETTINGS_PAGE_MENU_ORDER:
     case SETTINGS_PAGE_RGB:
         label = ">";
         break;

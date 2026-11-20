@@ -22,6 +22,7 @@
 #endif
 #endif
 #include "../services/external_link_service.h"
+#include "../services/settings_app_data.h"
 #include "../services/settings_persistence.h"
 #include "../services/settings_service.h"
 #include "../storage/file_mount.h"
@@ -118,11 +119,26 @@ static uint8_t firmware_app_media_event(hk_sd_event_t event)
         app_runtime_integration_media(kind, generation) == HK_OK);
 }
 
+static uint8_t firmware_save_menu_order(const hk_menu_order_t *order)
+{
+    if(!settings_set_menu_order(order))
+        return 0U;
+    settings_mark_dirty(1U);
+    return 1U;
+}
+
 void firmware_startup(void)
 {
+#if HK_ENABLE_APP_MICROPYTHON
+    _Static_assert(USERFS_PIN_MAX <= HK_MENU_SHORTCUT_CAPACITY &&
+                   USERFS_NAME_MAX < HK_MENU_ORDER_NAME_SIZE,
+                   "Launcher order storage must fit every script shortcut");
+#endif
     static const hk_menu_owner_hooks_t owner_hooks = {
         .enter = firmware_app_enter,
         .exit = firmware_app_exit,
+        .read_order = settings_menu_order,
+        .write_order = firmware_save_menu_order,
 #if HK_ENABLE_APP_MICROPYTHON
         .shortcut_count = userfs_pin_count,
         .shortcut_name = userfs_pin_name,

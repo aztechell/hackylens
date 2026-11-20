@@ -61,6 +61,7 @@ settings_payload_t settings_payload_encode(const settings_snapshot_t *snapshot)
     memcpy(payload.app_data, snapshot->app_data, sizeof(payload.app_data));
     memcpy(payload.tag_distance, snapshot->tag_distance, sizeof(payload.tag_distance));
     payload.object_disabled_classes = snapshot->object_disabled_classes;
+    payload.menu_order = snapshot->menu_order;
     payload.autostart_id = hk_app_autostart_id_is_persistable(
                                snapshot->autostart_id) ?
                            snapshot->autostart_id : HK_AUTOSTART_OFF;
@@ -94,6 +95,7 @@ void settings_payload_decode(const settings_payload_t *payload, settings_snapsho
     memcpy(snapshot->app_data, payload->app_data, sizeof(snapshot->app_data));
     memcpy(snapshot->tag_distance, payload->tag_distance, sizeof(snapshot->tag_distance));
     snapshot->object_disabled_classes = payload->object_disabled_classes;
+    snapshot->menu_order = payload->menu_order;
     snapshot->autostart_id = hk_app_autostart_id_is_persistable(
                                  payload->autostart_id) ?
                              payload->autostart_id : HK_AUTOSTART_OFF;

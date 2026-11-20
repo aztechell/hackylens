@@ -12,6 +12,8 @@ typedef struct
     uint8_t (*shortcut_count)(void);
     const char *(*shortcut_name)(uint8_t index);
     uint8_t (*open_shortcut)(const char *name, const hk_input_snapshot_t *input);
+    const hk_menu_order_t *(*read_order)(void);
+    uint8_t (*write_order)(const hk_menu_order_t *order);
 } hk_menu_owner_hooks_t;
 
 void menu_owner_hooks_set(const hk_menu_owner_hooks_t *hooks);

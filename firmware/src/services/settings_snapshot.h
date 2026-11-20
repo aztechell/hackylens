@@ -5,6 +5,7 @@
 
 #include "hk_config.h"
 #include "../config/settings_config.h"
+#include "../core/hk_menu_order.h"
 
 #if HK_ENABLE_CAMERA_FEATURE
 #include "camera_persist_settings.h"
@@ -32,6 +33,7 @@ typedef struct
     uint8_t ui_color;
     uint8_t tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
     uint32_t object_disabled_classes;
+    hk_menu_order_t menu_order;
 } settings_snapshot_t;
 
 void settings_snapshot_capture(settings_snapshot_t *snapshot);

@@ -14,6 +14,7 @@
 
 static uint8_t s_menu_index;
 static uint8_t s_rendered_count;
+static hk_menu_item_t s_items[HK_MENU_ORDER_CAPACITY];
 static const hk_app_t *s_active_app;
 static uint32_t s_menu_repeat_button;
 static uint8_t s_menu_repeat_ticks;
@@ -42,22 +43,103 @@ static void menu_draw_title_if_ready(const char *title)
 
 static uint8_t menu_item_count(void)
 {
-    return MENU_ITEM_COUNT + (s_owner_hooks.shortcut_count ?
-           s_owner_hooks.shortcut_count() : 0U);
+    unsigned count = MENU_ITEM_COUNT + (s_owner_hooks.shortcut_count ?
+                     s_owner_hooks.shortcut_count() : 0U);
+    return count <= HK_MENU_ORDER_CAPACITY ? (uint8_t)count : HK_MENU_ORDER_CAPACITY;
 }
 
-static const char *menu_shortcut_name(uint8_t index)
+static uint8_t menu_item_kind(const hk_menu_item_t *item)
 {
-    return s_owner_hooks.shortcut_name ?
-           s_owner_hooks.shortcut_name(index - MENU_ITEM_COUNT) : NULL;
+    return item->app ? HK_MENU_ORDER_APP : HK_MENU_ORDER_SHORTCUT;
+}
+
+static const char *menu_item_key(const hk_menu_item_t *item)
+{
+    return item->app ? item->app->id : item->shortcut;
+}
+
+uint8_t hk_menu_get_items(hk_menu_item_t items[HK_MENU_ORDER_CAPACITY])
+{
+    hk_menu_item_t available[HK_MENU_ORDER_CAPACITY] = {0};
+    uint8_t used[HK_MENU_ORDER_CAPACITY] = {0};
+    const hk_menu_order_t *order = s_owner_hooks.read_order ?
+                                   s_owner_hooks.read_order() : NULL;
+    uint8_t count = menu_item_count();
+    uint8_t filled = 0U;
+
+    for(uint8_t i = 0; i < count; i++)
+    {
+        if(i < MENU_ITEM_COUNT)
+            available[i].app = g_menu_items[i];
+        else if(s_owner_hooks.shortcut_name)
+            available[i].shortcut = s_owner_hooks.shortcut_name(i - MENU_ITEM_COUNT);
+    }
+    for(uint8_t i = 0; order && i < HK_MENU_ORDER_CAPACITY && order->keys[i].kind; i++)
+    {
+        const hk_menu_order_key_t *key = &order->keys[i];
+        for(uint8_t index = 0; index < count; index++)
+        {
+            const char *name = menu_item_key(&available[index]);
+            if(used[index] || !name || key->kind != menu_item_kind(&available[index]) ||
+               strncmp(key->name, name, sizeof(key->name)) != 0)
+                continue;
+            used[index] = 1U;
+            items[filled++] = available[index];
+            break;
+        }
+    }
+    for(uint8_t index = 0; index < count; index++)
+        if(!used[index])
+            items[filled++] = available[index];
+    return filled;
+}
+
+static void menu_select_app(const hk_app_t *app)
+{
+    if(!app)
+        return;
+    for(uint8_t i = 0; i < s_rendered_count; i++)
+    {
+        if(s_items[i].app == app)
+        {
+            s_menu_index = i;
+            return;
+        }
+    }
+}
+
+void hk_menu_save_order(const hk_menu_item_t *items, uint8_t count)
+{
+    hk_menu_order_t order = {0};
+
+    if(!s_owner_hooks.write_order || count > HK_MENU_ORDER_CAPACITY)
+        return;
+    for(uint8_t i = 0; i < count; i++)
+    {
+        const char *name = menu_item_key(&items[i]);
+        if(!name)
+            return;
+        size_t length = strlen(name);
+        if(length >= sizeof(order.keys[i].name))
+            return;
+        order.keys[i].kind = menu_item_kind(&items[i]);
+        memcpy(order.keys[i].name, name, length + 1U);
+    }
+    if(s_owner_hooks.write_order(&order))
+    {
+        s_rendered_count = hk_menu_get_items(s_items);
+        menu_select_app(s_active_app);
+    }
 }
 
 static const char *menu_item_title(uint8_t index)
 {
-    if(index < MENU_ITEM_COUNT)
-        return g_menu_items[index]->title;
-    const char *name = menu_shortcut_name(index);
-    return name ? name : "NO APPS";
+    if(index >= s_rendered_count)
+        return "NO APPS";
+    const hk_menu_item_t *item = &s_items[index];
+    if(item->app)
+        return item->app->title;
+    return item->shortcut ? item->shortcut : "NO APPS";
 }
 
 static void menu_draw_item(uint8_t index)
@@ -66,17 +148,14 @@ static void menu_draw_item(uint8_t index)
         return;
     uint8_t slot = index % MENU_PAGE_ITEMS;
     uint8_t selected = index == s_menu_index;
-    if(index < MENU_ITEM_COUNT)
+    const hk_menu_item_t *item = &s_items[index];
+    if(item->app)
     {
         if(s_menu_view.draw_item_at)
-            s_menu_view.draw_item_at(slot, g_menu_items[index], selected);
+            s_menu_view.draw_item_at(slot, item->app, selected);
     }
-    else if(s_menu_view.draw_shortcut_at)
-    {
-        const char *name = menu_shortcut_name(index);
-        if(name)
-            s_menu_view.draw_shortcut_at(slot, name, selected);
-    }
+    else if(item->shortcut && s_menu_view.draw_shortcut_at)
+        s_menu_view.draw_shortcut_at(slot, item->shortcut, selected);
 }
 
 static void menu_draw_selection(uint8_t previous)
@@ -103,7 +182,7 @@ const hk_app_t *hk_menu_active_app(void)
 
 void menu_render(void)
 {
-    uint8_t count = menu_item_count();
+    uint8_t count = hk_menu_get_items(s_items);
     s_rendered_count = count;
     hk_back_exit_set_armed(0);
     if(s_menu_index >= count)
@@ -143,17 +222,10 @@ void shell_show_menu(void)
 
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
 {
-    uint8_t index;
-
     if(!app || !s_owner_hooks.enter)
         return 0U;
-    for(index = 0U; index < g_menu_item_count; index++)
-    {
-        if(g_menu_items[index] == app)
-            break;
-    }
-    if(index < g_menu_item_count)
-        s_menu_index = index;
+    s_rendered_count = hk_menu_get_items(s_items);
+    menu_select_app(app);
     s_menu_repeat_button = 0;
     s_menu_repeat_ticks = 0;
     printf("[MENU] open %s\r\n", app->title);
@@ -179,9 +251,10 @@ uint8_t shell_open_shortcut(const char *name, const hk_input_snapshot_t *input)
 {
     if(!name || !s_owner_hooks.open_shortcut)
         return 0U;
-    for(uint8_t index = MENU_ITEM_COUNT, count = menu_item_count(); index < count; index++)
+    s_rendered_count = hk_menu_get_items(s_items);
+    for(uint8_t index = 0U; index < s_rendered_count; index++)
     {
-        const char *shortcut = menu_shortcut_name(index);
+        const char *shortcut = s_items[index].shortcut;
         if(shortcut && strcmp(shortcut, name) == 0)
         {
             printf("[MENU] run %s\r\n", shortcut);
@@ -200,12 +273,15 @@ void shell_open_selected(const hk_input_snapshot_t *input)
         menu_render();
         return;
     }
-    if(s_menu_index < MENU_ITEM_COUNT)
+    if(s_menu_index >= s_rendered_count)
+        return;
+    const hk_menu_item_t *item = &s_items[s_menu_index];
+    if(item->app)
     {
-        (void)shell_open_app(g_menu_items[s_menu_index], input);
+        (void)shell_open_app(item->app, input);
         return;
     }
-    if(!shell_open_shortcut(menu_shortcut_name(s_menu_index), input))
+    if(!shell_open_shortcut(item->shortcut, input))
         menu_render();
 }
 

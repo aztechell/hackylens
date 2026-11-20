@@ -2,12 +2,14 @@
 #include "../../core/hk_ui_colors.h"
 
 #include <hackylens/app/panel.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "settings_view_assets.h"
 
 static void draw_value(hk_app_panel_t *panel, uint16_t y, const char *title,
-                       const char *value, uint8_t selected, uint8_t editing)
+                       const char *value, uint8_t selected, uint8_t editing,
+                       uint8_t reserve_value)
 {
     const uint16_t width = panel->width - 28U;
     uint16_t value_width = (uint16_t)strlen(value) * HACKYLENS_FONT_W;
@@ -17,7 +19,7 @@ static void draw_value(hk_app_panel_t *panel, uint16_t y, const char *title,
     if(selected && !editing)
         hk_app_panel_fill(panel, 6U, y, panel->width - 12U,
                           SETTINGS_MENU_ROW_H - 3U, hk_ui_accent());
-    if(value_width && title_width + value_width + HACKYLENS_FONT_W > width)
+    if(!reserve_value && value_width && title_width + value_width + HACKYLENS_FONT_W > width)
         value_width = title_width + HACKYLENS_FONT_W < width ?
             (uint16_t)(width - title_width - HACKYLENS_FONT_W) : 0U;
     const uint16_t gap = value_width ? HACKYLENS_FONT_W : 0U;
@@ -59,12 +61,44 @@ static void draw_rgb_sample(hk_app_panel_t *panel, const settings_menu_session_t
     hk_app_panel_fill(panel, 16U, 153U, panel->width - 32U, 48U, color);
 }
 
+static void draw_menu_order(hk_app_panel_t *panel, const settings_order_editor_t *order)
+{
+    const uint16_t width = panel->width - 28U;
+    const uint16_t hint_y = SETTINGS_MENU_ROW_Y0 +
+                            SETTINGS_ORDER_VISIBLE_ROWS * SETTINGS_MENU_ROW_H;
+
+    hk_app_panel_chrome(panel, "MENU ORDER");
+    for(uint8_t slot = 0; slot < SETTINGS_ORDER_VISIBLE_ROWS; slot++)
+    {
+        uint8_t index = order->top + slot;
+        if(index >= order->count)
+            break;
+        const hk_menu_item_t *item = &order->items[index];
+        const char *title = item->app ? item->app->title : item->shortcut;
+        uint8_t selected = index == order->index;
+        uint8_t moving = selected && order->moving;
+        char position[12];
+
+        snprintf(position, sizeof(position), moving ? "<%u>" : "%u", index + 1U);
+        draw_value(panel, SETTINGS_MENU_ROW_Y0 + slot * SETTINGS_MENU_ROW_H,
+                   title ? title : "", position, selected, moving, 1U);
+    }
+    hk_app_panel_label(panel, 14U, hint_y, width,
+                       order->moving ? "OK Place" : "OK Move",
+                       hk_ui_accent(), HK_PANEL_CENTER);
+}
+
 hk_result_t settings_view_render(hk_app_surface_t *surface, const settings_state_t *state)
 {
     if(!surface || !state || !state->menu.definition)
         return HK_ERR_INVALID_ARGUMENT;
     const settings_menu_session_t *menu = &state->menu;
     hk_app_panel_t panel = hk_app_panel_begin(surface);
+    if(state->page == SETTINGS_PAGE_MENU_ORDER)
+    {
+        draw_menu_order(&panel, &state->order);
+        return panel.result;
+    }
     hk_app_panel_chrome(&panel, menu->definition->title);
 
     for(uint8_t slot = 0U; slot < SETTINGS_MENU_VISIBLE_ROWS; slot++)
@@ -78,12 +112,12 @@ hk_result_t settings_view_render(hk_app_surface_t *surface, const settings_state
             continue;
         if(state->page == SETTINGS_PAGE_STARTUP)
         {
-            draw_value(&panel, SETTINGS_MENU_ROW_Y0, title, "", selected, 0U);
+            draw_value(&panel, SETTINGS_MENU_ROW_Y0, title, "", selected, 0U, 0U);
             draw_startup_value(&panel, value, editing);
         }
         else
             draw_value(&panel, SETTINGS_MENU_ROW_Y0 + slot * SETTINGS_MENU_ROW_H,
-                       title, value, selected, editing);
+                       title, value, selected, editing, 0U);
     }
 
     if(state->page == SETTINGS_PAGE_RGB)

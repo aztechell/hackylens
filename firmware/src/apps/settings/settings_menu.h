@@ -19,6 +19,7 @@ typedef enum
     SETTINGS_PAGE_DEVICE,
     SETTINGS_PAGE_SOUND,
     SETTINGS_PAGE_RGB,
+    SETTINGS_PAGE_MENU_ORDER,
 } settings_page_t;
 
 enum

@@ -38,6 +38,7 @@ static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
 static uint8_t g_tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
 static uint32_t g_object_disabled_classes;
+static hk_menu_order_t g_menu_order;
 static uint8_t g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
 static uint8_t g_ui_color = HK_UI_COLOR_GREEN;
 
@@ -97,6 +98,19 @@ uint32_t settings_object_disabled_classes(void)
 void settings_set_object_disabled_classes(uint32_t mask)
 {
     g_object_disabled_classes = mask;
+}
+
+const hk_menu_order_t *settings_menu_order(void)
+{
+    return &g_menu_order;
+}
+
+uint8_t settings_set_menu_order(const hk_menu_order_t *order)
+{
+    if(memcmp(&g_menu_order, order, sizeof(g_menu_order)) == 0)
+        return 0U;
+    g_menu_order = *order;
+    return 1U;
 }
 
 uint8_t settings_led_enabled(void)
@@ -264,6 +278,7 @@ void settings_defaults(void)
     memset(g_app_data, 0, sizeof(g_app_data));
     memset(g_tag_distance, 0, sizeof(g_tag_distance));
     g_object_disabled_classes = 0U;
+    memset(&g_menu_order, 0, sizeof(g_menu_order));
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
 #endif
@@ -289,6 +304,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     memcpy(snapshot->app_data, g_app_data, sizeof(snapshot->app_data));
     memcpy(snapshot->tag_distance, g_tag_distance, sizeof(snapshot->tag_distance));
     snapshot->object_disabled_classes = g_object_disabled_classes;
+    snapshot->menu_order = g_menu_order;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
@@ -316,6 +332,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     memcpy(g_app_data, snapshot->app_data, sizeof(g_app_data));
     memcpy(g_tag_distance, snapshot->tag_distance, sizeof(g_tag_distance));
     g_object_disabled_classes = snapshot->object_disabled_classes;
+    g_menu_order = snapshot->menu_order;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif

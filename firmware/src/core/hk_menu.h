@@ -2,6 +2,13 @@
 #define HK_MENU_H
 
 #include "hk_app.h"
+#include "hk_menu_order.h"
+
+typedef struct
+{
+    const hk_app_t *app;
+    const char *shortcut;
+} hk_menu_item_t;
 
 typedef struct
 {
@@ -15,6 +22,8 @@ typedef struct
 void menu_view_set(const hk_menu_view_t *view);
 uint8_t hk_menu_index_get(void);
 const hk_app_t *hk_menu_active_app(void);
+uint8_t hk_menu_get_items(hk_menu_item_t items[HK_MENU_ORDER_CAPACITY]);
+void hk_menu_save_order(const hk_menu_item_t *items, uint8_t count);
 void menu_render(void);
 void shell_show_menu(void);
 uint8_t shell_open_app(const hk_app_t *app, const hk_input_snapshot_t *input);

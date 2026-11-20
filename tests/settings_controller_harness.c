@@ -24,6 +24,11 @@ enum
     ITEM_COUNT,
 };
 
+uint8_t hk_menu_get_items(hk_menu_item_t items[HK_MENU_ORDER_CAPACITY])
+{ (void)items; return 0U; }
+void hk_menu_save_order(const hk_menu_item_t *items, uint8_t count)
+{ (void)items; (void)count; }
+
 static int32_t s_values[ITEM_COUNT];
 static unsigned s_commits;
 static unsigned s_view_calls;
@@ -161,6 +166,58 @@ const settings_menu_definition_t *settings_app_startup_choices(settings_startup_
     return NULL;
 }
 
+static int test_order_repeat(void)
+{
+    settings_state_t state;
+    settings_controller_reset(&state, &s_definition);
+    state.page = SETTINGS_PAGE_MENU_ORDER;
+    state.order.count = HK_MENU_ORDER_CAPACITY;
+    state.order.items[0].shortcut = "pinned.py";
+
+    hk_input_event_t event = press(HK_INPUT_BUTTON_OK);
+    settings_controller_handle_input(&state, &event);
+    event = press(HK_INPUT_BUTTON_RIGHT);
+    settings_controller_handle_input(&state, &event);
+    CHECK(state.order.index == 1U);
+    for(uint8_t tick = 1U; tick < SETTINGS_MENU_REPEAT_INITIAL_TICKS; tick++)
+        settings_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    CHECK(state.order.index == 1U);
+    settings_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    CHECK(state.order.index == 2U);
+
+    for(uint8_t index = 3U; index < state.order.count; index++)
+    {
+        for(uint8_t tick = 1U; tick < SETTINGS_MENU_REPEAT_NEXT_TICKS; tick++)
+            settings_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+        CHECK(state.order.index == index - 1U);
+        settings_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+        CHECK(state.order.index == index);
+        CHECK(state.order.items[index].shortcut != NULL);
+    }
+    CHECK(state.order.top == state.order.count - SETTINGS_ORDER_VISIBLE_ROWS);
+    state.dirty = 0U;
+    for(uint8_t tick = 0U; tick < SETTINGS_MENU_REPEAT_NEXT_TICKS * 2U; tick++)
+        settings_controller_tick(&state, HK_INPUT_BUTTON_RIGHT);
+    CHECK(state.order.index == state.order.count - 1U && !state.dirty);
+
+    event = press(HK_INPUT_BUTTON_LEFT);
+    settings_controller_handle_input(&state, &event);
+    for(uint8_t tick = 0U; tick < SETTINGS_MENU_REPEAT_INITIAL_TICKS; tick++)
+        settings_controller_tick(&state, HK_INPUT_BUTTON_LEFT);
+    CHECK(state.order.index == state.order.count - 3U);
+    settings_controller_tick(&state, 0U);
+    for(uint8_t tick = 0U; tick < SETTINGS_MENU_REPEAT_INITIAL_TICKS * 2U; tick++)
+        settings_controller_tick(&state, 0U);
+    CHECK(state.order.index == state.order.count - 3U);
+
+    event = press(HK_INPUT_BUTTON_BACK);
+    settings_controller_handle_input(&state, &event);
+    settings_controller_tick(&state, HK_INPUT_BUTTON_LEFT);
+    CHECK(!state.order.moving && state.order.index == 0U && state.order.top == 0U);
+    CHECK(strcmp(state.order.items[0].shortcut, "pinned.py") == 0);
+    return 0;
+}
+
 int main(void)
 {
     settings_state_t state;
@@ -247,6 +304,7 @@ int main(void)
     settings_controller_handle_input(&state, &event);
     CHECK(s_values[ITEM_RANGE] == 3 && s_commits == 2U);
 
-    printf("SETTINGS_CONTROLLER_OK nav=1 change=1 save=1 reopen=1\n");
+    CHECK(test_order_repeat() == 0);
+    printf("SETTINGS_CONTROLLER_OK nav=1 change=1 save=1 reopen=1 repeat=1\n");
     return 0;
 }

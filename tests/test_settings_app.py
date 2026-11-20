@@ -64,7 +64,7 @@ class SettingsAppTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "SETTINGS_CONTROLLER_OK nav=1 change=1 save=1 reopen=1",
+            "SETTINGS_CONTROLLER_OK nav=1 change=1 save=1 reopen=1 repeat=1",
             result.stdout,
         )
 
@@ -85,6 +85,8 @@ class SettingsAppTests(unittest.TestCase):
                     "-Wall",
                     "-Wextra",
                     "-Werror",
+                    "-DHK_FAKE_DISPLAY_WIDTH=240",
+                    "-DHK_FAKE_DISPLAY_HEIGHT=240",
                     '-DHACKYLENS_VERSION="host"',
                     f"-I{ROOT / 'sdk' / 'include'}",
                     f"-I{ROOT / 'firmware' / 'include'}",

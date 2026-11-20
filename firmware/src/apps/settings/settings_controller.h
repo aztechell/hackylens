@@ -4,11 +4,32 @@
 #include <hackylens/app.h>
 
 #include "settings_menu.h"
+#include "../../core/hk_menu.h"
+#include "../../config/settings_menu_layout.h"
+
+#define SETTINGS_ORDER_VISIBLE_ROWS (SETTINGS_MENU_VISIBLE_ROWS - 1U)
+
+typedef struct
+{
+    hk_menu_item_t items[HK_MENU_ORDER_CAPACITY];
+    char shortcut_names[HK_MENU_SHORTCUT_CAPACITY][HK_MENU_ORDER_NAME_SIZE];
+    uint32_t repeat_button;
+    uint8_t count;
+    uint8_t index;
+    uint8_t top;
+    uint8_t original_index;
+    uint8_t moving;
+    uint8_t repeat_ticks;
+} settings_order_editor_t;
 
 typedef struct
 {
     settings_menu_session_t menu;
-    settings_startup_choices_t startup;
+    union
+    {
+        settings_startup_choices_t startup;
+        settings_order_editor_t order;
+    };
     const hk_input_t *input;
     uint8_t close_requested;
     uint8_t dirty;

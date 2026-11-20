@@ -48,6 +48,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware/src/config'}",
                 f"-I{ROOT / 'sdk/include'}",
                 f"-I{ROOT / 'firmware/include'}",
+                f"-I{ROOT / 'firmware/assets'}",
                 f"-I{gen_board.board_config_include_dir(board)}",
                 str(ROOT / "tests/settings_autostart_persistence_harness.c"),
                 str(ROOT / "firmware/src/storage/settings_store.c"),
@@ -55,6 +56,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 str(ROOT / "firmware/src/services/settings_persistence.c"),
                 str(ROOT / "firmware/src/services/settings_service.c"),
                 str(ROOT / "firmware/src/apps/settings/settings_menu.c"),
+                str(ROOT / "firmware/src/apps/settings/settings_controller.c"),
                 str(ROOT / "firmware/src/apps/apriltag/apriltag_settings.c"),
                 str(ROOT / "firmware/src/apps/apriltag/apriltag_settings_menu.c"),
                 str(ROOT / "firmware/src/apps/object_detect/object_detect_labels.c"),
@@ -63,6 +65,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 str(ROOT / "firmware/src/services/object_detect_postprocess.c"),
                 str(ROOT / "firmware/src/controllers/settings_menu_controller.c"),
                 str(ROOT / "firmware/src/core/hk_binary.c"),
+                str(ROOT / "firmware/src/core/hk_menu.c"),
                 str(ROOT / "firmware/src/core/hk_ui_colors.c"),
                 "-lm",
                 "-o", str(executable),
@@ -74,7 +77,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
             subprocess.run([str(executable), "--legacy-focal"], check=True, timeout=30)
             subprocess.run([str(executable), "--unset-focal"], check=True, timeout=30)
         self.assertIn(
-            "SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=156",
+            "SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=1716",
             result.stdout,
         )
 

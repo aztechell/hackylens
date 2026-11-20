@@ -11,7 +11,9 @@
 #include "../firmware/src/services/camera_session_preferences.h"
 #include "../firmware/src/services/object_detect_postprocess.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
+#include "../firmware/src/apps/settings/settings_controller.h"
 #include "../firmware/src/core/hk_ui_colors.h"
+#include "../firmware/src/core/hk_menu_runtime.h"
 #include "../firmware/src/core/hk_app_registry.h"
 #include "../firmware/src/core/hk_binary.h"
 #include "../firmware/src/services/settings_payload_codec.h"
@@ -66,6 +68,58 @@ typedef struct
 
 static uint8_t s_flash[2][SETTINGS_FLASH_SLOT_SIZE];
 static fat32_usage_t s_usage;
+static const hk_app_t s_camera = {.id = "camera", .title = "CAMERA"};
+static const hk_app_t s_qr = {.id = "qr-camera", .title = "QR-CAMERA"};
+static const hk_app_t s_files = {.id = "files", .title = "FILES"};
+static const hk_app_t s_terminal = {.id = "terminal", .title = "TERMINAL"};
+static const hk_app_t s_settings = {.id = "settings", .title = "SETTINGS"};
+static const hk_app_t s_power = {.id = "power", .title = "POWER"};
+const hk_app_t *const g_menu_items[] = {
+    &s_camera, &s_qr, &s_files, &s_terminal, &s_settings, &s_power,
+};
+const uint8_t g_menu_item_count = sizeof(g_menu_items) / sizeof(g_menu_items[0]);
+static screen_t s_screen;
+static const char *s_pin;
+static const char *s_drawn_first;
+static const hk_app_t *s_opened_app;
+static const char *s_opened_pin;
+
+void hk_back_exit_set_armed(uint8_t armed) { (void)armed; }
+void hk_screen_set(screen_t screen) { s_screen = screen; }
+screen_t hk_screen_get(void) { return s_screen; }
+const hk_app_t *hk_app_for_id(const char *id)
+{
+    for(uint8_t i = 0; i < g_menu_item_count; i++)
+        if(strcmp(id, g_menu_items[i]->id) == 0)
+            return g_menu_items[i];
+    return NULL;
+}
+static uint8_t menu_pin_count(void) { return s_pin != NULL; }
+static const char *menu_pin_name(uint8_t index) { return index == 0U ? s_pin : NULL; }
+static uint8_t menu_open_pin(const char *name, const hk_input_snapshot_t *input)
+{
+    (void)input;
+    s_opened_pin = name;
+    return 1U;
+}
+static uint8_t menu_open_app(const hk_app_t *app, const hk_input_snapshot_t *input)
+{
+    (void)input;
+    s_opened_app = app;
+    return 1U;
+}
+static void menu_draw_app(uint8_t slot, const hk_app_t *app, uint8_t selected)
+{
+    (void)selected;
+    if(slot == 0U)
+        s_drawn_first = app->title;
+}
+static void menu_draw_pin(uint8_t slot, const char *name, uint8_t selected)
+{
+    (void)selected;
+    if(slot == 0U)
+        s_drawn_first = name;
+}
 
 uint8_t hk_app_autostart_count(void) { return 0U; }
 const hk_app_t *hk_app_autostart_at(uint8_t index) { (void)index; return NULL; }
@@ -120,6 +174,89 @@ static void press(settings_menu_session_t *menu, uint32_t button)
 {
     const hk_input_snapshot_t input = {button, button, button};
     (void)settings_menu_handle_input(menu, &input);
+}
+
+static void settings_press(settings_state_t *state, uint32_t button)
+{
+    const hk_input_event_t event = {.state = button, .pressed = button, .changed = button};
+    settings_controller_handle_input(state, &event);
+}
+
+static uint8_t menu_write_order(const hk_menu_order_t *order)
+{
+    if(!settings_set_menu_order(order))
+        return 0U;
+    settings_mark_dirty(1U);
+    return 1U;
+}
+
+static int test_menu_order(void)
+{
+    const hk_menu_owner_hooks_t owner = {.enter = menu_open_app,
+        .shortcut_count = menu_pin_count, .shortcut_name = menu_pin_name,
+        .open_shortcut = menu_open_pin, .read_order = settings_menu_order,
+        .write_order = menu_write_order};
+    const hk_menu_view_t view = {.draw_item_at = menu_draw_app, .draw_shortcut_at = menu_draw_pin};
+    settings_state_t state;
+    hk_menu_item_t items[HK_MENU_ORDER_CAPACITY];
+    uint8_t count = g_menu_item_count + 1U;
+
+    memset(s_flash, 0xFF, sizeof(s_flash));
+    settings_storage_init();
+    s_pin = "tracker.py";
+    menu_owner_hooks_set(&owner);
+    menu_view_set(&view);
+    menu_render();
+    CHECK(strcmp(s_drawn_first, "CAMERA") == 0);
+    CHECK(shell_open_app(&s_settings, NULL));
+    settings_controller_reset(&state, settings_app_menu_definition());
+    settings_press(&state, BUTTON_LEFT);
+    settings_press(&state, BUTTON_OK);
+    CHECK(state.page == SETTINGS_PAGE_MENU_ORDER && state.order.count == count);
+
+    settings_press(&state, BUTTON_LEFT);
+    CHECK(state.order.index == count - 1U && state.order.top > 0U);
+    settings_press(&state, BUTTON_OK);
+    for(uint8_t i = 0; i < count; i++)
+        settings_press(&state, BUTTON_LEFT);
+    CHECK(state.order.index == 0U && state.order.top == 0U);
+    CHECK(hk_menu_get_items(items) == count && items[0].app == &s_camera);
+    settings_press(&state, BUTTON_OK);
+    CHECK(hk_menu_get_items(items) == count && strcmp(items[0].shortcut, s_pin) == 0);
+
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_BACK);
+    CHECK(state.order.index == 1U && state.order.items[1].app == &s_camera);
+    CHECK(hk_menu_get_items(items) == count && items[1].app == &s_camera);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_BACK);
+    CHECK(state.page == SETTINGS_PAGE_ROOT && !state.close_requested);
+    settings_controller_exit(&state);
+    shell_show_menu();
+    CHECK(strcmp(s_drawn_first, s_pin) == 0 && hk_menu_index_get() == 5U);
+    for(uint8_t i = 0; i < 5U; i++)
+        menu_select_delta(-1);
+    shell_open_selected(NULL);
+    CHECK(s_opened_pin && strcmp(s_opened_pin, s_pin) == 0);
+    menu_select_delta(1);
+    shell_open_selected(NULL);
+    CHECK(s_opened_app == &s_qr);
+
+    settings_storage_tick();
+    settings_storage_tick();
+    settings_storage_init();
+    CHECK(hk_menu_get_items(items) == count && items[2].app == &s_camera);
+    CHECK(items[1].app == &s_qr && strcmp(items[0].shortcut, s_pin) == 0);
+    s_pin = NULL;
+    CHECK(hk_menu_get_items(items) == count - 1U && items[0].app == &s_qr);
+    s_pin = "new.py";
+    CHECK(hk_menu_get_items(items) == count && items[0].app == &s_qr);
+    CHECK(items[count - 1U].shortcut && strcmp(items[count - 1U].shortcut, s_pin) == 0);
+    return 0;
 }
 
 static settings_menu_event_t object_press(settings_menu_session_t *menu, uint32_t button)
@@ -499,6 +636,16 @@ int main(int argc, char **argv)
     CHECK(output.tag_distance[0] == 1U && output.tag_distance[21] == 37U);
     CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
 
+    settings_record_t v9 = v8;
+    v9.version = SETTINGS_STORAGE_V9_VERSION;
+    v9.payload_size = 140U;
+    v9.payload = payload;
+    wr32((uint8_t *)&v9 + 152U, crc32_update(0U, (const uint8_t *)&v9, 12U + v9.payload_size));
+    memcpy(s_flash[0], &v9, 156U);
+    settings_storage_init();
+    CHECK(settings_object_disabled_classes() == (UINT32_C(1) << 19U));
+    CHECK(settings_menu_order()->keys[0].kind == 0U);
+
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&v4, 0, sizeof(v4));
     v4.magic = SETTINGS_MAGIC;
@@ -520,6 +667,7 @@ int main(int argc, char **argv)
     CHECK(test_tag_focal_editor() == 0);
     CHECK(settings_autostart_id() == 10U);
     CHECK(test_object_classes() == 0);
+    CHECK(test_menu_order() == 0);
 
     printf("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=%u\n",
            (unsigned)sizeof(settings_record_t));

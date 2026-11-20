@@ -5,6 +5,7 @@
 #include "app_runtime_host_support.h"
 #include "../firmware/src/apps/settings/settings_app.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
+#include "../firmware/src/core/hk_menu.h"
 #include "../firmware/src/storage/fat32_volume.h"
 
 #define CHECK(condition)                                                     \
@@ -20,14 +21,36 @@
 enum
 {
     ITEM_TEXT = 0,
+    ITEM_MENU_ORDER,
     ITEM_COUNT,
 };
+
+static const hk_app_t s_camera = {.id = "camera", .title = "CAMERA"};
+static const hk_app_t s_files = {.id = "files", .title = "FILES"};
+static const hk_app_t *s_order_first;
+
+uint8_t hk_menu_get_items(hk_menu_item_t items[HK_MENU_ORDER_CAPACITY])
+{
+    items[0] = (hk_menu_item_t){.app = &s_camera};
+    items[1] = (hk_menu_item_t){.app = &s_files};
+    return 2U;
+}
+void hk_menu_save_order(const hk_menu_item_t *items, uint8_t count)
+{
+    if(count == 2U)
+        s_order_first = items[0].app;
+}
 
 static const settings_menu_item_t s_items[] = {
     {
         .id = ITEM_TEXT,
         .title = "Version",
         .kind = SETTINGS_MENU_ITEM_TEXT,
+    },
+    [ITEM_MENU_ORDER] = {
+        .id = SETTINGS_PAGE_MENU_ORDER,
+        .title = "Menu Order",
+        .kind = SETTINGS_MENU_ITEM_ACTION,
     },
 };
 
@@ -123,6 +146,18 @@ int main(void)
 
     CHECK(dispatch_input(&host, HK_INPUT_BUTTON_RIGHT, &consumed) == 0);
     CHECK(consumed == 1U);
+    CHECK(hk_app_switch_active(switcher) == &app);
+
+    CHECK(dispatch_input(&host, HK_INPUT_BUTTON_OK, &consumed) == 0);
+    CHECK(hk_app_switch_poll(switcher, hk_app_runtime_host_now_us(&host)) == HK_OK);
+    CHECK(host.present_calls == 1U);
+    CHECK(dispatch_input(&host, HK_INPUT_BUTTON_OK, &consumed) == 0);
+    CHECK(dispatch_input(&host, HK_INPUT_BUTTON_RIGHT, &consumed) == 0);
+    CHECK(hk_app_switch_poll(switcher, hk_app_runtime_host_now_us(&host)) == HK_OK);
+    CHECK(host.present_calls == 2U);
+    CHECK(dispatch_input(&host, HK_INPUT_BUTTON_OK, &consumed) == 0);
+    CHECK(s_order_first == &s_files);
+    CHECK(dispatch_input(&host, HK_INPUT_BUTTON_BACK, &consumed) == 0);
     CHECK(hk_app_switch_active(switcher) == &app);
 
     CHECK(dispatch_input(&host, HK_INPUT_BUTTON_BACK, &consumed) == 0);
