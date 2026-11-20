@@ -313,9 +313,14 @@ static const char *settings_app_choice_label(void *context, uint16_t id, uint8_t
     uint8_t native_count = hk_app_autostart_count();
     if(index <= native_count)
         return hk_app_autostart_at(index - 1U)->title;
+#if HK_ENABLE_APP_MICROPYTHON
     const settings_startup_choices_t *choices = context;
     uint8_t pin_index = index - native_count - 1U;
     return choices && pin_index < choices->count ? choices->names[pin_index] : NULL;
+#else
+    (void)context;
+    return NULL;
+#endif
 }
 
 static void settings_app_committed(void *context, uint16_t id)

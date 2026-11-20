@@ -1,8 +1,13 @@
 #ifndef HK_SETTINGS_APP_MENU_H
 #define HK_SETTINGS_APP_MENU_H
 
+#ifndef HACKYLENS_VERSION
+#include "hk_config.h"
+#endif
 #include "../../controllers/settings_menu_controller.h"
+#if HK_ENABLE_APP_MICROPYTHON
 #include "../../storage/userfs.h"
+#endif
 
 typedef enum
 {
@@ -30,7 +35,9 @@ const settings_menu_definition_t *settings_app_page_definition(settings_page_t p
 typedef struct
 {
     settings_menu_definition_t definition;
+#if HK_ENABLE_APP_MICROPYTHON
     char names[USERFS_PIN_MAX][USERFS_NAME_MAX + 1U];
+#endif
     uint8_t count;
 } settings_startup_choices_t;
 
