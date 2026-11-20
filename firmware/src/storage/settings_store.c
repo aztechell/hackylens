@@ -178,12 +178,17 @@ static uint32_t settings_record_crc(const settings_record_t *record)
 static uint8_t settings_record_valid(const settings_record_t *record)
 {
     const size_t legacy_size = offsetof(settings_payload_t, tag_distance);
+    const size_t v8_size = offsetof(settings_payload_t, object_disabled_classes);
     const uint8_t *bytes = (const uint8_t *)record;
     if(record->magic != SETTINGS_MAGIC)
         return 0;
     if(record->version == SETTINGS_STORAGE_VERSION)
         return record->payload_size == sizeof(settings_payload_t) &&
                record->crc32 == settings_record_crc(record);
+    if(record->version == SETTINGS_STORAGE_V8_VERSION)
+        return record->payload_size == v8_size &&
+               rd32(bytes + offsetof(settings_record_t, payload) + v8_size) ==
+               settings_record_crc(record);
     if(((record->version == SETTINGS_STORAGE_V7_VERSION ||
          record->version == SETTINGS_STORAGE_V6_VERSION) &&
         record->payload_size == legacy_size) ||

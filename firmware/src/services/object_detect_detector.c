@@ -161,7 +161,7 @@ static void reset_detection_state(void)
     memset(shared_result_bank(1U), 0, sizeof(g_result_banks[1]));
 }
 
-static uint8_t finish_inference(void)
+static uint8_t finish_inference(uint32_t class_mask)
 {
     const uint8_t *output;
     size_t bytes;
@@ -191,7 +191,7 @@ static uint8_t finish_inference(void)
     bank->camera_sequence = g_inference_camera_sequence;
     decode_started_us = object_time_now_us();
     bank->count = object_detect_postprocess(
-        (const float *)output, bytes, g_confidence, g_nms,
+        (const float *)output, bytes, g_confidence, g_nms, class_mask,
         &g_workspace, bank->items, &bank->candidate_count, &bank->stats);
     uint8_t mapped_count = 0;
     for(uint8_t i = 0; i < bank->count; i++)
@@ -427,13 +427,13 @@ static uint8_t submit_input(void)
     return 1U;
 }
 
-void object_detect_detector_process_frame(uint32_t camera_sequence)
+void object_detect_detector_process_frame(uint32_t camera_sequence, uint32_t class_mask)
 {
     (void)camera_sequence;
     object_detect_detector_service_tick();
     if(!object_detect_detector_ready())
         return;
-    if(finish_inference() || ai_model_runtime_busy(&g_runtime))
+    if(finish_inference(class_mask) || ai_model_runtime_busy(&g_runtime))
     {
         g_busy_drop_count++;
         return;
@@ -456,7 +456,7 @@ hk_result_t object_detect_detector_poll_preview(void)
 {
     if(!object_detect_detector_ready())
         return HK_ERR_IO;
-    if(!finish_inference())
+    if(!finish_inference(OBJECT_DETECT_ALL_CLASSES))
         return HK_PENDING;
     return g_result == OBJECT_DETECT_LOAD_OK ? HK_OK : HK_ERR_IO;
 }

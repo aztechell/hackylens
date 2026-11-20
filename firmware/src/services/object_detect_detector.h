@@ -19,7 +19,7 @@ void object_detect_detector_service_tick(void);
 uint8_t object_detect_detector_ready(void);
 object_detect_load_result_t object_detect_detector_result(void);
 void object_detect_detector_attach_camera(void);
-void object_detect_detector_process_frame(uint32_t camera_sequence);
+void object_detect_detector_process_frame(uint32_t camera_sequence, uint32_t class_mask);
 void object_detect_detector_invalidate_results(void);
 void object_detect_detector_pause_capture(void);
 void object_detect_detector_resume_capture(void);

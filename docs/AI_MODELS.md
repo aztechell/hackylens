@@ -92,6 +92,13 @@ OBJECT DETECT requires:
 /hackylens.kmodels/object20/labels.txt
 ```
 
+Hold **OK** in OBJECT DETECT to open **OBJECT SETTINGS**, then open **Classes**.
+Use **LEFT** and **RIGHT** to move, and **OK** to toggle a class or activate
+**Enable All** or **Disable All**. Press **BACK** to return to OBJECT SETTINGS
+and again to resume detection. The selection is saved across restarts. By
+default all 20 classes are enabled. The LCD and External Link use the same
+selection, and MicroPython model inference continues to return all classes.
+
 Its pinned model is the official Kendryte nncase `20classes_yolo` example at
 commit `f92c085ec6355ae04258df5b76ec7570f784129d`:
 

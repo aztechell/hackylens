@@ -5,7 +5,11 @@
 #include "../firmware/src/config/input_config.h"
 #include "../firmware/src/apps/apriltag/apriltag_settings.h"
 #include "../firmware/src/apps/apriltag/apriltag_settings_menu.h"
+#include "../firmware/src/apps/object_detect/object_detect_labels.h"
+#include "../firmware/src/apps/object_detect/object_detect_settings.h"
+#include "../firmware/src/apps/object_detect/object_detect_settings_menu.h"
 #include "../firmware/src/services/camera_session_preferences.h"
+#include "../firmware/src/services/object_detect_postprocess.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
 #include "../firmware/src/core/hk_ui_colors.h"
 #include "../firmware/src/core/hk_app_registry.h"
@@ -90,6 +94,11 @@ void camera_session_preferences_override(const camera_session_preferences_t *pre
 }
 void apriltag_detector_set_refine_edges(uint8_t enabled) { (void)enabled; }
 void camera_light_apply(void) {}
+void object_detect_detector_set_thresholds(uint8_t confidence, uint8_t nms)
+{
+    (void)confidence;
+    (void)nms;
+}
 uint8_t apriltag_controller_arm_calibration(void) { return 0U; }
 uint8_t apriltag_controller_calibration_armed(void) { return 0U; }
 void apriltag_controller_cancel_calibration(void) {}
@@ -111,6 +120,100 @@ static void press(settings_menu_session_t *menu, uint32_t button)
 {
     const hk_input_snapshot_t input = {button, button, button};
     (void)settings_menu_handle_input(menu, &input);
+}
+
+static settings_menu_event_t object_press(settings_menu_session_t *menu, uint32_t button)
+{
+    const hk_input_snapshot_t input = {button, button, button};
+    return object_detect_settings_menu_handle_input(menu, &input);
+}
+
+static int test_object_classes(void)
+{
+    settings_menu_session_t menu = {0};
+    const char *title;
+    char value[24];
+    uint32_t selected = (UINT32_C(1) << 6U) | (UINT32_C(1) << 14U);
+    static float output[OBJECT_DETECT_OUTPUT_BYTES / sizeof(float)];
+    static object_detect_postprocess_workspace_t workspace;
+    object_detect_result_t results[OBJECT_DETECT_RESULT_MAX];
+
+    memset(s_flash, 0xFF, sizeof(s_flash));
+    settings_storage_init();
+    CHECK(settings_menu_open(&menu, object_detect_settings_menu_definition()));
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Classes") == 0 && strcmp(value, "20/20 >") == 0);
+    CHECK(object_press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(strcmp(menu.definition->title, "OBJECT CLASSES") == 0);
+    CHECK(menu.definition->item_count == OBJECT_DETECT_CLASS_COUNT + 2U);
+    for(uint8_t class_id = 0; class_id < OBJECT_DETECT_CLASS_COUNT; class_id++)
+    {
+        const settings_menu_item_t *item = &menu.definition->items[class_id + 2U];
+        CHECK(item->id == class_id && item->kind == SETTINGS_MENU_ITEM_TOGGLE);
+        CHECK(strcmp(item->title, object_detect_label(class_id)) == 0);
+        CHECK(settings_menu_display_value(&menu, class_id) == 1);
+    }
+
+    object_press(&menu, BUTTON_RIGHT);
+    CHECK(object_press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(object_detect_settings_class_mask() == 0U);
+    for(unsigned tick = 0; tick <= SETTINGS_SAVE_DELAY_TICKS; tick++)
+        settings_storage_tick();
+    settings_storage_init();
+    CHECK(object_detect_settings_class_mask() == 0U);
+
+    for(unsigned step = 0; step < 7U; step++)
+        object_press(&menu, BUTTON_RIGHT);
+    CHECK(menu.definition->items[menu.index].id == 6U);
+    object_press(&menu, BUTTON_OK);
+    for(unsigned step = 0; step < 8U; step++)
+        object_press(&menu, BUTTON_RIGHT);
+    CHECK(menu.definition->items[menu.index].id == 14U);
+    object_press(&menu, BUTTON_OK);
+    CHECK(object_detect_settings_class_mask() == selected);
+    CHECK(object_press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Classes") == 0 && strcmp(value, "2/20 >") == 0);
+    CHECK(object_press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
+    settings_menu_close(&menu);
+    CHECK(settings_storage_flush());
+    settings_storage_init();
+    CHECK(object_detect_settings_class_mask() == selected);
+
+    /* Nine strong cats fill the unfiltered output ahead of the car and person. */
+    const unsigned grid = OBJECT_DETECT_GRID_CELLS;
+    for(unsigned anchor = 0; anchor < OBJECT_DETECT_ANCHOR_COUNT; anchor++)
+    {
+        unsigned base = anchor * (OBJECT_DETECT_CLASS_COUNT + 5U) * grid;
+        for(unsigned cell = 0; cell < grid; cell++)
+            output[base + 4U * grid + cell] = -12.0f;
+    }
+    for(unsigned cell = 0; cell < 11U; cell++)
+    {
+        unsigned class_id = cell < 9U ? 7U : (cell == 9U ? 6U : 14U);
+        output[2U * grid + cell] = -1.0f;
+        output[3U * grid + cell] = -1.0f;
+        output[4U * grid + cell] = cell < 9U ? 8.0f : 5.0f;
+        output[(5U + class_id) * grid + cell] = 8.0f;
+    }
+    CHECK(object_detect_postprocess(output, sizeof(output), 50U, 20U,
+          OBJECT_DETECT_ALL_CLASSES, &workspace, results, NULL, NULL) == OBJECT_DETECT_RESULT_MAX);
+    for(uint8_t index = 0; index < OBJECT_DETECT_RESULT_MAX; index++)
+        CHECK(results[index].class_id == 7U);
+    CHECK(object_detect_postprocess(output, sizeof(output), 50U, 20U,
+          object_detect_settings_class_mask(), &workspace, results, NULL, NULL) == 2U);
+    CHECK(results[0].class_id == 6U && results[1].class_id == 14U);
+    CHECK(object_detect_postprocess(output, sizeof(output), 50U, 20U,
+          0U, &workspace, results, NULL, NULL) == 0U);
+
+    CHECK(settings_menu_open(&menu, object_detect_settings_menu_definition()));
+    object_press(&menu, BUTTON_OK);
+    object_press(&menu, BUTTON_OK);
+    CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
+    CHECK(settings_storage_flush());
+    settings_storage_init();
+    CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
+    return 0;
 }
 
 static int test_screen_and_device(void)
@@ -329,6 +432,8 @@ int main(int argc, char **argv)
     input.ui_color = HK_UI_COLOR_AMBER;
     input.tag_distance[0] = 1U;
     input.tag_distance[21] = 37U;
+    input.app_data[SETTINGS_APP_DATA_V2_SIZE] = 0xD2U;
+    input.object_disabled_classes = UINT32_C(1) << 19U;
     payload = settings_payload_encode(&input);
     CHECK(payload.autostart_id == 300U);
 
@@ -342,6 +447,7 @@ int main(int argc, char **argv)
     CHECK(output.audio_volume == 30U);
     CHECK(output.ui_color == HK_UI_COLOR_AMBER);
     CHECK(output.tag_distance[0] == 1U && output.tag_distance[21] == 37U);
+    CHECK(output.object_disabled_classes == (UINT32_C(1) << 19U));
     CHECK(output.auto_sleep_minutes == 0U);
 
     memset(s_flash, 0xFF, sizeof(s_flash));
@@ -378,6 +484,21 @@ int main(int argc, char **argv)
     settings_payload_decode(&loaded.payload, &output);
     CHECK(output.ui_color == HK_UI_COLOR_AMBER && output.tag_distance[0] == 0U);
 
+    settings_record_t v8 = v6;
+    v8.version = SETTINGS_STORAGE_V8_VERSION;
+    v8.payload_size = 136U;
+    v8.payload = payload;
+    wr32((uint8_t *)&v8 + 148U, crc32_update(0U, (const uint8_t *)&v8, 12U + v8.payload_size));
+    memcpy(s_flash[0], &v8, 152U);
+    settings_storage_init();
+    CHECK(settings_autostart_id() == 300U && settings_audio_volume() == 30U);
+    CHECK(settings_ui_color() == HK_UI_COLOR_AMBER);
+    settings_app_data_read(output.app_data);
+    settings_tag_distance_read(output.tag_distance);
+    CHECK(output.app_data[SETTINGS_APP_DATA_V2_SIZE] == 0xD2U);
+    CHECK(output.tag_distance[0] == 1U && output.tag_distance[21] == 37U);
+    CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
+
     memset(s_flash, 0xFF, sizeof(s_flash));
     memset(&v4, 0, sizeof(v4));
     v4.magic = SETTINGS_MAGIC;
@@ -398,7 +519,9 @@ int main(int argc, char **argv)
     CHECK(test_screen_and_device() == 0);
     CHECK(test_tag_focal_editor() == 0);
     CHECK(settings_autostart_id() == 10U);
+    CHECK(test_object_classes() == 0);
 
-    puts("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=152");
+    printf("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=%u\n",
+           (unsigned)sizeof(settings_record_t));
     return 0;
 }

@@ -310,6 +310,8 @@ session epochs prevent partial or
 pre-settings results from becoming visible. Boxes are composed before the
 single LCD present and published as the existing transport-neutral BLOCK
 format with class IDs `0..19`.
+The native app's saved class selection is applied before NMS and the eight-box
+limit, so the LCD overlay and the external link share the same filtered detections.
 
 Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log-sink lifecycle. The shared logging service exposes only a generic optional sink and remains independent of Terminal. Font selection remains in reserved feature bits inherited from the legacy settings payload, so old records and erased flash continue to decode as `TERMINAL_FONT_NORMAL`.
 
@@ -319,7 +321,8 @@ opaque app bytes remain unchanged: bytes `0..79` contain APRILTAG preferences
 and its 587-bit selected-ID map; OBJECT DETECT owns bytes `80..87`. The storage
 layer validates and migrates v1, v2, v3, and v4 records. V4 autostart values are
 zero-extended, so existing IDs `0..10` and all CAMERA, external-link, APRILTAG,
-and OBJECT data remain unchanged.
+and OBJECT data remain unchanged. V9 appends the OBJECT DETECT disabled-class
+mask. When loading a v8 or older record, all 20 classes start enabled.
 
 ## Architecture guard
 

@@ -28,6 +28,7 @@ typedef struct
     uint8_t audio_volume;
     uint8_t ui_color;
     uint8_t tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
+    uint32_t object_disabled_classes;
 } settings_payload_t;
 
 typedef struct
@@ -40,7 +41,7 @@ typedef struct
     uint32_t crc32;
 } settings_record_t;
 
-_Static_assert(sizeof(settings_payload_t) == 136U, "settings payload layout changed");
-_Static_assert(sizeof(settings_record_t) == 152U, "settings record layout changed");
+_Static_assert(sizeof(settings_payload_t) == 140U, "settings payload layout changed");
+_Static_assert(sizeof(settings_record_t) == 156U, "settings record layout changed");
 
 #endif

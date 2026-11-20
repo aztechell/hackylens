@@ -115,6 +115,7 @@ For an ARROW they are the start and end points. Coordinates use the `width` by
 publishes up to eight BLOCK items and clears them on app exit. OBJECT DETECT
 uses the VOC20 class ID `0..19` and reports
 confidence on the existing `0..1000` scale; the item layout is unchanged.
+OBJECT DETECT publishes only classes enabled in **OBJECT SETTINGS / Classes**.
 QR publishes a bounding BLOCK for a decoded code with ID and confidence set
 to zero. Its payload bytes are available through the
 [local C and MicroPython API](MICROPYTHON_API.md#vision-results).

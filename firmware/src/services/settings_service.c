@@ -37,6 +37,7 @@ static uint8_t g_qr_decode_rate = SETTINGS_QR_DECODE_RATE_DEFAULT;
 static hk_autostart_id_t g_autostart_id = HK_AUTOSTART_OFF;
 static uint8_t g_app_data[SETTINGS_APP_DATA_SIZE];
 static uint8_t g_tag_distance[SETTINGS_TAG_DISTANCE_BYTES];
+static uint32_t g_object_disabled_classes;
 static uint8_t g_audio_volume = SETTINGS_AUDIO_VOLUME_DEFAULT;
 static uint8_t g_ui_color = HK_UI_COLOR_GREEN;
 
@@ -86,6 +87,16 @@ void settings_tag_distance_read(uint8_t data[SETTINGS_TAG_DISTANCE_BYTES])
 void settings_tag_distance_write(const uint8_t data[SETTINGS_TAG_DISTANCE_BYTES])
 {
     memcpy(g_tag_distance, data, sizeof(g_tag_distance));
+}
+
+uint32_t settings_object_disabled_classes(void)
+{
+    return g_object_disabled_classes;
+}
+
+void settings_set_object_disabled_classes(uint32_t mask)
+{
+    g_object_disabled_classes = mask;
 }
 
 uint8_t settings_led_enabled(void)
@@ -252,6 +263,7 @@ void settings_defaults(void)
     settings_set_ui_color(HK_UI_COLOR_GREEN);
     memset(g_app_data, 0, sizeof(g_app_data));
     memset(g_tag_distance, 0, sizeof(g_tag_distance));
+    g_object_disabled_classes = 0U;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_defaults();
 #endif
@@ -276,6 +288,7 @@ void settings_snapshot_capture(settings_snapshot_t *snapshot)
     snapshot->autostart_id = g_autostart_id;
     memcpy(snapshot->app_data, g_app_data, sizeof(snapshot->app_data));
     memcpy(snapshot->tag_distance, g_tag_distance, sizeof(snapshot->tag_distance));
+    snapshot->object_disabled_classes = g_object_disabled_classes;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_get(&snapshot->camera);
 #endif
@@ -302,6 +315,7 @@ void settings_snapshot_apply(const settings_snapshot_t *snapshot)
     settings_set_autostart_id(snapshot->autostart_id);
     memcpy(g_app_data, snapshot->app_data, sizeof(g_app_data));
     memcpy(g_tag_distance, snapshot->tag_distance, sizeof(g_tag_distance));
+    g_object_disabled_classes = snapshot->object_disabled_classes;
 #if HK_ENABLE_CAMERA_FEATURE
     camera_service_persist_apply(&snapshot->camera);
 #endif

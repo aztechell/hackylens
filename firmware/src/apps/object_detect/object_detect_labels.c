@@ -3,10 +3,9 @@
 #include "../../services/object_detect_config.h"
 
 static const char *const g_labels[OBJECT_DETECT_CLASS_COUNT] = {
-    "aeroplane", "bicycle", "bird", "boat", "bottle",
-    "bus", "car", "cat", "chair", "cow",
-    "diningtable", "dog", "horse", "motorbike", "person",
-    "pottedplant", "sheep", "sofa", "train", "tvmonitor",
+#define CLASS_LABEL(class_id, label) [class_id] = label,
+    OBJECT_DETECT_VOC20_LABELS(CLASS_LABEL)
+#undef CLASS_LABEL
 };
 
 const char *object_detect_label(uint8_t class_id)

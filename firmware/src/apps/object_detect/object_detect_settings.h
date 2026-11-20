@@ -8,6 +8,8 @@
 void object_detect_settings_load(void);
 void object_detect_settings_apply_session(void);
 const object_detect_preferences_t *object_detect_settings_preferences(void);
+uint32_t object_detect_settings_class_mask(void);
+uint8_t object_detect_settings_set_class_mask(uint32_t mask);
 uint8_t object_detect_settings_set_confidence(uint8_t value);
 uint8_t object_detect_settings_set_nms(uint8_t value);
 uint8_t object_detect_settings_set_fps(uint8_t enabled);

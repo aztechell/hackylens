@@ -118,6 +118,22 @@ const object_detect_preferences_t *object_detect_settings_preferences(void)
     return &g_preferences;
 }
 
+uint32_t object_detect_settings_class_mask(void)
+{
+    return OBJECT_DETECT_ALL_CLASSES & ~settings_object_disabled_classes();
+}
+
+uint8_t object_detect_settings_set_class_mask(uint32_t mask)
+{
+    uint32_t disabled = OBJECT_DETECT_ALL_CLASSES & ~mask;
+
+    if(settings_object_disabled_classes() == disabled)
+        return 0U;
+    settings_set_object_disabled_classes(disabled);
+    settings_mark_dirty(0U);
+    return 1U;
+}
+
 uint8_t object_detect_settings_set_confidence(uint8_t value)
 {
     object_detect_settings_load();

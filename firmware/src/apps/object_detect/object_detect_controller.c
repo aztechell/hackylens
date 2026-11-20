@@ -99,7 +99,7 @@ static void object_consume_frame(const volatile uint16_t *pixels,
     (void)width;
     (void)height;
     (void)context;
-    object_detect_detector_process_frame(sequence);
+    object_detect_detector_process_frame(sequence, object_detect_settings_class_mask());
 }
 
 static void object_compose_overlay(camera_view_present_t *present,
@@ -212,7 +212,7 @@ uint8_t object_detect_controller_handle_buttons(
 {
     if(settings_menu_active(&g_settings_menu))
     {
-        if(settings_menu_handle_input(&g_settings_menu, input) ==
+        if(object_detect_settings_menu_handle_input(&g_settings_menu, input) ==
            SETTINGS_MENU_EVENT_CLOSE_REQUESTED)
         {
             settings_menu_close(&g_settings_menu);

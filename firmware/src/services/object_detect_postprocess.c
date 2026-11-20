@@ -120,6 +120,7 @@ uint8_t object_detect_postprocess(const float *output,
                                   size_t output_bytes,
                                   uint8_t confidence_percent,
                                   uint8_t nms_percent,
+                                  uint32_t class_mask,
                                   object_detect_postprocess_workspace_t *workspace,
                                   object_detect_result_t results[OBJECT_DETECT_RESULT_MAX],
                                   uint16_t *candidate_count,
@@ -224,7 +225,8 @@ uint8_t object_detect_postprocess(const float *output,
                     stats->top_cell = (uint16_t)cell;
                     stats->top_class = current_class;
                 }
-                if(probability >= threshold)
+                if(probability >= threshold &&
+                   (class_mask & (UINT32_C(1) << current_class)))
                 {
                     workspace->probabilities[(uint32_t)candidate_index *
                         OBJECT_DETECT_CLASS_COUNT + current_class] = probability;
@@ -239,6 +241,8 @@ uint8_t object_detect_postprocess(const float *output,
 
     for(uint8_t class_id = 0U; class_id < OBJECT_DETECT_CLASS_COUNT; class_id++)
     {
+        if(!(class_mask & (UINT32_C(1) << class_id)))
+            continue;
         memset(workspace->suppressed, 0, sizeof(workspace->suppressed));
         while(1)
         {
