@@ -17,6 +17,13 @@
 #include "../services/screenshot_source.h"
 #include "../services/debug_screenshot_stream.h"
 #include "../services/external_link_service.h"
+#if HK_MICROPYTHON_WDT_FAULT_INJECTION
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "../services/settings_service.h"
+#include "../services/settings_persistence.h"
+#endif
 #if HK_ENABLE_APP_MICROPYTHON
 #include "../services/hmpy_codec.h"
 #include "../services/hmpy_session.h"
@@ -25,8 +32,40 @@
 static char g_debug_cmd[DEBUG_CMD_MAX];
 static uint8_t g_debug_cmd_len;
 
+#if HK_MICROPYTHON_WDT_FAULT_INJECTION
+static void debug_wdt_autostart(const char *value)
+{
+    if(*value == ' ')
+    {
+        char *end;
+        unsigned long id = strtoul(value + 1, &end, 10);
+        if(end == value + 1 || *end || id > UINT16_MAX ||
+           !hk_app_autostart_id_is_persistable((hk_autostart_id_t)id))
+        {
+            debug_console_write_text("HKWDTSTART ERROR\n");
+            return;
+        }
+        settings_set_autostart_id((hk_autostart_id_t)id);
+        settings_mark_dirty(1U);
+        if(!settings_storage_flush())
+        {
+            debug_console_write_text("HKWDTSTART SAVE ERROR\n");
+            return;
+        }
+    }
+    printf("HKWDTSTART %u\r\n", (unsigned)settings_autostart_id());
+}
+#endif
+
 void debug_uart_handle_command(const char *cmd)
 {
+#if HK_MICROPYTHON_WDT_FAULT_INJECTION
+    if(strcmp(cmd, "HKWDTSTART") == 0 || strncmp(cmd, "HKWDTSTART ", 11U) == 0)
+    {
+        debug_wdt_autostart(cmd + 10U);
+        return;
+    }
+#endif
     if(strncmp(cmd, "HKAPP ", 6U) == 0)
     {
         activity_note();
