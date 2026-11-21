@@ -287,6 +287,12 @@ first. `storage/file_mount.h` and `storage/file_dir_scan.h` expose shared
 mount and directory operations. `storage/sd_card.h` is the private
 raw-block boundary.
 
+FILES decodes GIFs in slices from the first frame onward. The normal input
+loop can pause playback, leave the preview, or open another file between
+slices. FILES stages each frame in the shared workspace and publishes only
+complete frames. SD and display transfer times still affect playback speed.
+See the [Cube input timing check](MAIX_CUBE_TEST_LOG.md#gif-input-during-frame-decoding-2026-11-21).
+
 POWER replaces the separate SLEEP and POWER OFF menu entries. Its manifest ID is
 `power`; the existing `apps/sleep/` directory retains ownership of the complete
 module. LEFT/RIGHT selects SLEEP, POWER OFF or RESTART; one fresh OK executes the
@@ -441,9 +447,7 @@ SETTINGS → MENU switches. CAMERA present was observed near 31 ms; this is a
 smoke observation, not a matched-workload latency distribution. No repeat of
 unaffected accepted checks is needed for documentation/tooling cleanup.
 
-Heavy GIFs can still play below nominal speed, and button response may wait for
-a frame to finish. See the [roadmap](ROADMAP.md) for remaining product and
-research work.
+See the [roadmap](ROADMAP.md) for remaining product and research work.
 
 A useful Python-to-native experiment separates domain state from hardware,
 implements equivalent behavior through these shared services, then compares

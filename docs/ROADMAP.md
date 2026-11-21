@@ -7,8 +7,8 @@ implementation, hardware checks and limitations, and the
 
 ## Next product and research work
 
-- Improve SEN0305 features around concrete use cases, including heavy GIF
-  playback and input latency where measurements show a bottleneck.
+- Measure and improve heavy GIF playback throughput where SD reads, decoding,
+  or display updates dominate.
 - Document what the Maix Cube port changed in the BSP, shared services and
   applications, and which application logic it reused. Use the
   [Cube hardware log](MAIX_CUBE_TEST_LOG.md) to tie observations to tested builds.

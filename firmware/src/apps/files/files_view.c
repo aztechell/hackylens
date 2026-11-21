@@ -10,7 +10,9 @@
 #include "files_view_port.h"
 #include "files_firmware.h"
 
-static hk_ui_display_surface_t g_animation_surface;
+#define FILES_ANIMATION_ROW_BYTES (HK_DISPLAY_REQUIRED_WIDTH * 2U)
+#define FILES_ANIMATION_FRAME_BYTES (FILES_ANIMATION_ROW_BYTES * HK_DISPLAY_REQUIRED_HEIGHT)
+
 static hk_indexed_frame_t g_animation_previous_frame;
 static hk_indexed_frame_t g_animation_current_frame;
 static uint16_t g_animation_canvas_w;
@@ -22,6 +24,7 @@ static uint16_t g_animation_view_h;
 static uint16_t g_animation_background;
 static uint16_t g_animation_source_x[HK_DISPLAY_REQUIRED_WIDTH];
 static uint16_t g_animation_source_y[HK_DISPLAY_REQUIRED_HEIGHT];
+static uint8_t *g_animation_pixels;
 static uint8_t *g_animation_backup;
 static frame_workspace_borrow_t g_animation_workspace;
 static uint8_t g_animation_frame_open;
@@ -214,10 +217,9 @@ static void files_view_surface_pixel(uint16_t x, uint16_t y, uint16_t color)
 {
     uint8_t *pixel;
 
-    if(x >= g_animation_surface.width || y >= g_animation_surface.height)
+    if(x >= HK_DISPLAY_REQUIRED_WIDTH || y >= HK_DISPLAY_REQUIRED_HEIGHT)
         return;
-    pixel = g_animation_surface.rgb565_be +
-            (uint32_t)y * g_animation_surface.stride_bytes + (uint32_t)x * 2U;
+    pixel = g_animation_pixels + (uint32_t)y * FILES_ANIMATION_ROW_BYTES + (uint32_t)x * 2U;
     pixel[0] = (uint8_t)(color >> 8);
     pixel[1] = (uint8_t)color;
 }
@@ -249,8 +251,7 @@ static void files_view_fill_logical_rect(uint16_t src_x, uint16_t src_y,
 
 static void files_view_reset_animation_surface(void)
 {
-    memset(g_animation_surface.rgb565_be, 0,
-           (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height);
+    memset(g_animation_pixels, 0, FILES_ANIMATION_FRAME_BYTES);
     files_view_fill_logical_rect(0, 0, g_animation_canvas_w, g_animation_canvas_h,
                                  g_animation_background);
     g_animation_reset_pending = 0;
@@ -273,8 +274,7 @@ static void files_view_apply_previous_disposal(void)
     else if(g_animation_previous_frame.disposal == 3U &&
             g_animation_backup_valid && g_animation_backup)
     {
-        memcpy(g_animation_surface.rgb565_be, g_animation_backup,
-               (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height);
+        memcpy(g_animation_pixels, g_animation_backup, FILES_ANIMATION_FRAME_BYTES);
     }
 }
 
@@ -283,11 +283,14 @@ static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canva
 {
     if(canvas_w == 0 || canvas_h == 0)
         return 0;
-    if(g_animation_frame_open)
-    {
-        hk_ui_display_frame_cancel(g_animation_surface.lease_id);
-        g_animation_frame_open = 0;
-    }
+    g_animation_frame_open = 0;
+    /* Keep the incomplete frame and disposal backup in the existing
+       workspace. The LCD shadow is borrowed only to publish a frame. */
+    if(g_animation_workspace.generation == 0U &&
+       !frame_workspace_borrow(2U * FILES_ANIMATION_FRAME_BYTES, &g_animation_workspace))
+        return 0;
+    g_animation_pixels = g_animation_workspace.data;
+    g_animation_backup = g_animation_pixels + FILES_ANIMATION_FRAME_BYTES;
     g_animation_canvas_w = canvas_w;
     g_animation_canvas_h = canvas_h;
     g_animation_background = background_rgb565;
@@ -297,29 +300,18 @@ static uint8_t files_view_animation_begin_impl(uint16_t canvas_w, uint16_t canva
         g_animation_source_x[x] = (uint16_t)((uint32_t)x * canvas_w / g_animation_view_w);
     for(uint16_t y = 0; y < g_animation_view_h; y++)
         g_animation_source_y[y] = (uint16_t)((uint32_t)y * canvas_h / g_animation_view_h);
-    if(g_animation_workspace.generation != 0U)
-        (void)frame_workspace_release(&g_animation_workspace);
-    if(!frame_workspace_borrow(
-            HK_DISPLAY_REQUIRED_WIDTH * HK_DISPLAY_REQUIRED_HEIGHT * 2U,
-            &g_animation_workspace))
-        return 0;
-    g_animation_backup = g_animation_workspace.data;
     g_animation_reset_pending = 1;
     g_animation_previous_valid = 0;
     g_animation_backup_valid = 0;
-    return g_animation_backup != NULL;
+    return 1;
 }
 
 static uint8_t files_view_animation_frame_begin_impl(const hk_indexed_frame_t *frame)
 {
-    uint32_t surface_bytes;
-
     if(!frame || frame->canvas_w != g_animation_canvas_w ||
-       frame->canvas_h != g_animation_canvas_h || g_animation_frame_open ||
-       !hk_ui_display_frame_acquire(&g_animation_surface))
+       frame->canvas_h != g_animation_canvas_h || g_animation_frame_open || !g_animation_pixels)
         return 0;
     g_animation_frame_open = 1;
-    surface_bytes = (uint32_t)g_animation_surface.stride_bytes * g_animation_surface.height;
     if(g_animation_reset_pending)
         files_view_reset_animation_surface();
     else
@@ -328,7 +320,7 @@ static uint8_t files_view_animation_frame_begin_impl(const hk_indexed_frame_t *f
     g_animation_current_frame = *frame;
     if(frame->disposal == 3U)
     {
-        memcpy(g_animation_backup, g_animation_surface.rgb565_be, surface_bytes);
+        memcpy(g_animation_backup, g_animation_pixels, FILES_ANIMATION_FRAME_BYTES);
         g_animation_backup_valid = 1;
     }
     else
@@ -375,17 +367,27 @@ static void files_view_animation_render_indexed_row_impl(const hk_indexed_frame_
 
 static uint8_t files_view_animation_frame_end_impl(void)
 {
-    uint32_t lease_id;
+    hk_ui_display_surface_t surface;
 
-    if(!g_animation_frame_open)
+    if(!g_animation_frame_open || !hk_ui_display_frame_acquire(&surface))
         return 0;
-    lease_id = g_animation_surface.lease_id;
+    if(surface.width != HK_DISPLAY_REQUIRED_WIDTH || surface.height != HK_DISPLAY_REQUIRED_HEIGHT ||
+       surface.stride_bytes < FILES_ANIMATION_ROW_BYTES)
+    {
+        hk_ui_display_frame_cancel(surface.lease_id);
+        return 0;
+    }
+    for(uint16_t y = 0; y < surface.height; y++)
+        memcpy(surface.rgb565_be + (uint32_t)y * surface.stride_bytes,
+               g_animation_pixels + (uint32_t)y * FILES_ANIMATION_ROW_BYTES,
+               FILES_ANIMATION_ROW_BYTES);
+
     g_animation_frame_open = 0;
     g_animation_previous_frame = g_animation_current_frame;
     g_animation_previous_valid = 1;
-    if(!hk_ui_display_frame_present(lease_id))
+    if(!hk_ui_display_frame_present(surface.lease_id))
     {
-        hk_ui_display_frame_cancel(lease_id);
+        hk_ui_display_frame_cancel(surface.lease_id);
         return 0;
     }
     return 1;
@@ -393,15 +395,13 @@ static uint8_t files_view_animation_frame_end_impl(void)
 
 static void files_view_animation_end_impl(void)
 {
-    if(g_animation_frame_open)
-        hk_ui_display_frame_cancel(g_animation_surface.lease_id);
-    memset(&g_animation_surface, 0, sizeof(g_animation_surface));
     memset(&g_animation_previous_frame, 0, sizeof(g_animation_previous_frame));
     memset(&g_animation_current_frame, 0, sizeof(g_animation_current_frame));
     g_animation_frame_open = 0;
     g_animation_reset_pending = 0;
     g_animation_previous_valid = 0;
     g_animation_backup_valid = 0;
+    g_animation_pixels = NULL;
     g_animation_backup = NULL;
     if(g_animation_workspace.generation != 0U)
         (void)frame_workspace_release(&g_animation_workspace);

@@ -737,3 +737,16 @@ Selecting an area inside the red bar copied `(30, 31, 10, 12, 0, 1)`. The IDE
 saved it in the existing pinned `VPTEST.py` and ran the tracker. The resulting
 region in the 240 × 320 frame was `(0, 200, 240, 38, 9120)`. STOP ended the
 run with exit reason 2.
+
+## GIF input during frame decoding (2026-11-21)
+
+FILES opened a 1600 × 1200 animated GIF from the Cube's FAT32 card. A
+diagnostic build
+(`05c407d160fdf3dfa0ba530097dbd0601004132bddddb8a94d26dd70bf0818dd`)
+accepted input events injected through the normal app runtime over USB.
+OK paused the first frame at 65,703 of 1,920,000 pixels. The decode position
+and LCD contents stayed stable during the 200 ms hold. Resuming published
+the complete first frame. BACK returned to the file list while the second
+frame was in progress. The USB command round trips were 16 ms for pause
+and 44 ms for BACK, including the list redraw. The longest observed GIF
+tick was 29.4 ms, including the LCD update.

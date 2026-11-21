@@ -37,7 +37,11 @@ Current ownership:
   The landmark model and its crop scratch take about 204 KiB on the heap.
   Both applications hold their tail lease until their KPU models have been
   unloaded. A fault during unload quarantines the lease until reset.
-- GIF decoding uses fixed 12-bit LZW tables, one 255-byte sub-block buffer, the shared image row buffer, and small precomputed viewport maps. Frames are composited directly into the 320x240 LCD shadow; disposal mode 3 temporarily reuses one existing camera frame-pool slot, so no GIF-sized logical canvas or additional framebuffer is allocated.
+- GIF decoding uses fixed 12-bit LZW tables, one 255-byte sub-block buffer,
+  the shared image row buffer, and precomputed viewport maps. Two
+  display-sized surfaces in one existing camera workspace hold the frame
+  in progress and the disposal-mode-3 backup. FILES borrows the LCD shadow
+  only when publishing a complete frame.
 - Terminal history ring and viewport: `apps/terminal/terminal_buffer.c`; they are omitted when Terminal is disabled.
 - APRILTAG uses one fixed uncached 19,200-byte 160x120 luma handoff, two small result banks, a small stabilized display-result copy, a 74-byte selected-ID bitmap, and temporary heap allocations owned exclusively by its core-1 worker. Camera RGB565 slots are never retained while detection runs. A 16-bit union-find halves its main threshold working set because the bounded 19,200-pixel input cannot exceed its 65,535-node limit. Only TAG36H11 is built; image file I/O, profiling images, pthreads, and all other tag families are disabled. The complete detector, selection UI, and runtime buffers are omitted with `--disable-app apriltag`.
 - Settings menus keep one small instance state per owner and format only the currently drawn row into a 24-byte stack buffer. Descriptor tables live in read-only flash. The previous CAMERA/QR and system SETTINGS arrays containing formatted copies of every row were removed.

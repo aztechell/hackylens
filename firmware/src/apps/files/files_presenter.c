@@ -20,8 +20,8 @@ void files_presenter_bind_input(const hk_input_t *input)
 static void files_presenter_sample_input(void)
 {
     uint32_t state;
-    /* Sample into the existing debounced event ring while a frame is decoded.
-       Never consume events or dispatch UI while the frame transaction is open. */
+    /* Keep sampling short presses during each decode slice. The main loop
+       dispatches them after the slice returns. */
     if(g_input)
         (void)hk_input_get_state(g_input, &state);
 }
