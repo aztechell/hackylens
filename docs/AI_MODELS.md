@@ -52,6 +52,8 @@ confidence to distinguish valid inference from an unsuitable image.
 
 ## Included consumers
 
+### FACE DETECT
+
 FACE DETECT continues to load:
 
 ```text
@@ -83,6 +85,8 @@ from the original HUSKYLENS firmware package. That asset stores 32-bit words in
 flash byte order and uses a different/private container. Large weight regions
 match the standalone model, but the original asset is not directly loadable by
 HackyLens's native KModel-v3 runtime.
+
+### OBJECT DETECT
 
 OBJECT DETECT requires:
 

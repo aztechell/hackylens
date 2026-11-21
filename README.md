@@ -65,7 +65,7 @@ flash layout and pin mapping before flashing. See the
 
 | SEN0305 live camera | SEN0305 settings |
 | --- | --- |
-| ![HackyLens camera preview with FPS overlay](docs/images/camera.png) | ![HackyLens settings](docs/images/settings.png) |
+| ![HackyLens camera preview with FPS overlay](docs/images/camera.png) | ![SEN0305 SETTINGS showing Screen, Lights, Connection, Startup, Device, and Menu Order](docs/images/settings.png) |
 
 The firmware's UART screenshot protocol captured these images directly from the
 320 × 240 SEN0305 and the 240 × 240 Maix Cube.
@@ -74,7 +74,14 @@ The firmware's UART screenshot protocol captured these images directly from the
 
 `TERMINAL`, `CAMERA`, `QR-CAMERA`, `FACE DETECT`, `APRILTAG`, `OBJECT DETECT`,
 `MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, `POWER`, and
-[`FACE RECOG`](docs/FACE_RECOGNITION.md)
+[`FACE RECOG`](docs/FACE_RECOGNITION.md).
+
+- **APRILTAG** measures distance to selected tags. See the
+  [calibration guide](examples/markers/README.md#distance-measurements).
+- **OBJECT DETECT** can limit detections to selected classes. See the
+  [class filter controls](docs/AI_MODELS.md#object-detect).
+- **CAMERA** saves photos to microSD. Use
+  [USB photo download](#download-camera-photos-over-usb) to copy them to a PC.
 
 `POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 
@@ -261,11 +268,19 @@ power-loss testing during writes, and checks on additional SEN0305 units from
 the project's hardware acceptance scope. Hardware evidence covers the tested
 devices and recorded scenarios.
 
-The default run deadline is 30 seconds and the maximum requested deadline is
-300 seconds. API v1 exposes buttons, time/sleep, display, LED/RGB, and the
-external UART/I2C connector. See [MicroPython API](docs/MICROPYTHON_API.md),
-[HMPY protocol](docs/HMPY_PROTOCOL.md), and the
-[architecture/research report](docs/MICROPYTHON_RESEARCH.md).
+HMPY runs default to 30 seconds and accept up to 300 seconds. Runs started
+on the device continue until they finish, hit an error, or receive a stop
+request. See the [HMPY protocol](docs/HMPY_PROTOCOL.md) and the
+[MicroPython research report](docs/MICROPYTHON_RESEARCH.md).
+
+The [MicroPython API](docs/MICROPYTHON_API.md) exposes buttons, timing, display,
+LED/RGB, and external UART/I2C on both boards. Scripts can
+[capture frames and track colors](docs/MICROPYTHON_API.md#camera-and-color-tracking),
+run [FACE and OBJECT detection](docs/MICROPYTHON_API.md#kpu-detectors),
+decode [QR codes and AprilTags](docs/MICROPYTHON_API.md#qr-and-apriltag),
+and [save BMPs and data to microSD](docs/MICROPYTHON_API.md#microsd-output).
+Maix Cube also exposes [PCM playback and recording](docs/MICROPYTHON_API.md#built-in-audio)
+and [MSA301 acceleration readings](docs/MICROPYTHON_API.md#built-in-accelerometer).
 
 STOP is checked in bytecode and native iterator loops. If a native C call still
 does not return after the STOP/deadline grace period, a one-shot WDT1 reset is
@@ -308,7 +323,18 @@ Capture the current LCD contents without a camera or screen-grabber:
 python tools\hkflash.py screenshot --board huskylens-sen0305 --port COM10 --output screen.bmp
 ```
 
-Download the newest numbered CAMERA photo from the board's microSD over USB:
+This debug command opens SETTINGS on the connected SEN0305.
+
+```powershell
+python tools\hkflash.py cmd HKSETTINGS --board huskylens-sen0305 --port COM10
+```
+
+Run `python tools\hkflash.py --help` or the help for an individual subcommand to see reset, baud-rate, verification, monitor, command, and frame-capture options.
+
+### Download CAMERA photos over USB
+
+Download the newest numbered photo from the board's microSD. Use the board
+ID and COM port for your connected device.
 
 ```powershell
 python tools\hkflash.py photos --board sipeed-maix-cube --port COM15 -o photos
@@ -319,14 +345,6 @@ using the serial port. The command reads BMP, RAW and PPM photos already saved
 in `hackylens.photo`. Use `--list` to see filenames, `--name IMG00001.BMP` to
 select one or `--all` to copy all photos. Existing destination files are
 skipped in `--all` mode. Transfers use the USB console's default 115200 baud.
-
-Debug commands can also open firmware screens directly; for example:
-
-```powershell
-python tools\hkflash.py cmd HKSETTINGS --board huskylens-sen0305 --port COM10
-```
-
-Run `python tools\hkflash.py --help` or the help for an individual subcommand to see reset, baud-rate, verification, monitor, command, and frame-capture options.
 
 ## Project layout
 
