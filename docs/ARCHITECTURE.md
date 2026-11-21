@@ -359,8 +359,14 @@ remains to be measured on Cube.
 The maintainer waived the physical exchange test for Cube's
 Grove UART/I2C. The [hardware log](MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12)
 records IDE threshold selection, physical launches, BACK and microSD output
-on both boards. MicroPython has separate acceptance checks for 1000 run/stop
-cycles, flash endurance and power loss, and [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md).
+on both boards. The [1,000-cycle MicroPython run/stop stress](MICROPYTHON_RESEARCH.md#runstop-stress-on-k210)
+passed on both boards on 2026-11-21. [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md), including the
+physical reset and autostart suppression, passed on both boards on 2026-11-20.
+
+On 2026-11-20, the maintainer excluded physical NOR endurance tests, deliberate
+power-loss testing during writes, and checks on additional SEN0305 units from
+the project's hardware acceptance scope. Hardware evidence covers the tested
+devices and recorded scenarios.
 
 ### Earlier SEN0305 qualification
 

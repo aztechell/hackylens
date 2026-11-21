@@ -249,10 +249,17 @@ both FORMAT options are present.
 The v0.2.0 CLI/HMPY workflow has passed on a physical SEN0305 after an explicitly
 authorized USERFS format: atomic file operations, startup execution, cooperative
 STOP (123 ms), native `sum`/`min` STOP (121 ms), executor reuse, lease reconnect,
-and exact cleanup. Multi-device confirmation, long-duration NOR
-endurance/power-loss, physical BACK, live browser Web Serial
-edit/upload/run/log/stop/reconnect, WDT1 fault-injection, and 1000-cycle stress
-remain separate qualification gates.
+and exact cleanup. Later checks on both boards covered browser Web Serial
+upload/run/stop and physical BACK cleanup. See the
+[hardware log](docs/MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12).
+The MicroPython runtime passed 1,000 run/stop cycles on each board. A separate
+instrumented run confirmed stable C heap usage and working launcher navigation.
+[Hardware results](docs/MICROPYTHON_RESEARCH.md#runstop-stress-on-k210)
+
+On 2026-11-20, the maintainer excluded physical NOR endurance tests, deliberate
+power-loss testing during writes, and checks on additional SEN0305 units from
+the project's hardware acceptance scope. Hardware evidence covers the tested
+devices and recorded scenarios.
 
 The default run deadline is 30 seconds and the maximum requested deadline is
 300 seconds. API v1 exposes buttons, time/sleep, display, LED/RGB, and the
@@ -267,8 +274,8 @@ HELLO exposes a backward-compatible `WDT1_RECOVERY` boot flag so clients can
 report and acceptance-test that safe-boot path explicitly.
 The reproducible, deliberately test-build-only procedure is documented in
 [WDT1 hardware acceptance](docs/WDT_HARDWARE_ACCEPTANCE.md); production builds
-do not expose a Python fault-injection API. The physical `-wdtfi` reset/recovery
-gate has not yet been run.
+do not expose a Python fault-injection API. The physical `-wdtfi` reset,
+recovery and autostart-suppression checks passed on both boards on 2026-11-20.
 
 ## Flash and debug
 

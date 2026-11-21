@@ -349,7 +349,7 @@ next run; no script allocation survives VM deinitialization. An uncaught
 exception is reported as an error run and its traceback is sent through stdout.
 The fatal watchdog path restores ownership by resetting the whole SoC because
 asynchronously unwinding an arbitrary native C frame would be unsafe.
-It has a dedicated `-wdtfi` firmware build and a two-phase read-only
-baseline/post-reset acceptance procedure; that disruptive physical gate has not
-yet been run. The production API cannot deliberately wedge core 1.
-See [WDT1 hardware acceptance](WDT_HARDWARE_ACCEPTANCE.md).
+The dedicated `-wdtfi` firmware build and two-phase read-only baseline/post-reset
+procedure verified the physical reset, recovery and autostart suppression on
+SEN0305 and Maix Cube on 2026-11-20. Results and the procedure are recorded in
+[WDT1 hardware acceptance](WDT_HARDWARE_ACCEPTANCE.md).
