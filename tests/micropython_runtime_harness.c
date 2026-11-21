@@ -215,6 +215,7 @@ int main(void)
     micropython_runtime_get_status(&after);
     CHECK(after.state == MICROPYTHON_RUNTIME_STOPPED);
     CHECK(after.exit_reason == MICROPYTHON_EXIT_REQUESTED && s_cleanup_count == 3U);
+    CHECK(after.output_pending == 2U);
 
     s_check_interrupt = 0U;
     s_expected_source = "finish";
@@ -239,6 +240,7 @@ int main(void)
     micropython_runtime_poll();
     micropython_runtime_get_status(&after);
     CHECK(after.exit_reason == MICROPYTHON_EXIT_REQUESTED && s_cleanup_count == 5U);
+    CHECK(after.output_pending == 2U);
     puts("MICROPYTHON_RUNTIME_OK busy=2 invalid_active=2 complete=2 exception=1 stop=2 cleanup=5");
     return 0;
 }

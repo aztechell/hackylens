@@ -49,6 +49,7 @@ typedef enum
     MICROPYTHON_BINDING_OP_SD_FINISH,
     MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN,
     MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP,
+    MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
 } micropython_binding_op_t;
 
 typedef enum
@@ -76,6 +77,7 @@ hk_result_t micropython_capability_bridge_cleanup(void);
 void micropython_capability_bridge_release_camera(void);
 void micropython_capability_bridge_release_storage(void);
 uint8_t micropython_capability_bridge_camera_presented(void);
+uint8_t micropython_capability_bridge_display_presented(void);
 
 /* Core-1 synchronous RPC. VM stop/deadline hooks remain live while waiting. */
 micropython_binding_result_t micropython_binding_call(

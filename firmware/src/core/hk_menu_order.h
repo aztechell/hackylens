@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-/* The full launcher has 15 built-in icons and up to 8 script shortcuts. */
+/* The full launcher has 16 built-in icons and up to 8 script shortcuts. */
 #define HK_MENU_ORDER_CAPACITY 24U
 #define HK_MENU_SHORTCUT_CAPACITY 8U
 #define HK_MENU_ORDER_NAME_SIZE 64U

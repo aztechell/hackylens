@@ -141,6 +141,7 @@ static binding_display_transaction_t g_display_transaction;
 static hk_display_t g_display;
 static uint32_t g_display_run_id;
 static uint8_t g_display_owned;
+static uint8_t g_display_presented;
 static uint8_t g_display_batch_started;
 #if HK_ENABLE_AUDIO_FEATURE
 static uint32_t g_audio_ticket;
@@ -250,6 +251,7 @@ static void binding_display_stage_reset(uint32_t run_id)
     g_display_run_id = run_id;
     g_display_transaction.active = 0U;
     g_display_batch_started = 0U;
+    g_display_presented = 0U;
 }
 
 static hk_result_t binding_display_begin(void)
@@ -464,14 +466,56 @@ static uint16_t binding_read_le16(const volatile uint8_t *data)
     return (uint16_t)(data[0] | ((uint16_t)data[1] << 8));
 }
 
+static hk_result_t binding_display_record(const volatile uint8_t *record,
+                                          uint8_t validate_only)
+{
+    const hk_display_rect_t rect = {
+        binding_read_le16(record), binding_read_le16(record + 2),
+        binding_read_le16(record + 4), binding_read_le16(record + 6),
+    };
+    if((uint32_t)rect.x >= HK_DISPLAY_REQUIRED_WIDTH ||
+       (uint32_t)rect.y >= HK_DISPLAY_REQUIRED_HEIGHT || !rect.width || !rect.height)
+        return HK_ERR_INVALID_ARGUMENT;
+    return validate_only ? HK_OK :
+        hk_display_fill_rect(&g_display, &rect, binding_read_le16(record + 8));
+}
+
+static hk_result_t binding_display_commit(micropython_binding_control_t *control,
+                                          uint32_t ticket, uint32_t run_id)
+{
+    binding_display_cancel_context_t context = {control, ticket, run_id};
+    hk_cancel_t cancel = {binding_display_cancelled, &context};
+    hk_deadline_t deadline = binding_display_deadline();
+    uint16_t commands;
+    uint16_t text_bytes;
+    hk_result_t result = binding_display_begin();
+
+    if(result == HK_OK)
+        result = hk_display_stage_checkpoint(&g_display, &commands, &text_bytes);
+    if(result == HK_OK)
+        result = hk_display_present(&g_display, deadline, &cancel);
+    if(result == HK_OK)
+    {
+        g_display_presented = commands != 0U;
+        g_display_batch_started = 0U;
+        result = binding_display_begin();
+    }
+    if(result == HK_OK)
+        result = hk_display_stage_restore(&g_display, commands, text_bytes);
+    return result;
+}
+
 static size_t binding_input_limit(uint32_t operation)
 {
 #if HK_ENABLE_AUDIO_FEATURE
     if(operation == MICROPYTHON_BINDING_OP_AUDIO_PLAY)
         return HK_AUDIO_PCM_MAX_BYTES;
 #endif
-    return operation == MICROPYTHON_BINDING_OP_DISPLAY_RECTS ?
-        MICROPYTHON_BINDING_RECTS_BYTES : MICROPYTHON_BINDING_DATA_MAX;
+    if(operation == MICROPYTHON_BINDING_OP_DISPLAY_RECTS)
+        return MICROPYTHON_BINDING_RECTS_BYTES;
+    if(operation == MICROPYTHON_BINDING_OP_DISPLAY_FRAME)
+        return MICROPYTHON_BINDING_RECTS_BYTES - MICROPYTHON_BINDING_RECT_BYTES;
+    return MICROPYTHON_BINDING_DATA_MAX;
 }
 
 void micropython_capability_bridge_release_storage(void)
@@ -506,6 +550,11 @@ uint8_t micropython_capability_bridge_camera_presented(void)
 #else
     return 0U;
 #endif
+}
+
+uint8_t micropython_capability_bridge_display_presented(void)
+{
+    return g_display_presented;
 }
 
 #if HK_ENABLE_APP_MICROPYTHON
@@ -1099,54 +1148,51 @@ static micropython_binding_result_t binding_execute(
         for(uint32_t offset = 0U; offset < input_length;
             offset += MICROPYTHON_BINDING_RECT_BYTES)
         {
-            const volatile uint8_t *record = &control->data[offset];
-            hk_display_rect_t rect = {
-                binding_read_le16(record), binding_read_le16(record + 2),
-                binding_read_le16(record + 4), binding_read_le16(record + 6),
-            };
-            if((uint32_t)rect.x >= HK_DISPLAY_REQUIRED_WIDTH ||
-               (uint32_t)rect.y >= HK_DISPLAY_REQUIRED_HEIGHT ||
-               !rect.width || !rect.height)
-                return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
-            result = hk_display_fill_rect(&g_display, &rect,
-                                          binding_read_le16(record + 8));
+            result = binding_display_record(&control->data[offset], 0U);
             if(result != HK_OK)
                 return binding_display_result(result);
         }
         return MICROPYTHON_BINDING_OK;
     }
-    case MICROPYTHON_BINDING_OP_DISPLAY_PRESENT:
+    case MICROPYTHON_BINDING_OP_DISPLAY_FRAME:
     {
-        binding_display_cancel_context_t cancel_context = {
-            control, ticket, run_id,
-        };
-        hk_cancel_t cancel = {
-            binding_display_cancelled, &cancel_context,
-        };
-        uint16_t commands;
-        uint16_t text_bytes;
         hk_result_t result;
-        hk_deadline_t deadline = binding_display_deadline();
 
         if(!g_display_owned || g_display_run_id != run_id)
             return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        if(a[0] > 0xffffU ||
+           input_length % MICROPYTHON_BINDING_RECT_BYTES != 0U)
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        for(uint32_t offset = 0; offset < input_length;
+            offset += MICROPYTHON_BINDING_RECT_BYTES)
+        {
+            result = binding_display_record(&control->data[offset], 1U);
+            if(result != HK_OK)
+                return binding_display_result(result);
+        }
+        if(binding_request_cancelled(control, ticket, run_id))
+            return MICROPYTHON_BINDING_ERROR_TIMEOUT;
         result = binding_display_begin();
         if(result != HK_OK)
             return binding_display_result(result);
-        result = hk_display_stage_checkpoint(
-            &g_display, &commands, &text_bytes);
+        result = hk_display_stage_restore(&g_display, 0U, 0U);
         if(result == HK_OK)
-            result = hk_display_present(
-                &g_display, deadline, &cancel);
-        if(result == HK_OK)
+            result = hk_display_clear(&g_display, (uint16_t)a[0]);
+        for(uint32_t offset = 0; result == HK_OK && offset < input_length;
+            offset += MICROPYTHON_BINDING_RECT_BYTES)
+            result = binding_display_record(&control->data[offset], 0U);
+        if(result != HK_OK)
         {
-            g_display_batch_started = 0U;
-            result = binding_display_begin();
+            (void)hk_display_stage_restore(&g_display, 0U, 0U);
+            return binding_display_result(result);
         }
-        if(result == HK_OK)
-            result = hk_display_stage_restore(
-                &g_display, commands, text_bytes);
-        return binding_display_result(result);
+        return binding_display_result(binding_display_commit(control, ticket, run_id));
+    }
+    case MICROPYTHON_BINDING_OP_DISPLAY_PRESENT:
+    {
+        if(!g_display_owned || g_display_run_id != run_id)
+            return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
+        return binding_display_result(binding_display_commit(control, ticket, run_id));
     }
     case MICROPYTHON_BINDING_OP_LED:
     {

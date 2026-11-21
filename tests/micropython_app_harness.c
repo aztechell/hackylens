@@ -45,6 +45,7 @@ static unsigned g_menu_count;
 static unsigned g_failures;
 static uint8_t g_list_busy;
 static uint8_t g_camera_presented;
+static uint8_t g_display_presented;
 static unsigned g_render_count;
 static micropython_view_update_t g_last_update;
 
@@ -319,6 +320,11 @@ uint8_t micropython_capability_bridge_camera_presented(void)
     return g_camera_presented;
 }
 
+uint8_t micropython_capability_bridge_display_presented(void)
+{
+    return g_display_presented;
+}
+
 void micropython_runtime_get_status(micropython_runtime_status_t *status)
 {
     *status = g_runtime;
@@ -465,11 +471,16 @@ int main(void)
               "coalesced console output redraws body and info once");
     }
     check(g_view.log_total >= 4U, "console receives live output");
+    g_display_presented = 1U;
+    press_button(BUTTON_OK);
+    check(g_runtime.state == MICROPYTHON_RUNTIME_RUNNING && g_stop_count == 0U,
+          "presented script receives OK even when started by the script manager");
     press_button(BUTTON_BACK);
     render();
     check(g_view.mode == MICROPYTHON_UI_CONSOLE && g_stop_count == 1U,
           "BACK requests stop and stays in console");
     g_runtime.state = MICROPYTHON_RUNTIME_FINISHED;
+    g_display_presented = 0U;
     g_runtime.exit_reason = MICROPYTHON_EXIT_REQUESTED;
     micropython_poll_output(&input);
     press_button(BUTTON_BACK);

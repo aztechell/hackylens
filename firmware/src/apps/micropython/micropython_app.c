@@ -1023,6 +1023,7 @@ static void handle_console_buttons(uint32_t pressed,
         request_body_render();
     }
     if((pressed & BUTTON_OK) && !g_opened_from_pin &&
+       !micropython_capability_bridge_display_presented() &&
        !micropython_capability_bridge_camera_presented())
     {
         if(runtime_active(runtime_state))

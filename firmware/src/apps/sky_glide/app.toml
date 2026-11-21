@@ -1,0 +1,10 @@
+id = "sky-glide"
+name = "SKY GLIDE C"
+entry = "sky_glide_v2_entry"
+sources = ["sky_glide_app.c", "sky_glide_game.c"]
+requires = ["display", "input", "time"]
+menu_order = 135
+tick_ms = 5
+tick_budget_ms = 20
+debug_entry = "sky_glide_debug"
+debug = "HKSGLOGIC/HKSGPACED/HKSGBURST/HKSGINPUT"

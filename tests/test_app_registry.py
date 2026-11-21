@@ -228,15 +228,15 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=15 menu=15", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=16 menu=16", self.compile_profile(
             micropython=True, recorder=True
         ))
-        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=14 menu=14", self.compile_profile(
             micropython=True, recorder=False
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=12 menu=12", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
             micropython=False, recorder=False
         ))
 
@@ -359,13 +359,14 @@ int main(void)
         expected_order = [
             "camera", "qr-camera", "face-detect", "face-recognition",
             "object-detect", "apriltag", "files", "recorder", "accelerometer",
-            "micropython", "terminal", "buttons", "pong", "settings", "power",
+            "micropython", "terminal", "buttons", "pong", "sky-glide", "settings", "power",
         ]
         expected_autostart = {
             "terminal": 1, "camera": 2, "qr-camera": 3, "face-detect": 4,
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
             "power": 0, "recorder": 0, "accelerometer": 0, "face-recognition": 0,
+            "sky-glide": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
@@ -375,6 +376,7 @@ int main(void)
             "apriltag": "HKTAG/HKTAGINFO",
             "object-detect": "HKOBJECT/HKOBJECTINFO",
             "settings": "HKSETTINGS",
+            "sky-glide": "HKSGLOGIC/HKSGPACED/HKSGBURST/HKSGINPUT",
             "micropython": (
                 "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST "
                 "HKMPFORMAT-CONFIRM"
@@ -392,7 +394,7 @@ int main(void)
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
                     {"micropython": 5000, "apriltag": 5000, "files": 5000,
-                     "accelerometer": 100_000}.get(app_id, 20000),
+                     "sky-glide": 5000, "accelerometer": 100_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],

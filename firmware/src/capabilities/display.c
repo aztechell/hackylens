@@ -4,6 +4,86 @@
 #include "display_provider.h"
 #include "display_stage_private.h"
 
+#ifdef HK_SKY_GLIDE_BENCH
+#include <hackylens/capability/time.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "display_trace_private.h"
+
+enum { TRACE_CAPACITY = 1024, TRACE_PAGE = 8 };
+static struct
+{
+    struct { uint32_t offset_us, duration_us; int result; } frames[TRACE_CAPACITY];
+    uint64_t origin_us;
+    uint32_t plane;
+    unsigned count;
+    unsigned dropped;
+} trace;
+
+uint8_t hk_display_trace_debug(const char *command)
+{
+    if(strncmp(command, "HKSGTRACE ", 10) != 0)
+        return 0;
+    const char *action = command + 10;
+    if(strcmp(action, "BASE") == 0 || strcmp(action, "OVERLAY") == 0)
+    {
+        if(hk_time_now_us(hk_time_service(), &trace.origin_us) != HK_OK)
+        {
+            puts("SG TRACE ERROR");
+            return 1;
+        }
+        trace.plane = action[0] == 'B' ? HK_DISPLAY_PLANE_BASE : HK_DISPLAY_PLANE_OVERLAY;
+        trace.count = 0;
+        trace.dropped = 0;
+        puts("SG TRACE ARMED");
+    }
+    else if(strcmp(action, "STOP") == 0)
+    {
+        trace.plane = 0;
+        printf("SG TRACE %u %u %" PRIu64 "\n",
+               trace.count, trace.dropped, trace.origin_us);
+    }
+    else if(strncmp(action, "READ ", 5) == 0 && trace.plane == 0)
+    {
+        char *end;
+        const char *offset = action + 5;
+        unsigned long first = strtoul(offset, &end, 10);
+        if(end == offset || *end || first >= trace.count)
+            puts("SG TRACE ERROR");
+        else
+        {
+            for(unsigned i = (unsigned)first; i < trace.count && i < first + TRACE_PAGE; i++)
+                printf("SG T %u %" PRIu32 " %" PRIu32 " %d\n",
+                       i, trace.frames[i].offset_us, trace.frames[i].duration_us,
+                       trace.frames[i].result);
+            puts("SG TRACE END");
+        }
+    }
+    else
+        puts("SG TRACE ERROR");
+    return 1;
+}
+
+static void trace_frame(uint64_t start, hk_result_t result)
+{
+    uint64_t end;
+    if(trace.count == TRACE_CAPACITY ||
+       hk_time_now_us(hk_time_service(), &end) != HK_OK ||
+       start < trace.origin_us || end - trace.origin_us > UINT32_MAX)
+    {
+        trace.dropped++;
+        return;
+    }
+    unsigned i = trace.count++;
+    trace.frames[i].offset_us = (uint32_t)(start - trace.origin_us);
+    trace.frames[i].duration_us = (uint32_t)(end - start);
+    trace.frames[i].result = result;
+}
+#endif
+
 const hk_display_service_t *hk_display_service(void)
 {
     return hk_display_binding.get_info ? &hk_display_binding : NULL;
@@ -257,8 +337,19 @@ hk_result_t hk_display_present(
         return HK_ERR_INVALID_ARGUMENT;
     result = display_provider_for(handle, &provider);
     if(result == HK_OK)
+    {
+#ifdef HK_SKY_GLIDE_BENCH
+        uint64_t start = 0;
+        const uint8_t recording = handle->plane == trace.plane &&
+            hk_time_now_us(hk_time_service(), &start) == HK_OK;
+#endif
         result = provider->present(
             provider->context, handle, deadline, cancel);
+#ifdef HK_SKY_GLIDE_BENCH
+        if(recording)
+            trace_frame(start, result);
+#endif
+    }
     return quarantine_internal(handle, result);
 }
 

@@ -135,7 +135,8 @@ static uint8_t micropython_exec_source(micropython_shared_t *shared)
 
     if(shared->exit_reason == MICROPYTHON_EXIT_NONE)
         shared->exit_reason = MICROPYTHON_EXIT_EXCEPTION;
-    mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
+    if(shared->exit_reason != MICROPYTHON_EXIT_REQUESTED)
+        mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
     return 0U;
 }
 

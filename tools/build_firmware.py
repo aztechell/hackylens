@@ -396,6 +396,8 @@ def write_project_cmake(
     package: Path | None,
     board: Board,
     disabled_apps: set[str] | None = None,
+    *,
+    sky_glide_bench: bool = False,
 ) -> None:
     allowed_app_includes, forbidden_app_includes = app_include_sets(
         stage, disabled_apps or set()
@@ -432,6 +434,8 @@ def write_project_cmake(
         *(f'    "{cmake_path(path)}"' for path in allowed_app_includes),
         ")",
     ]
+    if sky_glide_bench:
+        lines.append("target_compile_definitions(${PROJECT_NAME} PRIVATE HK_SKY_GLIDE_BENCH)")
     if "qr-camera" not in (disabled_apps or set()):
         # K210 has a single-precision FPU. Use it for quirc's grid fitting
         # and select math functions that keep the calculations in float.
@@ -685,10 +689,13 @@ def stage_board_port(stage: Path, board: Board) -> None:
 
 def write_config(stage: Path, disabled_apps: set[str],
                  wdt_fault_injection: bool = False, *,
-                 audio_enabled: bool = False) -> None:
+                 audio_enabled: bool = False,
+                 sky_glide_bench: bool = False) -> None:
     version = read_firmware_version()
     if wdt_fault_injection:
         version += "-wdtfi"
+    if sky_glide_bench:
+        version += "-skybench"
     lines = [
         "#ifndef HK_CONFIG_H",
         "#define HK_CONFIG_H",
@@ -713,7 +720,8 @@ def stage_target(sdk: Path, target_name: str, board: Board,
                   micropython_package: Path | None = None,
                   littlefs: Path | None = None,
                   wdt_fault_injection: bool = False,
-                  service_selection: service_bindings.Selection | None = None) -> Path:
+                  service_selection: service_bindings.Selection | None = None,
+                  *, sky_glide_bench: bool = False) -> Path:
     target = TARGETS[target_name]
     stage = sdk / "src" / str(target["project"])
     if stage.exists():
@@ -759,15 +767,18 @@ def stage_target(sdk: Path, target_name: str, board: Board,
 
     service_bindings.write_generated_c(service_selection, stage)
     write_config(stage, disabled_apps, wdt_fault_injection,
-                 audio_enabled=board.drivers["audio"] != "none")
-    write_project_cmake(stage, micropython_package, board, disabled_apps)
+                 audio_enabled=board.drivers["audio"] != "none",
+                 sky_glide_bench=sky_glide_bench)
+    write_project_cmake(stage, micropython_package, board, disabled_apps,
+                        sky_glide_bench=sky_glide_bench)
     return stage
 
 
 def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
                  disabled_apps: set[str], exclusions: list[dict[str, object]],
                  service_selection: service_bindings.Selection,
-                 wdt_fault_injection: bool = False) -> Path:
+                 wdt_fault_injection: bool = False, *,
+                 sky_glide_bench: bool = False) -> Path:
     target = TARGETS[name]
     project = str(target["project"])
     output_name = Path(str(target["output"]))
@@ -776,6 +787,10 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
             f"{output_name.stem}-wdtfi{output_name.suffix}"
         )
         print("[DANGER] building non-release WDT fault-injection firmware")
+    if sky_glide_bench:
+        output_name = output_name.with_name(
+            f"{output_name.stem}-skybench{output_name.suffix}"
+        )
     out_image = ROOT / "build" / board.id / output_name
     micropython_package = None
     littlefs = None
@@ -793,7 +808,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
             )
     stage = stage_target(
         sdk, name, board, disabled_apps, micropython_package, littlefs,
-        wdt_fault_injection, service_selection,
+        wdt_fault_injection, service_selection, sky_glide_bench=sky_glide_bench,
     )
     print(f"[STAGE] {stage}")
 
@@ -847,6 +862,10 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
 
     out_image.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(built, out_image)
+    if sky_glide_bench:
+        write_flash_sidecar(out_image.with_suffix(".json"), out_image, board)
+        print(f"[OK] diagnostic image {out_image} ({out_image.stat().st_size} bytes)")
+        return out_image
     attestation = out_image.with_suffix(".attestation.json")
     capabilities_path = ROOT / "build" / board.id / "capabilities.json"
     capabilities_sha256 = hashlib.sha256(capabilities_path.read_bytes()).hexdigest()
@@ -923,6 +942,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "to exercise the WDT1 recovery path"
         ),
     )
+    parser.add_argument(
+        "--sky-glide-bench",
+        action="store_true",
+        help="Enable Sky Glide measurements in a diagnostic image under build/.",
+    )
     return parser.parse_args(argv)
 
 
@@ -970,9 +994,13 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError(
             "--wdt-fault-injection requires the micropython app"
         )
+    if args.sky_glide_bench and (
+        args.wdt_fault_injection or {"sky-glide", "micropython"} & disabled_apps
+    ):
+        raise RuntimeError("--sky-glide-bench requires Sky Glide and MicroPython")
     build_target(
         args.target, board, sdk, toolchain, disabled_apps, exclusions,
-        composition, args.wdt_fault_injection,
+        composition, args.wdt_fault_injection, sky_glide_bench=args.sky_glide_bench,
     )
     return 0
 

@@ -1,0 +1,148 @@
+{
+  "boards": {
+    "huskylens-sen0305": {
+      "diagnostic_image": {
+        "bytes": 1627512,
+        "sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc"
+      },
+      "hardware_validation_image": {
+        "bytes": 1627576,
+        "sha256": "661cb4c8f49606720f3932e4cd670bbd4239864e685c56cd7b2fd1a53d75317f",
+        "flash_seconds": 74.5183062
+      },
+      "ordinary": {
+        "board": "huskylens-sen0305",
+        "profile": "ordinary",
+        "seconds": 33.5094865,
+        "bin_bytes": 1625784,
+        "sha256": "e012a7bed98638cbd07ff89348f7ac8e623e1d01bbd810c2418e4b8f7e10d324",
+        "elf_sections": {
+          ".text": 1263696,
+          ".rodata": 203440,
+          ".data": 8920,
+          ".bss": 2706936
+        }
+      },
+      "no-game": {
+        "board": "huskylens-sen0305",
+        "profile": "no-game",
+        "seconds": 32.0971123,
+        "bin_bytes": 1623032,
+        "sha256": "8357b7600bfcd0e2935376827421ff5da079681ed818790555fabeeb31c28fad",
+        "elf_sections": {
+          ".text": 1261296,
+          ".rodata": 203104,
+          ".data": 8912,
+          ".bss": 2705912
+        }
+      },
+      "play-smoke": {
+        "board": "huskylens-sen0305",
+        "native_open_s": 0.008667799993418157,
+        "python_upload": {
+          "elapsed_seconds": 1.7282889999914914,
+          "script_bytes": 8979,
+          "source_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+          "uploaded": true
+        },
+        "python_hmpy_launch_s": 0.1775232999934815,
+        "python_worker_to_lcd_us": 133700,
+        "native_base_bmp_sha256": "8f550def4b65914a3bdaf21694fd97f13b08afb613f3464efb8486b3c43c0990"
+      },
+      "hardware_api_smoke": {
+        "board": "huskylens-sen0305",
+        "firmware_banner": "0.9.0-skybench",
+        "hardware_api_checks": [
+          "SG INVALID OK",
+          "SG LIMIT OK",
+          "SG API OK"
+        ]
+      },
+      "menu-input": {
+        "board": "huskylens-sen0305",
+        "physical_checks_reported_by_operator": [
+          "C game controls",
+          "Python RUN",
+          "Python pinned launch",
+          "BACK exit"
+        ],
+        "status_after_physical_ok": [
+          "HKMPSTATUS state=2 exit=0 run=4 source=8979 pending=0 dropped=0 fs=5 fs_error=7 startup=OFF",
+          "HKMPLOG RUN sky_glide_py.py"
+        ],
+        "status_after_physical_exit": [
+          "HKMPSTATUS state=0 exit=2 run=8 source=8979 pending=0 dropped=0 fs=5 fs_error=7 startup=OFF",
+          "HKMPLOG RUN sky_glide_py.py",
+          "HKMPLOG STOP REQUESTED"
+        ]
+      }
+    },
+    "sipeed-maix-cube": {
+      "diagnostic_image": {
+        "bytes": 1654520,
+        "sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c"
+      },
+      "hardware_validation_image": {
+        "bytes": 1654584,
+        "sha256": "b39edbcd194cb1b4ca412847399c3d6949792cef07a10c22772ef6773582bb87",
+        "flash_seconds": 43.2208644
+      },
+      "ordinary": {
+        "board": "sipeed-maix-cube",
+        "profile": "ordinary",
+        "seconds": 31.4312751,
+        "bin_bytes": 1652728,
+        "sha256": "0586dccee9975a09f10c621071639a8100e096014f839a22215ea86972cd7357",
+        "elf_sections": {
+          ".text": 1288000,
+          ".rodata": 206112,
+          ".data": 8872,
+          ".bss": 3062960
+        }
+      },
+      "no-game": {
+        "board": "sipeed-maix-cube",
+        "profile": "no-game",
+        "seconds": 34.0563694,
+        "bin_bytes": 1650040,
+        "sha256": "fa421ea4bd8859c3d010ac3407abc6a6673fa9069a8c9067f35948c55cba3b63",
+        "elf_sections": {
+          ".text": 1285592,
+          ".rodata": 205776,
+          ".data": 8928,
+          ".bss": 3061936
+        }
+      },
+      "hardware_api_smoke": {
+        "board": "sipeed-maix-cube",
+        "firmware_banner": "0.9.0-skybench",
+        "hardware_api_checks": [
+          "SG INVALID OK",
+          "SG LIMIT OK",
+          "SG API OK"
+        ]
+      },
+      "menu-input": {
+        "board": "sipeed-maix-cube",
+        "physical_checks_reported_by_operator": [
+          "C game controls",
+          "Python RUN",
+          "Python pinned launch",
+          "POW exit"
+        ],
+        "status_after_physical_ok": [
+          "HKMPSTATUS state=2 exit=0 run=2 source=8979 pending=0 dropped=0 fs=5 fs_error=7 startup=OFF",
+          "HKMPLOG RUN sky_glide_py.py",
+          ""
+        ],
+        "status_after_physical_exit": [
+          "HKMPSTATUS state=0 exit=2 run=3 source=8979 pending=0 dropped=0 fs=5 fs_error=7 startup=OFF"
+        ]
+      }
+    }
+  },
+  "script": {
+    "bytes": 8979,
+    "sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101"
+  }
+}

@@ -139,6 +139,16 @@ void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
     hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_pong);
 }
 
+void sky_glide_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    (void)bg;
+    hk_ui_display_fill_rect(x + 14U, y + 19U, 5U, 4U, color);
+    hk_ui_display_fill_rect(x + 19U, y + 22U, 8U, 4U, color);
+    hk_ui_display_fill_rect(x + 17U, y + 25U, 29U, 4U, color);
+    hk_ui_display_fill_rect(x + 23U, y + 29U, 17U, 4U, color);
+    hk_ui_display_fill_rect(x + 30U, y + 33U, 6U, 4U, color);
+}
+
 void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     hk_menu_icon_draw(x, y, color, bg, hk_menu_icon_terminal);

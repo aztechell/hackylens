@@ -74,6 +74,15 @@ void pong_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     dummy_draw_icon(x, y, color, bg);
 }
+void sky_glide_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
+{
+    dummy_draw_icon(x, y, color, bg);
+}
+uint8_t sky_glide_debug(const char *command)
+{
+    (void)command;
+    return 0;
+}
 void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     dummy_draw_icon(x, y, color, bg);
@@ -205,6 +214,15 @@ static hk_result_t dummy_pong_stop(const hk_app_context_t *ctx)
 const hk_app_v2_entry_t pong_v2_entry = {
     .state_storage = s_pong_v2_storage,
     .state_capacity_bytes = sizeof(s_pong_v2_storage),
+    .start = dummy_pong_start,
+    .event = dummy_pong_event,
+    .render = dummy_pong_render,
+    .stop = dummy_pong_stop,
+};
+static uint8_t s_sky_glide_v2_storage[16];
+const hk_app_v2_entry_t sky_glide_v2_entry = {
+    .state_storage = s_sky_glide_v2_storage,
+    .state_capacity_bytes = sizeof(s_sky_glide_v2_storage),
     .start = dummy_pong_start,
     .event = dummy_pong_event,
     .render = dummy_pong_render,
@@ -368,7 +386,7 @@ int main(void)
     const hk_app_t *sleep;
 
     CHECK(g_hk_generated_app_count ==
-          11U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
+          12U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
           HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION);
     CHECK(g_menu_item_count == g_hk_generated_app_count);
     static const char *const menu_order[] = {
@@ -386,7 +404,7 @@ int main(void)
 #if HK_ENABLE_APP_MICROPYTHON
         "micropython",
 #endif
-        "terminal", "buttons", "pong", "settings", "power",
+        "terminal", "buttons", "pong", "sky-glide", "settings", "power",
     };
     CHECK(g_menu_item_count == sizeof(menu_order) / sizeof(menu_order[0]));
     for(uint8_t index = 0U; index < g_menu_item_count; index++)

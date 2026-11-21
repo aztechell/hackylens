@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.micropython-api
 owner: micropython-runtime
-version: 1.5.0
+version: 1.6.0
 stability: experimental
 api-major: 1
 ---
@@ -47,11 +47,15 @@ import hackylens as hl
 | `buttons()` | current debounced button bit mask from `hackylens.cap.input` |
 | `button(mask)` | `True` if any bit in `mask` is pressed |
 | `ticks_ms()` | monotonic milliseconds since boot |
+| `ticks_us()` | monotonic microseconds since boot |
 | `sleep_ms(duration)` | cooperative sleep; `0..300000` ms |
 
 Button constants are `BUTTON_LEFT = 1`, `BUTTON_OK = 2`,
 `BUTTON_RIGHT = 4`, and `BUTTON_BACK = 8`. `sleep_ms()` checks both a remote
 stop request and the run deadline at least every 5 ms.
+
+After a script presents a display or camera frame, OK is available to the
+script in the script manager. BACK remains the manager's stop control.
 
 ## Display
 
@@ -67,6 +71,7 @@ through `0xffff`.
 | `display_size()` | return the selected display's `(width, height)` |
 | `display_rects(data, count=None)` | stage up to 256 filled rectangles in one call, within the frame's remaining command capacity |
 | `display_present()` | atomically make the currently staged display list visible |
+| `display_frame(background, data, count=None)` | clear, draw a packed batch of up to 255 filled rectangles, and present in one call |
 
 `display_clear()`, `display_text()`, and `display_rect()` only stage a bounded
 frame; the panel is updated by `display_present()`. `display_clear()` starts a
@@ -82,6 +87,13 @@ little-endian values per rectangle: `x`, `y`, `width`, `height`, and RGB565
 oversized batch leaves the previous staged commands intact. Both rectangle
 functions use the same display clipping rules. A frame can stage up to 256
 commands, including one for `display_clear()` and two per `display_text()`.
+
+`display_frame()` uses the same packed records, clipping and count argument as
+`display_rects()`. Use an empty buffer for a background-only frame. The call
+validates the complete batch before replacing the previous stage. After a
+successful call the new frame remains staged, like a frame submitted with
+`display_present()`. Display errors and script-stop cleanup follow the same
+rules as the separate calls.
 
 ## Illumination and RGB LED
 

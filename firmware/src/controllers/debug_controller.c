@@ -9,6 +9,9 @@
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "hk_config.h"
+#ifdef HK_SKY_GLIDE_BENCH
+#include "../capabilities/display_trace_private.h"
+#endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "debug_camera_controller.h"
 #endif
@@ -59,6 +62,10 @@ static void debug_wdt_autostart(const char *value)
 
 void debug_uart_handle_command(const char *cmd)
 {
+#ifdef HK_SKY_GLIDE_BENCH
+    if(hk_display_trace_debug(cmd))
+        return;
+#endif
 #if HK_MICROPYTHON_WDT_FAULT_INJECTION
     if(strcmp(cmd, "HKWDTSTART") == 0 || strncmp(cmd, "HKWDTSTART ", 11U) == 0)
     {

@@ -514,6 +514,55 @@ static void test_display_rects_rolls_back_invalid_batch(void)
                  "one call must carry a complete 256-command frame");
 }
 
+static void test_combined_display_frame(void)
+{
+    uint32_t background[6] = {0x1122U};
+    uint8_t record[] = {0, 0, 1, 0, 3, 0, 2, 0, 0x34, 0x12};
+    uint8_t full[MICROPYTHON_BINDING_RECTS_BYTES];
+    reset_run();
+    require_true(!micropython_capability_bridge_display_presented(),
+                 "a new run has not presented a display frame");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_CLEAR,
+                              background, NULL, 0U) == MICROPYTHON_BINDING_OK,
+                 "stage a predecessor");
+    record[4] = 0U;
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
+                              background, record, sizeof(record)) ==
+                     MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT &&
+                 g_overlay_present_calls == 0U,
+                 "invalid combined frame must never reach present");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
+                              NULL, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == 1U &&
+                 g_overlay_commands[0].color == 0x1122U,
+                 "invalid combined frame preserves the preceding stage");
+    record[4] = 3U;
+    for(size_t offset = 0; offset < sizeof(full); offset += sizeof(record))
+        memcpy(full + offset, record, sizeof(record));
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
+                              background, full, sizeof(full)) ==
+                     MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT,
+                 "combined frame reserves one command for the background");
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
+                              background, full, sizeof(full) - sizeof(record)) ==
+                     MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == LCD_OVERLAY_COMMAND_MAX &&
+                 g_overlay_commands[0].type == LCD_OVERLAY_COMMAND_CLEAR &&
+                 micropython_capability_bridge_display_presented() &&
+                 g_overlay_commands[1].color == 0x1234U,
+                 "combined frame installs clear and all 255 rectangles");
+    g_overlay_present_result = LCD_OVERLAY_PRESENT_CANCELLED;
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
+                              background, record, sizeof(record)) ==
+                     MICROPYTHON_BINDING_ERROR_TIMEOUT,
+                 "combined frame propagates an interrupted present");
+    g_overlay_present_result = LCD_OVERLAY_PRESENT_OK;
+    require_true(call_binding(MICROPYTHON_BINDING_OP_DISPLAY_PRESENT,
+                              NULL, NULL, 0U) == MICROPYTHON_BINDING_OK &&
+                 g_overlay_command_count == 2U,
+                 "legacy present can retry the complete combined stage");
+}
+
 static void test_display_limit_clear_recovery_and_cleanup(void)
 {
     static const uint8_t text[] = {'X'};
@@ -734,6 +783,7 @@ int main(void)
     test_display_stages_until_present();
     test_display_cancel_preserves_stage_for_retry();
     test_display_rects_rolls_back_invalid_batch();
+    test_combined_display_frame();
     test_display_limit_clear_recovery_and_cleanup();
     micropython_capability_bridge_cleanup();
     test_cleanup_failure_attempts_remaining_channels();

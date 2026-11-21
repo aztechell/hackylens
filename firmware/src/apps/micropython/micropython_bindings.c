@@ -112,6 +112,16 @@ static mp_obj_t binding_ticks_ms(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_ticks_ms_obj, binding_ticks_ms);
 
+static mp_obj_t binding_ticks_us(void)
+{
+    uint64_t now = 0U;
+    hk_result_t result = hk_time_now_us(hk_time_service(), &now);
+    if(result != HK_OK)
+        binding_time_raise(result);
+    return mp_obj_new_int_from_uint((mp_uint_t)now);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_ticks_us_obj, binding_ticks_us);
+
 static mp_obj_t binding_sleep_ms(mp_obj_t duration_object)
 {
     uint32_t duration = binding_uint(
@@ -198,26 +208,44 @@ static mp_obj_t binding_display_size(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(binding_display_size_obj, binding_display_size);
 
-static mp_obj_t binding_display_rects(size_t count, const mp_obj_t *args)
+static void binding_display_records(micropython_binding_op_t op,
+                                    uint32_t color, const mp_obj_t *args,
+                                    bool has_count, uint32_t limit)
 {
-    uint32_t arguments[6] = {0};
+    uint32_t arguments[6] = {color};
     mp_buffer_info_t buffer;
     size_t length;
 
     mp_get_buffer_raise(args[0], &buffer, MP_BUFFER_READ);
     length = buffer.len;
-    if(count == 2U)
-        length = binding_uint(args[1], MICROPYTHON_BINDING_RECTS_MAX) *
+    if(has_count)
+        length = binding_uint(args[1], limit) *
             MICROPYTHON_BINDING_RECT_BYTES;
-    if(length > buffer.len || length > MICROPYTHON_BINDING_RECTS_BYTES ||
+    if(length > buffer.len || length > limit * MICROPYTHON_BINDING_RECT_BYTES ||
        length % MICROPYTHON_BINDING_RECT_BYTES != 0U)
         mp_raise_ValueError(MP_ERROR_TEXT("invalid rectangle buffer length"));
-    (void)binding_call(MICROPYTHON_BINDING_OP_DISPLAY_RECTS, arguments,
-                       buffer.buf, length, NULL, 0U);
+    (void)binding_call(op, arguments, buffer.buf, length, NULL, 0U);
+}
+
+static mp_obj_t binding_display_rects(size_t count, const mp_obj_t *args)
+{
+    binding_display_records(MICROPYTHON_BINDING_OP_DISPLAY_RECTS, 0U,
+                            args, count == 2U, MICROPYTHON_BINDING_RECTS_MAX);
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
     binding_display_rects_obj, 1, 2, binding_display_rects);
+
+static mp_obj_t binding_display_frame(size_t count, const mp_obj_t *args)
+{
+    uint32_t color = binding_uint(args[0], 0xffffU);
+    bool has_count = count == 3U && args[2] != mp_const_none;
+    binding_display_records(MICROPYTHON_BINDING_OP_DISPLAY_FRAME, color,
+                            args + 1, has_count, MICROPYTHON_BINDING_RECTS_MAX - 1U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(
+    binding_display_frame_obj, 2, 3, binding_display_frame);
 
 static mp_obj_t binding_display_present(void)
 {
@@ -652,12 +680,14 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_buttons), MP_ROM_PTR(&binding_buttons_obj) },
     { MP_ROM_QSTR(MP_QSTR_button), MP_ROM_PTR(&binding_button_obj) },
     { MP_ROM_QSTR(MP_QSTR_ticks_ms), MP_ROM_PTR(&binding_ticks_ms_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks_us), MP_ROM_PTR(&binding_ticks_us_obj) },
     { MP_ROM_QSTR(MP_QSTR_sleep_ms), MP_ROM_PTR(&binding_sleep_ms_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_clear), MP_ROM_PTR(&binding_display_clear_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_text), MP_ROM_PTR(&binding_display_text_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_rect), MP_ROM_PTR(&binding_display_rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_size), MP_ROM_PTR(&binding_display_size_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_rects), MP_ROM_PTR(&binding_display_rects_obj) },
+    { MP_ROM_QSTR(MP_QSTR_display_frame), MP_ROM_PTR(&binding_display_frame_obj) },
     { MP_ROM_QSTR(MP_QSTR_display_present), MP_ROM_PTR(&binding_display_present_obj) },
     { MP_ROM_QSTR(MP_QSTR_led), MP_ROM_PTR(&binding_led_obj) },
     { MP_ROM_QSTR(MP_QSTR_rgb), MP_ROM_PTR(&binding_rgb_obj) },
