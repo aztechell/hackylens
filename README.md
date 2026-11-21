@@ -3,7 +3,7 @@
   <h1>HackyLens</h1>
   <p><strong>Open-source modular firmware for HUSKYLENS and the Kendryte K210.</strong></p>
   <p>
-    <a href="VERSION"><img alt="Firmware version 0.8.0" src="https://img.shields.io/badge/firmware-v0.8.0-45d483?style=flat-square"></a>
+    <a href="VERSION"><img alt="Firmware version 0.9.0" src="https://img.shields.io/badge/firmware-v0.9.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
     <a href="docs/MAIX_CUBE_TEST_LOG.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
@@ -26,7 +26,7 @@ HackyLens provides a compact on-device environment for camera experiments, QR sc
 
 ## Hardware
 
-HackyLens v0.8.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
+HackyLens v0.9.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 | Board | Camera | Display |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ HackyLens v0.8.0 ships firmware for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 
 Use the firmware package for your board. For other revisions, verify the board,
 flash layout and pin mapping before flashing. See the
-[v0.8.0 release notes](docs/releases/v0.8.0.md) for the hardware checks.
+[v0.9.0 release notes](docs/releases/v0.9.0.md) for the hardware checks.
 
 ## Features
 
@@ -179,7 +179,7 @@ and notices.
 After building both full images, create this payload locally with:
 
 ```powershell
-python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.8.0
+python tools\package_release_bundles.py --boards huskylens-sen0305 sipeed-maix-cube --tag v0.9.0
 ```
 
 Board staging directories under `build\release-stage\<board>` hold the

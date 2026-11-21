@@ -3,7 +3,7 @@
 HackyLens supports Maix Cube 2757 from v0.5.0. The `sipeed-maix-cube` board
 uses the `hackylens-cube` runtime profile. Its full build includes fifteen
 apps, with RECORDER and ACCELEROMETER available on Cube. See the
-[v0.8.0 release notes](releases/v0.8.0.md) for the release checks and the
+[v0.9.0 release notes](releases/v0.9.0.md) for the release checks and the
 [hardware test log](MAIX_CUBE_TEST_LOG.md) for the builds, conditions, and
 results of individual trials. Physical Grove UART/I2C exchange on Cube was
 [waived for release acceptance](MAIX_CUBE_TEST_LOG.md#release-050-final-io-acceptance-2026-10-30).

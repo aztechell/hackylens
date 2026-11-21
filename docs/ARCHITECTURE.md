@@ -1,6 +1,6 @@
 # Architecture
 
-HackyLens 0.8.0 is modular firmware built from common `firmware/src` layers,
+HackyLens 0.9.0 is modular firmware built from common `firmware/src` layers,
 the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 
 > HackyLens is a layered K210 reference firmware and MicroPython technology
@@ -394,7 +394,7 @@ The [Maix Cube board guide](MAIX_CUBE.md) covers its fifteen-app build,
 including RECORDER, ACCELEROMETER and WAV playback in FILES. ACCELEROMETER
 and MicroPython share the read-only sensor binding. The board provider
 owns the internal I²C1 transactions. See the
-[v0.8.0 release notes](releases/v0.8.0.md) for the current hardware coverage.
+[v0.9.0 release notes](releases/v0.9.0.md) for the current hardware coverage.
 Each build explicitly selects a board. Its `board.toml`
 owns wiring, defaults, flash layout and programming metadata. On Cube,
 settings and userfs writes require JEDEC to report exactly 16 MiB of flash.
