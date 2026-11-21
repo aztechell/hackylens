@@ -55,9 +55,10 @@ experiments. This gives a starting point for choosing test sizes.
 
 ## Distance measurements
 
-The APRILTAG app has a persistent **Distance** switch. Hold OK to open
-**TAG SETTINGS**. Aim the crosshair at a tag and press OK to select or deselect
-its ID. Selected tags have a yellow outline. Distance measures the visible
+Hold OK to open **TAG SETTINGS**, then choose **Distance → Enabled** to
+turn on distance measurements. Aim the crosshair at a tag and press OK
+in the camera view to select or deselect its ID. Selected tags have a
+yellow outline. Distance measures the visible
 selected tag nearest the middle of the image and shows its ID with the
 straight-line range. During calibration, the selected tag must be under the
 crosshair.
@@ -84,11 +85,11 @@ keep its white margin. Use one sheet at a time because both cards are ID 42.
    tag plane. Enter the measured square side under **Tag mm** and the
    reference distance under **Ref mm**.
 2. Select ID 42 with a short OK in the camera view before arming calibration.
-   Turn **Distance** on, select **Calibrate**, then press BACK to return to
-   the camera view. Hold the setup still while five consistent detections
-   are collected. A centimeter reading confirms calibration. **Focal** in
-   TAG SETTINGS shows the value in detector pixels. SEN0305 defaults to
-   154.00 px and Maix Cube defaults to 145.00 px. Press OK to edit and tap
+   In **Distance**, turn **Enabled** on and select **Calibrate**. Press
+   BACK twice to return to the camera view. Hold the setup still while
+   five consistent detections are collected. A centimeter reading confirms
+   calibration. **Distance → Focal** shows the value in detector pixels.
+   SEN0305 defaults to 154.00 px and Maix Cube to 145.00 px. Press OK to edit and tap
    LEFT/RIGHT to change it in 0.01 px steps. Holding a button increases the
    step to 0.10 px, then to a maximum of 0.50 px per repeat. Press OK to save
    or BACK to cancel. If the 60 mm square is too small at 300 mm, use the
@@ -105,15 +106,16 @@ keep its white margin. Use one sheet at a time because both cards are ID 42.
    record `range_mm` over USB. A zero field means the latest decoded frame
    had no valid reading. The `ranges` and `approx` counters report the
    number of accepted ranges and approximate ranges for the app session.
-4. Calibrate the Cube optics independently. For **Level range**, hold
-   the Cube upright with the camera pointing horizontally and select
-   **Set upright**. Pitch the Cube straight down by 90° without rolling
-   it and select **Set lens down**. Turn on **Level range**. The **H**
-   readout is the horizontal separation to the tag. It is available
+4. Calibrate the Cube optics independently. Open **Distance → Level range**.
+   Hold the Cube upright with the camera pointing horizontally and select
+   **Upright**. Pitch the Cube straight down by 90° without rolling
+   it and select **Lens down**. Turn **Enabled** on and press BACK three
+   times to return to the camera view. The **H** readout is the horizontal
+   separation to the tag. It is available
    after the board has settled and both references form a right angle.
    Compare the **H** reading with the horizontal separation from a plumb
    projection or from measured vertical and straight-line separation.
-   Toggle the option off and repeat to check the optical reading.
+   Turn **Level range → Enabled** off and repeat to check the optical reading.
 
 The prototype uses one optical reference distance, a centered principal
 point and square pixels. Measurements at different angles and positions
@@ -121,7 +123,7 @@ will show how much lens distortion and corner resolution affect each board.
 
 ## Near and far search
 
-**TAG SETTINGS → Search** defaults to **NEAR**, which searches the whole
+**TAG SETTINGS → Detection → Search** defaults to **NEAR**, which searches the whole
 image at 160×120. **FAR** starts with the center of the 320×240 capture
 and scans a 160×120 window in native pixels. Aim the crosshair at a distant
 tag to acquire it. After detection the window follows the tag, preferring

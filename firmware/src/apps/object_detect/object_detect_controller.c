@@ -212,7 +212,7 @@ uint8_t object_detect_controller_handle_buttons(
 {
     if(settings_menu_active(&g_settings_menu))
     {
-        if(object_detect_settings_menu_handle_input(&g_settings_menu, input) ==
+        if(settings_menu_handle_input(&g_settings_menu, input) ==
            SETTINGS_MENU_EVENT_CLOSE_REQUESTED)
         {
             settings_menu_close(&g_settings_menu);

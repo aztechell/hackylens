@@ -96,9 +96,10 @@ OBJECT DETECT requires:
 /hackylens.kmodels/object20/labels.txt
 ```
 
-Hold **OK** in OBJECT DETECT to open **OBJECT SETTINGS**, then open **Classes**.
+Hold **OK** in OBJECT DETECT and open **Classes** to choose which classes
+to report. **Detection** contains the confidence and NMS thresholds.
 Use **LEFT** and **RIGHT** to move, and **OK** to toggle a class or activate
-**Enable All** or **Disable All**. Press **BACK** to return to OBJECT SETTINGS
+**Enable All** or **Disable All**. Press **BACK** to return to **OBJ SETTINGS**
 and again to resume detection. The selection is saved across restarts. By
 default all 20 classes are enabled. The LCD and External Link use the same
 selection, and MicroPython model inference continues to return all classes.

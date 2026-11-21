@@ -174,6 +174,10 @@ time; feature modules do not replace each other's core-1 entry point.
 The shared controller in `controllers/settings_menu_controller.h` handles
 rows, navigation, hold-repeat and dynamic choices. CAMERA, QR, APRILTAG,
 OBJECT DETECT and SETTINGS supply their own descriptors and side effects.
+The four vision apps declare subsections as page rows. The controller
+restores the parent selection and scroll position on BACK. BACK at the
+root signals the app to resume its preview. APRILTAG selects its distance
+page based on accelerometer availability.
 SETTINGS uses the App SDK panel and groups the rows under Screen, Lights,
 Connection, Startup and Device. Boards with
 audio also show Sound. Range and choice edits in SETTINGS use a draft. Lighting

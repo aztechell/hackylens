@@ -76,12 +76,18 @@ The firmware's UART screenshot protocol captured these images directly from the
 `MICROPYTHON`, `FILES`, `BUTTONS`, `PONG`, `SETTINGS`, `POWER`, and
 [`FACE RECOG`](docs/FACE_RECOGNITION.md).
 
+Hold **OK** in CAMERA, QR-CAMERA, OBJECT DETECT, or APRILTAG to open
+its settings. **OK** opens a row marked `>`, and **BACK** returns one
+level. The **Lights** section groups the light source and RGB controls.
+
+- **CAMERA** groups resolution, photo format, and review in **Capture**.
+  Use [USB photo download](#download-camera-photos-over-usb) to copy saved
+  photos from microSD to a PC.
+- **QR-CAMERA** keeps **Decode Rate** on the first screen.
 - **APRILTAG** measures distance to selected tags. See the
   [calibration guide](examples/markers/README.md#distance-measurements).
 - **OBJECT DETECT** can limit detections to selected classes. See the
   [class filter controls](docs/AI_MODELS.md#object-detect).
-- **CAMERA** saves photos to microSD. Use
-  [USB photo download](#download-camera-photos-over-usb) to copy them to a PC.
 
 `POWER` offers sleep and restart on both boards. Maix Cube also supports power off.
 

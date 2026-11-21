@@ -13,6 +13,7 @@ typedef enum
     SETTINGS_MENU_ITEM_RANGE,
     SETTINGS_MENU_ITEM_ACTION,
     SETTINGS_MENU_ITEM_TEXT,
+    SETTINGS_MENU_ITEM_PAGE,
 } settings_menu_item_kind_t;
 
 typedef enum
@@ -34,7 +35,10 @@ enum
     SETTINGS_MENU_ITEM_MINUTES = 0x04U,
     SETTINGS_MENU_ITEM_CENTIPIXELS = 0x08U,
     SETTINGS_MENU_ITEM_ACCELERATE = 0x10U,
+    SETTINGS_MENU_ITEM_REDRAW_PAGE = 0x20U,
 };
+
+typedef struct settings_menu_definition settings_menu_definition_t;
 
 typedef struct
 {
@@ -49,6 +53,7 @@ typedef struct
     uint8_t choice_count;
     uint8_t flags;
     int32_t edit_initial; /* Used when a saved range value is below its minimum. */
+    const settings_menu_definition_t *page;
 } settings_menu_item_t;
 
 typedef int32_t (*settings_menu_read_fn)(void *context, uint16_t id);
@@ -65,7 +70,7 @@ typedef const char *(*settings_menu_choice_label_fn)(void *context,
 typedef void (*settings_menu_changed_fn)(void *context, uint16_t id);
 typedef void (*settings_menu_committed_fn)(void *context, uint16_t id);
 
-typedef struct
+struct settings_menu_definition
 {
     const char *title;
     const settings_menu_item_t *items;
@@ -81,11 +86,22 @@ typedef struct
     settings_menu_committed_fn committed;
     void (*preview)(void *context, uint16_t id, int32_t value);
     uint8_t defer_edits;
-} settings_menu_definition_t;
+};
+
+#define SETTINGS_MENU_MAX_DEPTH 2U
 
 typedef struct
 {
     const settings_menu_definition_t *definition;
+    uint8_t index;
+    uint8_t top;
+} settings_menu_position_t;
+
+typedef struct
+{
+    const settings_menu_definition_t *definition;
+    settings_menu_position_t parents[SETTINGS_MENU_MAX_DEPTH];
+    uint8_t depth;
     uint8_t index;
     uint8_t top;
     uint8_t active;

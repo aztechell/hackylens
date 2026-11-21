@@ -538,7 +538,7 @@ void apriltag_controller_tick(const hk_input_snapshot_t *input)
         vision_result_clear(VISION_SOURCE_APRILTAG);
         camera_service_freeze(1U);
         g_settings_repeat_due_us = 0U;
-        (void)settings_menu_open(&g_settings_menu, apriltag_settings_menu_definition(&g_settings_menu));
+        (void)settings_menu_open(&g_settings_menu, apriltag_settings_menu_definition());
         return;
     }
 

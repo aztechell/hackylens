@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -5,9 +6,15 @@
 #include "../firmware/src/config/input_config.h"
 #include "../firmware/src/apps/apriltag/apriltag_settings.h"
 #include "../firmware/src/apps/apriltag/apriltag_settings_menu.h"
+#include "../firmware/src/apps/camera/camera_settings_menu.h"
 #include "../firmware/src/apps/object_detect/object_detect_labels.h"
 #include "../firmware/src/apps/object_detect/object_detect_settings.h"
 #include "../firmware/src/apps/object_detect/object_detect_settings_menu.h"
+#include "../firmware/src/apps/qr_camera/qr_config.h"
+#include "../firmware/src/apps/qr_camera/qr_settings_menu.h"
+#include "../firmware/src/core/hk_camera_sizes.h"
+#include "../firmware/src/services/camera_light.h"
+#include "../firmware/src/services/camera_persist_settings.h"
 #include "../firmware/src/services/camera_session_preferences.h"
 #include "../firmware/src/services/object_detect_postprocess.h"
 #include "../firmware/src/apps/settings/settings_menu.h"
@@ -23,6 +30,7 @@
 #include "../firmware/src/storage/internal_flash.h"
 #include "../firmware/src/storage/settings_store.h"
 #include "../firmware/src/storage/fat32_volume.h"
+#include "../firmware/src/ui/display_binding.h"
 
 #define CHECK(condition)                                                     \
     do                                                                       \
@@ -83,6 +91,7 @@ static const char *s_pin;
 static const char *s_drawn_first;
 static const hk_app_t *s_opened_app;
 static const char *s_opened_pin;
+static uint8_t s_has_accelerometer;
 
 void hk_back_exit_set_armed(uint8_t armed) { (void)armed; }
 void hk_screen_set(screen_t screen) { s_screen = screen; }
@@ -148,6 +157,27 @@ void camera_session_preferences_override(const camera_session_preferences_t *pre
 }
 void apriltag_detector_set_refine_edges(uint8_t enabled) { (void)enabled; }
 void camera_light_apply(void) {}
+const char *camera_light_mode_label(camera_light_mode_t mode)
+{
+    return mode == CAMERA_LIGHT_RGB ? "RGB" : "LED";
+}
+const char *camera_log_prefix(void) { return "[CAM]"; }
+void camera_active_size_set(camera_size_t size) { (void)size; }
+uint64_t hal_time_us(void) { return 0U; }
+uint8_t camera_session_preferences_fps_enabled(void) { return camera_service_fps_enabled(); }
+void camera_service_frame_info(uint16_t *width, uint16_t *height)
+{
+    *width = camera_size_width(camera_service_size());
+    *height = camera_size_height(camera_service_size());
+}
+uint8_t qr_service_decode_rate(void) { return settings_qr_decode_rate(); }
+uint8_t qr_service_cycle_decode_rate(void)
+{
+    uint8_t rate = settings_qr_decode_rate();
+    settings_set_qr_decode_rate(rate >= QR_DECODE_RATE_MAX ? QR_DECODE_RATE_MIN : rate + 1U);
+    return settings_qr_decode_rate();
+}
+
 void object_detect_detector_set_thresholds(uint8_t confidence, uint8_t nms)
 {
     (void)confidence;
@@ -156,24 +186,42 @@ void object_detect_detector_set_thresholds(uint8_t confidence, uint8_t nms)
 uint8_t apriltag_controller_arm_calibration(void) { return 0U; }
 uint8_t apriltag_controller_calibration_armed(void) { return 0U; }
 void apriltag_controller_cancel_calibration(void) {}
-uint8_t apriltag_controller_has_accelerometer(void) { return 0U; }
+uint8_t apriltag_controller_has_accelerometer(void) { return s_has_accelerometer; }
 uint8_t apriltag_controller_capture_gravity(uint8_t lens_down) { (void)lens_down; return 0U; }
-void settings_menu_view_open(const char *title) { (void)title; }
-void settings_menu_view_clear_rows(void) {}
-void settings_menu_view_draw_row(uint8_t slot, const char *title, const char *value,
-                                 uint8_t selected, uint8_t editing)
+void menu_draw_chrome(const char *title)
 {
-    (void)slot;
-    (void)title;
-    (void)value;
-    (void)selected;
-    (void)editing;
+    unsigned margin = HK_DISPLAY_REQUIRED_WIDTH >= 320U ? 104U : 46U;
+    assert(strlen(title) * HACKYLENS_FONT_W <= HK_DISPLAY_REQUIRED_WIDTH - margin);
+}
+void hk_ui_display_fill_rect(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
+                             uint16_t color)
+{
+    (void)color;
+    assert(x + width <= HK_DISPLAY_REQUIRED_WIDTH && y + height <= HK_DISPLAY_REQUIRED_HEIGHT);
+}
+void hk_ui_display_draw_text_clipped_at(uint16_t x, uint16_t y, uint16_t width,
+                                        const char *text, uint16_t foreground,
+                                        uint16_t background)
+{
+    (void)foreground;
+    (void)background;
+    assert(x + width <= HK_DISPLAY_REQUIRED_WIDTH);
+    assert((unsigned)y + HACKYLENS_FONT_H <= HK_DISPLAY_REQUIRED_HEIGHT);
+    assert(strlen(text) * HACKYLENS_FONT_W <= width);
+}
+void hk_ui_display_draw_text_at(uint16_t x, uint16_t y, const char *text,
+                                uint16_t foreground, uint16_t background)
+{
+    (void)foreground;
+    (void)background;
+    assert(x + strlen(text) * HACKYLENS_FONT_W <= HK_DISPLAY_REQUIRED_WIDTH);
+    assert((unsigned)y + HACKYLENS_FONT_H <= HK_DISPLAY_REQUIRED_HEIGHT);
 }
 
-static void press(settings_menu_session_t *menu, uint32_t button)
+static settings_menu_event_t press(settings_menu_session_t *menu, uint32_t button)
 {
     const hk_input_snapshot_t input = {button, button, button};
-    (void)settings_menu_handle_input(menu, &input);
+    return settings_menu_handle_input(menu, &input);
 }
 
 static void settings_press(settings_state_t *state, uint32_t button)
@@ -259,12 +307,6 @@ static int test_menu_order(void)
     return 0;
 }
 
-static settings_menu_event_t object_press(settings_menu_session_t *menu, uint32_t button)
-{
-    const hk_input_snapshot_t input = {button, button, button};
-    return object_detect_settings_menu_handle_input(menu, &input);
-}
-
 static int test_object_classes(void)
 {
     settings_menu_session_t menu = {0};
@@ -279,9 +321,16 @@ static int test_object_classes(void)
     settings_storage_init();
     CHECK(settings_menu_open(&menu, object_detect_settings_menu_definition()));
     CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Detection") == 0 && strcmp(value, ">") == 0);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, NULL, 0U, NULL, NULL));
+    CHECK(strcmp(title, "Confidence") == 0);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    press(&menu, BUTTON_RIGHT);
+    CHECK(settings_menu_visible_slot(&menu, 1U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Classes") == 0 && strcmp(value, "20/20 >") == 0);
-    CHECK(object_press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
-    CHECK(strcmp(menu.definition->title, "OBJECT CLASSES") == 0);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(strcmp(menu.definition->title, "OBJ CLASSES") == 0);
     CHECK(menu.definition->item_count == OBJECT_DETECT_CLASS_COUNT + 2U);
     for(uint8_t class_id = 0; class_id < OBJECT_DETECT_CLASS_COUNT; class_id++)
     {
@@ -291,8 +340,8 @@ static int test_object_classes(void)
         CHECK(settings_menu_display_value(&menu, class_id) == 1);
     }
 
-    object_press(&menu, BUTTON_RIGHT);
-    CHECK(object_press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    press(&menu, BUTTON_RIGHT);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
     CHECK(object_detect_settings_class_mask() == 0U);
     for(unsigned tick = 0; tick <= SETTINGS_SAVE_DELAY_TICKS; tick++)
         settings_storage_tick();
@@ -300,18 +349,19 @@ static int test_object_classes(void)
     CHECK(object_detect_settings_class_mask() == 0U);
 
     for(unsigned step = 0; step < 7U; step++)
-        object_press(&menu, BUTTON_RIGHT);
+        press(&menu, BUTTON_RIGHT);
     CHECK(menu.definition->items[menu.index].id == 6U);
-    object_press(&menu, BUTTON_OK);
+    press(&menu, BUTTON_OK);
     for(unsigned step = 0; step < 8U; step++)
-        object_press(&menu, BUTTON_RIGHT);
+        press(&menu, BUTTON_RIGHT);
     CHECK(menu.definition->items[menu.index].id == 14U);
-    object_press(&menu, BUTTON_OK);
+    press(&menu, BUTTON_OK);
     CHECK(object_detect_settings_class_mask() == selected);
-    CHECK(object_press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
-    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(menu.index == 1U && menu.top == 0U);
+    CHECK(settings_menu_visible_slot(&menu, 1U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Classes") == 0 && strcmp(value, "2/20 >") == 0);
-    CHECK(object_press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
     settings_menu_close(&menu);
     CHECK(settings_storage_flush());
     settings_storage_init();
@@ -344,8 +394,9 @@ static int test_object_classes(void)
           0U, &workspace, results, NULL, NULL) == 0U);
 
     CHECK(settings_menu_open(&menu, object_detect_settings_menu_definition()));
-    object_press(&menu, BUTTON_OK);
-    object_press(&menu, BUTTON_OK);
+    press(&menu, BUTTON_RIGHT);
+    press(&menu, BUTTON_OK);
+    press(&menu, BUTTON_OK);
     CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
     CHECK(settings_storage_flush());
     settings_storage_init();
@@ -395,6 +446,52 @@ static int test_screen_and_device(void)
     return 0;
 }
 
+static int test_camera_and_qr_groups(void)
+{
+    settings_menu_session_t menu = {0};
+    const char *title;
+    char value[24];
+
+    camera_service_persist_defaults();
+    CHECK(settings_menu_open(&menu, camera_settings_menu_definition()));
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Capture") == 0 && strcmp(value, ">") == 0);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(strcmp(menu.definition->title, "CAM CAPTURE") == 0);
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, NULL, 0U, NULL, NULL));
+    CHECK(strcmp(title, "Size") == 0);
+    press(&menu, BUTTON_OK);
+    CHECK(camera_service_size() == camera_size_next(CAMERA_SIZE_320X240));
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(menu.index == 0U && strcmp(menu.definition->title, "CAM SETTINGS") == 0);
+    press(&menu, BUTTON_RIGHT);
+    press(&menu, BUTTON_OK);
+    CHECK(strcmp(menu.definition->title, "CAM LIGHTS") == 0);
+    press(&menu, BUTTON_OK);
+    CHECK(camera_service_light_mode() == CAMERA_LIGHT_RGB);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE && menu.index == 1U);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
+    settings_menu_close(&menu);
+
+    CHECK(settings_menu_open(&menu, qr_settings_menu_definition()));
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, NULL, 0U, NULL, NULL));
+    CHECK(strcmp(title, "Decode Rate") == 0);
+    settings_set_qr_decode_rate(QR_DECODE_RATE_MIN);
+    press(&menu, BUTTON_OK);
+    CHECK(settings_qr_decode_rate() == QR_DECODE_RATE_MIN + 1U);
+    press(&menu, BUTTON_RIGHT);
+    press(&menu, BUTTON_OK);
+    CHECK(strcmp(menu.definition->title, "QR LIGHTS") == 0);
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Source") == 0 && strcmp(value, "RGB") == 0);
+    press(&menu, BUTTON_OK);
+    CHECK(camera_service_light_mode() == CAMERA_LIGHT_LED);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE && menu.index == 1U);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
+    settings_menu_close(&menu);
+    return 0;
+}
+
 static int test_tag_focal_editor(void)
 {
     settings_menu_session_t menu = {0};
@@ -404,19 +501,40 @@ static int test_tag_focal_editor(void)
     const uint32_t default_focal = sen0305 ? 154000U : 145000U;
     const char *default_label = sen0305 ? "154.00 px" : "145.00 px";
     const apriltag_distance_settings_t *distance = apriltag_settings_distance();
-    CHECK(settings_menu_bind(&menu, apriltag_settings_menu_definition(&menu)));
+    s_has_accelerometer = !sen0305;
+    CHECK(settings_menu_open(&menu, apriltag_settings_menu_definition()));
+    CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Detection") == 0 && strcmp(value, ">") == 0);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
     CHECK(settings_menu_visible_slot(&menu, 0U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Search") == 0 && strcmp(value, "NEAR") == 0);
     press(&menu, HK_INPUT_BUTTON_OK);
     CHECK(settings_menu_visible_slot(&menu, 0U, NULL, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(value, "FAR") == 0 && apriltag_settings_preferences()->far_search);
-    for(uint8_t i = 0; i < 5U; i++)
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    press(&menu, BUTTON_RIGHT);
+    CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(strcmp(menu.definition->title, "TAG DISTANCE") == 0);
+    if(sen0305)
+        CHECK(!settings_menu_visible_slot(&menu, 5U, NULL, NULL, 0U, NULL, NULL));
+    else
+    {
+        press(&menu, BUTTON_LEFT);
+        CHECK(settings_menu_visible_slot(&menu, 5U, &title, value, sizeof(value), NULL, NULL));
+        CHECK(strcmp(title, "Level range") == 0 && strcmp(value, ">") == 0);
+        CHECK(press(&menu, BUTTON_OK) == SETTINGS_MENU_EVENT_NONE);
+        CHECK(strcmp(menu.definition->title, "LEVEL RANGE") == 0);
+        CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+        CHECK(strcmp(menu.definition->title, "TAG DISTANCE") == 0 && menu.index == 5U);
+        CHECK(press(&menu, BUTTON_RIGHT) == SETTINGS_MENU_EVENT_NONE && menu.index == 0U);
+    }
+    for(uint8_t i = 0; i < 4U; i++)
         press(&menu, HK_INPUT_BUTTON_RIGHT);
-    CHECK(settings_menu_visible_slot(&menu, 5U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(settings_menu_visible_slot(&menu, 4U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Focal") == 0);
     CHECK(strcmp(value, default_label) == 0);
     press(&menu, HK_INPUT_BUTTON_OK);
-    CHECK(settings_menu_visible_slot(&menu, 5U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(settings_menu_visible_slot(&menu, 4U, NULL, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(value, default_label) == 0);
     press(&menu, HK_INPUT_BUTTON_BACK);
     CHECK(distance->focal_millipixels == default_focal);
@@ -445,7 +563,7 @@ static int test_tag_focal_editor(void)
     press(&menu, HK_INPUT_BUTTON_OK);
     for(unsigned i = 0U; i < 4U; i++)
         press(&menu, HK_INPUT_BUTTON_LEFT);
-    CHECK(settings_menu_visible_slot(&menu, 5U, NULL, value, sizeof(value), NULL, NULL));
+    CHECK(settings_menu_visible_slot(&menu, 4U, NULL, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(value, "153.60 px") == 0);
     press(&menu, HK_INPUT_BUTTON_OK);
     CHECK(distance->focal_millipixels == 153600U);
@@ -454,6 +572,9 @@ static int test_tag_focal_editor(void)
     settings_store_init(&loaded);
     CHECK(loaded.has_payload && rd32(loaded.payload.tag_distance + 6U) == 153600U);
     CHECK(loaded.payload.app_data[1] & 0x08U);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_NONE);
+    CHECK(strcmp(menu.definition->title, "TAG SETTINGS") == 0 && menu.index == 1U);
+    CHECK(press(&menu, BUTTON_BACK) == SETTINGS_MENU_EVENT_CLOSE_REQUESTED);
     return 0;
 }
 
@@ -667,6 +788,7 @@ int main(int argc, char **argv)
     CHECK(test_tag_focal_editor() == 0);
     CHECK(settings_autostart_id() == 10U);
     CHECK(test_object_classes() == 0);
+    CHECK(test_camera_and_qr_groups() == 0);
     CHECK(test_menu_order() == 0);
 
     printf("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=%u\n",

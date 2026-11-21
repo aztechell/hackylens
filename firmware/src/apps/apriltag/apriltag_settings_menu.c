@@ -23,14 +23,26 @@ enum
     ITEM_LEVEL,
     ITEM_UPRIGHT,
     ITEM_LENS_DOWN,
-    LEVEL_ROWS = 3,
+    PAGE_DETECTION,
+    PAGE_DISTANCE,
+    PAGE_LEVEL,
+    PAGE_OUTPUT,
+    PAGE_LIGHTS,
 };
 
-static const settings_menu_item_t g_items[] = {
+static const settings_menu_item_t g_detection_items[] = {
     {.id = APRILTAG_SETTINGS_SEARCH, .title = "Search",
      .kind = SETTINGS_MENU_ITEM_CHOICE, .interaction = SETTINGS_MENU_CYCLE_ON_OK,
      .choices = g_search_choices, .choice_count = 2U, .flags = SETTINGS_MENU_ITEM_WRAP},
-    {.id = ITEM_DISTANCE, .title = "Distance", .kind = SETTINGS_MENU_ITEM_TOGGLE},
+    {.id = APRILTAG_SETTINGS_REFINE, .title = "Refine Edges",
+     .kind = SETTINGS_MENU_ITEM_TOGGLE, .interaction = SETTINGS_MENU_CYCLE_ON_OK},
+};
+
+static const settings_menu_definition_t g_level;
+
+static const settings_menu_item_t g_distance_items[] = {
+    {.id = ITEM_DISTANCE, .title = "Enabled", .kind = SETTINGS_MENU_ITEM_TOGGLE,
+     .flags = SETTINGS_MENU_ITEM_REDRAW_PAGE},
     {.id = ITEM_TAG_MM, .title = "Tag mm", .kind = SETTINGS_MENU_ITEM_RANGE,
      .interaction = SETTINGS_MENU_EDIT_ON_OK, .minimum = 20, .maximum = 150, .step = 1},
     {.id = ITEM_REF_MM, .title = "Ref mm", .kind = SETTINGS_MENU_ITEM_RANGE,
@@ -40,20 +52,28 @@ static const settings_menu_item_t g_items[] = {
      .interaction = SETTINGS_MENU_EDIT_ON_OK, .minimum = APRILTAG_DISTANCE_FOCAL_MIN_MPX / 10U,
      .maximum = APRILTAG_DISTANCE_FOCAL_MAX_MPX / 10U, .step = 1,
      .edit_initial = 12000,
-     .flags = SETTINGS_MENU_ITEM_CENTIPIXELS | SETTINGS_MENU_ITEM_ACCELERATE},
-    {.id = ITEM_LEVEL, .title = "Level range", .kind = SETTINGS_MENU_ITEM_TOGGLE},
-    {.id = ITEM_UPRIGHT, .title = "Set upright", .kind = SETTINGS_MENU_ITEM_ACTION},
-    {.id = ITEM_LENS_DOWN, .title = "Set lens down", .kind = SETTINGS_MENU_ITEM_ACTION},
-    {.id = APRILTAG_SETTINGS_REFINE, .title = "Refine Edges",
-     .kind = SETTINGS_MENU_ITEM_TOGGLE, .interaction = SETTINGS_MENU_CYCLE_ON_OK},
-    {.id = APRILTAG_SETTINGS_OUTPUT, .title = "Output",
+     .flags = SETTINGS_MENU_ITEM_CENTIPIXELS | SETTINGS_MENU_ITEM_ACCELERATE |
+              SETTINGS_MENU_ITEM_REDRAW_PAGE},
+    {.id = PAGE_LEVEL, .title = "Level range", .kind = SETTINGS_MENU_ITEM_PAGE,
+     .page = &g_level},
+};
+
+static const settings_menu_item_t g_level_items[] = {
+    {.id = ITEM_LEVEL, .title = "Enabled", .kind = SETTINGS_MENU_ITEM_TOGGLE},
+    {.id = ITEM_UPRIGHT, .title = "Upright", .kind = SETTINGS_MENU_ITEM_ACTION},
+    {.id = ITEM_LENS_DOWN, .title = "Lens down", .kind = SETTINGS_MENU_ITEM_ACTION},
+};
+
+static const settings_menu_item_t g_output_items[] = {
+    {.id = APRILTAG_SETTINGS_OUTPUT, .title = "Mode",
      .kind = SETTINGS_MENU_ITEM_CHOICE, .interaction = SETTINGS_MENU_CYCLE_ON_OK,
      .choices = g_output_choices, .choice_count = 2U, .flags = SETTINGS_MENU_ITEM_WRAP},
     {.id = APRILTAG_SETTINGS_CLEAR_IDS, .title = "Clear IDs",
      .kind = SETTINGS_MENU_ITEM_ACTION, .interaction = SETTINGS_MENU_CYCLE_ON_OK},
-    {.id = APRILTAG_SETTINGS_FPS, .title = "FPS Counter",
-     .kind = SETTINGS_MENU_ITEM_TOGGLE, .interaction = SETTINGS_MENU_CYCLE_ON_OK},
-    {.id = APRILTAG_SETTINGS_LIGHT, .title = "Light",
+};
+
+static const settings_menu_item_t g_lights_items[] = {
+    {.id = APRILTAG_SETTINGS_LIGHT, .title = "Source",
      .kind = SETTINGS_MENU_ITEM_CHOICE, .interaction = SETTINGS_MENU_CYCLE_ON_OK,
      .choices = g_light_choices, .choice_count = 2U, .flags = SETTINGS_MENU_ITEM_WRAP},
     {.id = APRILTAG_SETTINGS_RGB_RED, .title = "RGB Red",
@@ -65,8 +85,6 @@ static const settings_menu_item_t g_items[] = {
     {.id = APRILTAG_SETTINGS_RGB_BLUE, .title = "RGB Blue",
      .kind = SETTINGS_MENU_ITEM_RANGE, .interaction = SETTINGS_MENU_CYCLE_ON_OK,
      .minimum = 0, .maximum = 100, .step = 10, .flags = SETTINGS_MENU_ITEM_WRAP},
-    {.id = APRILTAG_SETTINGS_VERSION, .title = "Version",
-     .kind = SETTINGS_MENU_ITEM_TEXT, .interaction = SETTINGS_MENU_CYCLE_ON_OK},
 };
 
 static int32_t apriltag_menu_read(void *context, uint16_t id)
@@ -204,37 +222,41 @@ static void apriltag_menu_changed(void *context, uint16_t id)
        id == APRILTAG_SETTINGS_LIGHT ||
        (id >= APRILTAG_SETTINGS_RGB_RED && id <= APRILTAG_SETTINGS_RGB_BLUE))
         apriltag_settings_apply_session();
-    if(id == ITEM_DISTANCE || id == ITEM_FOCAL)
-        settings_menu_redraw_all(context);
 }
 
-static const settings_menu_definition_t g_definition = {
-    .title = "TAG SETTINGS",
-    .items = g_items,
-    .item_count = (uint8_t)(sizeof(g_items) / sizeof(g_items[0])),
-    .context = NULL,
-    .read = apriltag_menu_read,
-    .write = apriltag_menu_write,
-    .action = apriltag_menu_action,
-    .format = apriltag_menu_format,
-    .changed = apriltag_menu_changed,
-    .defer_edits = 1U,
-};
+#define TAG_PAGE(title_, items_, count_) \
+    { .title = title_, .items = items_, .item_count = count_, \
+      .read = apriltag_menu_read, .write = apriltag_menu_write, .action = apriltag_menu_action, \
+      .format = apriltag_menu_format, .changed = apriltag_menu_changed, .defer_edits = 1U }
+#define TAG_FULL_PAGE(title_, items_) TAG_PAGE(title_, items_, sizeof(items_) / sizeof((items_)[0]))
 
-const settings_menu_definition_t *apriltag_settings_menu_definition(settings_menu_session_t *session)
-{
-    static settings_menu_definition_t definition;
-    static settings_menu_item_t optical_items[sizeof(g_items) / sizeof(g_items[0]) - LEVEL_ROWS];
-    definition = g_definition;
-    definition.context = session;
-    if(!apriltag_controller_has_accelerometer())
-    {
-        uint8_t count = 0U;
-        for(unsigned i = 0U; i < g_definition.item_count; i++)
-            if(g_items[i].id < ITEM_LEVEL || g_items[i].id > ITEM_LENS_DOWN)
-                optical_items[count++] = g_items[i];
-        definition.items = optical_items;
-        definition.item_count = count;
+static const settings_menu_definition_t g_detection = TAG_FULL_PAGE("TAG DETECTION", g_detection_items);
+static const settings_menu_definition_t g_output = TAG_FULL_PAGE("TAG OUTPUT", g_output_items);
+static const settings_menu_definition_t g_lights = TAG_FULL_PAGE("TAG LIGHTS", g_lights_items);
+static const settings_menu_definition_t g_level = TAG_FULL_PAGE("LEVEL RANGE", g_level_items);
+static const settings_menu_definition_t g_distance = TAG_FULL_PAGE("TAG DISTANCE", g_distance_items);
+/* Level range is the last entry and requires an accelerometer. */
+static const settings_menu_definition_t g_optical_distance =
+    TAG_PAGE("TAG DISTANCE", g_distance_items, sizeof(g_distance_items) / sizeof(g_distance_items[0]) - 1U);
+
+#define TAG_ROOT_ITEMS(distance_) \
+    { \
+        {.id = PAGE_DETECTION, .title = "Detection", .kind = SETTINGS_MENU_ITEM_PAGE, .page = &g_detection}, \
+        {.id = PAGE_DISTANCE, .title = "Distance", .kind = SETTINGS_MENU_ITEM_PAGE, .page = &distance_}, \
+        {.id = PAGE_OUTPUT, .title = "Output", .kind = SETTINGS_MENU_ITEM_PAGE, .page = &g_output}, \
+        {.id = PAGE_LIGHTS, .title = "Lights", .kind = SETTINGS_MENU_ITEM_PAGE, .page = &g_lights}, \
+        {.id = APRILTAG_SETTINGS_FPS, .title = "FPS Counter", .kind = SETTINGS_MENU_ITEM_TOGGLE}, \
+        {.id = APRILTAG_SETTINGS_VERSION, .title = "Version", .kind = SETTINGS_MENU_ITEM_TEXT}, \
     }
-    return &definition;
+
+static const settings_menu_item_t g_root_items[] = TAG_ROOT_ITEMS(g_distance);
+static const settings_menu_item_t g_optical_root_items[] = TAG_ROOT_ITEMS(g_optical_distance);
+
+static const settings_menu_definition_t g_root = TAG_FULL_PAGE("TAG SETTINGS", g_root_items);
+static const settings_menu_definition_t g_optical_root =
+    TAG_FULL_PAGE("TAG SETTINGS", g_optical_root_items);
+
+const settings_menu_definition_t *apriltag_settings_menu_definition(void)
+{
+    return apriltag_controller_has_accelerometer() ? &g_root : &g_optical_root;
 }

@@ -103,6 +103,11 @@ static void settings_menu_format_value(const settings_menu_session_t *session,
                                    item->id, value, value_size))
         return;
 
+    if(item->kind == SETTINGS_MENU_ITEM_PAGE)
+    {
+        snprintf(value, value_size, ">");
+        return;
+    }
     current = settings_menu_display_value(session, item->id);
     if(item->kind == SETTINGS_MENU_ITEM_TOGGLE)
         snprintf(value, value_size, "%s", current ? "ON" : "OFF");
@@ -212,33 +217,46 @@ static void settings_menu_finish_edit(settings_menu_session_t *session, uint8_t 
         settings_menu_draw_index(session, session->index);
 }
 
-uint8_t settings_menu_open(settings_menu_session_t *session,
-                           const settings_menu_definition_t *definition)
+static uint8_t settings_menu_valid(const settings_menu_definition_t *definition)
 {
-    if(!session || !definition || !definition->items || definition->item_count == 0U)
+    return definition && definition->items && definition->item_count != 0U;
+}
+
+static void settings_menu_show_page(settings_menu_session_t *session)
+{
+    if(!session->headless)
+    {
+        settings_menu_view_open(session->definition->title);
+        settings_menu_redraw_all(session);
+    }
+}
+
+static uint8_t settings_menu_start(settings_menu_session_t *session,
+                                   const settings_menu_definition_t *definition,
+                                   uint8_t headless)
+{
+    if(!session || !settings_menu_valid(definition))
         return 0U;
     if(session->active)
         settings_menu_close(session);
     memset(session, 0, sizeof(*session));
     session->definition = definition;
     session->active = 1U;
-    settings_menu_view_open(definition->title);
-    settings_menu_redraw_all(session);
+    session->headless = headless;
+    settings_menu_show_page(session);
     return 1U;
+}
+
+uint8_t settings_menu_open(settings_menu_session_t *session,
+                           const settings_menu_definition_t *definition)
+{
+    return settings_menu_start(session, definition, 0U);
 }
 
 uint8_t settings_menu_bind(settings_menu_session_t *session,
                            const settings_menu_definition_t *definition)
 {
-    if(!session || !definition || !definition->items || definition->item_count == 0U)
-        return 0U;
-    if(session->active)
-        settings_menu_close(session);
-    memset(session, 0, sizeof(*session));
-    session->definition = definition;
-    session->active = 1U;
-    session->headless = 1U;
-    return 1U;
+    return settings_menu_start(session, definition, 1U);
 }
 
 void settings_menu_close(settings_menu_session_t *session)
@@ -253,6 +271,35 @@ void settings_menu_close(settings_menu_session_t *session)
 uint8_t settings_menu_active(const settings_menu_session_t *session)
 {
     return session && session->active ? 1U : 0U;
+}
+
+static void settings_menu_enter_page(settings_menu_session_t *session,
+                                      const settings_menu_definition_t *page)
+{
+    if(!settings_menu_valid(page) || session->depth == SETTINGS_MENU_MAX_DEPTH)
+        return;
+
+    session->parents[session->depth++] = (settings_menu_position_t){
+        .definition = session->definition,
+        .index = session->index,
+        .top = session->top,
+    };
+    session->definition = page;
+    session->index = 0U;
+    session->top = 0U;
+    settings_menu_repeat_reset(session);
+    settings_menu_show_page(session);
+}
+
+static void settings_menu_return_page(settings_menu_session_t *session)
+{
+    const settings_menu_position_t *parent = &session->parents[--session->depth];
+
+    session->definition = parent->definition;
+    session->index = parent->index;
+    session->top = parent->top;
+    settings_menu_repeat_reset(session);
+    settings_menu_show_page(session);
 }
 
 static void settings_menu_select_delta(settings_menu_session_t *session, int8_t delta)
@@ -323,7 +370,12 @@ static uint8_t settings_menu_write_value(settings_menu_session_t *session,
     if(changed && session->definition->changed)
         session->definition->changed(session->definition->context, item->id);
     if(changed)
-        settings_menu_draw_index(session, session->index);
+    {
+        if(item->flags & SETTINGS_MENU_ITEM_REDRAW_PAGE)
+            settings_menu_redraw_all(session);
+        else
+            settings_menu_draw_index(session, session->index);
+    }
     return changed;
 }
 
@@ -358,13 +410,21 @@ static void settings_menu_activate(settings_menu_session_t *session)
 
     if(!item || item->kind == SETTINGS_MENU_ITEM_TEXT)
         return;
+    if(item->kind == SETTINGS_MENU_ITEM_PAGE)
+    {
+        settings_menu_enter_page(session, item->page);
+        return;
+    }
     if(item->kind == SETTINGS_MENU_ITEM_ACTION)
     {
         changed = session->definition->action ?
                   session->definition->action(session->definition->context, item->id) : 0U;
         if(changed && session->definition->changed)
             session->definition->changed(session->definition->context, item->id);
-        settings_menu_draw_index(session, session->index);
+        if(changed && (item->flags & SETTINGS_MENU_ITEM_REDRAW_PAGE))
+            settings_menu_redraw_all(session);
+        else
+            settings_menu_draw_index(session, session->index);
         return;
     }
     if(item->interaction == SETTINGS_MENU_EDIT_ON_OK &&
@@ -397,7 +457,10 @@ settings_menu_event_t settings_menu_handle_input(settings_menu_session_t *sessio
             settings_menu_finish_edit(session, 1U, 0U);
             return SETTINGS_MENU_EVENT_NONE;
         }
-        return SETTINGS_MENU_EVENT_CLOSE_REQUESTED;
+        if(session->depth == 0U)
+            return SETTINGS_MENU_EVENT_CLOSE_REQUESTED;
+        settings_menu_return_page(session);
+        return SETTINGS_MENU_EVENT_NONE;
     }
     if(input->pressed & BUTTON_OK)
     {
