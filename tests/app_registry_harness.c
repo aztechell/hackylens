@@ -430,7 +430,7 @@ int main(void)
     CHECK(hk_app_for_id("absent") == NULL);
     CHECK(camera->entry == &camera_v2_entry);
     CHECK(camera->limits.tick_interval_us == 20000U);
-    CHECK(app_by_id("files")->limits.tick_interval_us == 20000U);
+    CHECK(app_by_id("files")->limits.tick_interval_us == 5000U);
     CHECK(app_by_id("qr-camera")->limits.tick_interval_us == 20000U);
     CHECK(hk_app_registry_handle_debug_command("APPDEBUG") == 0U);
     CHECK(s_debug_calls == 0U);
