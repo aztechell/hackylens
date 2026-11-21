@@ -65,10 +65,27 @@ which blocks the runtime allocator can provide.
 | Maix Cube | 1,523,712 bytes | 1,582,272 bytes |
 | HUSKYLENS SEN0305 | 1,904,576 bytes | 1,962,880 bytes |
 
-The settings record grows from the legacy 16-byte payload through the 96-byte
-v2 payload, 97-byte v3 payload, and 105-byte v4 payload to a 106-byte v5
-payload. V5 retains 88 opaque app bytes and widens stable autostart identity to
-uint16; alignment keeps the record at 124 bytes, so it still fits in one flash
-page. Build guard: `hackylens.bin` must remain below
-`0x007FE000`, preserving the two 4 KB settings slots at `0x007FE000` and
-`0x007FF000`.
+## Flash settings records
+
+Schema v10 has a 1,700-byte payload and a 1,716-byte record including its
+header and CRC32. The payload includes the saved launcher order.
+
+Both boards reserve two 4 KiB flash slots starting at `0x007FE000` and
+`0x007FF000`. Each record fits in one slot. The store writes to the alternate
+slot and validates the written record by reading it back. The firmware partition
+ends just below `0x007FE000`, preserving both slots during firmware updates.
+
+The loader also recognizes these earlier layouts. The sizes include any
+padding used by that schema. See [persistent settings](ARCHITECTURE.md#persistent-settings)
+for the upgrade behavior.
+
+| Schema | Payload (bytes) | Full record (bytes) |
+| --- | ---: | ---: |
+| v1 | 16 | 32 |
+| v2 | 96 | 112 |
+| v3 | 97 | 116 |
+| v4 | 105 | 124 |
+| v5 | 106 | 124 |
+| v6–v7 | 108 | 124 |
+| v8 | 136 | 152 |
+| v9 | 140 | 156 |

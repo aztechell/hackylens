@@ -128,15 +128,17 @@ the menu presentation hook `{id_with_hyphens_as_underscores}_draw_icon`. That
 icon symbol is a descriptor field, not a lifecycle callback. There is one
 entry type and no legacy adapter. Tick cadence and callback budget are separate
 descriptor limits.
-A canonical descriptor array is ordered by app ID; the separate menu view is
-ordered only by explicit `menu_order`. Conditional build flags remove a disabled
-descriptor and its entry reference without renumbering persisted autostart IDs.
+A canonical descriptor array is ordered by app ID. The generated menu array
+uses explicit `menu_order` as the default. The launcher applies any saved icon
+order at runtime. Conditional build flags remove a disabled descriptor and its
+entry reference without renumbering persisted autostart IDs.
 The generator also emits an immutable reserved-ID set of all non-zero uint16
 autostart IDs before applying app enable flags. Enabled autostart choices are
 enumerated from the canonical descriptor array, independently of menu visibility
 and menu order. A disabled app has no runtime target or sources but keeps its
-reserved persisted identity. Settings schema v5 stores the full uint16 identity;
-loading schema-v4 uint8 IDs 0–10 zero-extends them without renumbering.
+reserved persisted identity. Settings records have stored the full uint16
+identity since schema v5. Loading schema-v4 uint8 IDs zero-extends them without
+renumbering. See [persistent settings](../ARCHITECTURE.md#persistent-settings).
 
 `python tools/gen_app_composition.py --check` validates the production manifest
 set and proves generation is deterministic. It does not compare against

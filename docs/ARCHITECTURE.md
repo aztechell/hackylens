@@ -341,14 +341,34 @@ limit, so the LCD overlay and the external link share the same filtered detectio
 
 Terminal owns its bounded line ring, viewport, scrolling, font geometry, and log-sink lifecycle. The shared logging service exposes only a generic optional sink and remains independent of Terminal. Font selection remains in reserved feature bits inherited from the legacy settings payload, so old records and erased flash continue to decode as `TERMINAL_FONT_NORMAL`.
 
-Settings record v5 retains the v4 data layout and widens the stable autostart
-ID from uint8 to uint16 without increasing the aligned 124-byte record. The 88
-opaque app bytes remain unchanged: bytes `0..79` contain APRILTAG preferences
-and its 587-bit selected-ID map; OBJECT DETECT owns bytes `80..87`. The storage
-layer validates and migrates v1, v2, v3, and v4 records. V4 autostart values are
-zero-extended, so existing IDs `0..10` and all CAMERA, external-link, APRILTAG,
-and OBJECT data remain unchanged. V9 appends the OBJECT DETECT disabled-class
-mask. When loading a v8 or older record, all 20 classes start enabled.
+## Persistent settings
+
+Both boards save settings in schema v10. The complete record is 1,716 bytes,
+including the launcher order. The order identifies built-in apps by stable
+app ID and pinned scripts by filename. The 88-byte app data block still holds
+APRILTAG preferences and its 587-bit selected-ID map in bytes `0..79` and
+OBJECT DETECT preferences in bytes `80..87`. Distance calibration and the
+OBJECT DETECT class filter have separate fields.
+
+A firmware-only update preserves the settings slots. At boot the loader
+selects the newest valid record and decodes v1 through v9 as well as v10.
+It carries forward the saved display, lighting, camera, connector, autostart,
+and app settings present in the record. A successful save writes v10.
+Autostart IDs have been 16-bit since v5. Loading a v4 record zero-extends
+its 8-bit IDs without renumbering them. Pinned script metadata and the
+selected startup script filename remain in userfs.
+
+Fields missing from older schemas use their defaults.
+
+| Older record | Behavior on load |
+| --- | --- |
+| v1–v5 | Audio volume defaults to 100%. |
+| v1–v6 | The UI accent defaults to Green. |
+| v1–v7 | APRILTAG uses the board's default focal value with distance measurement off. |
+| v1–v8 | All 20 OBJECT DETECT classes are enabled. |
+| v1–v9 | The launcher uses the default app order followed by pinned scripts. |
+
+See the [settings record sizes and flash layout](RAM_BUDGET.md#flash-settings-records).
 
 ## Architecture guard
 
