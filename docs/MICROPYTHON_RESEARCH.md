@@ -614,7 +614,22 @@ The SEN0305 runs used HMPY. On Maix Cube, binary HMPY runs stopped after
 167, 36, and 590 confirmed cycles because of corrupt responses. One frame
 received by the host was missing 62 consecutive bytes. The qualifying Cube
 runs used the built-in test script via `HKMPTEST`, `HKMPSTOP`, and
-`HKMPSTATUS`. Long-running HMPY transport reliability on Cube remains open.
+`HKMPSTATUS`.
+
+A follow-up on Cube COM5 reproduced the 62-byte gap after changing the USB
+cable. Pacing asynchronous HMPY logs with 2 ms pauses also reproduced it.
+The tested mitigation sends encoded stdout and stderr in 32-byte bursts with
+20 ms pauses on Cube. Commands and log events retain their existing HMPY frame
+formats. This limits the rate of continuous console output on Cube.
+
+With that pacing, Cube completed 1,000 HMPY RUN/STOP cycles in one session.
+The wire audit decoded 7,639 frames and verified the complete ready marker
+and STOP traceback in all 1,000 runs. Median STOP confirmation was 94 ms and
+the maximum was 371 ms. The SEN0305 regression run also completed 1,000 HMPY
+cycles with complete output. An earlier SEN0305 attempt received a valid
+`BUSY` response during rapid restart. The successful repeat reported zero
+retries. Evidence for this follow-up is stored locally under
+`build/hardware-acceptance/hmpy-cube-tx-pacing/`.
 
 Reports, per-cycle CSV data, logs, and instrumentation source are stored
 locally in `build/hardware-acceptance/micropython-soak/`. Both boards were

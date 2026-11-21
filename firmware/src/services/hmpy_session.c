@@ -23,6 +23,8 @@
 #define HMPY_SESSION_LEASE_US 10000000ULL
 #define HMPY_READ_DATA_MAX 512U
 #define HMPY_EVENT_DATA_MAX 504U
+#define HMPY_CUBE_LOG_UART_BURST 32U
+#define HMPY_CUBE_LOG_UART_GAP_MS 20U
 #define HMPY_UPLOAD_DATA_MAX (HMPY_MAX_PAYLOAD_SIZE - 8U)
 #define HMPY_FORMAT_TOKEN "ERASE USERFS"
 
@@ -111,6 +113,28 @@ static void hmpy_wr64(uint8_t *data, uint64_t value)
     hmpy_wr32(data + 4U, (uint32_t)(value >> 32));
 }
 
+static void hmpy_write_wire(uint8_t type, size_t length)
+{
+    if(strcmp(HK_BOARD_ID, "sipeed-maix-cube") != 0 ||
+       (type != HMPY_MSG_STDOUT && type != HMPY_MSG_STDERR))
+    {
+        debug_console_write_wire(g_wire, length);
+        return;
+    }
+
+    /* Give the Cube USB-UART bridge time to drain between log bursts. Keep
+     * the encoded frame intact and leave command responses on their fast path. */
+    hal_sleep_ms(HMPY_CUBE_LOG_UART_GAP_MS);
+    for(size_t offset = 0U; offset < length; offset += HMPY_CUBE_LOG_UART_BURST)
+    {
+        size_t count = length - offset;
+        if(count > HMPY_CUBE_LOG_UART_BURST)
+            count = HMPY_CUBE_LOG_UART_BURST;
+        debug_console_write_wire(g_wire + offset, count);
+        hal_sleep_ms(HMPY_CUBE_LOG_UART_GAP_MS);
+    }
+}
+
 static uint8_t hmpy_send(uint8_t type, uint16_t flags,
                          uint32_t request_id, const uint8_t *payload,
                          uint32_t payload_length)
@@ -122,7 +146,7 @@ static uint8_t hmpy_send(uint8_t type, uint16_t flags,
 
     if(result != HMPY_CODEC_OK)
         return 0U;
-    debug_console_write_wire(g_wire, wire_length);
+    hmpy_write_wire(type, wire_length);
     return 1U;
 }
 
