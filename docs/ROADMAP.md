@@ -11,7 +11,7 @@ implementation, hardware checks and limitations, and the
   playback and input latency where measurements show a bottleneck.
 - Document what the Maix Cube port changed in the BSP, shared services and
   applications, and which application logic it reused. Use the
-  [Cube hardware log](MAIX_CUBE.md) to tie observations to tested builds.
+  [Cube hardware log](MAIX_CUBE_TEST_LOG.md) to tie observations to tested builds.
 - Extend MicroPython only for demanded scenarios through existing shared typed
   services. The Python API leases frames for color tracking, preview, FACE
   and OBJECT inference, and QR and AprilTag decoding.

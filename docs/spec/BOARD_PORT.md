@@ -180,6 +180,7 @@ runtime includes RECORDER and ACCELEROMETER. Its exact-16-MiB layout includes se
 userfs; runtime flash identification must match that capacity before writes.
 Full images and release-qualified metadata are published into `dist/` and
 packaged with their own board identity. Physical checks and the user's explicit
-waiver of external UART/I2C exchange are recorded in [Maix Cube](../MAIX_CUBE.md).
+waiver of external UART/I2C exchange are recorded in the
+[Cube hardware log](../MAIX_CUBE_TEST_LOG.md#release-050-final-io-acceptance-2026-10-30).
 The compile-only negative board lives under
 `tests/fixtures/boards/k210-conformance/` and retains conformance safety checks.

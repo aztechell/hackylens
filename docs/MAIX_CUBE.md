@@ -1,907 +1,120 @@
-# Maix Cube runtime
+# Sipeed Maix Cube
 
-The `sipeed-maix-cube` board selects the `hackylens-cube` runtime profile with
-fifteen apps, including RECORDER, ACCELEROMETER and the embedded MicroPython app. This is
-HackyLens firmware, not a MaixPy firmware build. The board is enabled for
-release starting with 0.5.0. The dated records below distinguish physical
-checks from software checks; external UART/I2C exchange was explicitly waived
-by the user and is not recorded as physically verified.
+HackyLens supports Maix Cube 2757 from v0.5.0. The `sipeed-maix-cube` board
+uses the `hackylens-cube` runtime profile. Its full build includes fifteen
+apps, with RECORDER and ACCELEROMETER available on Cube. See the
+[v0.8.0 release notes](releases/v0.8.0.md) for the release checks and the
+[hardware test log](MAIX_CUBE_TEST_LOG.md) for the builds, conditions, and
+results of individual trials. Physical Grove UART/I2C exchange on Cube was
+[waived for release acceptance](MAIX_CUBE_TEST_LOG.md#release-050-final-io-acceptance-2026-10-30).
 
 ## Hardware and composition
 
-The port targets the Sipeed Maix Cube 2757 layout: K210/M1n, ST7789V 240x240
-parallel LCD, OV7740 camera, AXP173, 16-MiB SPI flash, SD, three-way control,
-RGB LED, white illumination, backlight, and an ES8374 audio codec for the
-built-in speaker and microphone, and an MSA301 three-axis accelerometer.
-Pin mappings come from Sipeed's
-[MaixPy-v1 Cube board config](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/boards/config/cube.config.json)
-and [Cube schematic](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/Maix-Cube-2757/Maix-Cube-2757%28Schematic%29.pdf).
-Camera/LCD initialization follows the corresponding MaixPy-v1 drivers.
+| Component | Configuration |
+| --- | --- |
+| Processor and flash | Kendryte K210 / M1n, 16 MiB SPI NOR |
+| Display | Parallel ST7789V, 240 × 240, SPI0/DVP shared data path |
+| Camera | OV7740 at 7-bit address `0x21` on I2C2, SCL41/SDA40 at 100 kHz, requested XCLK 22 MHz |
+| Power and motion | AXP173 PMIC and MSA301 accelerometer on internal I2C1, SCL30/SDA31 |
+| Audio | ES8374 at `0x10` on internal I2C1, built-in speaker and microphone, I2S0 and DMA3 |
+| Lights | Active-low RGB, white illumination, and LCD backlight |
+| Grove | Pins 24/25 serve as UART1 RX/TX or I2C0 SCL/SDA. The modes are exclusive and use 3.3 V logic. |
+| Storage | FAT32 microSD and internal littlefs for MicroPython scripts |
 
-LCD control uses CS36, RESET37, DC38 and WR39 with the fixed shared SPI0/DVP
-octal data bus. Banks 6/7 use 1.8 V. Camera control pins are 40-47; OV7740 uses
-7-bit address 0x21 on I2C2, SCL41/SDA40, 100-kHz control bus and
-22-MHz requested XCLK. LCD WR requests 15 MHz.
-PMIC management uses I2C1 on SCL30/SDA31;
-it probes power status without changing battery charging or regulator policy.
-RGB pins are 13/12/14, white illumination32, and backlight17. All are active-low:
-RGB packages have common anodes; the white LED and backlight use SI2301
-high-side switches. PWM is driven to its inactive high level before pin routing.
-Timer 0 runs the LCD backlight at 500 Hz from the 26 MHz crystal. Timer 2
-runs the white and RGB LEDs at 20 kHz.
+The [board descriptor](../boards/sipeed-maix-cube/board.toml) defines the pin
+routes, defaults, and flash map. See [External Link](EXTERNAL_LINK_PROTOCOL.md#physical-port)
+for connector limits and protocol use.
 
-The ES8374 uses address `0x10` on the same internal I2C1 bus as the AXP173.
-I2S0 uses MCLK19, BCLK35, LRCLK33, codec data out34 and codec data in18,
-following [Sipeed's Cube codec example](https://github.com/sipeed/MaixPy-v1_scripts/blob/master/modules/others/es8374/es8374.py).
-Audio uses DMA3 and leaves display DMA0 and KPU DMA5 available. The firmware
-audio service and [MicroPython bindings](MICROPYTHON_API.md#built-in-audio)
-support playback and recording of short mono PCM buffers.
+I/O banks 6 and 7 use 1.8 V for the camera and display data bus. The LCD
+requests a 15 MHz write clock and uses DMA0. KPU inference uses DMA5.
+Backlight PWM runs at 500 Hz and illumination/RGB PWM runs at 20 kHz.
+The PMIC provider preserves the stock rail and charging settings.
 
-Grove signal pins 24/25 support mutually exclusive UART1 RX/TX and I2C0 SCL/SDA
-through the existing External Link service. PMIC management stays on its
-separate I2C1 instance. Use 3.3-V logic and the documented connector supply;
-external controller/target and UART behavior require physical loopback/bus
-acceptance.
-
-Capture and AI processing retain 320x240 input. The live camera preview rotates
-90 degrees clockwise, then fills the 240x240 display without changing the
-scene's proportions. The shared camera presentation policy selects `cover`:
-the centered 240x240 portion of the rotated 240x320 image is visible, with 40
-pixels outside the display at both the top and bottom. Detection boxes and
-labels use the same crop and scale; entirely hidden detections are omitted.
-The private board default `camera_preview_rotate = 1` selects the mounting
-correction. Capture, saved photos and AI coordinates retain sensor orientation
-and the full frame; the file viewer continues to show entire images with
-`contain`. Viewport math lives in the board-independent `core/image_viewport`;
-the choice of preview fitting mode lives in `config/camera_layout.h`.
-The menu uses a 3x3 grid, two pages and page indicators. SEN0305 keeps its 4x3
-menu and original 320x240 geometry.
-Pong obtains its field dimensions through the public display capability;
-its physics and rendering use the same 240x240 bounds on Cube.
-
-## Recorder and WAV playback
-
-Open RECORDER on the second menu page with a FAT32 microSD card inserted.
-LEFT and RIGHT select RECORD, RECORDINGS, or VOLUME. Press OK to prepare
-space on the card and start recording. Press OK or BACK to finish and save
-to `/hackyens.records/REC00001.WAV`,
-with the number increasing for each new file. Recordings use 16-bit mono PCM
-at 15,869 samples per second. Free an entry in FILES when `hackyens.records`
-reaches its 64-entry limit. If recording is interrupted by an SD error, a temporary
-`.TMP` entry may be left on the card.
-
-In RECORDINGS or FILES, select a WAV and press OK to open the player. OK
-starts or stops playback, LEFT and RIGHT adjust volume, and BACK returns
-to the file list. Both apps use the same player screen with elapsed time,
-duration, playback progress, status, and volume. The player supports 16-bit PCM
-WAV with one or two channels and sample rates from 8 to 48 kHz. It plays stereo files as mono through the
-Cube speaker. The saved volume applies to both apps and MicroPython.
-
-On 2026-11-09, a Cube with a FAT32 card captured 2,873,344 samples and
-published a 181-second WAV. The same file opened and played in RECORDER and
-FILES. FILES played 44.1 and 48 kHz stereo fixtures to completion and restarted
-playback at the beginning after both stop and end of file. The codec mute
-register was set during playback at 0%, and the saved level survived a reboot.
-Host tests cover full and removed cards, including publication of the committed
-prefix when the card is full.
-
-## Accelerometer
-
-Open ACCELEROMETER on the second menu page. LEFT and RIGHT cycle through
-three views. BACK returns to the launcher.
-
-- **LEVEL** shows a bubble and tilt angles along the sensor's X and Y axes.
-  The estimate uses gravity and works best with the Cube held still.
-- **TRACE** plots the last 48 readings of X, Y and Z, about five seconds
-  of history. The graph and live values use g and span ±2 g. The graph
-  draws into the borrowed display framebuffer.
-- **EVENTS** shows orientation after the sensor reports a change, plus
-  tap, double tap, motion and free-fall flags. `LIVE` indicates a flag is
-  currently set. `SEEN` records an event observed since opening the app
-  or clearing the view with OK. Events are sampled status flags.
-
-The values include gravity and use the sensor's native axes. MicroPython
-reads the same XYZ data through `hackylens.acceleration_mg()`. The MSA301
-shares internal I²C1 with the AXP173 and ES8374. See the
-[capability contract](spec/capabilities/ACCELEROMETER.md).
-
-The operator confirmed that a tilt and taps marked MOTION, TAP, and DOUBLE TAP
-on the Cube. The host fixture exercises the free-fall status flag and refreshes
-a full TRACE history across multiple wraps through the K210 display backend.
+The camera preview rotates 90° clockwise to compensate for sensor mounting.
+At 320 × 240 the display shows the centered 240 × 240 portion of the rotated
+frame, using the same crop for boxes and labels. Camera processing retains
+the full frame. FILES fits complete images into the display. The launcher
+uses a paginated 3 × 3 grid.
 
 ## Controls
 
-The generated routes use ENTER10 for the center, BACK11 for previous and NEXT16
-for next. Schematic S3 confirms KEY2/KEY1/BOOT in left/center/right order.
+- Move the three-way control left or right for LEFT or RIGHT. Its center is
+  OK and supports hold gestures.
+- A short or long press of POW sends one BACK event while HackyLens is
+  running. Hold the physical center during boot to skip autostart.
+- Use POWER for sleep, shutdown, or restart. One new OK press executes
+  the selected action.
 
-- Move to either side to send LEFT/RIGHT.
-- Center is normal OK, including held OK for app contexts.
-- POW short or long press is BACK; holding POW does not switch the board off.
-- BUTTON TEST exits on one POW/BACK pulse. It does not require holding BACK.
-- Hold the physical center during startup to suppress persisted autostart.
+## Recorder and WAV playback
+
+With a FAT32 microSD card inserted, open RECORDER and use LEFT/RIGHT to
+select RECORD, RECORDINGS, or VOLUME. Press OK on RECORD to start. Press
+OK or BACK to save the recording to `/hackyens.records/REC00001.WAV` or the
+next available number. Recordings are 16-bit mono PCM at 15,869 Hz. Use
+FILES to free an entry if the directory reaches 64 entries. An interrupted
+recording can leave a `.TMP` file.
+
+Open a WAV in RECORDINGS or FILES. OK starts or stops playback, LEFT/RIGHT
+adjusts the saved volume, and BACK returns to the list. The player takes
+16-bit PCM WAV at 8–48 kHz with one or two channels. Stereo is mixed to mono.
+RECORDER, FILES, and the [MicroPython audio API](MICROPYTHON_API.md#built-in-audio)
+share the volume setting.
+
+## Accelerometer
+
+LEFT/RIGHT switches between LEVEL, TRACE, and EVENTS. LEVEL estimates
+tilt from gravity. TRACE plots 48 readings over about five seconds, using
+the sensor's native XYZ axes and a ±2 g scale. EVENTS shows orientation,
+tap, double tap, motion, and free-fall status. `LIVE` marks an active flag.
+`SEEN` marks an event since opening the app or clearing the view with OK.
+MicroPython reads the same XYZ data via `hackylens.acceleration_mg()`.
+See the [accelerometer contract](spec/capabilities/ACCELEROMETER.md).
 
 ## Build and artifacts
 
-From the repository root on Windows:
+From the repository root on Windows, load the environment and select Cube.
 
 ```powershell
 . .\env.ps1
 python tools\build_firmware.py full --board sipeed-maix-cube
 ```
 
-The full image is `build/sipeed-maix-cube/hackylens-full.bin`, with a same-stem
-`.json` flasher sidecar and `.attestation.json`. Its release-qualified full
-composition is also published into `dist/` with the board-specific stem
-`hackylens-full-sipeed-maix-cube`. Qualification requires all apps and the
-correct image hash, board identity and partition layout. Do not relabel it as
-a SEN0305 image or bypass identity/layout validation.
+The build produces `build/sipeed-maix-cube/hackylens-full.bin` and its
+flasher JSON and attestation. A qualified full build also publishes
+`dist/hackylens-full-sipeed-maix-cube.bin` with matching metadata. Use the
+Cube image and sidecar together. See [flashing instructions](../README.md#flash-and-debug)
+and the [board port contract](spec/BOARD_PORT.md#layout-and-artifact-safety).
 
-The exact-16-MiB layout retains an 8-MiB firmware/settings region, reserves
-0x00800000-0x00C70000 and places userfs at 0x00C70000-0x01000000. Firmware
-programming changes only its firmware partition. Runtime settings/userfs writes
-are rejected unless the flash capacity matches the descriptor. Preserve the
-original full flash before the first install; MicroPython userfs formatting
-continues to require its explicit existing confirmation command.
+Runtime writes to settings and userfs require JEDEC to report exactly
+16 MiB. The firmware/settings region ends at 8 MiB and userfs occupies
+`0x00C70000` through `0x00FFFFFF`. A normal firmware flash preserves both
+settings and userfs. Save the original full flash before the first install.
 
-Cube programming uses an explicit identified COM port and Sipeed's `goE`
-automatic bootloader entry: the `sipeed-goe` profile uses the official DTR/RTS
-sequence with 100-ms phases and up to fifteen attempts. The
-`sipeed-goe-normal` profile returns the board to normal boot. `--manual` remains
-available for recovery. Flash writes must wait until the connected board
-identity and backup have been verified.
-
-Stock MaixPy backups can be read without programming flash:
+Cube uses the `sipeed-goe` DTR/RTS profile for BootROM entry and
+`sipeed-goe-normal` for normal boot. Use the identified Cube port. The
+flasher's `--manual` option is available for manual BootROM entry. To
+read a stock MaixPy backup, use the actual port in place of the example.
 
 ```powershell
 python tools\maixpy_flash_backup.py probe --port COM11
 python tools\maixpy_flash_backup.py backup --port COM11 --output ..\outputs\cube-original.bin
 ```
 
-Use the port actually identified for the connected Cube. The utility stops the
-running Python program to enter raw REPL, verifies each transferred block,
-rehashes the complete flash independently on the device and verifies the host
-file. `--resume` continues an aligned `.partial` file; the complete independent
-rehash is still required. Keep the default 115200 baud for stock firmware.
-
-## Recorded development checks (2026-10-28)
-
-- Connected stock firmware: COM11, MaixPy 0.6.2, config type `cube`, LCD 240x240;
-  FTDI USB 0403:6010 exposes COM9 and COM11.
-- Stock sensor initialization identified OV7740, sensor ID `0x7742`.
-- No `/sd` mount was present during inspection.
-- Original flash backup: 16,777,216 bytes, independently re-read and verified;
-  `../outputs/cube-original-20261028-stock-speed.bin` in the parent workspace.
-  SHA-256: `5aa6954b8d9ec655b3b570c4cf6dcad648b3f310a2304dcda075ead81923c8bf`.
-- Host suite: 236 tests passed after the Cube and Pong changes. Architecture
-  guard passed. Both full Cube and SEN0305 cross-builds passed.
-- First Cube image (`19abb5ba...`) was installed successfully after manual
-  BootROM entry. Boot reached the menu, registered all twelve apps, read AXP173
-  status `0xC1` and flash JEDEC `EF6018` (16 MiB). HMPY HELLO reported the correct
-  board and capabilities; userfs was initially unformatted (later formatted for
-  the HMPY workflow below).
-- The first hardware test FAILED acceptance: the framebuffer screenshot shows
-  the correct 240x240 menu, but the user observed white noise on the physical
-  LCD, and the sensor probe returned zero. A framebuffer capture alone does not
-  validate the LCD transport.
-- Corrected candidate: LCD clock 15 MHz; camera SCL41/SDA40; DVP SCCB wire
-  address `0x42`; representable 400-kHz divider. Nine Cube host tests and the
-  full Cube build passed. Image: 1,547,384 bytes; SHA-256
-  `2f6ad47707c2df7c3fd7086d40307fa84e04a0f433599ab22e5c4cea7bff911a`.
-  This candidate was installed: physical LCD still showed distorted yellow/black
-  output and the sensor probe failed (`FEFF/FFFF`). It is not accepted.
-- Next candidate uses the stock MaixPy camera control transport: I2C2 at 100 kHz,
-  seven-bit address `0x21`, separate STOP before register reads. Missing-device
-  waits are bounded to 20 ms. SEN0305 retains the DVP SCCB implementation.
-  LCD octal transactions preload the first FIFO batch before selecting CS;
-  coordinate windows and RGB565 byte packing were checked and retained.
-  Build: 1,547,448 bytes, SHA-256
-  `0bb6aa1ca5f2aaaa92c7645653a024b860b9cea7ecec6b765c6b489ea0e954f3`.
-  Cube full build, nine Cube tests, 39 board-contract tests and architecture
-  guard and sequential SEN0305 full cross-build (1,546,808 bytes) passed.
-  Physical LCD and camera acceptance remain pending;
-  `releaseable = false`.
-- HMPY hardware workflow passed on the installed `2f6ad477` candidate after
-  userfs formatting: file/upload/run/session recovery and STOP in 123–124 ms
-  (`build/cube-hmpy-workflow.json`). This does not validate LCD/camera.
-- The I2C2/preload candidate (`0bb6aa1c...`) was installed. OV7740 passed:
-  manufacturer `0x7FA2`, product `0x7742`, 320x240 at 29.8 fps with zero
-  timeouts and no camera failure (`build/cube-i2c-fifo-camera.log`). UART
-  screenshot `screenshots/cube-camera-i2c-fifo.bmp` shows a recognizable,
-  colored scene and the correct 240x180 viewport. The physical LCD distortion
-  remained: FIFO preloading alone was not a fix.
-- LCD DMA candidate: 1,547,896 bytes, SHA-256
-  `d1fd615658c6556926541f9caae861e62b7d142d7c59b491e1a970c57ad326f6`.
-  The complete octal transaction is staged as uncached 32-bit FIFO entries
-  and transferred by DMA0, matching the reference transport without CPU/row
-  gaps. DMA0 has no other firmware owner; KPU retains DMA5. DMA initialization
-  runs once during clock startup so first KPU use cannot reset display DMA.
-  Transfer completion and SPI drain share the caller deadline; timeout disables
-  DMA0 and the SPI transaction, and a still-busy DMA cannot reuse the buffer.
-  Nine Cube host tests cover byte/word ordering, DMA start before CS, and timeout
-  cleanup/recovery. Architecture guard and sequential Cube/SEN full builds pass.
-  Installed successfully. Camera hardware passed on this DMA candidate:
-  `0x7FA2/0x7742`, 320x240 at 24.9 fps, zero timeouts, failure NONE
-  (`build/cube-dma-camera.log`). The user confirmed the physical LCD is now correct.
-  The board remains experimental pending the remaining acceptance checks.
-  HMPY workflow and lease reconnect also PASS on this installed candidate
-  (`build/cube-dma-hmpy.json`, result PASS, exit code 0); STOP 119–125 ms.
-  Static staging costs 230,400 bytes. The linked image includes MicroPython's
-  131,072-byte heap and two 32,768-byte stacks, leaving 1,751,296 bytes of SDK
-  heap. The supplied object20 model plus KPU main buffer consume 1,396,340 bytes
-  (354,956 bytes remain before other allocations); AI runtime acceptance is
-  still required. Face model plus KPU main buffer consume 433,776 bytes.
-- Initial tests on stock MaixPy did not obtain a BootROM response with the two
-  tested RTS/DTR sequences. Manual entry was selected at that time. This
-  observation is superseded for the installed HackyLens runtime by the
-  controlled comparison below; its original cause has not been established.
-  Normal programming now uses automatic entry:
-
-```powershell
-python tools\hkflash.py flash --board sipeed-maix-cube --port COM11 --flash-baud 115200 build\sipeed-maix-cube\hackylens-full.bin
-```
-
-For manual recovery, add `--manual` and hold BOOT/NEXT while pressing RST.
-
-## Automatic BootROM entry comparison (2026-10-29)
-
-Sipeed's [GUI board table](https://github.com/sipeed/kflash_gui/blob/8985f23626f332897ff28e4b41d5e1ad7dd852ce/kflash_gui_data/boards_info.json#L44)
-maps Cube to `goE`. Its [loader implementation](https://github.com/sipeed/kflash.py/blob/550828c768b16ef329695d3f5eace3f6bcf14af2/kflash.py#L1649)
-selects `reset_to_isp_kd233`, with three 100-ms phases. Our previous generic
-kd233 helper used identical control-line levels and a byte-identical BootROM
-NOP request, but 10-ms phases. The Cube descriptor selected `manual` and thus
-never called that helper during a normal flash command.
-
-Controlled hardware comparison on COM11 started every individual case with a
-fresh runtime `HKPING` / `HKPONG`, then applied a reset and required the exact
-successful BootROM response `C0 C2 E0 C0`. Every case ended with a normal reset
-and another `HKPONG` before the next case. Both the 10-ms helper and the exact
-official 100-ms method passed twice. Therefore the 10-ms timing was not a
-reproduced cause of failure on this installed runtime. Evidence:
-`build/cube-bootrom-entry-controlled.json`.
-
-After selecting `sipeed-goe` in the descriptor, three additional cycles passed
-through the real `cmd_flash` path with automatic entry on its first attempt.
-Every cycle verified runtime before entry and after recovery. A serial write
-allowlist permitted only BootROM NOP and HKPING; execution stopped before the
-first SRAM upload. Flash and SRAM were not written. Evidence:
-`build/cube-bootrom-flashing-path.json`.
-
-The forced manual configuration was the confirmed reason ordinary invocations
-required buttons. The historical stock-MaixPy failure has not been reproduced
-under stock firmware and must not be attributed to timing, bridge hardware,
-or GPIO configuration without a separate controlled test. This acceptance
-covers BootROM entry and return to the installed runtime, not flash programming
-at 1.5 Mbaud or the remaining board acceptance criteria.
-
-## Physical acceptance checklist
-
-Verify cold power-on after disconnecting USB and cycling the battery/power
-button, power/reboot, LCD orientation/colors, all control gestures, RGB/white LED/
-backlight polarity, OV7740 ID and stable frames, SD insert/remove, persisted
-settings, userfs, the full board app set, AI models, MicroPython start/STOP/recovery,
-and Grove UART plus I2C controller/target. Host tests and cross-compilation do
-not replace those checks. Record performed checks and explicit acceptance
-waivers separately; release qualification does not turn an unperformed
-hardware test into a passing result.
+The utility enters raw REPL, verifies each block and compares a full
+device-side flash hash with the host file. `--resume` continues an aligned
+`.partial` file and still verifies the full hash. Keep the stock transport
+at 115200 baud.
 
 ## Driver references
 
-The hardware reference revision is MaixPy-v1
-`d8901fd2272f000226f1c1037c1eb7c412b88e66`:
-
-- [OV7740](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/ov7740.c):
-  default registers, frame sizes and color bars; OpenMV MIT notice is retained
-  in `ov7740_sensor.c`.
-- [Camera control bus](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/cambus.c):
-  hardware I2C address convention, 100-kHz initialization and separate register
-  selection/read transactions.
-- [Sensor integration](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/sensor.c):
-  OV7740 uses 22-MHz XCLK and YUV input to the K210 DVP RGB565 output path.
-- [ST7789 transport](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/drivers/lcd/src/st7789.c)
-  and [panel initialization](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/drivers/lcd/src/lcd_mcu.c):
-  octal command/data phases, RGB565 format and panel startup.
-- [MaixPy startup](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/maixpy_main.c):
-  I/O banks 6/7 at 1.8 V and the fixed SPI0/DVP data-path selection.
-
-The Cube schematic powers the M1n, LCD, SD and light switches from the same
-3.3-V supply; M1n has fixed local regulators for the camera/data-bus 1.8-V
-rail. Neither Cube's board config nor common MaixPy startup programs AXP173
-rail voltages. The port therefore preserves the PMIC's power-on rail and
-charging settings. Its separate I2C1 management bus probes status, configures
-PEK events and disables PEK automatic power-off for POW-as-BACK; explicit
-POWER OFF confirmation sets the PMIC shutdown bit as described below.
-A successful warm-reset test does not replace the cold power-on check above.
-
-## POW button as BACK
-
-A short or long POW press is consumed from AXP173 PEK and exposed as one debounced
-BACK press/release. The center button is ordinary OK, including held OK for
-app contexts; LEFT/RIGHT remain directional. The former delayed click,
-double-press and center-hold BACK gestures are removed.
-AXP173 PEK automatic power-off is disabled by clearing only register `0x36`
-bit 3, preserving all timing fields. The setting is read back before enabling
-the mapping. POW serves only as BACK while firmware runs.
-
-The X-Powers AXP173 datasheet (pp. 36, 41-42; [manufacturer-authored PDF mirror](https://dl.linux-sunxi.org/AXP/AXP173%20Datasheet%20v1.12_cn.pdf),
-[readable mirror](https://manuals.plus/m/ae4d7772bf0616d33560f2abd2d632f80a8cb3513e08ea2b6337a69dad7dfc26))
-defines IRQ enable register `0x42` bit 1 for short PEK, and W1C status `0x46`
-bit 1 for short / bit 0 for long. Both PEK IRQ classes are enabled; setup preserves every other enable bit and
-clears stale PEK events so booting with POW does not immediately navigate back.
-Polling uses the independent I2C1 PMIC bus every 20 ms; errors back off to
-100 ms. One latched event is delivered once even if its acknowledgement fails.
-Only the two PEK status bits are acknowledged; unrelated IRQ status survives.
-A combined short/long latch produces one BACK edge, not repeats. The PMIC
-reports classified press events rather than physical release, so no held BACK
-state is invented. `hk_input_info_t.pulse_buttons` exposes this limitation;
-BUTTON TEST uses one BACK to exit, while MicroPython STOP already uses its
-BACK press edge.
-The short event becomes a pulse long enough for the portable input debounce.
-During POW/BACK setup the only power-policy change is `0x36` bit 3.
-Sleep/wake `0x31`, shutdown `0x32`, rail and charger settings are untouched
-until an explicit POWER OFF confirmation. On 2026-10-29 the user confirmed
-short POW exits BUTTONS and an eight-second hold returns back without powering
-off on the corrected `9fa472d9...` image.
-
-## POWER OFF app
-
-Cube adds POWER OFF beside SLEEP. Launching it never cuts power: the screen
-requires a fresh OK press after the menu OK has been released; BACK cancels.
-It uses the public Power capability, available only with the AXP173 binding.
-SEN0305 excludes the app because it has no controllable power-off provider.
-
-After confirmation, shutdown waits up to two seconds for an active MicroPython
-run to stop, flushes dirty settings, closes any userfs upload and unmounts userfs.
-Only then does the PMIC driver set register `0x32` bit 7, preserving the other
-shutdown/charger-LED fields (X-Powers datasheet p.35). A STOP timeout, failed
-settings flush or filesystem operation prevents the power command. A failed
-PMIC write remounts userfs and leaves an error screen with BACK/OK recovery.
-Host tests cover confirmation, held-launch OK, cancellation, STOP, save failure,
-PMIC failure/recovery and deadline. Actual power-off should be checked last in
-hardware acceptance. POW navigation and long-hold behavior were confirmed by
-the user on the corrected image. On 2026-10-29 the user also confirmed that
-POW cancels POWER OFF and a fresh center OK powers the Cube off. Separate
-battery-only versus USB-powered shutdown coverage was not established.
-Camera/LCD PASS evidence above belongs to the earlier installed DMA image.
-
-## Reset-entry regression guard
-
-The first POWER OFF build did not boot: its C callback named `start` was
-compiled into `.text.start`, which the SDK linker reserves for CRT reset code.
-That callback preceded `_start` by 0x68 bytes in the raw image. K210 flash boot
-starts at 0x80000000 and cannot use the ELF entry address, so execution reached
-a C function before stack/BSS initialization. Renaming the callback to
-`power_off_start` restores `_start` at the image base. This was a binary layout
-fault before PMIC setup; it was not evidence of a PMIC rail change.
-
-`build_firmware.py` now rejects an ELF unless its first load address, entry
-address and `_start` symbol all equal 0x80000000, before publishing sidecars or
-attestations. Host fixtures cover the displaced entry and a misleading ELF
-entry header. The PMIC receive-FIFO drain also has a timeout. Physical boot and
-POW/POWER OFF acceptance must use the corrected image, not the failed build.
-
-The corrected image was installed successfully on 2026-10-29: 1,549,752 bytes,
-SHA-256 `9fa472d9cb47db3a542fbe1dec30b798cd517616ce2aa056b7ad4d15fbf27739`.
-`build/cube-entry-fix-boot.log` records verified POW/BACK policy, settings loaded
-from slot 0 (sequence 1), all thirteen apps and successful menu startup.
-HKPING and BUTTONS launch also passed. Both board builds, architecture checks
-and all 241 host tests passed. After reconnecting USB, the app smoke run passed
-launch/return for Terminal, Camera, QR, Face Detect, AprilTag, Object Detect,
-Files, Pong, Settings, MicroPython and Sleep; BUTTONS and POWER OFF were checked
-separately. See `build/cube-apps-smoke.log`, `build/cube-terminal-smoke.log`
-and `build/cube-poweroff-open.log`. These are launch checks, not complete
-recognition acceptance: no SD/models were available, no known QR/tag target
-was presented, and QR currently requests its existing 640x480 capture mode
-(320x240 decoder), unlike the 320x240 default camera mode.
-
-`build/cube-pow-hmpy.json` records PASS for file upload/readback, script run,
-STOP (122-125 ms), interpreter reuse, lease reconnect and cleanup on this
-installed image. The user confirmed POW short/long BACK and POWER OFF
-cancel/confirmed shutdown. SD, AI models, external UART/I2C loopback, all light
-channels, physical MicroPython STOP/WDT recovery and cold-start persistence
-still need hardware acceptance. The board remains non-releaseable.
-
-## Unified POWER candidate (2026-10-29)
-
-The current candidate replaces the two menu entries with one POWER app, leaving
-12 apps. Three equally spaced icons show SLEEP, POWER OFF and RESTART. LEFT/RIGHT
-selects; one fresh OK immediately executes SLEEP, POWER OFF or RESTART, with no
-additional confirmation. POW/BACK closes the selector.
-Held menu OK cannot execute an action. Any new button press wakes sleep. Automatic
-sleep enters the sleep session directly, without stopping at the selector.
-
-Both destructive actions stop MicroPython, flush settings and unmount userfs before
-the hardware command. RESTART uses the SoC soft reset, without a PMIC shutdown or
-watchdog-recovery marker. SEN retains SLEEP and RESTART; POWER OFF is visibly disabled
-because that board has no controlled power cut. Existing POW/BACK policy is unchanged.
-
-Cube rendering-fix candidate: 1,555,448 bytes, SHA-256
-`93b76a598979f2fb672d06c6dbfd64a0c27290399097bfea6f2aa91e2a26174c`.
-Both board builds and the production UI render at 240/320 pixels passed. Hardware
-acceptance of this unified POWER candidate is pending; the 13-app evidence above
-belongs to the earlier separate POWER OFF implementation, not this candidate.
-
-The first unified candidate (`5735dc91...`) booted with the 12-app menu but
-POWER immediately returned to the menu with `HK_ERR_LIMIT` (-14). Its compact
-font queued one fill command per pixel, exceeding the K210 batch limit of 32.
-The rendering fix borrows the public RGB565BE surface before drawing, writes
-pixels within that lease and marks the full frame dirty for presentation. The
-regression harness links the real public surface and K210 provider, reproduces
-the rejected 33rd command, then checks successful POWER rendering/presentation
-for all three selections at 240 and 320 pixels. Only LCD transport is simulated;
-`build/power-real-240.png` and `power-real-320.png` come from its panel output.
-Hardware acceptance of the rendering-fix candidate remains pending.
-
-## POWER visual refresh and single-press actions (2026-10-29)
-
-The refreshed selector uses shared 48x48 monochrome glyphs: a curved crescent,
-standard power symbol and circular restart arrow. The same power glyph is used
-by the main menu. The icon/label group is centered below the header at both
-240x240 and 320x240. Permanent navigation and BACK hints have been removed;
-only waiting, error or unsupported-operation status is shown when applicable.
-
-One fresh OK immediately executes the selected action; no second confirmation
-is required. Launch-held OK is still ignored until released and pressed again.
-Tests cover single-press OFF/RESTART, held-key suppression, sleep/wake, failure
-recovery and shutdown preparation. Both full board builds, architecture checks
-and all 250 host tests (174 subtests) passed.
-
-The Cube image was installed through the current automatic reset profile on
-COM15, then started with a normal-boot reset. Size: 1,556,856 bytes; SHA-256:
-`eeeadf759dad104e07deb4c09e635b26a60db2f55c7093d531a8bbc93182d859`.
-`build/cube-power-visual-runtime-boot.log` records successful menu startup;
-`build/cube-power-visual-open-final.log` records successful POWER launch.
-The actual framebuffer screenshot `screenshots/cube-power-visual.bmp` confirms
-the refreshed screen remains open without the former rendering-limit failure.
-Fresh physical OFF/RESTART acceptance for this revision is not yet recorded.
-
-## Camera preview cover acceptance (2026-10-30)
-
-The `cover` preview image was installed on COM15: 1,557,112 bytes, SHA-256
-`a5ecef110f82d5c70a377d92f2e15788c5b079aa12120b17b110961e715a002b`.
-Both board builds, architecture/documentation checks and all 250 host tests
-passed. Tests cover centered fitting/cropping, three capture resolutions,
-clockwise rotation, overlay clipping and the file viewer's full-image mode.
-
-`build/cube-camera-cover-flash.log` records completed programming and menu
-startup with persisted settings. `build/cube-camera-cover-camera.log` records
-OV7740 `0x7FA2/0x7742`, a ready 320x240 stream, 178 captured frames and zero
-timeouts, with failure `NONE`. The user confirmed correct full-screen camera
-output after installation. The preserved image and matching metadata are in
-`build/camera-cover/sipeed-maix-cube/`.
-
-## Thin launcher icon acceptance (2026-10-30)
-
-The user-approved V2 icon set was installed on COM15: 1,558,520 bytes,
-SHA-256 `2646a8ff8181551926e3dd1802382afc8a884cef2772d1c8d4bd0e7220031bff`.
-Both board builds, the architecture check, and 22 targeted host tests passed.
-The image adds 1,408 bytes relative to the preceding camera-cover build.
-
-`build/menu-icons-flash.log` records successful programming, settings loaded
-from slot 1 (sequence 6, schema v5), and menu startup with all twelve apps.
-Runtime HKPING returned HKPONG. The actual framebuffer captures
-`screenshots/cube-icons-v2-live.bmp` and `screenshots/cube-icons-v2-page-2.bmp`
-match all twelve approved icon tiles pixel-for-pixel, including selection
-frames. The separate Sleep/Off/Restart artwork inside POWER is unchanged.
-This verifies programming and the launcher refresh; the board remains
-non-releaseable pending its other physical acceptance checks.
-
-## Camera register transport separation (2026-10-30)
-
-The register backend is now selected by the board's strict `camera_control`
-table, independently of the sensor driver. Cube retains I2C2, seven-bit address
-`0x21` and configured 100 kHz. SEN0305 uses DVP-SCCB, seven-bit address `0x30`
-(converted to `0x60` only inside that backend), and explicit SCL counts `255/255`.
-SEN frequency is reported as unknown, not a claimed 100-kHz measurement. Legacy
-ambiguous address/rate defaults are rejected. The sensor reports RGB565/YUV422
-input explicitly; DVP capture contains no sensor-model branches or register I/O.
-
-Register reads share one absolute 20-ms deadline across both phases. I2C emits
-STOP between phases and reports abort/timeout; SCCB reports completion/timeout
-without inventing NACK detection. A failed operation requires reinitialization.
-Sensor initialization stops on its first bus error. Debug probe/reinit is refused
-while a frame is borrowed; otherwise session-owned retirement preserves lights,
-SD-poll policy and frozen-preview state. SDK clock/reset order, settling delays
-and all sensor register tables were preserved.
-
-Before changing code, binaries, ELF files, camera descriptors and Cube runtime
-diagnostics were saved in `build/camera-control-baseline/049716c/`. The Cube
-baseline was OV7740 `7FA2/7742`, 640x480, about 22.9 fps, no frame timeouts and
-failure `NONE`. The original stock-flash backup remains unchanged.
-
-Validation: 268 host tests and 228 subtests passed, including actual backend
-code with MMIO emulation, first-error sensor sequences, both capture formats,
-deadline/fault recovery, real platform-source architecture rejection and
-probe/session-state preservation. The architecture guard passed. Six builds
-passed: full, no-MicroPython and no-camera compositions for both boards. The
-no-camera builds omit sensor control and DVP capture. Final full artifacts and
-variant attestations are retained in `build/camera-control-candidate/`.
-
-Final Cube full: 1,559,736 bytes; SHA-256
-`14d45802c88cd2c4a6530799beb869c5e02eed2f98053014581d5505100c2793`.
-Final SEN0305 full: 1,557,816 bytes; SHA-256
-`943683c9eaee2e3fe5c76964f1cc0d3491a90012d0ca503e5f428a7d506abdf5`.
-
-Cube was flashed on COM15 and reached the menu with persisted settings. Logs:
-`build/camera-control-final-cube-flash.log`, `-boot.log`, `-camera.log`,
-`-probe-colorbar.log` and `-switches.log` under the same filename prefix.
-The hardware check identified the selected I2C backend and OV7740 `7FA2/7742`,
-retained 640x480 at about 22.9 fps and reproduced DVP configuration `0x1E01430B`
-with zero frame timeouts and failure `NONE`. Probe/reinit during live preview
-resumed frames successfully. Colorbar rendered correctly in the actual
-`screenshots/camera-control-colorbar.bmp` capture and was then disabled.
-CAMERA -> QR (640x480) -> APRILTAG (320x240) -> CAMERA switches passed and the
-device was returned to the menu. These are pipeline checks, not known-target
-QR/tag recognition acceptance. FACE reported no SD; AI inference was not tested
-without the SD/models. The user confirmed a successful Cube cold start: POWER
-OFF, USB disconnected, power-on with POW, then USB reconnected; the normal menu
-appeared.
-
-SEN0305 was subsequently identified on COM10 (CP210x), with OV2640
-`7FA2/2642`, flash JEDEC `EF6018` and a mounted SDHC/FAT32 card. Its pre-flash
-camera diagnostics are in `build/camera-control-baseline/049716c/sen-runtime.log`.
-The final SEN0305 image above was installed; settings slot 0, sequence 179,
-schema v5 and the SD mount were retained. Logs use the
-`build/camera-control-final-sen-` prefix (`flash.log`, `boot.log`,
-`camera-switches.log`, `ai.log` and `ai-reset.log`).
-
-On physical SEN0305 the selected backend reports `dvp-sccb`, address7 `0x30`,
-unknown frequency (`configured_hz=0`) and counts `255/255`. OV2640 retained
-640x480 at about 20.7 fps, matching the pre-flash baseline. Live probe/reinit
-and CAMERA -> QR -> APRILTAG -> CAMERA passed with zero frame timeouts and
-failure `NONE`; the latter also exercised 320x240. The user confirmed normal
-colors and geometry on the physical colorbar screen, also captured in
-`screenshots/camera-control-sen-colorbar.bmp`. Colorbar was then disabled.
-FACE ran its 388,776-byte model with `error=NONE`; after a clean reset OBJECT
-ran its 1,352,588-byte VOC20 model and decoded outputs with `error=NONE`.
-OBJECT -> FACE -> OBJECT also passed. No known recognition targets were used.
-
-An existing memory limitation remains: after the CAMERA/probe -> QR ->
-APRILTAG -> CAMERA -> FACE sequence, OBJECT can fail with `MODEL ALLOC`.
-This was reproduced on the saved pre-refactor SEN0305 image
-`0016baeafe815a5353a5b8cb76aac78d6a8e216cd1701fb20bded7277123ee99`, not
-inferred from the new image alone. Comparison logs use the
-`build/camera-control-sen-baseline-comparison-` prefix. A clean reset restores
-OBJECT operation. The camera-transport refactor does not change QR/model
-memory ownership. The final image was restored successfully after comparison;
-its restoration and menu-boot logs use `build/camera-control-final-sen-restored-`.
-The user also confirmed SEN0305 cold start after complete USB/external-power
-disconnection, with normal menu startup and a working camera; follow-up UART
-diagnostics are in `build/camera-control-final-sen-cold-start.log`. Physical
-160x120 operation was then confirmed by the user on both Cube and SEN0305.
-Together with the recorded 320x240 and 640x480 checks, this covers all three
-supported camera sizes. Cube AI inference remains untested without its
-SD/models, and known-target recognition accuracy was not evaluated.
-
-## Cube AI input and QR memory follow-up (0.5.0, 2026-10-30)
-
-With SD installed, a clean Cube start loaded both pinned models. The reported
-OBJECT model failure was reproduced after QR: `MODEL ALLOC`, not a missing
-model file (`build/cube-ai-old-qr-object.log`). QR now destroys its decoder and
-image workspaces on exit. The same QR -> OBJECT sequence on the corrected image
-loaded the 1,352,588-byte model and completed inference/decode with `error=NONE`
-and zero camera timeouts (`build/cube-ai-fixed-runtime.log`).
-
-The OV7740 remains configured for YUV422. K210 DVP supplies only Y to its AI
-output in this mode, so that output cannot serve the RGB model contract. The
-shared camera-AI adapter now converts the already leased RGB565 preview into
-upright planar RGB888, applying the Cube mounting rotation with centered
-letterboxing. It holds the input unchanged through KPU completion and maps
-model boxes back to sensor coordinates for the existing display/vision path.
-Sensor register tables, the DVP capture configuration and the working LCD path
-are unchanged. Unrotated RGB565 boards retain direct DVP planar capture.
-
-Both full builds passed, as did 271 host tests with 230 subtests and the
-architecture guard. Tests cover actual quirc heap reclamation after resizing,
-partial allocation failure and repeated close/reopen; RGB channel order,
-rotation, letterbox clipping and inverse rectangles; and both input ownership
-paths. Documentation and app-composition checks also passed.
-QR-only compositions with AI/MicroPython omitted also built on both boards;
-the full builds were then restored and reproduced the same SHA-256 values.
-
-Installed Cube image: 1,561,912 bytes, SHA-256
-`565328a0ca96fb7018cbb36efcc2bdea75ac543912cd541e6edd9495584ab562`.
-SEN0305 full: 1,560,056 bytes, SHA-256
-`7cac474496bcb6bb55383076c3346e7e9e9302e0a28cadbd4d64a71156876c62`.
-Programming and menu startup are recorded in `build/cube-ai-fixed-flash.log`
-and `build/cube-ai-fixed-boot.log`. FACE reports populated RGB planes,
-successful repeated inference around 13 ms, and no model/camera errors.
-The user then presented a face and confirmed a visible detection rectangle on
-Cube. Follow-up runtime health is recorded in `build/cube-ai-face-accepted.log`.
-On the user's instruction, no external UART/I2C fixture check will be performed:
-these implemented interfaces remain supported, with actual external exchange
-explicitly unverified. The board's previous `releaseable=false` restriction is
-removed for 0.5.0; identity, layout and full-composition guards remain enforced.
-
-## Release 0.5.0 final I/O acceptance (2026-10-30)
-
-HMPY read-only probing passed during FACE, but the first file upload stalled.
-The same reversible workflow passed from an idle menu and after a normal FACE
-exit. SPI3 flash PIO now uses checked, bounded exchanges of at most 260 TX or
-256 RX bytes, preserving the caller's interrupt state around the short FIFO
-exchange. Its timeout starts after masking interrupts; flash program/erase
-busy polling remains outside that critical section. Transport errors reach
-the flash driver and quarantine further I/O until initialization. LCD DMA and
-the HMPY foreground/reconnect policy are unchanged.
-
-A separate reset issue held PMIC SDA low. Diagnostics captured SCL=1, SDA=0,
-an enabled I2C1 controller, two queued commands and no abort. The bus recovery
-uses up to nine open-drain SCL pulses and STOP, with a 500-us pulse/stretch
-budget and exact GPIO/FPIOA/interrupt-state restoration. Temporary GPIOHS
-channels are selected only when unmapped; existing routes are never displaced.
-Early boot with no free channels fails safely, and a 500-ms PEK setup retry
-recovers once normal board routing has freed a pair. Physical recovery needed
-two pulses on GPIOHS23/22 and verified the POW/BACK policy. The user confirmed
-that POW exited BUTTONS to the menu after recovery. No rail or charger settings
-were changed.
-
-The final Cube repeated QR -> OBJECT -> FACE successfully. The standard HMPY
-upload/read/run/STOP/cleanup workflow then passed directly from active FACE,
-preserving the original userfs files and startup selection. Evidence:
-`build/release-0.5-power-recovered-boot.log`,
-`build/release-0.5-accepted-ai.log`, `build/release-0.5-accepted-hmpy.json`.
-
-Final full images (release-qualified):
-
-- Cube: 1,563,960 bytes, SHA-256
-  `8eeb15d91da7a644ee0b087ccc90363598152080f2d69102c4c8396d38408269`.
-- SEN0305: 1,559,608 bytes, SHA-256
-  `991f6645661736466c916c5611eea4ee1f352267552853bd664575f61c8377af`.
-
-The strict host runner passed 269 tests without skips; the separate camera-bus
-suite passed all ten cases. Architecture and documentation guards passed.
-Additional bus-clear regressions cover channel collisions, later channel
-availability, stuck SDA/SCL, partial remapping, pending-bit cleanup and both
-initial interrupt states. The release contains exactly two complete board ZIPs
-and `SHA256SUMS.txt`; metadata, SD packages and notices remain inside the ZIPs.
-External UART/I2C exchange remains explicitly untested by user decision.
-
-## Built-in audio checks (2026-11-09)
-
-On Cube 2757, test image SHA-256
-`2556cb4fde3a07c9f975dffe9de9992ae43fd088274b4eb2adcc9ab882493985`
-completed three 660 Hz playback transfers and two 16,000-byte captures
-through MicroPython. The user confirmed hearing the Cube's speaker in a
-separate run on the same image. A 997 Hz tone from a nearby PC was detected in the
-Cube microphone samples above the quiet recording and the off-frequency
-comparison. HMPY STOP ended a playback run in 50 ms. The next run captured
-and played another buffer successfully.
-
-## MicroPython camera and KPU checks (2026-11-12)
-
-On both boards, the color tracker processed 60 out of 60 frames from the
-sensor color bars, drew the largest region, and released the camera on STOP,
-exception, and normal completion. Repeated runs reached 6.2–6.6 frames/s on
-SEN0305 and 9.3–9.9 frames/s on Maix Cube with LCD presentation. The LCD
-capture on Maix Cube showed the rectangle in the rotated frame.
-
-The KPU probe loaded the shipped FACE model and the named `object20` package,
-including manifest checks. Each measurement covered eight QVGA frames.
-The probe checked frame sequence and orientation, then reran both detectors
-after an exception, STOP during model loading, and STOP during an inference
-loop.
-
-| Board | Detector | Load (s) | Mean `camera_detect` call (ms) | Loop (frames/s) |
-| --- | --- | ---: | ---: | ---: |
-| SEN0305 | FACE | 2.8–3.0 | 73–80 | 7.3–8.0 |
-| SEN0305 | OBJECT | 8.7–9.3 | 82–87 | 6.8–7.5 |
-| Maix Cube | FACE | 1.5–1.6 | 51–56 | 10.9–11.9 |
-| Maix Cube | OBJECT | 5.1–5.3 | 58–62 | 10.2–10.8 |
-
-The KPU loop ran without LCD presentation. Both models returned empty
-detection lists for the test scene. The Python heap held 2,304 bytes after
-collection, with 127,744 bytes free. The detector uses the existing
-230,720-byte planar input in firmware. The browser-to-device flow and positive
-detection accuracy are pending. KPU serial logs are under
-`build/vision-acceptance/` as `kpu-sen-probe.log` and `kpu-cube-probe.log`.
-
-## MicroPython QR and AprilTag checks (2026-11-12)
-
-Both boards scanned live QVGA frames and returned the expected frame sequence
-and orientation. Each measurement used 16 frames with no LCD presentation.
-Both detectors returned empty lists for the test scene. The probe checked
-stale frame rejection, then reran both decoders after an uncaught exception
-with a frame held and after STOP during an AprilTag loop. The native QR and
-AprilTag apps also processed frames after the Python probe.
-
-| Board | Decoder | Mean `camera_scan` call (ms) | Loop (frames/s) |
-| --- | --- | ---: | ---: |
-| SEN0305 | QR | 125.9–126.3 | 5.9–6.1 |
-| SEN0305 | AprilTag | 30.6–31.1 | 14.0–14.5 |
-| Maix Cube | QR | 87.4–95.1 | 8.5–8.9 |
-| Maix Cube | AprilTag | 28.1–29.8 | 14.9–15.7 |
-
-The Python heap held 1,952 bytes after collection, with 128,096 bytes free.
-This count covers the VM heap. The firmware also uses the shared 19,200-byte
-AprilTag luma buffer and the 76,800-byte image allocated by quirc.
-The host test decoded normal and inverted QR fixtures and tag36h11 ID 42,
-including the rotated result boxes. Serial logs are in `build/vision-acceptance/` under
-`codes-sen-probe.log` and `codes-cube-probe.log`.
-
-A follow-up on Maix Cube used two black-and-white reference images displayed
-in front of the physical camera. MicroPython returned QR payload `HL` in
-two separate runs. Both QR runs timed out before three consecutive correct
-frames. One run also retried intermittent `binding inactive` errors during
-QR scanning. The separate AprilTag test read tag36h11 ID 42 with Hamming
-distance zero on three consecutive frames, reporting box `(16, 26, 131, 132)`
-at frame 123. The logs are `cube-live-retry.log`, `cube-live-qr-final.log`
-and `cube-live-tag.log` under `build/qr-apriltag-cards/`. Positive optical
-reads on SEN0305 remain pending.
-
-The Cube ELF placed the uncached QR image pointer in the same cache line as
-the cached flag updated during camera presentation. The QR bridge now sends
-the image address and lease together in its synchronized request. The
-45-second run without a reference marker completed 277 scans with zero errors
-before the change and 282 scans with zero errors on the rebuilt Cube. The
-rebuilt Cube also reran QR and AprilTag after STOP and an uncaught exception.
-These runs verify the scan and cleanup paths. In a 90-second optical repeat
-on that build, Cube read `HL` once and reported zero binding errors. The run
-did not reach three consecutive matching frames.
-
-The next build adds a local luminance threshold as a fallback after the
-original and inverted QR passes. On 36 synthetic QVGA RGB565 frames with
-different marker sizes, blur and lighting gradients, the previous passes read
-6 frames and the new sequence read 22. The host regression includes a QR
-fixture with a luminance gradient that requires the fallback.
-
-One lifecycle probe with the local fallback reported a core-1 failure on
-restart. The Cube ELF showed that the executor's uncached mailbox shared a
-cache line with the cached debug log. The MicroPython bridge mailbox also
-shared its last line with cached state. Both structures now occupy complete
-cache lines, verified in the Cube and SEN0305 ELF files.
-
-With both changes, Cube completed 190 QR scans with LCD presentation in
-45 seconds without a scan error. Three lifecycle probes completed, including
-restarts after STOP and an uncaught exception. One additional probe aborted
-on a malformed serial packet while awaiting the STOP response. On a scene
-without a QR code, the mean scan call took 167–172 ms with the fallback.
-The mailbox-only build took 92–95 ms in the same probe. Logs are under
-`build/qr-apriltag-cards/` as `cube-qr-final-stress.log` and
-`cube-qr-final-cycle-*.log`.
-
-Two optical runs on the final build used the original `HL` card. The first
-reported no matches in 25 seconds. The second, with the card confirmed in
-a separate 120 × 160 RGB565 snapshot, reported one match in 20 seconds.
-Both runs reported zero binding errors. On the captured snapshot, the host
-decoder found the QR grid but returned an error-correction failure for the
-original luminance, including after cropping and global contrast adjustment.
-The local-threshold pass decoded `HL` from the same snapshot after rotation
-and scaling to QVGA.
-
-A separate 20-second run with the same payload encoded at error-correction
-level H reported two matches, with a longest streak of one matching frame
-and zero binding errors. Neither card reached three consecutive matches.
-Logs are `cube-qr-final-optical.log`, `cube-qr-final-optical-repeat.log`
-and `cube-qr-final-optical-h.log` under `build/qr-apriltag-cards/`.
-
-### QR camera pixel order (2026-11-13)
-
-Two full 320 × 240 RGB565 captures of the displayed `HL` card showed
-that the K210 DVP buffer held adjacent pixels in reverse order within
-each 32-bit word. With the original order the host decoder missed both
-captures. With the pixel order corrected in the QR luminance conversion,
-both captures decoded as `HL` on the normal pass. The two dark control
-captures produced no result.
-
-In a ten-second MicroPython run on Cube, the previous firmware read 1 of
-32 scanned frames, with its first match at 3.06 seconds. With the pixel
-order correction and the grid sampling retry, a separate run with the
-same card read 8 of 9 scanned frames, including eight in a row, with its
-first match at 2.60 seconds. Neither run reported a binding error or an
-unexpected payload. These are separate live runs. The full-frame replay
-above compares the decoders on identical input. The logs are
-`cube-qr-live-baseline-metrics.log` and `cube-qr-live-dvp-repeat.log`.
-
-Quirc now uses the K210's single-precision floating-point instructions for
-grid fitting. In a ten-second run with the displayed `HL` card, the final
-build read all 38 scanned frames. The first match took 406 ms and the
-longest interval without a match was 469 ms. No unexpected payloads or
-binding errors were reported. The native QR-CAMERA app also read `HL` in
-VGA camera mode. The logs are `cube-qr-live-float-metrics.log` and
-`cube-qr-live-float-native.log`. A separate run after removing the card
-reported no results in 22 scanned frames over five seconds
-(`cube-qr-live-float-no-card.log`). These results cover one card setup.
-
-In a separate Cube test, a PC alternated the `HL` card with a blank
-white screen. The MicroPython scanner confirmed a blank frame before
-each presentation and read all 20 presentations within one second
-(442–735 ms, median 476 ms). The interval includes the time to show the
-card and receive the result over USB. The log is
-`cube-qr-20-presentations-reset.log`.
-
-The native QR-CAMERA app read 19 of 20 separate presentations within
-one second when started after a board reboot before each trial. The
-remaining presentation decoded in 1,124 ms. The card was displayed only
-after an initial scan of the blank screen. The log is
-`cube-qr-20-presentations-native-cold.log`. Earlier attempts that reopened
-QR-CAMERA without a reboot stopped producing scans after several app
-transitions. The native worker exchange occupied part of the same cache
-line as QR settings. After padding the exchange to whole cache lines,
-Cube completed scans on all 20 consecutive app opens without rebooting.
-This separate check exercised scanner restart without measuring
-presentation latency (`cube-qr-reopen-check.log`).
-
-### CAMERA preview pixel order (2026-11-13)
-
-A screen target with straight edges reproduced doubled horizontal edges
-and a broken diagonal on Cube at 160 × 120. Both the raw camera capture
-and LCD screenshot showed the artifact. The preview now reads each RGB565
-pair in logical sensor order before applying rotation or scaling. Replaying
-the same raw frame through the old and new preview renderers removed the
-duplicated edges. A fresh LCD screenshot at 160 × 120 confirmed the
-correction on Cube. Captures and the renderer comparison are under
-`build/camera-160-diagnostics/`.
-
-The same target reproduced broken diagonals and doubled vertical edges on
-SEN0305 at 160 × 120. Replaying its captured frame through the corrected
-preview removed both artifacts. After flashing the fix, the maintainer
-confirmed the correction on the SEN0305 LCD.
-
-CAMERA photo export and MicroPython's `camera_save()` now apply the same
-RGB565 pixel ordering when encoding a photo. Host checks cover the
-snapshot pixel reader at all three camera sizes on both board profiles.
-
-## Python launcher checks (2026-11-12)
-
-The full launcher builds booted on both boards and accepted `VPTEST.py` over
-HMPY. The host tests exercised pin/unpin, launcher selection, BACK waiting for
-VM cleanup, and a local run with one simulated hour elapsed. The USERFS power
-cut test verified that the pin remains with either complete version of a
-replaced file. Deleting and re-uploading the file left it unpinned. A timed
-run started from the Cube launcher held the camera for 117.6 seconds with no
-deadline. One physical BACK press stopped the VM and selected `VPTEST.py`
-again in the main menu. The initial SEN0305 launcher run timed out during
-camera initialization. The launcher now defers the console redraw to its next
-tick and `camera_open()` allows two seconds for a cold sensor start. After
-those changes, a physical launch ran `COLOR.py` for 45.3 seconds with no
-deadline. BACK stopped the VM and returned to the main menu. The SEN0305
-status and console logs are `pin-launch-sen-status.log` and
-`pin-launch-sen-console.log` under `build/vision-acceptance/`.
-
-## Python microSD output checks (2026-11-12)
-
-The HMPY probe wrote 4,097 bytes and saved a live camera frame on both
-boards. It checked filename validation, case-insensitive collision rejection,
-and stale frame rejection. STOP interrupted a second BMP save. The next run
-reopened the camera and saved successfully under the interrupted filename.
-
-| Board | Frame orientation | Data write (ms) | BMP save (ms) |
-| --- | --- | ---: | ---: |
-| SEN0305 | 320 × 240 | 1,045 | 7,249 |
-| Maix Cube | 240 × 320 | 1,362 | 3,906 |
-
-Both BMPs were 230,454 bytes. The save probe reported 1,568 bytes in the
-MicroPython heap after collection, with 128,480 bytes free. The SEN0305 ELF
-allocates 600 bytes for the static writer state, including its sector buffer.
-The host FAT32 test read the bytes back and checked BMP headers and row padding. It also
-simulated a full volume, a data write failure and a media change. The SD
-probe logs are in `build/vision-acceptance/` under `sd-sen-final-probe.log`
-and `sd-cube-final-probe.log`.
-
-The color tracker example used a threshold sampled from the Cube sensor color
-bars and saved `122906.BMP` and `122906.TXT` in `/PYDATA`. The detected region
-was `(0, 200, 240, 38, 9120)`. The test invoked the example's save branch once
-from an HMPY run. Pressing OK during the pinned SEN0305 run saved `49262.BMP`
-and `49262.TXT` in `/PYDATA`. The tracker reported more frames after the save.
-After the browser test on Cube, the user started the same `VPTEST.py` from
-its shortcut, pressed OK and returned to the menu with BACK. FILES showed
-`344118.BMP`. Its text companion recorded frame 1501 and the region
-`(0, 200, 240, 38, 9120)`, as shown in `pin-launch-cube-files.png` under
-`build/vision-acceptance/`.
-
-## Browser color tracker checks (2026-11-12)
-
-HackyLens Code in Chrome captured a 160 × 120 RGB565 snapshot over Web Serial.
-Dragging a rectangle over the dark scene yielded `(0, 2, 0, 3, 0, 2)`. The
-copy button put that tuple on the clipboard. Pasting it into the tracker and
-saving `COLOR.py` wrote 1,792 bytes to USERFS. Running that file from the IDE
-reported a `(0, 0, 320, 240)` box with about 75,800 matching pixels. The IDE's
-STOP ended the run with exit reason 2. Selecting an illuminated region in a
-second snapshot yielded `(22, 31, 50, 63, 28, 31)`. With that threshold, the
-tracker reported a distinct region with about 13,500 matching pixels, for
-example `(66, 129, 254, 111, 13580)`.
-
-On Cube, Chrome captured a 120 × 160 RGB565 snapshot of the sensor color bars.
-Selecting an area inside the red bar copied `(30, 31, 10, 12, 0, 1)`. The IDE
-saved it in the existing pinned `VPTEST.py` and ran the tracker. The resulting
-region in the 240 × 320 frame was `(0, 200, 240, 38, 9120)`. STOP ended the
-run with exit reason 2.
+The wiring references are Sipeed's
+[MaixPy-v1 Cube config](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/boards/config/cube.config.json)
+and [Cube 2757 schematic](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/Maix-Cube-2757/Maix-Cube-2757%28Schematic%29.pdf).
+Camera and panel setup draw on Sipeed's pinned
+[OV7740](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/ov7740.c),
+[camera bus](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/cambus.c),
+[sensor integration](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/omv/sensor.c),
+[ST7789 transport](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/drivers/lcd/src/st7789.c),
+[panel initialization](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/drivers/lcd/src/lcd_mcu.c),
+and [startup code](https://github.com/sipeed/MaixPy-v1/blob/d8901fd2272f000226f1c1037c1eb7c412b88e66/components/micropython/port/src/maixpy_main.c).
+The audio routes follow the [Cube codec example](https://github.com/sipeed/MaixPy-v1_scripts/blob/master/modules/others/es8374/es8374.py).

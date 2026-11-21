@@ -1,287 +1,295 @@
-# MicroPython внутри HackyLens: исследование и план реализации
+# MicroPython in HackyLens
 
-Исследование начато 2026-08-04. Область аппаратной приёмки уточнена
-2026-11-20, фактические результаты обновлены 2026-11-21.
+This report records the research and implementation plan started on 2026-08-04.
+The hardware acceptance scope was updated on 2026-11-20 and the results on
+2026-11-21. See [the implementation and validation results](#implementation-and-validation-results)
+for the builds and devices actually tested.
 
-## Краткий вывод
+## Summary
 
-Пункт 5 roadmap реализуем на текущем K210 и в текущей архитектуре HackyLens.
-Рекомендуемая основа — официальный MicroPython 1.28.0 в режиме `embed`, а не
-перенос MaixPy как второй прошивки. VM следует запускать как длительную задачу
-на core 1; главный цикл, экран, кнопки, USB-UART и владение периферией должны
-остаться на core 0. Аппаратные Python-bindings вызывают сервисы HackyLens через
-ограниченный RPC/mailbox и никогда не обращаются к SDK-драйверам напрямую.
+Roadmap item 5 was feasible on the K210 within the existing HackyLens
+architecture. The recommended starting point was the official MicroPython
+1.28.0 `embed` port. The VM should run as a long-lived task on core 1. The main
+loop, display, buttons, USB-to-UART transport, and peripheral ownership should
+remain on core 0. Python hardware bindings should access HackyLens services
+through a bounded RPC mailbox. SDK drivers stay behind those services.
 
-Скрипты следует хранить в littlefs в отдельном разделе внутренней NOR flash.
-На исследованном SEN0305 установлен 16-МБ flash: оригинальный пакет использует
-адреса вплоть до `0x00C6E000`. Поэтому безопасный предварительный кандидат для
-пользовательского раздела — `0x00C70000..0x00FFFFFF` (3 735 552 байта, 912
-секторов по 4 КБ). Включать раздел можно только после проверки JEDEC capacity;
-на 8-МБ вариантах приложение должно сообщать `UNSUPPORTED_FLASH`, а не писать
-за пределы микросхемы.
+Scripts should be stored in littlefs on a dedicated partition of the internal
+NOR flash. The SEN0305 examined for this report had 16 MB of flash. The original
+firmware package uses addresses through `0x00C6E000`. The preliminary user
+partition was therefore `0x00C70000..0x00FFFFFF` (3,735,552 bytes, or 912 sectors
+of 4 KB). The firmware should enable the partition only after verifying the
+JEDEC capacity. On 8 MB variants it should report `UNSUPPORTED_FLASH` and
+disable writes to the proposed user partition.
 
-Первую версию надо разделить на три вертикальных этапа: надёжное хранилище и
-протокол, минимальная VM с безопасной остановкой, затем bindings и IDE. Камеру,
-KPU и SD нельзя включать в первый релиз bindings: у них более сложное владение,
-большие буферы и асинхронный lifecycle.
+The first release was planned in three steps. First came reliable storage and
+the protocol, followed by a minimal VM with safe stopping, then bindings and
+the IDE. Camera, KPU, and SD bindings were deferred because of more complex
+resource ownership, large buffers, and asynchronous lifecycle requirements.
 
-## Исходный baseline до реализации пункта 5
+## Baseline before roadmap item 5
 
-- До добавления MicroPython полная прошивка собиралась в 1 312 632 байта. ELF
-  содержал 2 415 168 байт `.bss`; его статические данные заканчивались около
-  `0x8038E240`. Эти числа использовались только как исходная оценка бюджета;
-  итоговые размеры приведены в разделе фактических результатов ниже.
-- Прошивка уже имела feature-модули, `hk_app_t`, безопасный lifecycle входа и
-  выхода, общий `core1_executor`, UART3 debug console и кольцевой терминал.
-- Исходный `boot_flash` умел JEDEC ID, чтение, sector erase и page program, но
-  ещё не имел достаточных для filesystem bounds/page checks, результата timeout,
-  взаимного исключения и передачи ошибок наверх.
-- Settings v4 занимают два сектора `0x007FE000` и `0x007FF000`; build guard не
-  даёт образу пересечь первый слот. Их следует оставить без изменений.
-- PC-соединение — UART3 через USB-serial мост, а не нативный USB device K210.
-  Значит «USB-протокол» roadmap фактически является протоколом поверх уже
-  работающего serial-порта.
-- Исходный firmware package подтверждает 16-МБ раскладку: основной образ лежит
-  с нуля, модели занимают области до конца `object_detect.bin` около
-  `0x00C5BDE8`, а очистка служебных секторов заканчивается на `0x00C6E000`.
+- Before MicroPython was added, the full firmware image was 1,312,632 bytes.
+  The ELF contained 2,415,168 bytes of `.bss` and its static data ended near
+  `0x8038E240`. These figures were used for initial sizing. The measured build
+  sizes appear in the implementation results below.
+- The firmware already had feature modules, `hk_app_t`, safe app entry and
+  exit, a shared `core1_executor`, a UART3 debug console, and a ring-buffer
+  terminal.
+- The original `boot_flash` supported JEDEC ID, read, sector erase, and page
+  program. It still needed range and page checks, timeout status, mutual
+  exclusion, and error propagation for filesystem use.
+- Settings v4 occupies two sectors at `0x007FE000` and `0x007FF000`. The build
+  guard keeps the image from crossing into the first slot. The settings layout
+  should be preserved.
+- The PC connects to UART3 through a USB-to-serial bridge. The protocol proposed
+  in the roadmap can run over that existing serial link.
+- The original firmware package confirms the 16 MB layout. The main image
+  starts at zero, model data extends to the end of `object_detect.bin` near
+  `0x00C5BDE8`, and service-sector erasure ends at `0x00C6E000`.
 
-Локальные источники этих выводов: `tools/build_firmware.py`,
+Local sources include `tools/build_firmware.py`,
 `firmware/src/storage/settings_store.c`, `firmware/src/drivers/boot_flash.c`,
-`firmware/src/services/core1_executor.c`, `build/sdk-full/hackylens_full` и
+`firmware/src/services/core1_executor.c`, `build/sdk-full/hackylens_full`, and
 `../unpacked/flash-list.json`.
 
-## Выбор MicroPython
+## Choosing a MicroPython port
 
-### Рекомендуется: upstream `embed`
+### Upstream `embed`
 
-Официальный MicroPython имеет Tier 2 port `embed`, который генерирует
-самодостаточный набор `.c/.h` для встраивания в существующий C-проект. Его
-пример принимает GC heap от хост-приложения, выполняет строки и затем вызывает
-deinit. Это ровно нужная модель владения: HackyLens остаётся основной
-прошивкой, а Python VM создаётся только на время работы приложения.
+The official MicroPython Tier 2 `embed` port generates a self-contained set of
+`.c/.h` files for use in an existing C project. Its example takes a GC heap from
+the host, executes source strings, and calls deinit. This lets HackyLens remain
+the host firmware and create the Python VM only for the duration of a run.
 
-Зафиксировать в lock-файле:
+The lockfile should pin these inputs.
 
-- MicroPython `v1.28.0` и полный commit SHA;
-- конфигурацию `mpconfigport.h`;
-- сгенерированный список исходников или воспроизводимую команду `embed.mk`;
-- версию `.mpy`, хотя v1 должен передавать исходные `.py`, чтобы IDE не зависела
-  от bytecode ABI.
+- MicroPython `v1.28.0` and its full commit SHA
+- The `mpconfigport.h` configuration
+- The generated source list or a reproducible `embed.mk` invocation
+- The `.mpy` version. In v1 the IDE should send `.py` source to avoid a
+  dependency on the bytecode ABI.
 
-Фактическая конфигурация VM v1 (первоначальные оценки 256–512 КиБ heap и
-32-КиБ Python stack после compile/link-аудита были уменьшены):
+The compile and link audit reduced the initial estimates of a 256–512 KiB
+heap and a 32 KiB Python stack. The resulting v1 VM used the following
+configuration.
 
-- `MICROPY_CONFIG_ROM_LEVEL_MINIMUM`, compiler, GC, exceptions, `sys`, `gc` и
-  явно включённые builtins `min/max`;
-- float single precision;
-- без REPL, `_thread`, network, SSL/TLS, native/viper emitter, dynamic native
-  modules, persistent-code loader, VFS imports и доступа к произвольной памяти;
-- без стандартного `machine`: вместо него модуль `hackylens` с контролируемыми
-  объектами;
-- статический выровненный GC heap 128 КиБ, принадлежащий только core 1;
-- Python stack limit 24 КиБ с 1-КиБ stack-check margin и лимит исходного файла
-  65535 байт;
-- heap, source и output buffers зарезервированы один раз и переиспользуются;
-  `mp_embed_deinit` очищает VM-состояние, не создавая фрагментацию C heap между
-  запусками.
+- `MICROPY_CONFIG_ROM_LEVEL_MINIMUM`, compiler, GC, exceptions, `sys`, `gc`,
+  and explicitly enabled `min/max` builtins
+- Single-precision floating point
+- REPL, `_thread`, network, SSL/TLS, native/Viper emitters, dynamic native
+  modules, persistent-code loading, VFS imports, and arbitrary memory access
+  disabled
+- The `hackylens` module with controlled objects in place of the standard
+  `machine` module
+- A static, aligned 128 KiB GC heap owned exclusively by core 1
+- A 24 KiB Python stack limit with a 1 KiB stack-check margin and a source
+  file limit of 65,535 bytes
+- Heap, source, and output buffers reserved once and reused.
+  `mp_embed_deinit` clears VM state without fragmenting the C heap between runs.
 
-В v1 поддерживается один исходный entrypoint и встроенные модули. Импорт других
-пользовательских `.py` из littlefs надо добавить отдельным этапом через
-ограниченный reader/import hook; нельзя случайно открывать VM весь flash block
-device или SD.
+V1 supports one source entry point and built-in modules. Imports of additional
+user `.py` files from littlefs should be added separately through a bounded
+reader or import hook. That interface must keep the rest of the flash block
+device and the SD card outside the VM's reach.
 
-Официальный минимальный embed-пример работает даже с 8-КБ heap, но это лишь
-демонстрация API, а не реалистичный бюджет пользовательского приложения.
-MicroPython использует отдельный Python heap, не совпадающий с C heap, поэтому
-оба бюджета надо измерять раздельно.
+The official minimal embedding example runs with an 8 KB heap to demonstrate
+the API. Size the heap for the application workload. MicroPython has a
+separate Python heap, so measure the Python and C heaps independently.
 
-### Почему не переносить MaixPy-v1 целиком
+### MaixPy-v1 as a K210 reference
 
-MaixPy-v1 доказывает, что MicroPython, KPU, камера, LCD и периферия работают на
-K210. Но это законченная альтернативная платформа, основанная на старом fork
-MicroPython/OpenMV и собственной сборочной системе. Репозиторий прямо описывает
-её как MicroPython firmware для K210 и больше не поддерживает историческую
-ветку. Перенос всего port вернёт в HackyLens вторую HAL, второе владение
-камерой/LCD/UART и второй lifecycle.
+MaixPy-v1 demonstrates that MicroPython, the KPU, camera, LCD, and other
+peripherals run on the K210. It is a complete platform based on an older
+MicroPython/OpenMV fork and its own build system. The repository describes it
+as K210 MicroPython firmware and no longer maintains the historical branch.
+Porting it in full would introduce another HAL, a second owner for the
+camera, LCD, and UART, and a separate lifecycle.
 
-MaixPy полезен только как справочник по K210-специфичным решениям: сборка
-RISC-V, GC/stack collection, cache barriers и возможные реализации bindings.
-Копировать следует лишь минимально необходимые фрагменты после отдельной
-проверки лицензии каждого файла. Общий license MaixPy-v1 — MIT/Apache-2.0;
-MicroPython/OpenMV части обозначены как MIT.
+MaixPy is a reference for K210-specific RISC-V builds, GC and stack collection,
+cache barriers, and binding implementations. Copy only the necessary parts
+after checking each file's license. MaixPy-v1 uses MIT/Apache-2.0, with the
+MicroPython/OpenMV portions marked MIT.
 
-## Выполнение и безопасная остановка
+## Execution and safe stopping
 
-### Размещение по ядрам
+### Core assignment
 
-Синхронный `mp_embed_exec_*()` нельзя вызывать из `app.tick` на core 0:
-бесконечный `while True` остановит кнопки, экран, debug protocol и системный
-tick. VM должна быть одной job в существующем `core1_executor`.
+A synchronous `mp_embed_exec_*()` call from `app.tick` on core 0 would let an
+infinite `while True` block the buttons, display, debug protocol, and system
+tick. Run the VM as one job on the existing `core1_executor`.
 
-Последовательность запуска:
+The startup sequence proceeds as follows.
 
-1. Core 0 закрывает предыдущее приложение и проверяет, что core 1 свободен.
-2. Storage читает выбранный `.py` в ограниченный буфер и проверяет размер.
-3. Runtime подключает статически зарезервированный GC heap, создаёт resource
-   ledger и публикует epoch запуска.
-4. Core 1 фиксирует вершину именно своего стека, инициализирует VM и выполняет
-   код.
-5. Core 0 продолжает UI tick, обрабатывает mailbox bindings и выгружает stdout.
-6. После обычного завершения или исключения core 1 вызывает deinit и публикует
-   итог. Core 0 освобождает все leases и только затем разрешает выход в меню.
+1. Core 0 closes the previous application and checks that core 1 is free.
+2. Storage reads the selected `.py` into a bounded buffer and checks its size.
+3. The runtime attaches the statically reserved GC heap, creates the resource
+   ledger, and publishes the run epoch.
+4. Core 1 captures its own stack top, initializes the VM, and executes the
+   source.
+5. Core 0 continues the UI tick, services binding calls in the mailbox, and
+   drains stdout.
+6. After the script returns or raises an exception, core 1 deinitializes the VM
+   and publishes the result. Core 0 releases all leases before allowing a
+   return to the menu.
 
-MicroPython и APRILTAG не работают одновременно: оба используют единственный
-executor. Перед запуском Python следует дождаться завершения отложенного
-APRILTAG destroy. В перспективе executor стоит дополнить owner ID и cancel
-contract, не создавая второй entry point для core 1.
+MicroPython and APRILTAG share one executor and run exclusively. Wait for
+APRILTAG's deferred destroy to complete before starting Python. The executor
+could later gain an owner ID and a cancellation contract while retaining a
+single entry point for core 1.
 
-### Два уровня остановки
+### Cooperative stop and watchdog recovery
 
-Кооперативная остановка — основной путь:
+Cooperative stopping is the normal path.
 
-- atomic `stop_requested` и deadline проверяются через `MICROPY_VM_HOOK_LOOP`,
-  `MICROPY_VM_HOOK_RETURN` и обе центральные точки `mp_iternext*`; pinned patch
-  поэтому охватывает также native C-циклы `sum`, `min/max` и конструкторов;
-- hook поднимает `KeyboardInterrupt` внутри VM;
-- `time.sleep*` дробится на интервалы не более 10 мс и также проверяет stop;
-- каждый C binding обязан иметь конечный timeout и точки отмены;
-- native/viper запрещены, иначе Python-код сможет надолго уйти из bytecode VM.
+- `MICROPY_VM_HOOK_LOOP`, `MICROPY_VM_HOOK_RETURN`, and both central
+  `mp_iternext*` entry points check the atomic `stop_requested` flag and
+  deadline. The pinned patch also covers native C loops in `sum`, `min/max`,
+  and constructors.
+- The hook raises `KeyboardInterrupt` in the VM.
+- `time.sleep*` is split into intervals of at most 10 ms and checks for stop
+  between them.
+- Each C binding needs a finite timeout and cancellation points.
+- Native/Viper code is disabled to keep long-running Python code subject to the
+  bytecode VM hooks.
 
-Временной лимит должен быть политикой запуска, а не одним жёстким значением:
-IDE может запросить лимит до установленного firmware maximum. В v1 значение `0`
-выбирает безопасный default 30 секунд, maximum равен 300 секундам; кнопка STOP
-доступна при любом лимите.
+The time limit should come from the launch policy. The IDE can request a limit
+up to the firmware maximum. In v1, `0` selects the 30-second default and the
+maximum is 300 seconds. STOP is available at any limit.
 
-Аппаратный watchdog — только аварийный путь. Если core 1 не завершился через
-2 секунды после STOP либо через 5 секунд после deadline, безопасно «убить поток»
-и вернуться в меню невозможно: его C-код мог владеть ресурсом. Core 0 тогда
-одноразово запускает WDT1 и ждёт аппаратного reset; обычные flash-операции под
-watchdog не выполняются. Причина WDT1 сохраняется, firmware autostart
-подавляется на этот boot, чтобы не получить boot loop; native-приложение само
-никогда не запускает startup script при входе, а явный ручной RUN остаётся
-доступен.
+The hardware watchdog is the emergency recovery path. If core 1 remains
+active two seconds after STOP or five seconds after the deadline, its C code
+may still own a resource. Returning to the menu requires a hardware reset.
+Core 0 arms WDT1 once and waits for reset. Normal flash operations do not run
+under this watchdog. The firmware records the WDT1 cause and suppresses
+firmware autostart for that boot to avoid a boot loop. Entering the native
+app never runs the startup script by itself. An explicit manual RUN is still
+available.
 
 ### Resource ledger
 
-В реализованном v1 ресурсы имеют небольшой фиксированный dependency order, а
-не универсальную динамическую таблицу: display lease берётся первым при
-подготовке запуска, external UART/I2C и LED/RGB state отмечаются лениво при
-первом использовании. Идемпотентный cleanup останавливает external transaction,
-возобновляет connector service, восстанавливает настройки света и последним
-снимает display overlay. Такой обратный порядок покрыт executable exact-once
-тестами; независимость этих трёх групп не требует общего order stack. Python не
-получает сырые указатели, номера FPIOA, SPI flash, watchdog или возможность
-менять clocks. Ошибка, исключение, STOP и выход из приложения проходят через
-одну cleanup state machine.
+V1 uses a small fixed dependency order. It takes the display lease while
+preparing the run and records external UART/I2C and LED/RGB state lazily on
+first use. Idempotent cleanup stops the external transaction, resumes the
+connector service, restores the light settings, and removes the display
+overlay last. Executable tests verify that each cleanup operation runs exactly
+once in reverse order. These three independent groups need no shared order
+stack. Python receives no raw pointers, FPIOA numbers, SPI flash or watchdog
+access, or clock controls. Errors, exceptions, STOP, and app exit use the same
+cleanup state machine.
 
-## Flash-хранилище
+## Flash storage
 
-### Предлагаемая карта
+### Proposed layout
 
-| Диапазон | Размер | Назначение |
+| Range | Size | Purpose |
 | --- | ---: | --- |
-| `0x000000..image_end` | переменный | HackyLens firmware |
-| `0x007FE000..0x007FFFFF` | 8 КБ | существующие settings slots |
-| `0x00C70000..0x00FFFFFF` | 3 735 552 Б | littlefs scripts |
+| `0x000000..image_end` | Variable | HackyLens firmware |
+| `0x007FE000..0x007FFFFF` | 8 KB | Existing settings slots |
+| `0x00C70000..0x00FFFFFF` | 3,735,552 bytes | littlefs scripts |
 
-Диапазоны между образом, settings и `0x00C70000` не объявляются свободными:
-они использовались моделями и splash оригинальной прошивки. Такое решение также
-не заставляет firmware image расти до размера раздела.
+The ranges between the image, settings, and `0x00C70000` remain reserved
+because the original firmware used them for models and the splash screen.
+The firmware image can stay smaller than the partition.
 
-Нужен versioned flash-layout descriptor в release metadata. Flasher по
-умолчанию обновляет только firmware и сохраняет userfs; отдельные явные команды
-`format-userfs`/`erase-userfs` могут стереть раздел. Полное восстановление
-оригинального пакета не обязано сохранять Python-файлы.
+Release metadata needs a versioned flash layout descriptor. The flasher
+updates only the firmware by default and preserves userfs. Separate explicit
+`format-userfs` or `erase-userfs` commands may erase it. A full restore of the
+original package may erase the Python files.
 
-Перед монтированием firmware обязана:
+The firmware checks the flash and filesystem before mounting.
 
-1. прочитать JEDEC ID;
-2. вычислить capacity из density byte и сверить с allowlist протестированных
-   чипов;
-3. проверить, что все разделы выровнены и не пересекаются;
-4. отключить userfs на capacity меньше 16 МБ;
-5. никогда автоматически не форматировать повреждённую файловую систему без
-   подтверждения пользователя или команды IDE.
+1. Read the JEDEC ID.
+2. Derive capacity from the density byte and validate it against the allowlist
+   of tested chips.
+3. Verify that partitions are aligned and do not overlap.
+4. Disable userfs on capacities below 16 MB.
+5. Require user confirmation or an IDE command before formatting a damaged
+   filesystem.
 
-### Почему littlefs
+### Why littlefs
 
-Littlefs рассчитан на NOR flash, имеет copy-on-write, устойчивость к сбою
-питания, динамическое выравнивание износа, bounded RAM и атомарные операции
-rename/remove. Это лучше самодельного append-only журнала, как только нужны
-list/read/delete и несколько файлов. Код BSD-3-Clause совместим с MIT-проектом.
+Littlefs is designed for NOR flash and supports copy-on-write, power-loss
+resilience, dynamic wear leveling, bounded RAM usage, and atomic rename and
+remove operations. These features make it a better fit than a custom
+append-only journal once the system needs list, read, delete, and multiple
+files. Its BSD-3-Clause license is compatible with the project's MIT license.
 
-Начальный block config для проверки на реальной микросхеме:
+The initial block configuration needs validation on the physical chip.
 
-- `read_size = 1` или подтверждённая минимальная гранулярность драйвера;
-- `prog_size = 256`;
-- `block_size = 4096`;
-- `block_count = 912`;
-- `cache_size = 256`, два статических cache buffer;
-- `lookahead_size = 32` как стартовая точка, затем измерение;
-- `block_cycles = 500` как стартовая точка для выравнивания износа littlefs.
+- `read_size = 1` or the confirmed minimum driver granularity
+- `prog_size = 256`
+- `block_size = 4096`
+- `block_count = 912`
+- `cache_size = 256`, with two static cache buffers
+- `lookahead_size = 32` initially, then tune based on measurements
+- `block_cycles = 500` as a starting point for littlefs wear leveling
 
-CRC littlefs защищает метаданные; transport дополнительно проверяет CRC32 всего
-загруженного файла до атомарного commit. Upload идёт во временное имя
-`.upload-<id>`, после `close/sync` файл перечитывается/проверяется и атомарно
-переименовывается. Неоконченные временные файлы очищаются при следующем mount.
+Littlefs uses CRC to protect metadata. The transport also checks the CRC32 of
+the complete upload before atomic commit. The upload goes to a temporary
+`.upload-<id>` file. After `close/sync`, the file is read back, verified, and
+renamed atomically. Incomplete temporary files are removed on the next mount.
 
-До подключения littlefs надо усилить `boot_flash`:
+Littlefs depends on the following changes to `boot_flash`.
 
-- checked range и page-boundary split;
-- возврат `OK/TIMEOUT/IO/BOUNDS` вместо `void`;
-- read-after-program там, где нужен transport-level verify;
-- общий lock/owner для settings и littlefs;
-- запрет erase/program из core 1;
-- тест block device на RAM/file backend с fault injection после каждого
-  program/erase шага.
+- Range checks and page-boundary splitting
+- `OK/TIMEOUT/IO/BOUNDS` results in place of `void`
+- Read-after-program where transport verification requires it
+- A shared lock or owner for settings and littlefs
+- Erase and program restricted to core 0
+- Block-device tests with a RAM or file backend and fault injection after
+  each program or erase step
 
 ## Serial protocol v1
 
-Смешивать произвольный stdout с текущими строковыми `HK...` командами нельзя.
-Совместимый переход:
+Arbitrary stdout must be kept separate from the existing line-based `HK...`
+commands. The following handshake preserves compatibility with line mode.
 
-1. В обычном line mode IDE отправляет `HKMPROTO 1`.
-2. Устройство отвечает текстом `HKMPROTO 1 READY` и переключает UART3 в
-   exclusive framed mode.
-3. Все дальнейшие ответы, stdout и events идут только кадрами.
-4. `SESSION_CLOSE`, disconnect timeout или reboot возвращает line mode.
+1. In line mode, the IDE sends `HKMPROTO 1`.
+2. The device answers `HKMPROTO 1 READY` and switches UART3 to exclusive
+   framed mode.
+3. Subsequent responses, stdout, and events use frames.
+4. `SESSION_CLOSE`, a disconnect timeout, or reboot restores line mode.
 
-Формат кадра: COBS payload + delimiter `0x00`. Декодированный header:
+A frame consists of the COBS payload and a `0x00` delimiter. The table shows
+the decoded layout.
 
-| Поле | Размер |
+| Field | Bytes |
 | --- | ---: |
-| magic `HMPY` | 4 |
-| version | 1 |
-| type | 1 |
-| flags | 2 |
-| request_id | 4 |
-| payload_len | 4 |
-| payload | N, максимум 1024 в v1 |
-| CRC32 header+payload | 4 |
+| Magic `HMPY` | 4 |
+| Version | 1 |
+| Type | 1 |
+| Flags | 2 |
+| `request_id` | 4 |
+| `payload_len` | 4 |
+| Payload | N, up to 1024 in v1 |
+| CRC32 of header + payload | 4 |
 
-COBS гарантирует однозначное восстановление границы по нулю; CRC32 обнаруживает
-повреждение. `request_id` позволяет IDE сопоставлять ответы, а async events
-используют ноль. Все integer — little-endian. Parser имеет фиксированный
-буфер, отбрасывает oversized frame и восстанавливается на следующем delimiter.
+COBS lets the receiver find the next frame boundary at the zero delimiter.
+CRC32 detects corruption. The IDE uses `request_id` to match responses.
+Asynchronous events use zero. All integers are little-endian. The parser has
+a fixed buffer, drops oversized frames, and resynchronizes at the next
+delimiter.
 
-Минимальные request/response:
+The minimum message set includes these requests, responses, and events.
 
-- `HELLO` — protocol, firmware, board, flash profile, capabilities, limits;
-- `LIST`, `STAT`, `READ`;
-- `UPLOAD_BEGIN`, `UPLOAD_CHUNK`, `UPLOAD_COMMIT`, `UPLOAD_ABORT`;
-- `DELETE`, `SET_STARTUP`, `FORMAT` с отдельным подтверждающим token;
-- `RUN`, `STOP`, `STATUS`;
-- events `STDOUT`, `STDERR`, `STATE`, `FILE_CHANGED`, `DROPPED`;
-- `SESSION_CLOSE` и `PING`.
+- `HELLO` returns protocol, firmware, board, flash profile, capabilities,
+  and limits
+- `LIST`, `STAT`, `READ`
+- `UPLOAD_BEGIN`, `UPLOAD_CHUNK`, `UPLOAD_COMMIT`, `UPLOAD_ABORT`
+- `DELETE`, `SET_STARTUP`, and `FORMAT` with a separate confirmation token
+- `RUN`, `STOP`, `STATUS`
+- Events `STDOUT`, `STDERR`, `STATE`, `FILE_CHANGED`, `DROPPED`
+- `SESSION_CLOSE` and `PING`
 
-Каждый upload содержит ожидаемые size и CRC32. Chunks имеют offset, повторная
-доставка того же chunk идемпотентна, пропуск/перекрытие возвращает ошибку.
-stdout проходит через bounded 4-КиБ ring; при переполнении старые
-байты не должны молча исчезать — отправляется `DROPPED(bytes)`.
+Every upload includes the expected size and CRC32. Chunks carry offsets.
+Delivering the same chunk again is idempotent. Gaps and overlaps return an
+error. Stdout uses a bounded 4 KiB ring buffer. On overflow, it reports the
+discarded bytes with `DROPPED(bytes)`.
 
 ## Bindings v1
 
-Реализованный публичный API v1 сознательно оставлен плоским и небольшим:
+The original public v1 API deliberately used a small, flat interface.
 
 ```python
 import hackylens as hl
@@ -293,319 +301,344 @@ hl.display_clear(0x0000)
 hl.display_text(8, 8, "Hello", 0xffff)
 hl.display_present()
 hl.led(50)                  # 0..100
-hl.rgb(255, 0, 102)         # каждый канал 0..255
+hl.rgb(255, 0, 102)         # 0..255 per channel
 hl.sleep_ms(100)
 ```
 
-Namespaced objects, button edge events и нормализованный RGB `0..100` были
-ранним вариантом дизайна и не являются контрактом v1. Канонический контракт
-зафиксирован в `MICROPYTHON_API.md`.
+Namespaced objects, button edge events, and normalized RGB values from
+`0..100` belonged to an earlier design. The canonical contract is in
+[`MICROPYTHON_API.md`](MICROPYTHON_API.md).
 
-Ограничения v1:
+The original v1 interface had these limits.
 
-- `buttons`: level snapshot/read, без edge state и Python IRQ callbacks;
-- `display`: bounded command buffer, clipping и один Python overlay; запись в
-  LCD shadow/present выполняется core 0;
-- `time`: ticks/sleep с wrap-safe semantics;
-- LED: `0..100`; RGB: три канала `0..255`;
-- UART/I2C: только внешний connector через существующие HAL/services, с
-  exclusive lease (обычный external-link service на это время приостановлен),
-  лимитом буфера и timeout; debug UART3 недоступен Python;
-- STOP/BACK всегда имеет приоритет над пользовательским чтением кнопок.
+- `buttons` exposes level snapshots and reads. Edge state and Python IRQ
+  callbacks are unavailable.
+- `display` uses a bounded command buffer, clipping, and one Python overlay.
+  Core 0 updates the LCD shadow buffer and presents it.
+- `time` provides wrap-safe ticks and sleep.
+- LED accepts `0..100` and RGB accepts `0..255` for each of three channels.
+- UART/I2C uses only the external connector through the existing HAL and
+  services, with an exclusive lease, a buffer limit, and a timeout. The
+  regular external-link service pauses during the lease. Python cannot
+  access the UART3 debug port.
+- STOP/BACK takes priority over button reads by the script.
 
-Bindings v2 (camera, KPU, SD/files, vision results) следует проектировать после
-стабилизации runtime. Они должны переиспользовать `camera_session`,
-`ai_model_runtime`, `file_*` и `vision_result_service`, а не MaixPy API и не
-сырые SDK calls. KPU сохраняет правило одной загруженной модели.
+The next bindings for camera, KPU, SD/files, and vision results were planned
+after the runtime stabilized. They should reuse `camera_session`,
+`ai_model_runtime`, `file_*`, and `vision_result_service`. Those services keep
+MaixPy APIs and raw SDK calls outside the Python interface. The KPU retains
+its single loaded model rule.
 
-## Приложение на устройстве
+## On-device application
 
-Feature folder `firmware/src/apps/micropython/` должен иметь единственный
-публичный `micropython_app.h` и включаться целиком через
-`--disable-app micropython`. Внутри нужны controller, view, runtime adapter,
-file model и config; littlefs/block device остаётся общей storage subsystem,
-так как ей также пользуется IDE protocol. Но build manifest должен условно
-убирать VM, littlefs и protocol целиком, когда MicroPython app отключён.
+The `firmware/src/apps/micropython/` feature folder should have one public
+`micropython_app.h` header and be removable as a unit using
+`--disable-app micropython`. Internally it needs a controller, view, runtime
+adapter, file model, and configuration. The littlefs block device stays in the
+shared storage subsystem because the IDE protocol also uses it. The build
+manifest should omit the VM, littlefs, and the protocol when the MicroPython
+app is disabled.
 
-Минимальный UI:
+The proposed UI covers the basic file and execution workflows.
 
-- список `.py`, индикатор startup и свободного места;
-- RUN/STOP, DELETE с подтверждением, SET/CLEAR STARTUP;
-- read-only просмотр исходника с постраничным чтением без загрузки файла целиком;
-- экран логов с follow/scroll и итоговым статусом;
-- BACK во время запуска сначала запрашивает stop и остаётся на экране;
-- выход в меню разрешён только после cleanup;
-- удержание BACK на boot подавляет firmware autostart MicroPython;
-- после watchdog reset показывается причина предыдущего аварийного завершения.
+- A list of `.py` files, with a startup indicator and available space
+- RUN/STOP, DELETE with confirmation, and SET/CLEAR STARTUP
+- A read-only source viewer that reads one page at a time
+- A log screen with follow, scroll, and final status
+- BACK during a run first requests a stop and stays on the run screen
+- A return to the menu only after cleanup
+- Holding BACK during boot suppresses MicroPython firmware autostart
+- The app shows the previous failure reason after a watchdog reset
 
-Startup script не должен запускаться из общего boot orchestration напрямую.
-Сохраняется autostart ID приложения, но вход через boot или меню открывает один
-и тот же безопасный список без запуска. Startup metadata задаёт сохранённый
-default: файл выделяется первым и остаётся целью HMPY `RUN` без имени.
+The initial plan kept startup-script execution out of the common boot
+orchestration. The firmware saves the app autostart ID. Starting the app at
+boot or from the menu opens the same script list. Startup metadata selects
+the default file, which is highlighted first and is the target of HMPY
+`RUN` without a filename.
 
-## IDE на базе Pybricks Code
+## IDE based on Pybricks Code
 
-Pybricks Code — MIT Web IDE на TypeScript/React с Monaco, project storage и
-terminal UI. Это подходящая UI-база, но его transport и device model заточены
-под LEGO Bluetooth/USB и Pybricks firmware. Рекомендуется отдельный fork с
-зафиксированным upstream commit, сохранёнными `LICENSE`, copyright и страницей
-attribution.
+Pybricks Code is an MIT-licensed TypeScript/React web IDE with Monaco,
+project storage, and a terminal. Its UI was a suitable base. Its transport
+and device model target LEGO Bluetooth/USB and Pybricks firmware. The plan
+was to keep a separate fork pinned to an upstream commit, with the
+`LICENSE`, copyright, and a visible attribution page.
 
-Оставить:
+The plan retained these components.
 
-- Monaco editor, tabs/project persistence, file import/export;
-- terminal component;
-- installable PWA/offline shell;
-- общую state-management структуру там, где она не зависит от LEGO hub.
+- Monaco, tabs, project persistence, and file import and export
+- The terminal
+- The installable PWA and its offline shell
+- State management where it is independent of LEGO hubs
 
-Заменить/удалить:
+These components needed replacement or removal.
 
-- BLE hub transport, LEGO device discovery и firmware installer;
-- Pybricks-specific mpy-cross/firmware metadata;
-- LEGO API docs и анализатор, заменив их stubs/docs модуля `hackylens`;
-- run/download flow, заменив одним HackyLens Web Serial client.
+- BLE hub transport, LEGO discovery, and the firmware installer
+- Pybricks-specific mpy-cross and firmware metadata
+- LEGO API docs and analysis, replaced with `hackylens` module stubs and docs
+- The run and download flow, replaced with one HackyLens Web Serial client
 
-Web Serial доступен только в secure context и не поддерживается всеми
-популярными браузерами. Целевые браузеры web-версии — Chromium/Edge desktop;
-нужны HTTPS или localhost. Для Firefox/Safari и полностью офлайн Windows стоит
-собирать desktop wrapper с тем же protocol client, не меняя firmware protocol.
+Web Serial requires a secure context and has limited browser support. The
+web version targets desktop Chromium and Edge on HTTPS or localhost. A
+desktop wrapper could serve Firefox and Safari users and fully offline
+Windows installations. It could reuse the same protocol client without
+requiring a firmware protocol change.
 
-MVP IDE должен уметь connect, HELLO, list/read/upload/delete, run/stop, live
-stdout, выбор startup и recovery после disconnect. Форматирование, autocomplete
-и симулятор — последующие функции.
+The IDE MVP covers connection, HELLO, file listing and management, run and
+stop, live stdout, startup selection, and reconnection. Formatting,
+autocomplete, and simulation were left for later.
 
-## Лицензии
+## Licensing
 
-- HackyLens — MIT.
-- MicroPython — MIT, copyright/permission notice сохраняется.
-- Pybricks Code — MIT, copyright Pybricks Authors сохраняется, добавляется
-  видимая attribution.
-- littlefs — BSD-3-Clause, notice входит в source и binary distribution docs.
-- MaixPy-v1 — смесь MIT/Apache-2.0; любой заимствованный файл проверяется
-  отдельно и отмечается в `NOTICE`.
+- HackyLens uses MIT.
+- MicroPython uses MIT. Keep its copyright and permission notice.
+- Pybricks Code uses MIT. Keep the Pybricks Authors copyright and add
+  visible attribution.
+- Littlefs uses BSD-3-Clause. Include its notice with source and binary
+  distributions.
+- MaixPy-v1 includes MIT and Apache-2.0 code. Check each borrowed file and
+  record it in `NOTICE`.
 
-Перед release нужен автоматически генерируемый third-party manifest с версией,
-commit SHA, license и перечнем включённых файлов.
+The release plan called for a generated third-party manifest containing the
+version, commit SHA, license, and list of included files.
 
-## Порядок реализации и контрольные точки
+## Implementation milestones
 
-### Этап 0 — hardware proof
+### Stage 0 — Hardware proof
 
-1. Снять JEDEC ID и подтвердить 16 МБ на доступном SEN0305.
-2. Протестировать erase/program/read `0x00C70000` без повреждения settings,
-   firmware и возможности восстановления оригинального пакета.
-3. Добавить flash-layout descriptor и bounds guard в build/release/flasher.
+1. Read the JEDEC ID and confirm 16 MB on the available SEN0305.
+2. Test erase, program, and read at `0x00C70000` while preserving settings,
+   firmware, and the ability to restore the original package.
+3. Add the flash layout descriptor and bounds checks to the build, release,
+   and flasher.
 
-Gate: JEDEC/layout и работа хранилища на доступном SEN0305 с записью в пределах
-пользовательского раздела.
+Acceptance requires confirming the JEDEC ID, the layout, and storage
+operation on the available SEN0305, with writes confined to the user
+partition.
 
-По решению владельца проекта от 2026-11-20 физические испытания NOR на износ,
-намеренное отключение питания во время записи и проверки дополнительных
-экземпляров SEN0305 исключены из области аппаратной приёмки.
+On 2026-11-20 the project owner excluded physical NOR endurance testing,
+deliberate power cuts during writes, and testing of additional SEN0305 units
+from hardware acceptance.
 
-### Этап 1 — storage и protocol
+### Stage 1 — Storage and protocol
 
-1. Усилить `boot_flash`, добавить littlefs block device и host fault tests.
-2. Реализовать атомарные upload/list/read/delete/startup metadata.
-3. Реализовать framed protocol и Python CLI reference client до IDE.
+1. Harden `boot_flash`, add the littlefs block device, and add host fault tests.
+2. Implement atomic upload, list, read, delete, and startup metadata.
+3. Implement the framed protocol and reference Python CLI before the IDE.
 
-Gate: upload с обрывом на каждом chunk оставляет старый файл или отсутствие
-файла, но никогда частично опубликованный файл; line debug восстанавливается.
+Disconnecting at any upload chunk must leave the old file or no file, with
+no partial file published. The line-based debug interface must recover.
 
-### Этап 2 — минимальная VM
+### Stage 2 — Minimal VM
 
-1. Интегрировать pinned upstream embed без bindings.
-2. Запускать source на core 1, выводить stdout и состояние на core 0.
-3. Добавить heap/stack/time limits, hooks, STOP, deinit и watchdog fallback.
+1. Integrate the pinned upstream embed port without bindings.
+2. Execute source on core 1 and deliver stdout and state on core 0.
+3. Add heap, stack, and time limits, hooks, STOP, deinit, and watchdog recovery.
 
-Gate: normal return, syntax/runtime error, OOM, recursion, infinite loop,
-sleep и stdout flood завершаются предсказуемо; 1000 run/stop циклов не дают
-роста C heap и не ломают меню.
+Normal return, syntax and runtime errors, OOM, recursion, infinite loops,
+sleep, and stdout floods must end predictably. The 1,000-cycle RUN/STOP test
+must preserve the C heap footprint and menu operation.
 
-### Этап 3 — bindings v1 и on-device app
+### Stage 3 — V1 bindings and on-device app
 
-1. Buttons/time, затем LED/RGB, затем display, UART/I2C.
-2. Для каждого binding добавить lease, timeout, cancel и cleanup tests.
-3. Добавить browser/log/startup UI и safe boot.
+1. Add buttons and time, then LED/RGB, display, and UART/I2C.
+2. Add lease, timeout, cancellation, and cleanup tests for each binding.
+3. Add the browser, log and startup UI, and safe boot.
 
-Gate: STOP на каждом blocking API возвращает управление или предлагает
-контролируемый restart; после остановки все ресурсы в исходном состоянии.
+STOP during each blocking API call must return control or offer a controlled
+restart. All resources must be restored after stopping.
 
-### Этап 4 — IDE
+### Stage 4 — IDE
 
-1. Зафиксировать fork Pybricks Code и оформить attribution.
-2. Добавить transport client и MVP file/run/log UI.
-3. Проверить reconnect, duplicate chunks, CRC errors и firmware mismatch.
+1. Pin the Pybricks Code fork and add attribution.
+2. Add the transport client and the initial file, run, and log UI.
+3. Verify reconnection, duplicate chunks, CRC errors, and firmware mismatch.
 
-Gate: полный workflow edit → atomic upload → run → live logs → stop → run from
-device проходит без SD и без ручных debug-команд.
+The full workflow must support editing, atomic upload, running, live logs,
+stopping, and running from the device without an SD card or manual debug
+commands.
 
-### Этап 5 — camera/KPU расширение
+### Stage 5 — Camera and KPU
 
-Только после измерений latency, RAM и cleanup v1. Сначала read-only vision
-results, затем camera snapshots, затем модели. Каждый шаг сохраняет существующие
-single-owner contracts.
+Extend the bindings after measuring v1 latency, RAM, and cleanup. Start with
+read-only vision results, then add camera snapshots, then models. Preserve
+the existing single-owner contracts at each step.
 
-## Фактический результат реализации и проверки
+## Implementation and validation results
 
-Исследовательские прототипы подтвердили, что для K210 не нужен MaixPy fork.
-Официальный MicroPython v1.28.0 embed на commit
-`e0e9fbb17ed6fd06bb76e266ae554784c9c80804` сгенерировал 135 C-файлов; все они
-скомпилировались GCC 8.2 с теми же `rv64imafc/lp64f` flags, что основная прошивка,
-и связались с HackyLens. Минимальная VM добавила 135038 байт text, 8 байт data и
-776 байт BSS без GC heap. RV64 NLR (`py/nlrrv64.c`) и сохранение регистров GC
-уже входят в upstream.
+The prototypes confirmed that the K210 can use upstream MicroPython
+directly. The official MicroPython v1.28.0 embed port at commit
+`e0e9fbb17ed6fd06bb76e266ae554784c9c80804` generated 135 C files. All compiled
+with GCC 8.2 using the firmware's `rv64imafc/lp64f` flags and linked with
+HackyLens. The minimal VM added 135,038 bytes of text, 8 bytes of data, and
+776 bytes of BSS, excluding the GC heap. Upstream already provides RV64 NLR
+(`py/nlrrv64.c`) and GC register saving.
 
-По результатам аудита первоначальный дизайн уточнён:
+The code audit led to these design adjustments.
 
-- stack core 1 физически ограничен linker script размером 32 КиБ, поэтому VM
-  получает консервативный лимит 24 КиБ от локального stack anchor, а не все
-  32 КиБ;
-- GC heap сделан статическим, выровненным и принадлежащим только core 1,
-  размером 128 КиБ;
-- mailbox, runtime control/source/output и binding RPC размещены в uncached
-  alias; одних `volatile` и fences для K210 недостаточно;
-- flash и периферия остаются core-0-only. Python bindings выполняются через
-  bounded single-flight RPC, а STOP является кооперативным исключением из VM
-  hooks и cancel points;
-- binding RPC удерживает single-slot context до final core-0 cancel ack, поэтому
-  NLR unwind не может оставить позднюю hardware-операцию. UART TX продвигается
-  неблокирующими tick-шагами с 8-байтной FIFO и завершается только после
-  `TFL==0 && TEMT`; I2C имеет 100-мс deadline и cancel points;
-- GC hook только обновляет heartbeat: поднимать исключение внутри сборщика
-  нельзя, иначе GC может остаться в промежуточном состоянии;
-- native iterator gateways опрашивают тот же stop/deadline hook, а просроченный
-  кооперативный STOP имеет one-shot WDT1 fallback с safe-boot suppression;
-- HackyLens Code выделен в отдельный repository `hackylens-code` с полным
-  buildable source tree на проверенном Pybricks Code pin и материализованными
-  HackyLens transport/UI/tests. Upstream MIT license, attribution и pin сохранены;
-  большие LEGO firmware/video assets не включены.
+- The linker script allocates a 32 KiB stack for core 1. The VM uses a
+  conservative 24 KiB limit measured from a local stack anchor.
+- Core 1 exclusively owns the static, aligned 128 KiB GC heap.
+- The mailbox, runtime control, source and output buffers, and binding RPC
+  use the uncached alias. K210 also needs this placement when using
+  `volatile` and fences.
+- Flash and peripherals remain exclusive to core 0. Python bindings use a
+  bounded RPC with one call in flight. STOP raises a cooperative exception
+  through VM hooks and cancellation points.
+- The binding RPC keeps its single-slot context until the final cancellation
+  acknowledgement from core 0. This prevents an NLR unwind from leaving a
+  hardware operation pending. UART TX advances in nonblocking ticks using
+  the 8-byte FIFO and completes only at `TFL==0 && TEMT`. I2C has a 100 ms
+  deadline and cancellation points.
+- The GC hook only updates the heartbeat. An exception inside the collector
+  could leave it in an intermediate state.
+- Native iterator entry points poll the same stop and deadline hook. An
+  overdue cooperative STOP has a one-shot WDT1 fallback that suppresses
+  autostart on the recovery boot.
+- HackyLens Code lives in the separate `hackylens-code` repository with a
+  complete buildable source tree pinned to a verified Pybricks Code commit.
+  It includes the HackyLens transport, UI, and tests. The upstream MIT
+  license, attribution, and pin are preserved. Large LEGO firmware and
+  video assets are excluded.
 
-Реализованы canonical flash map, guarded NOR driver, littlefs v2.11.2, явное
-форматирование, atomic upload `temporary + sync + CRC32 + rename`, startup
-metadata, cleanup незавершённых upload, core-1 MicroPython runtime, bindings v1,
-on-device приложение, HMPY v1, Python CLI и отдельный HackyLens Code repository
-с Monaco/Web Serial. IDE имеет собственный CI/build lifecycle, выпускается
-отдельно и больше не входит в firmware/SD-card release archive.
+The implementation includes the canonical flash map, a guarded NOR driver,
+littlefs v2.11.2, explicit formatting, atomic upload using
+`temporary + sync + CRC32 + rename`, startup metadata, cleanup of incomplete
+uploads, the core 1 MicroPython runtime, v1 bindings, the on-device app,
+HMPY v1, the Python CLI, and the separate HackyLens Code repository with
+Monaco and Web Serial. The IDE has its own CI, build, and release process
+outside the firmware and SD card release archives.
 
-Software-side результаты:
+The original implementation went through the following software checks.
 
-- fault harness проходит 53 возможных обрыва mutation sequence, а также CRC
-  rejection, abort, delete/startup и stale-upload сценарии;
-- 57 Python host-тестов проходят без skip, включая Python/C golden vectors, corruption,
-  fragmentation, bounds/resync, 53 fault cuts, полный fake-device
-  storage/runtime workflow, безопасный hardware-acceptance runner и executable
-  harness реального binding/HAL/LCD state machine;
-- 13 TypeScript codec/client tests в трёх suites используют те же golden vectors, полный
-  fake-device workflow и long-operation/keepalive gate; strict TypeScript check
-  и production webpack build проходят;
-- `check_arch.py`, `gen_flash_layout.py --check` и `check_env.py` проходят для
-  текущего 12-модульного дерева, 16-МиБ flash map и pinned host/target toolchains;
-- full firmware: text/data/BSS `1346182/158152/2697472`, бинарник 1504440 байт,
-  SHA-256 `5F265CB4DDF14E1B2C3E852725973782EBD91D39C415CB422943A48B469D7FBD`;
-- symbol gate подтверждает MicroPython/runtime/HMPY/userfs и явно требует
-  `mp_builtin_min_obj`, `mp_builtin_max_obj`, `mp_builtin_sum_obj`; production
-  release-бинарник побайтно совпадает с проверенной full-сборкой;
-- фактическая строка release/HELLO в ELF равна canonical `VERSION=0.2.0`;
-- сборка с `--disable-app micropython` не содержит MicroPython, HMPY и userfs
-  symbols, имеет text/data/BSS `1157879/158112/2418448`, бинарник 1316088 байт
-  и SHA-256 `3ED2FA8E9F2D357F85EF4BFA5B491645824DEC6C9106493A064EF6C2E7BC11D9`;
-- браузерная проверка production IDE при 1280x720 подтверждает Monaco, все
-  disabled/initial states, локальные действия и отсутствие console errors.
+- The fault harness passes 53 possible interruption points in the mutation
+  sequence, plus CRC rejection, abort, delete/startup, and stale-upload
+  scenarios.
+- All 57 Python host tests pass without skips. They cover Python/C golden
+  vectors, corruption, fragmentation, bounds and resynchronization, the
+  53 fault cuts, the full fake-device storage/runtime workflow, the safe
+  hardware acceptance runner, and an executable harness for the real
+  binding/HAL/LCD state machine.
+- Thirteen TypeScript codec and client tests across three suites use the
+  same golden vectors and cover the full fake-device workflow, long
+  operations, and keepalive. Strict TypeScript checking and the production
+  webpack build pass.
+- `check_arch.py`, `gen_flash_layout.py --check`, and `check_env.py` pass for
+  the 12-module tree, the 16 MiB flash map, and the pinned host and target
+  toolchains used in this validation.
+- The full firmware has text/data/BSS sizes of `1346182/158152/2697472`.
+  The binary is 1,504,440 bytes with SHA-256
+  `5F265CB4DDF14E1B2C3E852725973782EBD91D39C415CB422943A48B469D7FBD`.
+- The symbol check verifies MicroPython, runtime, HMPY, and userfs symbols,
+  explicitly requiring `mp_builtin_min_obj`, `mp_builtin_max_obj`, and
+  `mp_builtin_sum_obj`. The production release binary is byte-for-byte
+  identical to the tested full build.
+- The release and HELLO version in the ELF matches the canonical
+  `VERSION=0.2.0`.
+- The `--disable-app micropython` build contains no MicroPython, HMPY, or
+  userfs symbols. It has text/data/BSS sizes of `1157879/158112/2418448`.
+  The binary is 1,316,088 bytes with SHA-256
+  `3ED2FA8E9F2D357F85EF4BFA5B491645824DEC6C9106493A064EF6C2E7BC11D9`.
+- A browser check of the production IDE at 1280×720 confirmed Monaco, all
+  disabled and initial states, local actions, and no console errors.
 
-Для прошивки физического SEN0305 выбран production-образ с тем же SHA-256;
-flasher завершил запись без общего erase, поэтому settings, legacy area и userfs
-не стирались. Boot log подтвердил JEDEC `EF6018` (16 МиБ), сохранённые settings,
-12 приложений и работающую OV2640. HMPY `HELLO` возвращает firmware `0.2.0`, board
-`HackyLens K210`, capabilities `511`; на живой камере прошёл stress из 100
-последовательных `PING` с максимальным 1024-байтным payload. ISP stub не
-предоставляет flash-read command, поэтому опция flasher `--verify` честно
-завершилась предупреждением: версия и transport проверены на устройстве, но
-криптографический readback именно выбранного бинарника отсутствует.
+The production image with the same SHA-256 was installed on the physical
+SEN0305. The flasher wrote it without a full erase and preserved settings,
+the legacy area, and userfs. The boot log confirmed JEDEC `EF6018` (16 MiB),
+preserved settings, 12 applications, and a working OV2640. HMPY `HELLO`
+returned firmware `0.2.0`, board `HackyLens K210`, and capabilities `511`.
+With the camera running, 100 consecutive `PING` requests at the maximum
+1024-byte payload succeeded. The ISP stub lacks a flash-read command,
+so flasher `--verify` ended with a warning. The device checks confirmed
+the version and transport. The exact binary hash was unavailable from
+the device because it could not be read back.
 
-Первый mount обнаружил существующий повреждённый userfs:
-`filesystem_state=3` (`CORRUPT`) и `filesystem_error=5` (`CORRUPT`). Firmware
-правильно отказалась форматировать его автоматически. После отдельного явного
-разрешения принят точный destructive token `ERASE USERFS`; раздел успешно
-отформатирован и смонтирован. Полный аппаратный workflow на production-прошивке
-прошёл: atomic upload/read/LIST/STAT, выбор и запуск startup, непрерывные логи,
-cooperative STOP (123 мс), STOP внутри native `sum` (121 мс) и `min` (121 мс),
-повторное использование executor, потеря transport без `SESSION_CLOSE`,
-переподключение после lease и STOP нового run (122 мс). Cleanup удалил только
-пять acceptance-файлов, снял startup и вернул userfs к пустому mounted-состоянию.
-Локальная machine-readable трасса находится в gitignored каталоге
-`build/hardware-acceptance`: `com10-format-full-workflow.json` содержит успешный
-шаг `format` (общий запуск затем завершился ошибкой старой host-проверки STDERR),
-а `com10-postformat-readonly.json` отдельно подтверждает mounted пустой раздел.
-Финальные `com10-full-workflow-final.json` и `com10-final-clean-readonly.json`
-имеют общий результат `PASS`.
+The first mount found a damaged userfs with `filesystem_state=3` (`CORRUPT`)
+and `filesystem_error=5` (`CORRUPT`). The firmware correctly required
+explicit approval to format it. After the exact destructive confirmation
+token `ERASE USERFS` was accepted, the partition formatted and mounted
+successfully. The full hardware workflow passed on production firmware.
+It covered atomic upload/read/LIST/STAT, startup selection and execution,
+continuous logs, cooperative STOP (123 ms), STOP inside native `sum` (121 ms)
+and `min` (121 ms), executor reuse, transport loss without `SESSION_CLOSE`,
+reconnection after the lease, and STOP on a new run (122 ms). Cleanup
+removed just the five acceptance files, cleared startup, and left userfs
+mounted and empty.
 
-Основная CLI/HMPY часть аппаратного workflow прошла. Более поздний
-[журнал Cube](MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12) фиксирует
-браузерный upload/run/stop и физический BACK на обеих платах.
-[WDT1 reset-cause/startup suppression](WDT_HARDWARE_ACCEPTANCE.md) прошёл
-аппаратную проверку на SEN0305 и Maix Cube 2026-11-20.
+The machine-readable traces are in the gitignored
+`build/hardware-acceptance` directory. `com10-format-full-workflow.json`
+records a successful `format` step followed by a failure in the older host-side
+STDERR check. `com10-postformat-readonly.json` independently confirms that
+the empty partition mounted. The final `com10-full-workflow-final.json` and
+`com10-final-clean-readonly.json` both report `PASS`.
 
-Физические испытания NOR на износ, намеренное отключение питания во время
-записи и JEDEC/layout-проверки дополнительных экземпляров SEN0305 исключены
-из области приёмки по решению владельца проекта от 2026-11-20. Аппаратные
-результаты относятся к проверенным устройствам и зафиксированным сценариям.
+The main CLI/HMPY hardware workflow passed. The later
+[Cube test log](MAIX_CUBE_TEST_LOG.md#browser-color-tracker-checks-2026-11-12) records
+browser upload, run, and stop, as well as the physical BACK button on both
+boards. [WDT1 reset cause and autostart suppression](WDT_HARDWARE_ACCEPTANCE.md)
+passed on SEN0305 and Maix Cube on 2026-11-20.
 
-WDT1 gate воспроизводится без опасного production binding: отдельная сборка
-`--wdt-fault-injection` получает видимую версию `-wdtfi` и намеренно зависает в
-VM hook после STOP/deadline. До trigger снимается read-only baseline, а после
-физического reset отдельный read-only postcheck сверяет boot flag, idle state,
-файлы, startup metadata и отсутствие autostart. Точная процедура описана в
-[WDT_HARDWARE_ACCEPTANCE.md](WDT_HARDWARE_ACCEPTANCE.md).
+On 2026-11-20 the project owner excluded physical NOR endurance testing,
+deliberate power cuts during writes, and JEDEC/layout checks on additional
+SEN0305 units from acceptance. The results apply to the units and scenarios
+recorded here.
+
+The WDT1 test uses a dedicated `--wdt-fault-injection` build with a visible
+`-wdtfi` version suffix. Its VM hook deliberately hangs after STOP or the
+deadline. A read-only check takes a baseline before triggering the reset.
+After the physical reset, another read-only check verifies the boot flag,
+idle state, files, startup metadata, and that autostart was suppressed.
+See [WDT_HARDWARE_ACCEPTANCE.md](WDT_HARDWARE_ACCEPTANCE.md) for the procedure.
 
 ### RUN/STOP stress on K210
 
-21 ноября 2026 года на каждой плате прошли два прогона по 1000 циклов.
-Штатная прошивка `0.8.0` прошла проверку RUN/STOP и возврата в меню.
-Сборка `0.8.0-heapdiag` повторила прогон с замерами аллокатора Newlib.
+On 2026-11-21 each board passed two runs of 1,000 cycles. Stock `0.8.0`
+firmware passed the RUN/STOP and return-to-menu checks. The
+`0.8.0-heapdiag` build repeated the run with Newlib allocator measurements.
 
-| Плата | Штатная сборка | Диагностическая сборка | Занятый C heap до → после | Арена C heap до → после |
+| Board | Stock build | Diagnostic build | C heap in use before → after | C heap arena before → after |
 | --- | ---: | ---: | ---: | ---: |
-| HUSKYLENS SEN0305 (COM10) | 1000/1000 | 1000/1000 | 73 760 → 73 760 Б | 76 800 → 76 800 Б |
-| Maix Cube (COM11) | 1000/1000 | 1000/1000 | 73 760 → 73 760 Б | 74 560 → 74 560 Б |
+| HUSKYLENS SEN0305 (COM10) | 1000/1000 | 1000/1000 | 73,760 → 73,760 bytes | 76,800 → 76,800 bytes |
+| Maix Cube (COM11) | 1000/1000 | 1000/1000 | 73,760 → 73,760 bytes | 74,560 → 74,560 bytes |
 
-В каждом цикле скрипт вывел маркер готовности до STOP. Проверка подтвердила
-следующий `run_id` и состояние `STOPPED / EXIT_REQUESTED` менее чем за 2 с.
-Перед прогоном контрольные `malloc` и `free` подтвердили отклик счётчика.
-`mallinfo` показал одинаковые значения до первого цикла, после 1, 10, 50 и
-после каждой сотни циклов. После прогона на обеих платах открывалось приложение
-BUTTONS и работал возврат в меню. Диагностическая сборка также подтвердила
-перемещение выделения сигналами RIGHT и LEFT через штатную обработку кнопок.
+In every cycle the script printed a ready marker before STOP. The test
+verified the next `run_id` and the `STOPPED / EXIT_REQUESTED` state within two
+seconds. Control calls to `malloc` and `free` verified the allocator counter
+before the run. `mallinfo` reported the same values before the first cycle,
+after cycles 1, 10, and 50, and after every 100 cycles. After the run,
+BUTTONS opened on both boards and returned to the menu. The diagnostic
+build also confirmed that RIGHT and LEFT moved the selection through the
+normal button handling.
 
-На SEN0305 прогоны управлялись по HMPY. На Maix Cube бинарные прогоны HMPY
-прервались из-за повреждённых ответов после 167, 36 и 590 подтверждённых циклов.
-В одном кадре на стороне ПК зафиксирована потеря 62 последовательных байтов.
-Зачётные прогоны Cube использовали встроенный скрипт `HKMPTEST`, `HKMPSTOP`
-и проверку `HKMPSTATUS`. Надёжность длительного обмена HMPY на Cube остаётся
-открытой.
+The SEN0305 runs used HMPY. On Maix Cube, binary HMPY runs stopped after
+167, 36, and 590 confirmed cycles because of corrupt responses. One frame
+received by the host was missing 62 consecutive bytes. The qualifying Cube
+runs used the built-in test script via `HKMPTEST`, `HKMPSTOP`, and
+`HKMPSTATUS`. Long-running HMPY transport reliability on Cube remains open.
 
-Отчёты, CSV по каждому циклу, журналы и исходники измерителя сохранены локально
-в `build/hardware-acceptance/micropython-soak/`. На обе платы возвращена штатная
-прошивка `0.8.0`. Проверены исходный автозапуск и SHA-256 исходных файлов.
+Reports, per-cycle CSV data, logs, and instrumentation source are stored
+locally in `build/hardware-acceptance/micropython-soak/`. Both boards were
+restored to stock `0.8.0` firmware. The original autostart setting and file
+SHA-256 hashes were verified.
 
-## Основные риски
+## Main risks
 
-| Риск | Мера |
+| Risk | Mitigation |
 | --- | --- |
-| Не все ревизии имеют 16-МБ flash | JEDEC allowlist, feature disabled на 8 МБ |
-| VM блокирует интерфейс | core 1 + VM hooks + bounded bindings |
-| Нельзя безопасно убить зависший C binding | timeout/cancel; затем только controlled reboot |
-| Cache coherency между ядрами | uncached mailbox или явный cache flush/invalidate, barriers и hardware stress test |
-| C/GC heap конфликтуют с AI и статическими буферами | app exclusivity, статический 128-КиБ GC heap, map/heap instrumentation |
-| Износ/corruption flash | littlefs, atomic rename, CRC32 upload, fault injection |
-| stdout ломает команды | exclusive framed session и отдельные event frames |
-| IDE fork быстро расходится с upstream | тонкий transport layer, pinned commit, регулярный controlled rebase |
-| Startup script создаёт boot loop | удержание BACK, countdown, one-boot suppression после watchdog |
+| Some revisions may have less than 16 MB of flash | JEDEC allowlist and disable the feature on 8 MB devices |
+| VM blocks the interface | Core 1, VM hooks, and bounded bindings |
+| A stalled C binding cannot be stopped safely | Timeout and cancellation, then controlled reboot |
+| Inter-core cache coherency | Uncached mailbox or explicit cache flush and invalidation, barriers, and hardware stress testing |
+| C and GC heaps compete with AI and static buffers | Application exclusivity, static 128 KiB GC heap, map and heap instrumentation |
+| Flash wear or corruption | littlefs, atomic rename, upload CRC32, and fault injection |
+| Stdout interferes with commands | Exclusive framed session and separate event frames |
+| IDE fork drifts from upstream | Thin transport layer, pinned commit, and regular controlled rebase |
+| Startup script creates a boot loop | Hold BACK, countdown, and one-boot autostart suppression after watchdog reset |
 
-## Источники
+## Sources
 
 - [MicroPython embed port](https://github.com/micropython/micropython/tree/master/ports/embed)
-- [Официальный embedding example](https://github.com/micropython/micropython/tree/master/examples/embedding)
+- [Official embedding example](https://github.com/micropython/micropython/tree/master/examples/embedding)
 - [MicroPython v1.28.0](https://github.com/micropython/micropython/releases/tag/v1.28.0)
 - [MicroPython porting guide](https://docs.micropython.org/en/latest/develop/porting.html)
 - [MicroPython C modules and heap model](https://docs.micropython.org/en/latest/develop/cmodules.html)

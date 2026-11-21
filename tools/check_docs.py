@@ -21,7 +21,6 @@ HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
 CLAIM_SURFACES = (
     Path("README.md"),
     Path("docs/ARCHITECTURE.md"),
-    Path("docs/MODULES.md"),
 )
 
 FORBIDDEN_CLAIMS = (

@@ -6,7 +6,7 @@
     <a href="VERSION"><img alt="Firmware version 0.8.0" src="https://img.shields.io/badge/firmware-v0.8.0-45d483?style=flat-square"></a>
     <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8bd5ca?style=flat-square"></a>
     <a href="https://www.dfrobot.com/product-1922.html?srsltid=AfmBOopFLFOvPDHc_IyIEzhXPL2jOfHyxDgTjD5jBq53ne3zEmhpjHFF"><img alt="Tested on SEN0305" src="https://img.shields.io/badge/tested%20on-SEN0305-f5a97f?style=flat-square"></a>
-    <a href="docs/MAIX_CUBE.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
+    <a href="docs/MAIX_CUBE_TEST_LOG.md"><img alt="Tested on Maix Cube" src="https://img.shields.io/badge/tested%20on-Maix%20Cube-f5a97f?style=flat-square"></a>
     <img alt="Kendryte K210" src="https://img.shields.io/badge/MCU-Kendryte%20K210-a6da95?style=flat-square">
   </p>
 </div>
@@ -251,7 +251,7 @@ authorized USERFS format: atomic file operations, startup execution, cooperative
 STOP (123 ms), native `sum`/`min` STOP (121 ms), executor reuse, lease reconnect,
 and exact cleanup. Later checks on both boards covered browser Web Serial
 upload/run/stop and physical BACK cleanup. See the
-[hardware log](docs/MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12).
+[hardware log](docs/MAIX_CUBE_TEST_LOG.md#browser-color-tracker-checks-2026-11-12).
 The MicroPython runtime passed 1,000 run/stop cycles on each board. A separate
 instrumented run confirmed stable C heap usage and working launcher navigation.
 [Hardware results](docs/MICROPYTHON_RESEARCH.md#runstop-stress-on-k210)
@@ -350,7 +350,7 @@ HackyLens Code is intentionally maintained in the separate sibling
 
 See [Architecture](docs/ARCHITECTURE.md) for the current implementation,
 hardware acceptance and limitations, and [Roadmap](docs/ROADMAP.md) for product
-and research priorities. Detailed references cover [modules](docs/MODULES.md),
+and research priorities. Detailed references cover
 [AI models](docs/AI_MODELS.md), [app lifecycle](docs/spec/APP_RUNTIME.md),
 [RAM/flash budget](docs/RAM_BUDGET.md) and [public interfaces](docs/spec/README.md).
 Historical plans and decisions remain in Git history.

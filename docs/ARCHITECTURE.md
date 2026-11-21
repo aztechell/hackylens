@@ -7,8 +7,8 @@ the selected `boards/<id>` BSP, and the K210 HAL/startup under `platforms/k210`.
 > preview.
 
 This is the current architecture and implementation status. [Roadmap](ROADMAP.md)
-contains product priorities; [technical references](spec/README.md) describe
-public interfaces. Historical plans and decisions remain in Git history.
+contains product priorities, and the [technical references](spec/README.md)
+describe public interfaces.
 
 The project aims to reuse feature logic across K210 boards, compose firmware
 from isolated native apps, and share hardware services with MicroPython.
@@ -50,7 +50,8 @@ runtime owns Display transactions. App identity and persisted autostart IDs do
 not depend on menu order. Existing bundled portable firmware services are not
 therefore standalone public SDK APIs.
 
-The launcher appends user-pinned script shortcuts after the native registry.
+The default launcher order lists built-in apps before pinned script shortcuts.
+SETTINGS → Menu Order can reorder both independently of the registry.
 A shortcut opens the existing MICRO-PYTHON app with a saved program name. Pin
 metadata lives in the USERFS file entry and follows atomic program replacement.
 
@@ -123,6 +124,19 @@ they do not require another ADR, evidence schema or governance checker.
 - `storage` encodes and persists data. `storage/screenshot_bmp.c` only encodes BMP using a supplied `screenshot_pixel_source_t`; it never accesses the LCD or UART.
 - `ui` renders views through the typed Display session; raw LCD transport stays below its provider.
 
+`services/vision_result_service.*` owns the latest BLOCK/ARROW result and
+QR payload. `services/external_link_protocol.*` encodes the
+[external link protocol](EXTERNAL_LINK_PROTOCOL.md#results-and-unified-items).
+`services/external_link_service.*` dispatches it over Grove UART1 or I2C0.
+UART3 is reserved for the USB-serial console and HMPY.
+
+`drivers/camera_stream.h` exposes the IRQ-driven two-slot stream and frame
+leases. K210 interrupt handling stays inside `platforms/k210/hal/hal_dvp.c`.
+`services/frame_pool.*` owns the shared SRAM arena.
+`services/frame_workspace.h` lends generation-checked scratch space while
+capture is stopped. `services/media_workspace.h` leases the arena tail for
+PNG input or model weights. See the [RAM layout](RAM_BUDGET.md).
+
 `core/image_viewport.*` calculates a centered source crop and destination area
 from explicit dimensions and a `contain` or `cover` mode, without board or
 display dependencies. The camera's presentation policy in
@@ -135,8 +149,6 @@ The file viewer uses the existing `ui/image_fit` adapter with `contain`, so a
 saved image remains entirely visible.
 
 Screenshot UART output keeps the `HKSHOT BEGIN BMP24` / `HKSHOT END` protocol and CRC. `services/screenshot_source.c` supplies the LCD shadow source, `storage/screenshot_bmp.c` encodes bytes, and `services/debug_screenshot_stream.c` sends them through `services/debug_console_service.c`.
-
-`tools/check_arch.py` guards include boundaries, forbidden compatibility headers, SDK-token placement, include cycles, and feature-module ownership.
 
 The shared AI platform is split across the normal layers. `core/ai_model_types.h`
 describes tensors, normalization, post-processing, and exact KModel contracts.
@@ -159,10 +171,11 @@ without reserving another frame-pool slot. `services/core1_executor.*`
 similarly owns the one reusable core-1 loop and accepts one bounded job at a
 time; feature modules do not replace each other's core-1 entry point.
 
-The shared `settings_menu` controller handles rows, navigation, hold-repeat and
-dynamic choices. CAMERA, QR, APRILTAG, OBJECT DETECT and SETTINGS supply their
-own descriptors and side effects. SETTINGS uses the App SDK panel and groups
-the rows under Screen, Lights, Connection, Startup and Device. Boards with
+The shared controller in `controllers/settings_menu_controller.h` handles
+rows, navigation, hold-repeat and dynamic choices. CAMERA, QR, APRILTAG,
+OBJECT DETECT and SETTINGS supply their own descriptors and side effects.
+SETTINGS uses the App SDK panel and groups the rows under Screen, Lights,
+Connection, Startup and Device. Boards with
 audio also show Sound. Range and choice edits in SETTINGS use a draft. Lighting
 and Screen → UI Color preview edits live. OK saves the value and BACK restores
 the previous setting. UI Color selects the accent used by the launcher and
@@ -177,9 +190,11 @@ Device is open and displays the used space once the scan completes. It caches
 the count for the mounted card. FAT writes adjust the count for sectors
 already scanned.
 
-SETTINGS → Startup can select an eligible built-in app or a pinned MicroPython
-script. The script name is stored in userfs and the boot controller opens it
-through the launcher shortcut path. Unpinning or deleting the selected script
+SETTINGS → Startup can select an eligible built-in app from the immutable
+registry or a pinned MicroPython script. The generated reserved ID set preserves
+persisted app identities across builds with disabled apps. The boot controller
+reads the saved script name from userfs and opens the launcher shortcut.
+Unpinning or deleting the selected script
 clears the target. An unavailable target returns to the launcher.
 
 APRILTAG Distance keeps fractional corner coordinates in the unrotated 160×120
@@ -230,9 +245,11 @@ only for FACE DETECT, FACE RECOG and OBJECT DETECT. The shared core-1 executor i
 MICROPYTHON, or QR-CAMERA needs it. With no camera consumer, sensor/DVP/camera runtime sources
 are omitted while the general KPU HAL remains available.
 
-Canonical manifests generate the immutable descriptor and menu arrays. The
-small app-neutral core registry dispatches primary and secondary screen
-ownership, menu icons and explicit debug commands. The single foreground
+Canonical manifests generate the immutable descriptor and menu arrays.
+The [manifest reference](spec/APP_MANIFEST.md#generated-composition) defines
+the generated files and ID rules. The app-neutral `core/hk_app_registry.c`
+dispatches primary and secondary screen ownership, menu icons and explicit
+debug commands. The single foreground
 runtime dispatches lifecycle callbacks, timer and SD events; inactive apps do
 not receive background ticks. Shared screen, SD, debug, boot, and system-tick controllers
 do not include feature headers or select features with conditionals.
@@ -259,7 +276,12 @@ The main loop takes results after the worker ticket completes and pauses the
 preview when it opens the result window. Exit discards pending results and
 defers decoder cleanup until the worker releases the image.
 
-FILES owns browser navigation/state, previews and deletion, all BMP/PNG/PPM/RAW/GIF decoders, and its view. Shared FAT32 provides neutral mount, directory scan, file, allocation, and stream contracts and has no dependency on FILES browser state. BUTTONS, system SETTINGS, and POWER likewise own their lifecycle and presentation.
+FILES owns its browser, image decoders, previews, and deletion. It reads BMP,
+PNG, PPM, RAW, and streaming GIF up to 1600 × 1200. It decodes FAT long names
+as UTF-8, renders Cyrillic, and sorts entries by modification time, newest
+first. `storage/file_mount.h` and `storage/file_dir_scan.h` expose shared
+mount and directory operations. `storage/sd_card.h` is the private
+raw-block boundary.
 
 POWER replaces the separate SLEEP and POWER OFF menu entries. Its manifest ID is
 `power`; the existing `apps/sleep/` directory retains ownership of the complete
@@ -293,7 +315,7 @@ starts centered, follows detections and shrinks to 64×64 for small tags during
 full-detail tracking. The app periodically searches the full frame
 after misses. FAR can retry the window without decimation. Both modes compose
 the corner contour into the rotated LCD preview and publish native tag IDs
-and capture-space bounding boxes through `vision_result_service`. The
+`0..586` and capture-space bounding boxes through `vision_result_service`. The
 `ALL/SELECTED` filter applies to the shared BLOCK snapshot. Refine Edges,
 the FPS display and the illumination profile are app preferences. The
 BSD-licensed OpenMV AprilTag core is staged from `firmware/third_party/apriltag`
@@ -326,15 +348,22 @@ mask. When loading a v8 or older record, all 20 classes start enabled.
 
 ## Architecture guard
 
-`tools/check_arch.py` uses one declarative table for the feature directories. It rejects legacy paths, flat app implementations, external inclusion of private feature headers, private settings-menu view access, layer inversions, include cycles, a mismatch between feature directories and the build manifest, app access to AI storage/HAL internals, and camera/feature dependencies in the shared AI platform.
+`tools/check_arch.py` reads the layer map in `tools/architecture_layers.toml`.
+It checks feature directories against the build manifest and detects
+forbidden SDK references, private-header access, layer inversions, include
+cycles, and dependencies from the shared AI platform on camera or feature
+code. Build checks also use resolved include paths, generated compiler
+dependencies, and undefined object symbols, and verify matching provider
+objects in the full and MicroPython-disabled profiles.
 
 ## Supported hardware and current qualification
 
 HackyLens ships full builds for HUSKYLENS SEN0305 and Sipeed Maix Cube.
 Both include FACE RECOG and embedded MicroPython. SEN0305 has thirteen apps.
-Cube has fifteen and also supports WAV playback in FILES. Its additional apps are RECORDER
-and ACCELEROMETER. The latter uses the same read-only typed binding as
-MicroPython. The board provider owns the internal I²C1 transactions. See the
+The [Maix Cube board guide](MAIX_CUBE.md) covers its fifteen-app build,
+including RECORDER, ACCELEROMETER and WAV playback in FILES. ACCELEROMETER
+and MicroPython share the read-only sensor binding. The board provider
+owns the internal I²C1 transactions. See the
 [v0.8.0 release notes](releases/v0.8.0.md) for the current hardware coverage.
 Each build explicitly selects a board. Its `board.toml`
 owns wiring, defaults, flash layout and programming metadata. On Cube,
@@ -347,17 +376,18 @@ FACE detection box. OBJECT loaded the VOC20 model and completed inference
 after QR-CAMERA. The final Cube build passed HMPY upload, read, run, STOP
 and cleanup while FACE was active. The user confirmed POW/BACK navigation
 after PMIC bus recovery. See the [v0.5.0 release notes](releases/v0.5.0.md)
-and the [Cube hardware log](MAIX_CUBE.md) for the tested builds and scenarios.
+and the [Cube hardware log](MAIX_CUBE_TEST_LOG.md#release-050-final-io-acceptance-2026-10-30)
+for the tested builds and scenarios.
 
-The Cube hardware log records [optical AprilTag recognition](MAIX_CUBE.md#micropython-qr-and-apriltag-checks-2026-11-12)
-and [QR timing on an on-screen card](MAIX_CUBE.md#qr-camera-pixel-order-2026-11-13).
+The Cube hardware log records [optical AprilTag recognition](MAIX_CUBE_TEST_LOG.md#micropython-qr-and-apriltag-checks-2026-11-12)
+and [QR timing on an on-screen card](MAIX_CUBE_TEST_LOG.md#qr-camera-pixel-order-2026-11-13).
 MicroPython read 20 of 20 presentations within one second. QR-CAMERA
 read 19 of 20 within one second with a reboot before each trial. A
 separate check on the build with the QR worker cache fix confirmed that
 scanning resumed on all 20 app opens without a reboot. VOC20 accuracy
 remains to be measured on Cube.
 The maintainer waived the physical exchange test for Cube's
-Grove UART/I2C. The [hardware log](MAIX_CUBE.md#browser-color-tracker-checks-2026-11-12)
+Grove UART/I2C. The [hardware log](MAIX_CUBE_TEST_LOG.md#browser-color-tracker-checks-2026-11-12)
 records IDE threshold selection, physical launches, BACK and microSD output
 on both boards. The [1,000-cycle MicroPython run/stop stress](MICROPYTHON_RESEARCH.md#runstop-stress-on-k210)
 passed on both boards on 2026-11-21. [WDT1 recovery](WDT_HARDWARE_ACCEPTANCE.md), including the
