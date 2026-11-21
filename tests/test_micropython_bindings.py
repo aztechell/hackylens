@@ -118,7 +118,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3 uart_irq=8 "
+            "HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_irq=8 "
             "i2c_continuous=2 i2c_stop=1 i2c_abort=1",
             result.stdout,
         )

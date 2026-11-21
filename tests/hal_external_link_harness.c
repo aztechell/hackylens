@@ -4,6 +4,7 @@
 
 #include "hal_external_link_test_platform.h"
 #include "hal_external_link.h"
+#include "hal_time.h"
 
 static uart_t g_uart;
 static i2c_t g_i2c;
@@ -33,6 +34,12 @@ static uint8_t g_i2c_source[32];
 static size_t g_i2c_source_size;
 static size_t g_i2c_source_position;
 static uint8_t g_i2c_fifo_gap;
+static uint64_t g_now_us;
+
+uint64_t hal_time_us(void)
+{
+    return g_now_us;
+}
 
 static void require_true(uint8_t condition, const char *message)
 {
@@ -166,50 +173,49 @@ int main(void)
 {
     static const uint8_t data[10] = {0U, 1U, 2U, 3U, 4U,
                                       5U, 6U, 7U, 8U, 9U};
+    static const struct
+    {
+        uint32_t baud;
+        uint32_t drain_us;
+    } faster_uart_rates[] = {{115200U, 696U}, {1000000U, 81U}};
 
+    memcpy(g_uart_hardware_rx, data, 8U);
+    g_uart_hardware_rx_size = 8U;
+    hal_external_uart_init(9600U, receive_uart_byte, NULL);
+    require_true(g_uart_irq_register_calls == 1U && g_uart_rx_irq != NULL,
+                 "UART init must register one RX interrupt");
+
+    /* These status values falsely suggested that the FIFO had drained on SEN0305. */
     g_uart.TFL = 0U;
+    g_uart.LSR = 1U << 6;
     g_uart.THR = 0xffU;
+    g_now_us = 1000U;
     require_true(hal_external_uart_send_ready(data, sizeof(data)) == 8U,
                  "empty FIFO must accept exactly eight bytes");
     require_true(g_uart.THR == 7U,
                  "empty FIFO must queue the first eight bytes in order");
 
-    g_uart.TFL = 7U;
-    g_uart.THR = 0xffU;
-    require_true(hal_external_uart_send_ready(data, sizeof(data)) == 1U,
-                 "TFL=7 must expose one byte of capacity");
-    require_true(g_uart.THR == 0U,
-                 "single free slot must queue only the first byte");
-
-    g_uart.TFL = 8U;
-    g_uart.THR = 0xa5U;
-    require_true(hal_external_uart_send_ready(data, sizeof(data)) == 0U,
-                 "TFL=8 must report a full FIFO");
-    require_true(g_uart.THR == 0xa5U,
-                 "full FIFO must not touch THR");
-
-    g_uart.TFL = 9U;
-    require_true(hal_external_uart_send_ready(data, sizeof(data)) == 0U,
-                 "out-of-range TFL must fail closed");
+    g_now_us += 4500U;
+    require_true(hal_external_uart_send_ready(data + 8U, 2U) == 0U &&
+                     g_uart.THR == 7U && !hal_external_uart_tx_idle(),
+                 "an early poll must not refill a sending FIFO");
+    g_now_us += 3834U;
+    require_true(!hal_external_uart_tx_idle(),
+                 "rounding must not make the last stop bit end early");
+    ++g_now_us;
+    require_true(hal_external_uart_tx_idle(),
+                 "eight 9600 baud characters must drain after 8335 us");
+    require_true(hal_external_uart_send_ready(data + 8U, 2U) == 2U &&
+                     g_uart.THR == 9U,
+                 "the next FIFO window must start with the unsent bytes");
+    g_now_us += 2084U;
+    require_true(!hal_external_uart_tx_idle(),
+                 "completion must wait for the final short window");
+    ++g_now_us;
+    require_true(hal_external_uart_tx_idle(),
+                 "two 9600 baud characters must drain after 2085 us");
     require_true(hal_external_uart_send_ready(NULL, sizeof(data)) == 0U,
                  "null input must be a no-op");
-
-    g_uart.TFL = 0U;
-    g_uart.LSR = 1U << 6;
-    require_true(hal_external_uart_tx_idle(),
-                 "TEMT with an empty FIFO must report drained");
-    g_uart.TFL = 1U;
-    require_true(!hal_external_uart_tx_idle(),
-                 "queued FIFO data must prevent drain completion");
-    g_uart.TFL = 0U;
-    g_uart.LSR = 0U;
-    require_true(!hal_external_uart_tx_idle(),
-                 "busy shift register must prevent drain completion");
-    memcpy(g_uart_hardware_rx, data, 8U);
-    g_uart_hardware_rx_size = 8U;
-    hal_external_uart_init(115200U, receive_uart_byte, NULL);
-    require_true(g_uart_irq_register_calls == 1U && g_uart_rx_irq != NULL,
-                 "UART init must register one RX interrupt");
     memcpy(g_uart_hardware_rx, data, 8U);
     g_uart_hardware_rx_size = 8U;
     require_true(g_uart_rx_irq(g_uart_rx_irq_context) == 0,
@@ -221,6 +227,25 @@ int main(void)
     hal_external_uart_stop();
     require_true(g_uart_irq_unregister_calls == 1U && g_uart_rx_irq == NULL,
                  "UART stop must unregister its RX interrupt");
+
+    for(size_t i = 0U; i < sizeof(faster_uart_rates) / sizeof(faster_uart_rates[0]); ++i)
+    {
+        hal_external_uart_init(faster_uart_rates[i].baud, receive_uart_byte, NULL);
+        require_true(hal_external_uart_send_ready(data, 8U) == 8U,
+                     "the configured UART must accept its first FIFO window");
+        g_now_us += faster_uart_rates[i].drain_us - 1U;
+        require_true(hal_external_uart_send_ready(data + 8U, 2U) == 0U &&
+                         !hal_external_uart_tx_idle(),
+                     "faster UART rates must still wait through the last stop bit");
+        ++g_now_us;
+        require_true(hal_external_uart_tx_idle() &&
+                         hal_external_uart_send_ready(data + 8U, 2U) == 2U,
+                     "the next FIFO window must use the configured baud rate");
+        hal_external_uart_stop();
+        require_true(hal_external_uart_tx_idle() &&
+                         hal_external_uart_send_ready(data, 1U) == 0U,
+                     "resetting UART must clear the old drain time and disable writes");
+    }
 
     {
         static const uint8_t prefix[1] = {0x10U};
@@ -275,7 +300,7 @@ int main(void)
     require_true(g_i2c_irq_register_calls == 4U &&
                  g_i2c_irq_unregister_calls == 4U,
                  "each controller transaction must own one IRQ lifecycle");
-    puts("HAL_EXTERNAL_LINK_OK boundaries=4 depth=8 idle=3 uart_irq=8 i2c_continuous=2 i2c_stop=1 i2c_abort=1");
+    puts("HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_irq=8 i2c_continuous=2 i2c_stop=1 i2c_abort=1");
     return 0;
 }
 

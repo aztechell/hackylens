@@ -1,4 +1,5 @@
 #include "hal_external_link.h"
+#include "hal_time.h"
 
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #include "hal_external_link_test_platform.h"
@@ -21,7 +22,7 @@
 
 /* K210 general-purpose UART1/2/3 expose an 8-byte TX FIFO. */
 #define HAL_EXTERNAL_UART_FIFO_DEPTH 8U
-#define HAL_EXTERNAL_UART_LSR_TEMT (1U << 6)
+#define HAL_EXTERNAL_UART_BITS_PER_BYTE 10U /* 8N1, including start and stop. */
 #define HAL_EXTERNAL_UART_RX_IRQ_PRIORITY 2U
 #define HAL_EXTERNAL_I2C_IRQ_PRIORITY 2U
 #define HAL_EXTERNAL_I2C_FIFO_DEPTH 8U
@@ -45,6 +46,8 @@ static uint8_t g_i2c_controller_active;
 static hal_external_uart_receive_fn g_uart_receive;
 static void *g_uart_receive_context;
 static uint8_t g_uart_active;
+static uint32_t g_uart_baud;
+static uint64_t g_uart_tx_ready_us;
 
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #define I2C_CONTROLLER_WRITE(adapter, value) \
@@ -204,6 +207,7 @@ void hal_external_uart_stop(void)
     g_uart_active = 0U;
     g_uart_receive = NULL;
     g_uart_receive_context = NULL;
+    g_uart_tx_ready_us = 0U;
     uart_init(UART_DEVICE_1);
 }
 
@@ -221,6 +225,7 @@ void hal_external_uart_init(uint32_t baud,
     g_uart_receive_context = context;
     uart_irq_register(UART_DEVICE_1, UART_RECEIVE, uart_receive_irq, NULL,
                       HAL_EXTERNAL_UART_RX_IRQ_PRIORITY);
+    g_uart_baud = baud;
     g_uart_active = 1U;
 }
 
@@ -238,28 +243,27 @@ void hal_external_uart_send(const uint8_t *data, size_t len)
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)
 {
     volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
-    uint32_t level;
-    size_t capacity;
+    size_t count;
+    uint32_t bit_time_numerator;
 
-    if(!data || !len)
+    if(!data || len == 0U || !g_uart_active || hal_time_us() < g_uart_tx_ready_us)
         return 0U;
-    level = adapter->TFL;
-    if(level >= HAL_EXTERNAL_UART_FIFO_DEPTH)
-        return 0U;
-    capacity = HAL_EXTERNAL_UART_FIFO_DEPTH - level;
-    if(capacity > len)
-        capacity = len;
-    for(size_t i = 0U; i < capacity; i++)
+    count = len < HAL_EXTERNAL_UART_FIFO_DEPTH ? len : HAL_EXTERNAL_UART_FIFO_DEPTH;
+    for(size_t i = 0U; i < count; i++)
         adapter->THR = data[i];
-    return capacity;
+
+    /* TFL can report zero while UART1 is still sending. Wait for one FIFO
+       window to reach the wire before accepting another one. The additional
+       microsecond covers the resolution of the timestamp. */
+    bit_time_numerator = (uint32_t)count * HAL_EXTERNAL_UART_BITS_PER_BYTE * 1000000U;
+    g_uart_tx_ready_us = hal_time_us() +
+                        (bit_time_numerator + g_uart_baud - 1U) / g_uart_baud + 1U;
+    return count;
 }
 
 uint8_t hal_external_uart_tx_idle(void)
 {
-    volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
-
-    return adapter->TFL == 0U &&
-           (adapter->LSR & HAL_EXTERNAL_UART_LSR_TEMT) != 0U;
+    return hal_time_us() >= g_uart_tx_ready_us;
 }
 
 void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *callbacks)

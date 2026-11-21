@@ -34,10 +34,40 @@ See the [SEN0305 pinout](https://wiki.dfrobot.com/sen0305/#pinout) and the
 [Maix Cube pinout](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/ProductSpecification/Sipeed%20Maix%20Cube%20Datasheet%20V1.0.pdf#page=3).
 
 I2C mode uses the camera as a 7-bit slave at address `0x32`. UART is the default.
-Select the mode through Settings / External Link or through the PC debug UART
-with `HKLINKUART` and `HKLINKI2C`. Settings / UART Speed selects 9600, 115200,
-or 1000000 baud and persists the choice. `HKLINK9600`, `HKLINK115200`, and
-`HKLINK1000000` select that speed, switch to UART, and save both settings.
+Set **Settings → Connection → Grove Mode** to UART or I2C. **Grove Mode** is
+the shared settings label for the external port on both boards. In UART mode,
+the **Baud** field selects 9600, 115200, or 1000000 and saves the choice. The PC
+debug console also accepts `HKLINKUART` and `HKLINKI2C`. `HKLINK9600`,
+`HKLINK115200`, and `HKLINK1000000` select UART and save the requested speed.
+`HKLINKINFO` reads the active mode, baud rate, and frame counters.
+
+### SEN0305 UART bench wiring
+
+Use a four-pin Gravity cable and 3.3 V logic. The keyed PH2.0 end plugs into the
+SEN0305. Match the wires to the board labels.
+[DFRobot Gravity cable](https://www.dfrobot.com/product-2261.html)
+
+| SEN0305 Gravity | NodeMCU 1.0 (ESP8266) | 3.3 V USB–UART adapter |
+|---|---|---|
+| `T` (IO35, TX) | `D2` (GPIO4, RX) | `RXD` |
+| `R` (IO34, RX) | `D1` (GPIO5, TX) | `TXD` |
+| `-` (GND) | `GND` | `GND` |
+| `+` | Leave open | Leave open |
+
+The NodeMCU wiring uses the same three connections as the SEN0305 I2C fixture
+(`D1` was SCL and `D2` was SDA). Power each board through its own USB cable.
+Select UART mode and 115200 baud on the SEN0305 before starting the test. Use
+115200 baud, 8 data bits, no parity, one stop bit, and no flow control on the
+controller. The NodeMCU uses software UART on `D1` and `D2` and keeps its
+hardware UART available for USB logging.
+
+Send the PING request as raw bytes and compare the reply with the expected
+PONG. This checks both directions through UART1.
+
+| Direction | Hex bytes |
+|---|---|
+| Controller → SEN0305 | `48 4B 01 03 01 00 04 00 55 41 52 54 05 73` |
+| SEN0305 → controller | `48 4B 01 83 01 00 04 00 55 41 52 54 B7 CC` |
 
 ## Frame
 
@@ -129,18 +159,49 @@ setting controls whether the snapshot includes all detections or selected IDs.
 The USB debug command `HKTAGINFO` reports optical and horizontal range in
 millimeters. External Link v1 carries the bounding rectangle and tag metadata.
 
+## SEN0305 UART hardware verification
+
+The NodeMCU 1.0 ran a software UART probe from RAM on the SEN0305 Gravity
+port. Its cycle counter was calibrated against elapsed PC time. The probe
+used the 104 MHz setting to capture and decode signal edges at 1 Mbaud.
+
+| Baud | Valid PING replies |
+|---:|---:|
+| 9600 | 300/300 |
+| 115200 | 300/300 |
+| 1000000 | 300/300 |
+
+Every reply passed sequence, payload, and CRC checks. Each run used payloads
+from 0 to 160 bytes and included 50 replies at the full 170-byte frame size.
+At each speed, `GET_INFO` reported the selected baud rate,
+`GET_RESULTS` returned an empty snapshot from the menu, and the protocol handled
+unsupported requests, bad CRCs, and resynchronization after stray bytes.
+With QR-CAMERA running at 640×480, each speed also passed 20 of 20 full-size
+replies. `GET_RESULTS` reported changing QR frame numbers during the run.
+
+The original 9600-baud transmit path used `TFL` to decide how much of the
+eight-byte UART1 FIFO was free. Register sampling on SEN0305 showed `TFL`
+returning zero during transmission, allowing a refill before the previous
+batch had drained. GPIO captures recovered 140 and 142 bytes from two expected
+170-byte replies. The corrected driver queues one FIFO-sized batch at a time
+and uses the configured 8N1 baud rate to schedule the next write. A full batch
+takes approximately 8.34 ms at 9600 baud.
+
 ## SEN0305 I2C hardware verification
 
-An ESP8266 controller completed 114 exchanges at approximately 10 kHz,
-1,140 at approximately 100 kHz, and 1,368 at approximately 404 kHz. The
-100 kHz and 404 kHz runs continued through automatic sleep. In ten further
-trials the controller interrupted a read, issued nine clock pulses and a
-STOP, and then received a valid response to a new request without restarting
-the SEN0305.
+A NodeMCU 1.0 (ESP8266) controller connected to the SEN0305 Gravity port
+completed 114 exchanges at approximately 6.4 kHz, 1,140 at approximately 64 kHz,
+and 1,368 at approximately 262 kHz. The two faster runs continued through
+automatic sleep. In ten further trials the controller interrupted a read,
+issued nine clock pulses and a STOP, and then received a valid response to a
+new request without restarting the SEN0305.
+
+The SCL rates use the 52 MHz cycle-counter frequency measured with the original
+RAM image. The original timing report assumed 80 MHz and overstated the rates.
 
 On SEN0305, replayed input frames were processed by the native QR, AprilTag,
 FACE DETECT, FACE RECOG, and OBJECT DETECT apps. Each app sent populated
-`GET_RESULTS` replies over the physical I2C connector at approximately 100
-and 400 kHz. Leaving each app cleared the result. The replay exercised result
+`GET_RESULTS` replies over the physical I2C connector at approximately 64
+and 262 kHz. Leaving each app cleared the result. The replay exercised result
 production and transport with known inputs. The Maix Cube physical I2C
 exchange remains to be verified.
