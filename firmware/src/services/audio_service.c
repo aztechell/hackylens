@@ -6,10 +6,9 @@
 #if HK_BOARD_AUDIO_ES8374
 #include "hal_audio.h"
 
-#define AUDIO_OWNER_PYTHON 3U
-static uint8_t s_owner;
+static hk_audio_owner_t s_owner;
 
-static hk_result_t audio_poll_owner(uint8_t owner)
+static hk_result_t audio_poll_owner(hk_audio_owner_t owner)
 {
     hk_result_t result;
     if(s_owner != owner)
@@ -20,7 +19,7 @@ static hk_result_t audio_poll_owner(uint8_t owner)
     return result;
 }
 
-static hk_result_t audio_cancel_owner(uint8_t owner)
+static hk_result_t audio_cancel_owner(hk_audio_owner_t owner)
 {
     if(s_owner != owner)
         return HK_OK;
@@ -34,10 +33,11 @@ uint8_t audio_service_available(void)
     return HK_BOARD_AUDIO_ES8374;
 }
 
-hk_result_t audio_service_begin(hk_audio_direction_t direction,
+hk_result_t audio_service_begin(hk_audio_owner_t owner, hk_audio_direction_t direction,
                                 volatile uint8_t *pcm, size_t size)
 {
-    if((direction != HK_AUDIO_PLAY && direction != HK_AUDIO_RECORD) ||
+    if((owner != HK_AUDIO_OWNER_PYTHON && owner != HK_AUDIO_OWNER_APP) ||
+       (direction != HK_AUDIO_PLAY && direction != HK_AUDIO_RECORD) ||
        !pcm || !size || size % 2U || size > HK_AUDIO_PCM_MAX_BYTES)
         return HK_ERR_INVALID_ARGUMENT;
 #if HK_BOARD_AUDIO_ES8374
@@ -47,27 +47,29 @@ hk_result_t audio_service_begin(hk_audio_direction_t direction,
     if(result == HK_OK)
         result = hal_audio_begin(direction, pcm, size / 2U);
     if(result == HK_PENDING)
-        s_owner = AUDIO_OWNER_PYTHON;
+        s_owner = owner;
     return result;
 #else
     return HK_ERR_FEATURE_UNAVAILABLE;
 #endif
 }
 
-hk_result_t audio_service_poll(void)
+hk_result_t audio_service_poll(hk_audio_owner_t owner)
 {
 #if HK_BOARD_AUDIO_ES8374
-    return audio_poll_owner(AUDIO_OWNER_PYTHON);
+    return audio_poll_owner(owner);
 #else
+    (void)owner;
     return HK_ERR_FEATURE_UNAVAILABLE;
 #endif
 }
 
-hk_result_t audio_service_cancel(void)
+hk_result_t audio_service_cancel(hk_audio_owner_t owner)
 {
 #if HK_BOARD_AUDIO_ES8374
-    return audio_cancel_owner(AUDIO_OWNER_PYTHON);
+    return audio_cancel_owner(owner);
 #else
+    (void)owner;
     return HK_OK;
 #endif
 }
@@ -84,7 +86,7 @@ hk_result_t audio_stream_begin(hk_audio_owner_t owner, hk_audio_direction_t dire
     if(result == HK_OK)
         result = hal_audio_stream_begin(direction);
     if(result == HK_PENDING)
-        s_owner = (uint8_t)owner;
+        s_owner = owner;
     return result;
 }
 

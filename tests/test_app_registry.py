@@ -99,6 +99,7 @@ class AppRegistryTests(unittest.TestCase):
         buttons["menu"] = {"visible": False, "order": 65000}
         buttons["autostart"] = {"eligible": True, "id": 42}
         terminal["autostart"] = {"eligible": True, "id": 1}
+        terminal["menu"]["icon"] = "label"
         model = {"schema": 1, "apps": [buttons, terminal]}
 
         with tempfile.TemporaryDirectory(prefix="hackylens-app-registry-fixture-") as directory:
@@ -174,13 +175,10 @@ void buttons_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     (void)x; (void)y; (void)color; (void)bg;
 }
-void terminal_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
-{
-    (void)x; (void)y; (void)color; (void)bg;
-}
-
 int main(void)
 {
+    if(g_menu_item_count != 1U || g_menu_items[0]->draw_icon)
+        return 4;
     if(g_hk_reserved_autostart_id_count != 2U ||
        g_hk_reserved_autostart_ids[0] != 1U ||
        g_hk_reserved_autostart_ids[1] != 42U ||
@@ -228,15 +226,15 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=16 menu=16", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=17 menu=16", self.compile_profile(
             micropython=True, recorder=True
         ))
-        self.assertIn("APP_REGISTRY_OK apps=14 menu=14", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=15 menu=14", self.compile_profile(
             micropython=True, recorder=False
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=13 menu=13", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=14 menu=13", self.compile_profile(
             micropython=False, recorder=False
         ))
 
@@ -366,7 +364,7 @@ int main(void)
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
             "power": 0, "recorder": 0, "accelerometer": 0, "face-recognition": 0,
-            "sky-glide": 0,
+            "sky-glide": 0, "color-tracker": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
@@ -394,11 +392,17 @@ int main(void)
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
                     {"micropython": 5000, "apriltag": 5000, "files": 5000,
-                     "sky-glide": 5000, "accelerometer": 100_000}.get(app_id, 20000),
+                     "sky-glide": 5000, "accelerometer": 100_000,
+                     "color-tracker": 10_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],
-                    100_000 if app_id == "accelerometer" else 3_000_000 if app_id in {"qr-camera", "face-recognition"} else 1_000_000 if app_id in {"camera", "face-detect", "object-detect", "apriltag", "files", "micropython", "recorder"} else 20000,
+                    {"accelerometer": 100_000, "color-tracker": 1_000_000,
+                     "qr-camera": 3_000_000, "face-recognition": 3_000_000,
+                     "camera": 1_000_000, "face-detect": 1_000_000,
+                     "object-detect": 1_000_000, "apriltag": 1_000_000,
+                     "files": 1_000_000, "micropython": 1_000_000,
+                     "recorder": 1_000_000}.get(app_id, 20_000),
                 )
                 self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:

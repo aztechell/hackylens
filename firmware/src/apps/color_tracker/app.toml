@@ -1,0 +1,10 @@
+id = "color-tracker"
+name = "COLOR TRACKER"
+entry = "color_tracker_v2_entry"
+sources = ["color_tracker_app.c"]
+requires = ["camera", "display", "input", "time", "sd-card"]
+tick_ms = 10
+# FAT updates and a multi-block SD write may exceed the capture interval.
+tick_budget_ms = 1000
+debug_entry = "color_tracker_debug"
+debug = "HKCOLORINFO/HKCOLORSAVE"

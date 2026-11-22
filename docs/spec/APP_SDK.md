@@ -1,10 +1,10 @@
 ---
 contract-id: hackylens.feature-app-sdk
 owner: platform-architecture
-version: 0.3.0
+version: 0.4.0
 stability: experimental
 compatibility-app-runtime: >=0.2.0,<0.3.0
-compatibility-app-manifest: >=0.1.0,<0.2.0
+compatibility-app-manifest: >=0.1.0,<0.3.0
 compatibility-capability-api: >=0.1.0,<0.2.0
 ---
 
@@ -41,7 +41,7 @@ language-boundary reason recorded in the contract; naming convenience is not
 sufficient.
 
 The canonical umbrella is `sdk/include/hackylens/app.h`. It publishes the
-Feature App SDK `0.3.0` version, the accepted App Runtime range `[0.2.0, 0.3.0)`,
+Feature App SDK `0.4.0` version, the accepted App Runtime range `[0.2.0, 0.3.0)`,
 Capability API range `[0.1.0, 0.2.0)`, and Native App Manifest schema major `1`
 as numeric compile-time metadata. `sdk/include/hackylens/app/runtime.h` owns the
 public lifecycle callback typedefs and immutable `hk_app_v2_entry_t` definition;
@@ -75,7 +75,7 @@ the common panel and repainting the body when the displayed value changes.
 
 ## App-facing contracts
 
-SDK `0.3.x` defines or re-exports:
+SDK `0.4.x` defines or re-exports:
 
 - lifecycle callback types `start`, `event`, `render`, and `stop`, plus stop
   reasons from App Runtime `0.2.x`;
@@ -91,6 +91,10 @@ SDK `0.3.x` defines or re-exports:
   [vision result semantics](../MICROPYTHON_API.md#vision-results). In C,
   `count` and `qr_length` delimit the two arrays;
 - panel layout helpers for a render callback's borrowed surface;
+- scoped camera capture, preview, color tracking, code scanning, model inference
+  and BMP saving through `<hackylens/app/camera.h>`;
+- incremental creation of files under `/PYDATA` through `<hackylens/app/data.h>`;
+- scoped PCM playback and recording through `<hackylens/app/audio.h>`;
 - fixed-capacity private app-state access;
 - `hk_app_context_request_close` as the portable close-request seam;
 - result, version, deadline, cancellation, buffer, and capability types from
@@ -102,6 +106,14 @@ view of their state. Recording names and status strings are borrowed for the
 current callback. File handles, SD requests, and audio buffers remain in
 firmware services. RECORDER forwards the runtime teardown deadline when it
 retires its session.
+
+Camera, data files and PCM are foreground services shared with MicroPython.
+Call the SDK from lifecycle callbacks. Keep frame leases and ongoing operation
+state across Timer events. Keep PCM buffers alive until poll completes or the
+operation is cancelled. Teardown cancels unfinished work and releases the
+service claims. Code decoding runs on the existing worker and retains only
+staged image data while finishing a cancelled job. The public headers specify
+the begin, poll and error contracts. See [Porting a MicroPython prototype](../PYTHON_TO_C.md).
 
 The context exposes no mutable descriptor, registry table, provider vtable,
 raw filesystem block access, unrestricted platform path, raw camera/DVP object,
@@ -201,9 +213,9 @@ operation generations remain where they protect real lifetimes.
 Session storage and cleanup authority remain private to runtime. Cleanup never
 trusts fields read back from a callback's public context snapshot.
 
-SDK functions are bounded and allocation-free. They do not create tasks,
-queues, cores, general background work, or hidden heap storage. Large buffers
-remain explicit borrows. App state is descriptor-sized fixed storage and is
+SDK entry points use bounded service steps. Camera decoding uses the firmware's
+existing worker and decoder workspace. Large caller buffers remain explicit
+borrows. App state is descriptor-sized fixed storage and is
 reused only after the normative runtime teardown and generation invalidation.
 The app entry supplies state storage and its size; the descriptor uses the fixed
 `HK_APP_STATE_ALIGNMENT` ABI policy; alignment is not a runtime request or an
@@ -259,10 +271,11 @@ headers is not SDK conformance.
 
 ## Compatibility
 
-SDK `0.3.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` schema major
-`1`, and Capability API `0.1.x`. SDK `0.3.0` adds panel helpers, the accelerometer
-accessor and the bundled RECORDER interface. Existing SDK `0.2.x` app sources
-continue to use the same lifecycle and context ABI.
+SDK `0.4.x` accepts App Runtime `0.2.x`, Native App Manifest `0.1.x` and `0.2.x`
+with schema major `1`, and Capability API `0.1.x`. SDK `0.4.0` adds camera,
+data files and PCM.
+Earlier lifecycle-v2 app sources continue to use the same lifecycle and
+context ABI.
 
 All bundled apps use the same runtime entry. No legacy adapter or
 manifest lifecycle selector remains. Menu, BACK, autostart, debug forced exit,

@@ -2,6 +2,7 @@
 #define HK_COLOR_TRACKER_H
 
 #include <stdint.h>
+#include <hackylens/capability/camera_types.h>
 
 /* A landscape sensor frame up to VGA. Rotate clockwise for portrait output. */
 #define HK_COLOR_MAX_WIDTH 640U
@@ -16,27 +17,6 @@ typedef struct
     uint16_t height;
     uint8_t rotate;
 } hk_color_frame_t;
-
-typedef struct
-{
-    uint16_t x;
-    uint16_t y;
-    uint16_t width;
-    uint16_t height;
-} hk_color_rect_t;
-
-typedef struct
-{
-    uint8_t red_min, red_max;
-    uint8_t green_min, green_max;
-    uint8_t blue_min, blue_max;
-} hk_color_threshold_t;
-
-typedef struct
-{
-    hk_color_rect_t bounds;
-    uint32_t pixels;
-} hk_color_blob_t;
 
 typedef struct
 {

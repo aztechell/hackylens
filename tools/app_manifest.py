@@ -21,7 +21,8 @@ REQUIRED_FIELDS = {
     "id", "name", "entry", "sources", "requires", "tick_ms",
 }
 OPTIONAL_FIELDS = {
-    "private_includes", "menu_order", "autostart_id", "optional", "debug", "tick_budget_ms", "debug_entry",
+    "private_includes", "menu_order", "menu_icon", "autostart_id", "optional", "debug",
+    "tick_budget_ms", "debug_entry",
 }
 ALLOWED_FIELDS = REQUIRED_FIELDS | OPTIONAL_FIELDS
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx"}
@@ -41,7 +42,14 @@ MAX_DISPLAY_NAME_BYTES = 96
 MAX_DEBUG_BYTES = 1024
 MAX_TICK_MS = 60_000
 HARDWARE_SERVICES = frozenset({"display", "input", "time", "lights", "external-link", "power", "accelerometer"})
-FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings", "audio"})
+DETECTOR_REQUIREMENTS = {
+    "qr-decoder": {"camera"},
+    "apriltag-decoder": {"camera"},
+    "face-detector": {"camera", "sd-card"},
+    "object-detector": {"camera", "sd-card"},
+}
+FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings", "audio",
+                               *DETECTOR_REQUIREMENTS})
 OPTIONAL_FALLBACKS = {
     "display": "headless",
     "external-link": "hide-external-link-menu",
@@ -265,6 +273,10 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
         }
     else:
         menu = {"visible": False, "order": 0}
+    if "menu_icon" in table:
+        if table["menu_icon"] != "label":
+            raise ManifestError(f"{path}: menu_icon must be 'label'")
+        menu["icon"] = "label"
 
     if "autostart_id" in table:
         autostart_id = _integer(
@@ -296,6 +308,10 @@ def load_manifest(path: Path, scan_root: Path) -> dict[str, Any]:
     for service_name in required_names + optional_names:
         if service_name not in HARDWARE_SERVICES | FIRMWARE_SERVICES:
             raise ManifestError(f"{path}: unknown required service {service_name!r}")
+    for service_name in required_names:
+        missing = DETECTOR_REQUIREMENTS.get(service_name, set()) - set(required_names)
+        if missing:
+            raise ManifestError(f"{path}: {service_name!r} also requires {sorted(missing)}")
     for service_name in optional_names:
         if service_name in FIRMWARE_SERVICES:
             raise ManifestError(f"{path}: services cannot be optional")

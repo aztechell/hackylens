@@ -12,7 +12,10 @@
 #include "../firmware/src/apps/apriltag/apriltag_distance.h"
 #include "../firmware/src/services/apriltag_decoder.h"
 #include "../firmware/src/services/camera_client.h"
-#include "../firmware/src/services/qr_luma.h"
+#include "../firmware/src/services/camera_code_client.h"
+#include "../firmware/src/services/camera_code_decoder.h"
+#include "../firmware/src/services/core1_executor.h"
+#include "../firmware/src/services/resource_cleanup.h"
 #include "qr_fixture.h"
 
 static const char owner;
@@ -20,6 +23,10 @@ static uint16_t pixels[320U * 240U];
 static uint8_t rotate;
 static uint32_t copy_count;
 static uint32_t local_pass_count;
+static core1_executor_job_fn worker_job;
+static void *worker_context;
+static uint32_t worker_ticket;
+static uint32_t worker_finished;
 
 /* The firmware build discards the bundled library's unused PNM file reader. */
 pnm_t *pnm_create_from_file(const char *path) { (void)path; abort(); }
@@ -32,6 +39,35 @@ hk_result_t hk_time_now_us(const hk_time_t *service, uint64_t *now)
     (void)service;
     *now = 0U;
     return HK_OK;
+}
+
+hk_result_t hk_time_deadline_after_us(const hk_time_t *service, uint64_t duration,
+                                     hk_deadline_t *deadline)
+{
+    (void)service;
+    deadline->at_us = duration;
+    return HK_OK;
+}
+
+uint8_t core1_executor_init(void) { return 1U; }
+uint8_t core1_executor_idle(void) { return worker_job == NULL; }
+uint8_t core1_executor_complete(uint32_t ticket) { return ticket <= worker_finished; }
+
+uint32_t core1_executor_submit(core1_executor_job_fn job, void *context)
+{
+    if(worker_job)
+        return 0U;
+    worker_job = job;
+    worker_context = context;
+    return ++worker_ticket;
+}
+
+static void finish_worker(void)
+{
+    assert(worker_job);
+    worker_job(worker_context);
+    worker_job = NULL;
+    worker_finished = worker_ticket;
 }
 
 hk_result_t camera_client_get(const void *client, uint32_t lease,
@@ -50,16 +86,16 @@ micropython_binding_result_t micropython_binding_call(
     const uint8_t *input, size_t input_length,
     uint8_t *output, size_t output_capacity, size_t *output_length)
 {
-    micropython_code_frame_t frame;
+    camera_code_frame_t frame;
     uint8_t *qr_image;
     assert(operation == MICROPYTHON_BINDING_OP_CAMERA_CODE_FRAME);
     assert(input && input_length == sizeof(qr_image) && output_capacity == sizeof(frame));
     memcpy(&qr_image, input, sizeof(qr_image));
     assert((qr_image != NULL) == (arguments[1] == VISION_SOURCE_QR));
-    if(arguments[2] == QR_PASS_LOCAL)
+    if(arguments[1] == VISION_SOURCE_QR && arguments[2] == 2U)
         local_pass_count++;
     *output_length = 0U;
-    hk_result_t result = micropython_camera_codes_stage(
+    hk_result_t result = camera_code_stage(
         &owner, arguments[0], (vision_source_t)arguments[1], arguments[2], qr_image, &frame);
     if(result == HK_ERR_STALE_HANDLE)
         return MICROPYTHON_BINDING_ERROR_NOT_ACTIVE;
@@ -122,6 +158,36 @@ static void assert_rotation(vision_result_item_t original, vision_result_item_t 
     assert(rotated.x1 == 240U - original.y0 && rotated.y1 == original.x1);
 }
 
+static void assert_native_scan(vision_source_t source, const vision_result_snapshot_t *python)
+{
+    vision_result_snapshot_t native;
+    assert(camera_code_client_begin(&owner, 7U, source) == HK_OK);
+    assert(camera_code_client_holds(&owner, 7U));
+    assert(camera_code_client_poll(&owner, &native) == HK_PENDING);
+    hk_result_t result;
+    do
+    {
+        finish_worker();
+        result = camera_code_client_poll(&owner, &native);
+    } while(result == HK_PENDING);
+    assert(result == HK_OK && !camera_code_client_holds(&owner, 7U));
+    assert(native.source == python->source && native.frame_id == python->frame_id);
+    assert(native.width == python->width && native.height == python->height);
+    assert(native.count == python->count && native.qr_length == python->qr_length);
+    assert(memcmp(native.items, python->items, native.count * sizeof(native.items[0])) == 0);
+    assert(memcmp(native.qr_payload, python->qr_payload, native.qr_length) == 0);
+
+    /* Close while an executor job is pending, then let cleanup join it. */
+    assert(camera_code_client_begin(&owner, 7U, source) == HK_OK);
+    camera_code_client_close(&owner);
+    assert(!camera_code_client_holds(&owner, 7U));
+    assert(camera_code_client_begin(&owner, 7U, source) == HK_ERR_BUSY);
+    finish_worker();
+    resource_cleanup_poll();
+    finish_worker();
+    resource_cleanup_poll();
+}
+
 int main(void)
 {
     vision_result_snapshot_t result;
@@ -176,7 +242,16 @@ int main(void)
     assert(micropython_camera_codes_scan(7U, VISION_SOURCE_APRILTAG, &result) ==
            MICROPYTHON_BINDING_OK);
     assert_rotation(original, result.items[0]);
+    assert_native_scan(VISION_SOURCE_APRILTAG, &result);
     micropython_camera_codes_cleanup();
+
+    draw_uneven_qr();
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
+    assert(micropython_camera_codes_scan(7U, VISION_SOURCE_QR, &result) ==
+           MICROPYTHON_BINDING_OK);
+    assert_native_scan(VISION_SOURCE_QR, &result);
+    draw_tag(42U, 100, 60, 96);
+    pack_qr_fixture_dvp(pixels, 320U * 240U);
 
     apriltag_decoder_t decoder = {0};
     apriltag_result_t tags[APRILTAG_RESULT_MAX];

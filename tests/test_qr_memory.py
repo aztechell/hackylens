@@ -16,7 +16,7 @@ class QrMemoryTests(unittest.TestCase):
             temp = Path(directory)
             executable = temp / ("codes.exe" if os.name == "nt" else "codes")
             (temp / "hk_config.h").write_text(
-                "#define HK_ENABLE_APP_QR_CAMERA 1\n#define HK_ENABLE_APP_APRILTAG 1\n",
+                "#define HK_ENABLE_QR_DECODER 1\n#define HK_ENABLE_APRILTAG_DECODER 1\n",
                 encoding="utf-8",
             )
             services = ROOT / "firmware/src/services"
@@ -31,7 +31,8 @@ class QrMemoryTests(unittest.TestCase):
                 str(ROOT / "firmware/src/apps/apriltag/apriltag_distance.c"),
                 *(str(services / name) for name in (
                     "qr_decoder_engine.c", "qr_luma.c", "apriltag_decoder.c",
-                    "vision_result_service.c",
+                    "vision_result_service.c", "camera_code_decoder.c",
+                    "camera_code_client.c", "resource_cleanup.c",
                 )),
                 *(str(path) for path in sorted(quirc.glob("*.c"))),
                 *(str(path) for path in sorted(apriltag.rglob("*.c"))),

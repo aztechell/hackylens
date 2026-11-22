@@ -117,11 +117,14 @@ static void test_volume_usage(void)
     assert(fat32_usage().used_bytes == SECTOR_BYTES);
 }
 
+static const char s_owner;
+static const char s_other_owner;
+
 static script_sd_result_t begin(const char *name, uint8_t bmp)
 {
     for(unsigned retry = 0; retry < 10U; retry++)
     {
-        script_sd_result_t result = script_sd_begin(name, strlen(name), bmp);
+        script_sd_result_t result = script_sd_begin(&s_owner, name, strlen(name), bmp);
         if(result != SCRIPT_SD_PENDING)
             return result;
     }
@@ -135,7 +138,7 @@ static script_sd_result_t write_all(const uint8_t *data, size_t size)
     {
         size_t accepted;
         size_t count = size < 193U ? size : 193U;
-        script_sd_result_t result = script_sd_write(data, count, &accepted);
+        script_sd_result_t result = script_sd_write(&s_owner, data, count, &accepted);
         assert(accepted <= count);
         if(result != SCRIPT_SD_OK && result != SCRIPT_SD_PENDING)
             return result;
@@ -150,7 +153,7 @@ static void finish(void)
 {
     script_sd_result_t result;
     do
-        result = script_sd_finish();
+        result = script_sd_finish(&s_owner);
     while(result == SCRIPT_SD_PENDING);
     assert(result == SCRIPT_SD_OK);
 }
@@ -188,11 +191,16 @@ int main(void)
     const char *invalid[] = {"../A.BIN", "/A.BIN", "A\\B.BIN", "A..BIN", "A.TMP", "LONGNAME9.BIN"};
     for(size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++)
         assert(begin(invalid[i], 0U) == SCRIPT_SD_INVALID_NAME);
-    assert(script_sd_begin("A\0.BIN", 6U, 0U) == SCRIPT_SD_INVALID_NAME);
+    assert(script_sd_begin(&s_owner, "A\0.BIN", 6U, 0U) == SCRIPT_SD_INVALID_NAME);
     assert(begin("BAD.RAW", 1U) == SCRIPT_SD_INVALID_NAME);
     assert(allocated() == 1U);
 
     assert(begin("data.bin", 0U) == SCRIPT_SD_OK);
+    assert(script_sd_begin(&s_other_owner, "OTHER.BIN", 9U, 0U) == SCRIPT_SD_BUSY);
+    size_t other_written = 5U;
+    assert(script_sd_write(&s_other_owner, payload, 10U, &other_written) == SCRIPT_SD_BUSY);
+    assert(other_written == 0U && script_sd_finish(&s_other_owner) == SCRIPT_SD_BUSY);
+    script_sd_abort(&s_other_owner);
     assert(write_all(payload, sizeof(payload)) == SCRIPT_SD_OK);
     assert(file_path_find("/PYDATA/DATA.BIN", &entry) == FILE_PATH_NOT_FOUND);
     assert(file_path_find("/PYDATA/DATA.TMP", &entry) == FILE_PATH_OK);
@@ -233,7 +241,8 @@ int main(void)
     uint8_t baseline = allocated();
     assert(begin("STOP.BIN", 0U) == SCRIPT_SD_OK);
     assert(write_all(payload, sizeof(payload)) == SCRIPT_SD_OK);
-    script_sd_abort();
+    script_sd_abort(&s_owner);
+    resource_cleanup_poll();
     assert(file_path_find("/PYDATA/STOP.TMP", &entry) == FILE_PATH_NOT_FOUND);
     assert(file_path_find("/PYDATA/STOP.BIN", &entry) == FILE_PATH_NOT_FOUND);
     for(unsigned i = 0U; i < 4U; i++)
@@ -243,6 +252,7 @@ int main(void)
     fail_data_write = 1U;
     assert(write_all(payload, sizeof(payload)) == SCRIPT_SD_IO);
     fail_data_write = 0U;
+    resource_cleanup_poll();
     assert(file_path_find("/PYDATA/STOP.BIN", &entry) == FILE_PATH_NOT_FOUND);
     assert(allocated() == baseline);
 
@@ -251,6 +261,7 @@ int main(void)
             wr32(disk[FAT_SECTOR] + cluster * 4U, FAT32_EOC);
     assert(begin("FULL.BIN", 0U) == SCRIPT_SD_OK);
     assert(write_all(payload, sizeof(payload)) == SCRIPT_SD_FULL);
+    resource_cleanup_poll();
     assert(file_path_find("/PYDATA/FULL.TMP", &entry) == FILE_PATH_NOT_FOUND);
 
     mount_blank();
@@ -259,7 +270,7 @@ int main(void)
     fat32_mark_removed();
     mount_blank();
     memcpy(replacement, disk, sizeof(disk));
-    assert(script_sd_finish() == SCRIPT_SD_NO_MEDIA);
+    assert(script_sd_finish(&s_owner) == SCRIPT_SD_NO_MEDIA);
     resource_cleanup_poll();
     assert(memcmp(replacement, disk, sizeof(disk)) == 0);
 
@@ -271,7 +282,7 @@ int main(void)
     memcpy(padded, payload, sizeof(payload));
     assert(begin("RUN.BIN", 0U) == SCRIPT_SD_OK);
     size_t accepted;
-    assert(script_sd_write_run(sizeof(payload), source_sector, padded, &accepted) == SCRIPT_SD_OK);
+    assert(script_sd_write_run(&s_owner, sizeof(payload), source_sector, padded, &accepted) == SCRIPT_SD_OK);
     assert(last_run_count == 3U && accepted == sizeof(payload));
     finish();
     assert(file_path_find("/PYDATA/RUN.BIN", &entry) == FILE_PATH_OK);

@@ -554,6 +554,8 @@ int main(void)
 
 hk_result_t camera_light_retire(hk_deadline_t deadline)
 { (void)deadline; return HK_OK; }
+void app_data_retire(void) {}
+void app_camera_retire(void) {}
 
 #ifndef APP_RUNTIME_PRODUCTION_REAL_SETTINGS_LIGHTS
 void settings_lights_suspend(uint32_t channels) { (void)channels; }

@@ -6,6 +6,7 @@
 #include <hackylens/capability/lights.h>
 
 #include "hk_config.h"
+#include "app_services.h"
 #include "../app_runtime/surface_private.h"
 #include "../services/settings_lights.h"
 #include "../ui/display_binding.h"
@@ -66,10 +67,17 @@ static hk_result_t cleanup(void *user, hk_deadline_t deadline)
     app_runtime_integration_t *integration = user;
     hk_result_t result = HK_OK;
 
+    app_data_retire();
 #if HK_ENABLE_CAMERA_FEATURE
+    app_camera_retire();
     result = camera_light_retire(deadline);
 #else
     (void)deadline;
+#endif
+#if HK_ENABLE_AUDIO_FEATURE
+    hk_result_t audio = app_audio_retire();
+    if(result == HK_OK)
+        result = audio;
 #endif
 
     settings_lights_restore(integration->claimed_lights_channels);

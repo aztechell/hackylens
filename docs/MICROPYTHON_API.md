@@ -8,6 +8,9 @@ api-major: 1
 
 # HackyLens MicroPython API v1
 
+For the equivalent C services and lifecycle, see
+[Porting a MicroPython prototype to C](PYTHON_TO_C.md).
+
 HackyLens embeds upstream MicroPython inside the main firmware. A program runs
 on K210 core 1 with a private 128 KiB GC heap and a 24 KiB conservative stack
 limit. Core 0 keeps the menu, serial protocol, display, flash, and hardware

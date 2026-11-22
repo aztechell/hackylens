@@ -85,6 +85,17 @@ def apps_requiring_legacy(requirement: str) -> frozenset[str]:
 
 
 CAMERA_APP_IDS = apps_requiring_legacy("camera")
+DETECTOR_FLAGS = {
+    "qr-decoder": "HK_ENABLE_QR_DECODER",
+    "apriltag-decoder": "HK_ENABLE_APRILTAG_DECODER",
+    "face-detector": "HK_ENABLE_FACE_DETECTOR",
+    "object-detector": "HK_ENABLE_OBJECT_DETECTOR",
+}
+DETECTOR_CONSUMERS = {name: apps_requiring_legacy(name) for name in DETECTOR_FLAGS}
+
+
+def detector_enabled(service: str, disabled_apps: set[str]) -> bool:
+    return bool(DETECTOR_CONSUMERS[service] - disabled_apps)
 
 
 def select_services(
@@ -119,6 +130,8 @@ CAMERA_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/drivers/ov7740_sensor.h"),
     Path("firmware/src/controllers/camera_runtime_controller.c"),
     Path("firmware/src/controllers/camera_runtime_controller.h"),
+    Path("firmware/src/controllers/camera_client_preview.c"),
+    Path("firmware/src/controllers/camera_client_preview.h"),
     Path("firmware/src/controllers/debug_camera_controller.c"),
     Path("firmware/src/controllers/debug_camera_controller.h"),
     Path("firmware/src/drivers/camera_stream.c"),
@@ -189,8 +202,6 @@ MICROPYTHON_FEATURE_SOURCE_MODULES = {
     Path("firmware/src/services/micropython_runtime.h"),
     Path("firmware/src/storage/userfs.c"),
     Path("firmware/src/storage/userfs.h"),
-    Path("firmware/src/services/script_sd_store.c"),
-    Path("firmware/src/services/script_sd_store.h"),
 }
 
 TARGETS = {
@@ -436,7 +447,7 @@ def write_project_cmake(
     ]
     if sky_glide_bench:
         lines.append("target_compile_definitions(${PROJECT_NAME} PRIVATE HK_SKY_GLIDE_BENCH)")
-    if "qr-camera" not in (disabled_apps or set()):
+    if detector_enabled("qr-decoder", disabled_apps or set()):
         # K210 has a single-precision FPU. Use it for quirc's grid fitting
         # and select math functions that keep the calculations in float.
         lines.extend([
@@ -582,11 +593,13 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str],
         for app in APP_MODULES if app not in disabled_apps
     )) if set(APP_MODULES) - disabled_apps else set()
     camera_feature_enabled = bool(CAMERA_APP_IDS - disabled_apps)
-    face_detector_enabled = bool({"face-detect", "face-recognition"} - disabled_apps)
-    camera_ai_input_enabled = face_detector_enabled or "object-detect" not in disabled_apps
-    core1_executor_enabled = bool(
-        {"apriltag", "micropython", "qr-camera"} - disabled_apps)
     micropython_feature_enabled = "micropython" not in disabled_apps
+    face_detector_enabled = detector_enabled("face-detector", disabled_apps)
+    object_detector_enabled = detector_enabled("object-detector", disabled_apps)
+    qr_enabled = detector_enabled("qr-decoder", disabled_apps)
+    apriltag_enabled = detector_enabled("apriltag-decoder", disabled_apps)
+    camera_ai_input_enabled = face_detector_enabled or object_detector_enabled
+    core1_executor_enabled = qr_enabled or apriltag_enabled or micropython_feature_enabled
 
     for path in (ROOT / "firmware" / "src").rglob("*"):
         if not path.is_file():
@@ -616,11 +629,11 @@ def stage_firmware_sources(stage: Path, disabled_apps: set[str],
             continue
         if not face_detector_enabled and rel in FACE_DETECT_SOURCE_MODULES:
             continue
-        if "object-detect" in disabled_apps and rel in OBJECT_DETECT_SOURCE_MODULES:
+        if not object_detector_enabled and rel in OBJECT_DETECT_SOURCE_MODULES:
             continue
-        if "qr-camera" in disabled_apps and rel in QR_DECODER_SOURCE_MODULES:
+        if not qr_enabled and rel in QR_DECODER_SOURCE_MODULES:
             continue
-        if "apriltag" in disabled_apps and rel in APRILTAG_DECODER_SOURCE_MODULES:
+        if not apriltag_enabled and rel in APRILTAG_DECODER_SOURCE_MODULES:
             continue
         if not core1_executor_enabled and rel in CORE1_EXECUTOR_SOURCE_MODULES:
             print(f"[SKIP] unused core-1 executor source {rel}")
@@ -703,10 +716,13 @@ def write_config(stage: Path, disabled_apps: set[str],
     ]
     for app, flag in APP_MODULES.items():
         lines.append(f"#define {flag} {0 if app in disabled_apps else 1}")
+    for name, flag in DETECTOR_FLAGS.items():
+        lines.append(f"#define {flag} {int(detector_enabled(name, disabled_apps))}")
+    camera_consumers = " || ".join(APP_MODULES[app] for app in sorted(CAMERA_APP_IDS)) or "0"
     lines.extend([
         f"#define HK_ENABLE_AUDIO_FEATURE {int(audio_enabled)}",
         f"#define HK_MICROPYTHON_WDT_FAULT_INJECTION {1 if wdt_fault_injection else 0}",
-        "#define HK_ENABLE_CAMERA_FEATURE (HK_ENABLE_APP_CAMERA || HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_APRILTAG || HK_ENABLE_APP_OBJECT_DETECT)",
+        f"#define HK_ENABLE_CAMERA_FEATURE ({camera_consumers})",
         "#define HK_ENABLE_QR_FEATURE HK_ENABLE_APP_QR_CAMERA",
         '#include "hk_config_default.h"',
         "#endif",
@@ -751,14 +767,14 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         shutil.copy2(header, stage / header.name)
     shutil.copy2(ROOT / "firmware" / "config" / "hk_config_default.h", stage / "hk_config_default.h")
 
-    if "qr-camera" not in disabled_apps:
+    if detector_enabled("qr-decoder", disabled_apps):
         quirc = ROOT / "firmware" / "third_party" / "quirc"
         for source in quirc.glob("*.c"):
             shutil.copy2(source, stage / source.name)
         for header in quirc.glob("*.h"):
             shutil.copy2(header, stage / header.name)
 
-    if "apriltag" not in disabled_apps:
+    if detector_enabled("apriltag-decoder", disabled_apps):
         copy_tree_files(ROOT / "firmware" / "third_party" / "apriltag", stage)
 
     if littlefs is not None:

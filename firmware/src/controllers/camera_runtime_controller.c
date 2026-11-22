@@ -11,7 +11,7 @@
 #include "../core/hk_screen.h"
 #include "hal_time.h"
 #include "../services/camera_frame.h"
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_FACE_DETECTOR || HK_ENABLE_OBJECT_DETECTOR
 #include "../services/camera_ai_input.h"
 #endif
 #include "../services/camera_input.h"
@@ -107,7 +107,7 @@ static uint8_t camera_runtime_present_preview(camera_runtime_frame_consumer_t co
         }
         consumer = NULL;
     }
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_FACE_DETECTOR || HK_ENABLE_OBJECT_DETECTOR
     camera_ai_input_prepare_preview(service_frame.pixels, service_frame.width,
                                     service_frame.height, service_frame.sequence);
 #endif

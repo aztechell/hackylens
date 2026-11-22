@@ -288,6 +288,10 @@ and [save BMPs and data to microSD](docs/MICROPYTHON_API.md#microsd-output).
 Maix Cube also exposes [PCM playback and recording](docs/MICROPYTHON_API.md#built-in-audio)
 and [MSA301 acceleration readings](docs/MICROPYTHON_API.md#built-in-accelerometer).
 
+The native App SDK exposes those services to C apps with the same camera
+coordinates, RGB565 thresholds, detector results and on-card file formats.
+See [Porting a MicroPython prototype to C](docs/PYTHON_TO_C.md).
+
 STOP is checked in bytecode and native iterator loops. If a native C call still
 does not return after the STOP/deadline grace period, a one-shot WDT1 reset is
 used; MicroPython autostart is held for that recovery boot to prevent loops.

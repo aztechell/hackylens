@@ -83,6 +83,11 @@ uint8_t sky_glide_debug(const char *command)
     (void)command;
     return 0;
 }
+uint8_t color_tracker_debug(const char *command)
+{
+    (void)command;
+    return 0U;
+}
 void qr_camera_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
     dummy_draw_icon(x, y, color, bg);
@@ -135,6 +140,7 @@ const hk_app_v2_entry_t buttons_v2_entry = {
     .stop = dummy_buttons_stop,
 };
 const hk_app_v2_entry_t camera_v2_entry = {0};
+const hk_app_v2_entry_t color_tracker_v2_entry = {0};
 const hk_app_v2_entry_t face_detect_v2_entry = {0};
 const hk_app_v2_entry_t face_recognition_v2_entry = {0};
 void face_recognition_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -386,9 +392,10 @@ int main(void)
     const hk_app_t *sleep;
 
     CHECK(g_hk_generated_app_count ==
-          12U + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
+          12U + HK_ENABLE_APP_COLOR_TRACKER + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
           HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION);
-    CHECK(g_menu_item_count == g_hk_generated_app_count);
+    CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER);
+    CHECK(hk_app_for_id("color-tracker") && !hk_app_for_id("color-tracker")->menu_visible);
     static const char *const menu_order[] = {
         "camera", "qr-camera", "face-detect",
 #if HK_ENABLE_APP_FACE_RECOGNITION

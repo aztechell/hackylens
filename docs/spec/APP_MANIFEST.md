@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.native-app-manifest
 owner: platform-architecture
-version: 0.1.0
+version: 0.2.0
 stability: experimental
 schema-major: 1
 format-scope: native-app-build
@@ -25,7 +25,7 @@ descriptors. Firmware MUST NOT contain a TOML parser, filesystem app discovery,
 runtime registration, mutable descriptor construction, or dynamic native-code
 loading.
 
-The semantic contract is `0.1.0 experimental`. Unknown fields are errors.
+The semantic contract is `0.2.0 experimental`. Unknown fields are errors.
 
 ## Manifest fields
 
@@ -41,6 +41,7 @@ Every production manifest declares:
 | `optional` | no | non-empty short-name array of optional hardware services with named fallbacks |
 | `private_includes` | no | non-empty app-relative private include directories; omit when empty |
 | `menu_order` | no | positive uint16 menu order; omit to hide the app |
+| `menu_icon` | no | `"label"` uses the first three characters of the app ID as the tile label |
 | `autostart_id` | no | Stable app identity from 1 to 65534. Omit or use `0` for ineligible apps. The system reserves 65535 for pinned scripts. |
 | `tick_ms` | yes | positive tick period in milliseconds, at most 60_000 |
 | `tick_budget_ms` | no | callback budget, 1–5000 ms; defaults to `tick_ms`, independent of cadence |
@@ -73,8 +74,11 @@ are rejected before compilation.
 ## Required services
 
 `requires` and `optional` use short service names directly. Hardware bindings
-are `time`, `input`, `display`, `lights` and `external-link`. Existing firmware
-service requirements are `camera`, `sd-card`, `internal-flash` and `settings`.
+include `time`, `input`, `display`, `lights` and `external-link`. Firmware
+service requirements include `camera`, `sd-card`, `internal-flash`, `settings`
+and `audio`. A native app can require `qr-decoder`, `apriltag-decoder`,
+`face-detector` or `object-detector` independently of the built-in apps.
+Declare `camera` alongside each of these and `sd-card` for either KPU detector.
 There is no expansion into generic capability requests, instance numbers,
 version ranges, feature masks or owner grants.
 
@@ -124,8 +128,9 @@ instances, provider vtables, drivers, or HAL objects.
 The generated descriptor contains identity, menu visibility and order, stable
 autostart identity, typed entry reference, debug text and handler, the
 tick interval derived from `tick_ms`, expanded capability/service requests, and
-the menu presentation hook `{id_with_hyphens_as_underscores}_draw_icon`. That
-icon symbol is a descriptor field, not a lifecycle callback. There is one
+the menu presentation hook `{id_with_hyphens_as_underscores}_draw_icon` for
+visible apps that omit `menu_icon`. The shell draws the tile label for
+`menu_icon = "label"`. There is one
 entry type and no legacy adapter. Tick cadence and callback budget are separate
 descriptor limits.
 A canonical descriptor array is ordered by app ID. The generated menu array
@@ -161,8 +166,8 @@ discovery record. Those concerns belong to the future Project Format.
 
 ## Compatibility
 
-Native App Manifest contract `0.1.x` is accepted with App Runtime `0.2.x` and
-Capability API `0.1.x`. Experimental App Runtime consumers request
+Native App Manifest contracts `0.1.x` and `0.2.x` use schema 1 with App Runtime
+`0.2.x` and Capability API `0.1.x`. Experimental App Runtime consumers request
 `[0.2.0, 0.3.0)`. Changing one version axis does not implicitly change the
 others.
 

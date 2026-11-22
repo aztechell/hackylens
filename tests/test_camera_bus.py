@@ -73,7 +73,7 @@ def test_build_stages_exactly_one_or_no_camera_transport(tmp_path, board, backen
     import build_firmware, service_bindings
     board = load_board(board)
     disabled = set() if camera_enabled else {
-        'camera', 'qr-camera', 'face-detect', 'face-recognition', 'apriltag', 'object-detect',
+        app['id'] for app in build_firmware.APP_MANIFESTS.values() if 'camera' in app['requires']
     }
     selection = service_bindings.select(board, disabled, set(), set())
     build_firmware.stage_platform_sources(tmp_path, disabled, selection)

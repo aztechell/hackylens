@@ -19,17 +19,19 @@ typedef enum
     HK_AUDIO_RECORD,
 } hk_audio_direction_t;
 
-uint8_t audio_service_available(void);
-hk_result_t audio_service_begin(hk_audio_direction_t direction,
-                                volatile uint8_t *pcm, size_t size);
-hk_result_t audio_service_poll(void);
-hk_result_t audio_service_cancel(void);
-
 typedef enum
 {
     HK_AUDIO_OWNER_FILES = 1,
     HK_AUDIO_OWNER_RECORDER,
+    HK_AUDIO_OWNER_PYTHON,
+    HK_AUDIO_OWNER_APP,
 } hk_audio_owner_t;
+
+uint8_t audio_service_available(void);
+hk_result_t audio_service_begin(hk_audio_owner_t owner, hk_audio_direction_t direction,
+                                volatile uint8_t *pcm, size_t size);
+hk_result_t audio_service_poll(hk_audio_owner_t owner);
+hk_result_t audio_service_cancel(hk_audio_owner_t owner);
 
 /* Playback submits mono PCM before polling. Capture takes completed blocks.
  * HK_PENDING from push/take means the caller can retry after servicing SD.

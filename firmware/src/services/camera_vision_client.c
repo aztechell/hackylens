@@ -6,10 +6,10 @@
 #include "hk_config.h"
 #include "camera_client.h"
 #include "vision_result_service.h"
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION
+#if HK_ENABLE_FACE_DETECTOR
 #include "face_detect_detector.h"
 #endif
-#if HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_OBJECT_DETECTOR
 #include "object_detect_detector.h"
 #endif
 
@@ -44,7 +44,7 @@ static struct
     hk_deadline_t deadline;
 } s_vision;
 
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION || HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_FACE_DETECTOR || HK_ENABLE_OBJECT_DETECTOR
 static void add_box(vision_result_snapshot_t *snapshot, uint16_t id,
                     uint16_t confidence, int16_t x, int16_t y, int16_t w, int16_t h)
 {
@@ -53,7 +53,7 @@ static void add_box(vision_result_snapshot_t *snapshot, uint16_t id,
 }
 #endif
 
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION
+#if HK_ENABLE_FACE_DETECTOR
 static void collect_faces(vision_result_snapshot_t *snapshot)
 {
     uint8_t count;
@@ -68,7 +68,7 @@ static const camera_detector_t s_face = {
 };
 #endif
 
-#if HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_OBJECT_DETECTOR
 static void collect_objects(vision_result_snapshot_t *snapshot)
 {
     uint8_t count;
@@ -86,11 +86,11 @@ static const camera_detector_t s_objects = {
 
 static const camera_detector_t *find_detector(vision_source_t source)
 {
-#if HK_ENABLE_APP_FACE_DETECT || HK_ENABLE_APP_FACE_RECOGNITION
+#if HK_ENABLE_FACE_DETECTOR
     if(source == VISION_SOURCE_FACE)
         return &s_face;
 #endif
-#if HK_ENABLE_APP_OBJECT_DETECT
+#if HK_ENABLE_OBJECT_DETECTOR
     if(source == VISION_SOURCE_OBJECT_DETECT)
         return &s_objects;
 #endif

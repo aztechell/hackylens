@@ -161,6 +161,10 @@ def source_boundary_failures() -> list[str]:
     failures.extend(production_v2_app_failures())
     fixture_sources = [FIXTURE / "minimal_app.c", FIXTURE / "minimal_private.h"]
     failures.extend(app_source_boundary_failures(FIXTURE, fixture_sources, [FIXTURE]))
+    tracker = ROOT / "firmware" / "src" / "apps" / "color_tracker"
+    failures.extend(app_source_boundary_failures(
+        tracker, [tracker / "color_tracker_app.c"], [tracker]
+    ))
     return sorted(set(failures))
 
 
@@ -188,12 +192,15 @@ def run_executable(path: Path) -> None:
 
 def compile_header_consumers(temp: Path) -> None:
     source = """#include <hackylens/app.h>
+#include <hackylens/app/audio.h>
+#include <hackylens/app/camera.h>
+#include <hackylens/app/data.h>
 #ifdef __cplusplus
-static_assert(HK_APP_SDK_VERSION_MINOR == 3U);
+static_assert(HK_APP_SDK_VERSION_MINOR == 4U);
 static_assert(HK_APP_STATE_ALIGNMENT == 16U);
 int main(void) { hk_app_v2_entry_t entry{}; return entry.start != nullptr; }
 #else
-_Static_assert(HK_APP_SDK_VERSION_MINOR == 3U, "sdk version");
+_Static_assert(HK_APP_SDK_VERSION_MINOR == 4U, "sdk version");
 _Static_assert(HK_APP_STATE_ALIGNMENT == 16U, "state alignment");
 int main(void) { hk_app_v2_entry_t entry = {0}; return entry.start != 0; }
 #endif

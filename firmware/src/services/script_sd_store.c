@@ -25,6 +25,7 @@ typedef enum
 static struct
 {
     writer_state_t state;
+    const void *owner;
     uint32_t generation;
     fat_dir_slot_t directory_slot;
     fat_cluster_search_t directory_search;
@@ -62,23 +63,35 @@ static uint8_t same_media(void)
     return hk_fat_mounted() && fat32_mount_generation() == s_writer.generation;
 }
 
+static void idle_writer(void)
+{
+    s_writer.state = WRITER_IDLE;
+    s_writer.owner = NULL;
+}
+
 static uint8_t discard_step(void)
 {
     if(same_media() && fat_append_discard_step(&s_writer.file) == HK_PENDING)
         return 0U;
-    s_writer.state = WRITER_IDLE;
+    idle_writer();
     return 1U;
 }
 
-void script_sd_abort(void)
+void script_sd_abort(const void *owner)
 {
+    if(!owner || s_writer.owner != owner)
+        return;
     if(s_writer.state == WRITER_PREPARING)
-        s_writer.state = WRITER_IDLE;
+        idle_writer();
     if(s_writer.state == WRITER_OPEN)
     {
+        if(!same_media())
+        {
+            idle_writer();
+            return;
+        }
         s_writer.state = WRITER_ABORTING;
-        if(!discard_step())
-            (void)resource_cleanup_schedule(RESOURCE_CLEANUP_SCRIPT_SD, discard_step);
+        (void)resource_cleanup_schedule(RESOURCE_CLEANUP_SCRIPT_SD, discard_step);
     }
 }
 
@@ -171,24 +184,33 @@ static script_sd_result_t create_temporary(uint32_t directory)
     return storage_result(fat_append_begin(&s_writer.file, directory, s_writer.base));
 }
 
-script_sd_result_t script_sd_begin(const char *name, size_t length, uint8_t bmp_only)
+script_sd_result_t script_sd_begin(const void *owner, const char *name, size_t length,
+                                   uint8_t bmp_only)
 {
-    if(s_writer.state == WRITER_OPEN || s_writer.state == WRITER_ABORTING)
+    if(!owner || (s_writer.owner && s_writer.owner != owner) ||
+       s_writer.state == WRITER_OPEN || s_writer.state == WRITER_ABORTING)
         return SCRIPT_SD_BUSY;
+    char base[9];
+    char extension[4];
+    if(!split_name(name, length, bmp_only, base, extension))
+        return SCRIPT_SD_INVALID_NAME;
     if(s_writer.state == WRITER_IDLE)
     {
-        if(!split_name(name, length, bmp_only, s_writer.base, s_writer.extension))
-            return SCRIPT_SD_INVALID_NAME;
         if(!file_mount_if_needed())
             return SCRIPT_SD_NO_MEDIA;
+        strcpy(s_writer.base, base);
+        strcpy(s_writer.extension, extension);
+        s_writer.owner = owner;
         s_writer.generation = fat32_mount_generation();
         s_writer.directory_slot = (fat_dir_slot_t){0};
         s_writer.directory_search = (fat_cluster_search_t){0};
         s_writer.state = WRITER_PREPARING;
     }
+    else if(!str_eq_ci(base, s_writer.base) || !str_eq_ci(extension, s_writer.extension))
+        return SCRIPT_SD_BUSY;
     if(!same_media())
     {
-        s_writer.state = WRITER_IDLE;
+        idle_writer();
         return SCRIPT_SD_NO_MEDIA;
     }
     uint32_t directory = 0U;
@@ -197,50 +219,55 @@ script_sd_result_t script_sd_begin(const char *name, size_t length, uint8_t bmp_
         return result;
     if(result == SCRIPT_SD_OK)
         result = create_temporary(directory);
-    s_writer.state = result == SCRIPT_SD_OK ? WRITER_OPEN : WRITER_IDLE;
+    if(result == SCRIPT_SD_OK)
+        s_writer.state = WRITER_OPEN;
+    else
+        idle_writer();
     return result;
 }
 
-static script_sd_result_t open_writer(void)
+static script_sd_result_t open_writer(const void *owner)
 {
-    if(s_writer.state != WRITER_OPEN)
+    if(!owner || s_writer.owner != owner || s_writer.state != WRITER_OPEN)
         return SCRIPT_SD_BUSY;
     if(!same_media())
     {
-        script_sd_abort();
+        script_sd_abort(owner);
         return SCRIPT_SD_NO_MEDIA;
     }
     return SCRIPT_SD_OK;
 }
 
-script_sd_result_t script_sd_write(const uint8_t *data, size_t length, size_t *accepted)
+script_sd_result_t script_sd_write(const void *owner, const uint8_t *data, size_t length,
+                                   size_t *accepted)
 {
     *accepted = 0U;
-    script_sd_result_t status = open_writer();
+    script_sd_result_t status = open_writer(owner);
     if(status != SCRIPT_SD_OK)
         return status;
     hk_result_t result = fat_append_write(&s_writer.file, data, length, accepted);
     if(result < 0)
-        script_sd_abort();
+        script_sd_abort(owner);
     return storage_result(result);
 }
 
-script_sd_result_t script_sd_write_run(uint32_t remaining, sd_block_source_t source,
-                                       void *context, size_t *accepted)
+script_sd_result_t script_sd_write_run(const void *owner, uint32_t remaining,
+                                       sd_block_source_t source, void *context,
+                                       size_t *accepted)
 {
     *accepted = 0U;
-    script_sd_result_t status = open_writer();
+    script_sd_result_t status = open_writer(owner);
     if(status != SCRIPT_SD_OK)
         return status;
     hk_result_t result = fat_append_write_run(&s_writer.file, remaining, source, context, accepted);
     if(result < 0)
-        script_sd_abort();
+        script_sd_abort(owner);
     return storage_result(result);
 }
 
-script_sd_result_t script_sd_finish(void)
+script_sd_result_t script_sd_finish(const void *owner)
 {
-    script_sd_result_t status = open_writer();
+    script_sd_result_t status = open_writer(owner);
     if(status != SCRIPT_SD_OK)
         return status;
     hk_result_t result = fat_append_flush(&s_writer.file);
@@ -251,8 +278,8 @@ script_sd_result_t script_sd_finish(void)
         result = fat_append_publish(&s_writer.file, (const char *)short_name + 8U, NULL, 0U);
     }
     if(result == HK_OK)
-        s_writer.state = WRITER_IDLE;
+        idle_writer();
     else if(result < 0)
-        script_sd_abort();
+        script_sd_abort(owner);
     return storage_result(result);
 }

@@ -7,7 +7,9 @@ from pathlib import Path
 import re
 from board_contract import Board
 import app_composition
-from app_manifest import canonical_json_bytes, OPTIONAL_FALLBACKS, FIRMWARE_SERVICES
+from app_manifest import (
+    canonical_json_bytes, DETECTOR_REQUIREMENTS, FIRMWARE_SERVICES, OPTIONAL_FALLBACKS,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -90,6 +92,7 @@ def select(board: Board, disabled_apps: set[str], required_apps: set[str],
     excluded = set(disabled_apps)
     exclusions, fallbacks = [], []
     firmware = (set(supported) & FIRMWARE_SERVICES) | {"settings"}
+    firmware |= {name for name, needs in DETECTOR_REQUIREMENTS.items() if needs <= firmware}
     for name, app in sorted(apps.items()):
         if name in excluded:
             continue

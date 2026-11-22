@@ -11,7 +11,7 @@
 #include "hal_time.h"
 #include "hal_watchdog.h"
 #include "hk_config.h"
-#if HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_APRILTAG
+#if HK_ENABLE_QR_DECODER || HK_ENABLE_APRILTAG_DECODER
 #include "../adapters/micropython/micropython_camera_codes.h"
 #endif
 
@@ -155,7 +155,7 @@ static void micropython_worker(void *context)
     mp_stack_set_limit(MICROPYTHON_STACK_LIMIT_BYTES);
     (void)micropython_exec_source(shared);
     mp_embed_deinit();
-#if HK_ENABLE_APP_QR_CAMERA || HK_ENABLE_APP_APRILTAG
+#if HK_ENABLE_QR_DECODER || HK_ENABLE_APRILTAG_DECODER
     micropython_camera_codes_cleanup();
 #endif
 

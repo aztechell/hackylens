@@ -68,15 +68,16 @@ def generated_source(
         guard = enable_definition(str(app["id"]))
         entry_type = "hk_app_v2_entry_t"
         debug_symbol = app["metadata"].get("debug_entry") or "NULL"
-        icon_symbol = str(app["id"]).replace("-", "_") + "_draw_icon"
+        icon_symbol = "NULL"
         lines.extend([
             f"#if {guard}",
             f"extern const {entry_type} {app['entry']};",
-            f"extern void {icon_symbol}("
-            "uint16_t x, uint16_t y, uint16_t color, uint16_t bg);",
-            "",
         ])
-
+        if app["menu"]["visible"] and app["menu"].get("icon") != "label":
+            icon_symbol = str(app["id"]).replace("-", "_") + "_draw_icon"
+            lines.append(f"extern void {icon_symbol}("
+                         "uint16_t x, uint16_t y, uint16_t color, uint16_t bg);")
+        lines.append("")
         if debug_symbol != "NULL":
             lines.append(f"extern uint8_t {debug_symbol}(const char *command);")
 

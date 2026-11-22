@@ -3,7 +3,7 @@ contract-id: hackylens.app-runtime
 owner: firmware-runtime
 version: 0.2.0
 stability: experimental
-compatibility-app-manifest: >=0.1.0,<0.2.0
+compatibility-app-manifest: >=0.1.0,<0.3.0
 compatibility-capability-api: >=0.1.0,<0.2.0
 ---
 
@@ -378,7 +378,7 @@ dispatch overhead separately from callback body and provider I/O.
 
 ## Compatibility
 
-App Runtime `0.2.x` accepts native App Manifest `0.1.x` with schema major `1`
+App Runtime `0.2.x` accepts native App Manifest `0.1.x` and `0.2.x` with schema major `1`
 and Capability API `0.1.x`. Experimental Feature App SDK consumers request
 runtime `[0.2.0, 0.3.0)`. Because the contract is experimental, a future `0.3.0`
 line may be breaking. Firmware, HMPY, Board Port, and

@@ -88,22 +88,10 @@ static void menu_draw_tile(uint8_t index, uint8_t selected, uint16_t *x, uint16_
         hk_ui_display_draw_rect(*x, *y, MENU_ICON, MENU_ICON, MENU_LINE, hk_ui_accent());
 }
 
-void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
+static void menu_draw_label(uint16_t x, uint16_t y, const char *name,
+                            uint16_t fg, uint16_t bg)
 {
-    uint16_t x, y;
-    menu_draw_tile(index, selected, &x, &y);
-    if(app && app->draw_icon)
-        app->draw_icon(x, y, selected ? COLOR_BLACK : hk_ui_accent(),
-                      selected ? hk_ui_accent() : COLOR_BLACK);
-}
-
-void menu_draw_shortcut_at(uint8_t index, const char *name, uint8_t selected)
-{
-    uint16_t x, y;
-    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
-    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
     char label[4] = {0};
-    menu_draw_tile(index, selected, &x, &y);
     uint8_t length = 0U;
     while(length < sizeof(label) - 1U && name[length] && name[length] != '.')
     {
@@ -112,6 +100,27 @@ void menu_draw_shortcut_at(uint8_t index, const char *name, uint8_t selected)
     }
     hk_ui_display_draw_text_at(x + (MENU_ICON - length * HACKYLENS_FONT_W) / 2U,
                                y + 18U, label, fg, bg);
+}
+
+void menu_draw_item_at(uint8_t index, const hk_app_t *app, uint8_t selected)
+{
+    uint16_t x, y;
+    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
+    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
+    menu_draw_tile(index, selected, &x, &y);
+    if(app && app->draw_icon)
+        app->draw_icon(x, y, fg, bg);
+    else if(app)
+        menu_draw_label(x, y, app->id, fg, bg);
+}
+
+void menu_draw_shortcut_at(uint8_t index, const char *name, uint8_t selected)
+{
+    uint16_t x, y;
+    uint16_t fg = selected ? COLOR_BLACK : hk_ui_accent();
+    uint16_t bg = selected ? hk_ui_accent() : COLOR_BLACK;
+    menu_draw_tile(index, selected, &x, &y);
+    menu_draw_label(x, y, name, fg, bg);
 }
 
 void menu_draw_page(uint8_t page, uint8_t pages)

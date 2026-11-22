@@ -22,7 +22,8 @@ class ColorTrackerTests(unittest.TestCase):
             subprocess.run(
                 [
                     compiler, "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
-                    f"-I{CORE}", str(ROOT / "tests" / "color_tracker_harness.c"),
+                    f"-I{CORE}", f"-I{ROOT / 'firmware' / 'include'}",
+                    str(ROOT / "tests" / "color_tracker_harness.c"),
                     str(CORE / "color_tracker.c"), "-o", str(executable),
                 ],
                 check=True, cwd=ROOT,

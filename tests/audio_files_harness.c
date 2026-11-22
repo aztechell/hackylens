@@ -221,9 +221,9 @@ static void test_parse_and_resample(void)
         entry.size = source_size;
         assert(audio_player_open(HK_AUDIO_OWNER_FILES, &entry) == NULL);
         audio_player_toggle(HK_AUDIO_OWNER_FILES);
-        assert(audio_service_cancel() == HK_OK && cancel_count == 0U);
+        assert(audio_service_cancel(HK_AUDIO_OWNER_PYTHON) == HK_OK && cancel_count == 0U);
         uint8_t python_pcm[2] = {0U};
-        assert(audio_service_begin(HK_AUDIO_PLAY, python_pcm, 2U) == HK_ERR_BUSY);
+        assert(audio_service_begin(HK_AUDIO_OWNER_PYTHON, HK_AUDIO_PLAY, python_pcm, 2U) == HK_ERR_BUSY);
         for(uint8_t tick = 0U; tick < 12U; tick++)
             audio_player_tick();
         assert(first_output == 500);
@@ -243,10 +243,12 @@ static void test_parse_and_resample(void)
     assert(wav_pcm_read(read_wav, NULL, source_size - 1U, &parsed) == HK_WAV_INVALID);
     assert(audio_service_set_volume(0U) == HK_OK && hw_volume == 0U && volume == 0U);
     uint8_t python_pcm[2] = {0U};
-    assert(audio_service_begin(HK_AUDIO_PLAY, python_pcm, 2U) == HK_PENDING);
+    assert(audio_service_begin(HK_AUDIO_OWNER_PYTHON, HK_AUDIO_PLAY, python_pcm, 2U) == HK_PENDING);
     audio_stream_cancel(HK_AUDIO_OWNER_FILES);
     assert(cancel_count == 0U);
-    assert(audio_service_cancel() == HK_OK && cancel_count == 1U);
+    assert(audio_service_cancel(HK_AUDIO_OWNER_APP) == HK_OK && cancel_count == 0U);
+    assert(audio_service_poll(HK_AUDIO_OWNER_APP) == HK_ERR_INVALID_STATE);
+    assert(audio_service_cancel(HK_AUDIO_OWNER_PYTHON) == HK_OK && cancel_count == 1U);
 }
 
 static void test_append_partial(void)

@@ -841,10 +841,9 @@ def layout_failures() -> list[str]:
             failures.append(f"{relative}: committed generated copy must not exist")
     if not (SRC / "core" / "hk_app_registry.c").is_file():
         failures.append("generic app registry runtime is missing")
-    if 'if "qr-camera" not in disabled_apps:' not in manifest:
-        failures.append("tools/build_firmware.py: quirc is not gated by QR-CAMERA")
-    if 'if "apriltag" not in disabled_apps:' not in manifest:
-        failures.append("tools/build_firmware.py: AprilTag third party is not gated")
+    for service, library in (("qr-decoder", "quirc"), ("apriltag-decoder", "AprilTag")):
+        if f'if detector_enabled("{service}", disabled_apps):' not in manifest:
+            failures.append(f"tools/build_firmware.py: {library} is not gated by {service}")
     if "APP_MANIFEST_MODEL = app_composition.load_model()" not in manifest:
         failures.append("tools/build_firmware.py: app composition must come from manifests")
     if (ROOT / "firmware" / "app_requirements.toml").exists():

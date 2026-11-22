@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,9 +128,10 @@ uint8_t audio_service_available(void)
     return 1U;
 }
 
-hk_result_t audio_service_begin(hk_audio_direction_t direction,
+hk_result_t audio_service_begin(hk_audio_owner_t owner, hk_audio_direction_t direction,
                                 volatile uint8_t *pcm, size_t size)
 {
+    assert(owner == HK_AUDIO_OWNER_PYTHON);
     require_true(!g_audio_pcm && direction == HK_AUDIO_RECORD,
                  "audio fixture must start one recording");
     g_audio_pcm = pcm;
@@ -138,14 +140,16 @@ hk_result_t audio_service_begin(hk_audio_direction_t direction,
     return HK_PENDING;
 }
 
-hk_result_t audio_service_cancel(void)
+hk_result_t audio_service_cancel(hk_audio_owner_t owner)
 {
+    assert(owner == HK_AUDIO_OWNER_PYTHON);
     g_audio_pcm = NULL;
     return HK_OK;
 }
 
-hk_result_t audio_service_poll(void)
+hk_result_t audio_service_poll(hk_audio_owner_t owner)
 {
+    assert(owner == HK_AUDIO_OWNER_PYTHON);
     require_true(g_audio_pcm != NULL, "audio must not poll a retired buffer");
     if(g_now_us < g_audio_complete_at)
         return HK_PENDING;
