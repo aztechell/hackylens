@@ -133,7 +133,7 @@ The v1 I2C binding is a 100 kHz controller with 7-bit addresses.
 | `i2c_write(address, data)` | write up to 256 bytes to address `1..127` |
 | `i2c_read(address, size, prefix=b"")` | optional prefix write, then read `0..256` bytes |
 
-An I2C transaction has a 100 ms hardware deadline. A NACK or bus error raises
+An I2C transaction has a 250 ms service deadline. A NACK or bus error raises
 `OSError`; a service deadline raises `RuntimeError`. The connector mode and
 normal external-link service are restored after every run.
 

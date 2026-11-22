@@ -183,9 +183,9 @@ The original 9600-baud transmit path used `TFL` to decide how much of the
 eight-byte UART1 FIFO was free. Register sampling on SEN0305 showed `TFL`
 returning zero during transmission, allowing a refill before the previous
 batch had drained. GPIO captures recovered 140 and 142 bytes from two expected
-170-byte replies. The corrected driver queues one FIFO-sized batch at a time
-and uses the configured 8N1 baud rate to schedule the next write. A full batch
-takes approximately 8.34 ms at 9600 baud.
+170-byte replies. The v0.9.0 driver queued one FIFO-sized batch at a time
+and used the configured 8N1 baud rate to schedule the next write. A full batch
+took approximately 8.34 ms at 9600 baud.
 
 ## SEN0305 I2C hardware verification
 
@@ -204,4 +204,5 @@ FACE DETECT, FACE RECOG, and OBJECT DETECT apps. Each app sent populated
 `GET_RESULTS` replies over the physical I2C connector at approximately 64
 and 262 kHz. Leaving each app cleared the result. The replay exercised result
 production and transport with known inputs. The Maix Cube physical I2C
-exchange remains to be verified.
+and UART checks over SP-MOD are in the [Cube hardware log](MAIX_CUBE_TEST_LOG.md#uart-and-i2c-over-sp-mod-2026-11-22).
+Those results cover the board's UART1 and I2C0 driver and protocol paths.

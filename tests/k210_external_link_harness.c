@@ -76,26 +76,9 @@ void hal_external_uart_stop(void)
     s_uart_rx_size = 0U;
 }
 
-size_t hal_external_uart_receive(uint8_t *data, size_t len)
+uint8_t hal_external_uart_collect_rx(void)
 {
-    size_t available = s_uart_rx_size - s_uart_rx_head;
-
-    if(len > available)
-        len = available;
-    if(len != 0U)
-        memcpy(data, s_uart_rx + s_uart_rx_head, len);
-    s_uart_rx_head += (uint32_t)len;
-    if(s_uart_rx_head == s_uart_rx_size)
-    {
-        s_uart_rx_head = 0U;
-        s_uart_rx_size = 0U;
-    }
-    return len;
-}
-
-void hal_external_uart_send(const uint8_t *data, size_t len)
-{
-    (void)hal_external_uart_send_ready(data, len);
+    return 1U;
 }
 
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)

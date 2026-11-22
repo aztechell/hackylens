@@ -1,12 +1,16 @@
 #include "hal_external_link.h"
+#include "hal_shared_buffer.h"
 #include "hal_time.h"
 
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #include "hal_external_link_test_platform.h"
 #else
+#include <dmac.h>
+#include <encoding.h>
 #include <i2c.h>
 #include <platform.h>
 #include <plic.h>
+#include <sysctl.h>
 #include <uart.h>
 
 #include "../../../firmware/src/internal/hk_board_port.h"
@@ -22,10 +26,18 @@
 
 /* K210 general-purpose UART1/2/3 expose an 8-byte TX FIFO. */
 #define HAL_EXTERNAL_UART_FIFO_DEPTH 8U
+/* UART TX and I2C target RX are mutually exclusive users of DMA1. */
+#define HAL_EXTERNAL_LINK_DMA DMAC_CHANNEL1
+#define HAL_EXTERNAL_UART_RX_DMA DMAC_CHANNEL2
+#define HAL_EXTERNAL_UART_BATCH 32U
+#define HAL_EXTERNAL_UART_RX_WORDS 257U
 #define HAL_EXTERNAL_UART_BITS_PER_BYTE 10U /* 8N1, including start and stop. */
-#define HAL_EXTERNAL_UART_RX_IRQ_PRIORITY 2U
-#define HAL_EXTERNAL_I2C_IRQ_PRIORITY 2U
+#define HAL_EXTERNAL_UART_LSR_OVERRUN (1U << 1U)
+#define HAL_EXTERNAL_I2C_IRQ_PRIORITY 4U
 #define HAL_EXTERNAL_I2C_FIFO_DEPTH 8U
+/* One 256-byte target write plus room to identify an overlong transaction. */
+#define HAL_EXTERNAL_I2C_DMA_WORDS 272U
+#define HAL_EXTERNAL_DMA_STOP_US 100U
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #define HAL_EXTERNAL_UART_ADAPTER (uart[UART_DEVICE_1])
 #else
@@ -34,7 +46,9 @@
 
 static const hal_external_i2c_callbacks_t *g_i2c_callbacks;
 static uint8_t g_i2c_active;
-static uint8_t g_i2c_skip_sdk_receive;
+static uint8_t g_i2c_rx_bank;
+static uint8_t g_i2c_rx_dma_failed;
+static _Alignas(64) uint32_t g_i2c_rx_words[2][HAL_EXTERNAL_I2C_DMA_WORDS];
 static const uint8_t *g_i2c_controller_tx;
 static uint8_t *g_i2c_controller_rx;
 static uint32_t g_i2c_controller_tx_size;
@@ -47,16 +61,24 @@ static hal_external_uart_receive_fn g_uart_receive;
 static void *g_uart_receive_context;
 static uint8_t g_uart_active;
 static uint32_t g_uart_baud;
-static uint64_t g_uart_tx_ready_us;
+static uint8_t g_uart_rx_bank;
+static _Alignas(64) uint32_t g_uart_rx_words[2][HAL_EXTERNAL_UART_RX_WORDS];
+static uint8_t g_uart_tx_pending;
+static uint64_t g_uart_tx_drained_at;
+static _Alignas(64) uint32_t g_uart_tx_words[HAL_EXTERNAL_UART_BATCH];
 
 #if defined(HAL_EXTERNAL_LINK_TESTING)
 #define I2C_CONTROLLER_WRITE(adapter, value) \
     hal_external_i2c_test_write_command((value))
-#define I2C_CONTROLLER_READ(adapter) \
+#define I2C_READ_DATA(adapter) \
     hal_external_i2c_test_read_data()
+#define UART_RX_IRQ_SAVE() 0UL
+#define UART_RX_IRQ_RESTORE(state) ((void)(state))
 #else
 #define I2C_CONTROLLER_WRITE(adapter, value) ((adapter)->data_cmd = (value))
-#define I2C_CONTROLLER_READ(adapter) ((adapter)->data_cmd)
+#define I2C_READ_DATA(adapter) ((adapter)->data_cmd)
+#define UART_RX_IRQ_SAVE() clear_csr(mstatus, MSTATUS_MIE)
+#define UART_RX_IRQ_RESTORE(state) do { if((state) & MSTATUS_MIE) (void)set_csr(mstatus, MSTATUS_MIE); } while(0)
 #endif
 
 static void i2c_controller_abort(volatile i2c_t *adapter)
@@ -75,7 +97,7 @@ static void i2c_controller_drain_rx(volatile i2c_t *adapter)
           drained < HAL_EXTERNAL_I2C_FIFO_DEPTH)
     {
         g_i2c_controller_rx[received] =
-            (uint8_t)I2C_CONTROLLER_READ(adapter);
+            (uint8_t)I2C_READ_DATA(adapter);
         __sync_synchronize();
         g_i2c_controller_rx_received = ++received;
         ++drained;
@@ -136,78 +158,135 @@ static int i2c_controller_irq(void *context)
     return 0;
 }
 
-static int uart_receive_irq(void *context)
+static uint8_t external_dma_start_rx(dmac_channel_number_t channel,
+                                     const volatile uint32_t *source,
+                                     uint32_t *words, size_t count)
 {
-    uint8_t bytes[HAL_EXTERNAL_UART_FIFO_DEPTH];
-    size_t count;
+    if(!dmac_is_idle(channel))
+        return 0U;
+    __sync_synchronize();
+    dmac_set_single_mode(channel, (const void *)source, words,
+                         DMAC_ADDR_NOCHANGE, DMAC_ADDR_INCREMENT, DMAC_MSIZE_1,
+                         DMAC_TRANS_WIDTH_32, count);
+    return 1U;
+}
+
+static uint8_t external_dma_stop(dmac_channel_number_t channel, uint64_t deadline)
+{
+    if(!dmac_is_idle(channel))
+    {
+        /* CHEN has per-channel abort and abort-write-enable fields. */
+        const uint64_t bit = UINT64_C(1) << channel;
+        dmac->chen = (bit << 32U) | (bit << 40U);
+        dmac_channel_disable(channel);
+    }
+    while(!dmac_is_idle(channel) && hal_time_us() < deadline)
+        ;
+    return dmac_is_idle(channel);
+}
+
+static void i2c_target_notify(hal_external_i2c_event_t event)
+{
+    if(g_i2c_callbacks && g_i2c_callbacks->event)
+        g_i2c_callbacks->event(event);
+}
+
+static void i2c_target_start_rx(volatile i2c_t *adapter)
+{
+    uint32_t *words = hal_shared_buffer_uncached(g_i2c_rx_words[g_i2c_rx_bank]);
+
+    if(!external_dma_start_rx(HAL_EXTERNAL_LINK_DMA, &adapter->data_cmd,
+                              words, HAL_EXTERNAL_I2C_DMA_WORDS))
+    {
+        g_i2c_rx_dma_failed = 1U;
+        return;
+    }
+    adapter->dma_cr = I2C_DMA_CR_RDMAE;
+}
+
+static void i2c_target_finish_rx(volatile i2c_t *adapter)
+{
+    volatile uint32_t *words = hal_shared_buffer_uncached(g_i2c_rx_words[g_i2c_rx_bank]);
+    uint64_t deadline;
+    uint8_t failed = g_i2c_rx_dma_failed;
+
+    /* Short writes may be buffered in DMA even with an empty peripheral FIFO.
+       Finish the DMA block at STOP before interpreting the SRAM contents. */
+    deadline = hal_time_us() + HAL_EXTERNAL_DMA_STOP_US;
+    while(adapter->rxflr && !dmac_is_idle(HAL_EXTERNAL_LINK_DMA) && hal_time_us() < deadline)
+        ;
+    adapter->dma_cr = 0U;
+    if(!external_dma_stop(HAL_EXTERNAL_LINK_DMA, deadline))
+    {
+        g_i2c_rx_dma_failed = 1U;
+        i2c_target_notify(HAL_EXTERNAL_I2C_EVENT_OVERFLOW);
+        return;
+    }
+    failed |= adapter->rxflr != 0U;
+    if(failed)
+    {
+        for(size_t count = 0U; count < HAL_EXTERNAL_I2C_FIFO_DEPTH && adapter->rxflr; ++count)
+            (void)I2C_READ_DATA(adapter);
+        i2c_target_notify(HAL_EXTERNAL_I2C_EVENT_OVERFLOW);
+    }
+    /* Arm the other buffer before passing bytes to the protocol. The DMA DAR
+       advances in bursts, so use the first untouched word as the frame end. */
+    g_i2c_rx_bank ^= 1U;
+    g_i2c_rx_dma_failed = 0U;
+    i2c_target_start_rx(adapter);
+    for(size_t index = 0U; index < HAL_EXTERNAL_I2C_DMA_WORDS; ++index)
+    {
+        uint32_t word = words[index];
+        if(word == UINT32_MAX)
+            break;
+        words[index] = UINT32_MAX;
+        if(!failed && g_i2c_callbacks && g_i2c_callbacks->receive)
+            g_i2c_callbacks->receive((uint8_t)word);
+    }
+}
+
+static int i2c_target_irq(void *context)
+{
+    volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
+    uint32_t status = adapter->intr_stat;
 
     (void)context;
-    do
+    if(status & I2C_INTR_STAT_RX_OVER)
     {
-        count = (size_t)uart_receive_data(
-            UART_DEVICE_1, (char *)bytes, sizeof(bytes));
-        if(g_uart_receive)
-        {
-            for(size_t index = 0U; index < count; ++index)
-                g_uart_receive(g_uart_receive_context, bytes[index]);
-        }
-    } while(count != 0U);
+        g_i2c_rx_dma_failed = 1U;
+        (void)adapter->clr_rx_over;
+    }
+    if(status & I2C_INTR_STAT_START_DET)
+    {
+        (void)adapter->clr_start_det;
+        i2c_target_notify(HAL_EXTERNAL_I2C_EVENT_START);
+    }
+    if(status & I2C_INTR_STAT_STOP_DET)
+    {
+        (void)adapter->clr_stop_det;
+        i2c_target_finish_rx(adapter);
+        i2c_target_notify(HAL_EXTERNAL_I2C_EVENT_STOP);
+    }
+    if(status & I2C_INTR_STAT_RD_REQ)
+    {
+        adapter->data_cmd = g_i2c_callbacks && g_i2c_callbacks->transmit ?
+            g_i2c_callbacks->transmit() : 0U;
+        (void)adapter->clr_rd_req;
+    }
     return 0;
 }
-
-static void i2c_receive(uint32_t data)
-{
-    if(g_i2c_skip_sdk_receive)
-    {
-        g_i2c_skip_sdk_receive = 0U;
-        return;
-    }
-    if(g_i2c_callbacks && g_i2c_callbacks->receive)
-        g_i2c_callbacks->receive((uint8_t)data);
-}
-
-static uint32_t i2c_transmit(void)
-{
-    if(g_i2c_callbacks && g_i2c_callbacks->transmit)
-        return g_i2c_callbacks->transmit();
-    return 0U;
-}
-
-static void i2c_event(i2c_event_t event)
-{
-    if(!g_i2c_callbacks || !g_i2c_callbacks->event)
-        return;
-    if(event == I2C_EV_STOP)
-    {
-        volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
-        uint8_t sdk_will_read = (adapter->intr_stat & I2C_INTR_STAT_RX_FULL) != 0U;
-
-        /* The SDK announces STOP before servicing RX_FULL and consumes only
-           one FIFO byte per IRQ. Drain the completed write here so the main
-           loop can prepare the response before the master's read START. */
-        while(adapter->rxflr != 0U)
-            g_i2c_callbacks->receive((uint8_t)adapter->data_cmd);
-        g_i2c_skip_sdk_receive = sdk_will_read;
-    }
-    g_i2c_callbacks->event(event == I2C_EV_STOP ? HAL_EXTERNAL_I2C_EVENT_STOP :
-                                                HAL_EXTERNAL_I2C_EVENT_START);
-}
-
-static const i2c_slave_handler_t g_i2c_handler = {
-    .on_receive = i2c_receive,
-    .on_transmit = i2c_transmit,
-    .on_event = i2c_event,
-};
 
 void hal_external_uart_stop(void)
 {
     if(!g_uart_active)
         return;
-    uart_irq_unregister(UART_DEVICE_1, UART_RECEIVE);
+    (void)external_dma_stop(HAL_EXTERNAL_UART_RX_DMA, hal_time_us() + HAL_EXTERNAL_DMA_STOP_US);
+    (void)external_dma_stop(HAL_EXTERNAL_LINK_DMA, hal_time_us() + HAL_EXTERNAL_DMA_STOP_US);
     g_uart_active = 0U;
     g_uart_receive = NULL;
     g_uart_receive_context = NULL;
-    g_uart_tx_ready_us = 0U;
+    g_uart_tx_pending = 0U;
+    g_uart_tx_drained_at = 0U;
     uart_init(UART_DEVICE_1);
 }
 
@@ -220,59 +299,148 @@ void hal_external_uart_init(uint32_t baud,
     PREPARE_EXTERNAL_UART();
     uart_init(UART_DEVICE_1);
     uart_configure(UART_DEVICE_1, baud, UART_BITWIDTH_8BIT, UART_STOP_1, UART_PARITY_NONE);
-    (void)uart_receive_irq(NULL);
     g_uart_receive = receive;
     g_uart_receive_context = context;
-    uart_irq_register(UART_DEVICE_1, UART_RECEIVE, uart_receive_irq, NULL,
-                      HAL_EXTERNAL_UART_RX_IRQ_PRIORITY);
+    sysctl_dma_select((sysctl_dma_channel_t)HAL_EXTERNAL_LINK_DMA,
+                     SYSCTL_DMA_SELECT_UART1_TX_REQ);
+    sysctl_dma_select((sysctl_dma_channel_t)HAL_EXTERNAL_UART_RX_DMA,
+                     SYSCTL_DMA_SELECT_UART1_RX_REQ);
+    g_uart_rx_bank = 0U;
+    for(size_t bank = 0U; bank < 2U; ++bank)
+    {
+        uint32_t *words = hal_shared_buffer_uncached(g_uart_rx_words[bank]);
+        for(size_t index = 0U; index < HAL_EXTERNAL_UART_RX_WORDS; ++index)
+            words[index] = UINT32_MAX;
+    }
+    (void)external_dma_start_rx(HAL_EXTERNAL_UART_RX_DMA, &HAL_EXTERNAL_UART_ADAPTER->RBR,
+        hal_shared_buffer_uncached(g_uart_rx_words[g_uart_rx_bank]), HAL_EXTERNAL_UART_RX_WORDS);
     g_uart_baud = baud;
     g_uart_active = 1U;
 }
 
-size_t hal_external_uart_receive(uint8_t *data, size_t len)
+uint8_t hal_external_uart_collect_rx(void)
 {
-    return (size_t)uart_receive_data(UART_DEVICE_1, (char *)data, len);
-}
+    volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
+    volatile uint32_t *words;
+    unsigned long interrupts;
+    uint8_t started;
+    uint8_t overrun;
 
-void hal_external_uart_send(const uint8_t *data, size_t len)
-{
-    if(data && len)
-        uart_send_data(UART_DEVICE_1, (const char *)data, len);
+    if(!g_uart_active)
+        return 0U;
+
+    /* Stopping flushes partial DMA bursts. Arm the other bank before a slow
+       interrupt can keep the UART without a DMA consumer. */
+    interrupts = UART_RX_IRQ_SAVE();
+    overrun = (adapter->LSR & HAL_EXTERNAL_UART_LSR_OVERRUN) != 0U;
+    if(!external_dma_stop(HAL_EXTERNAL_UART_RX_DMA, hal_time_us() + HAL_EXTERNAL_DMA_STOP_US))
+    {
+        UART_RX_IRQ_RESTORE(interrupts);
+        return 0U;
+    }
+    words = hal_shared_buffer_uncached(g_uart_rx_words[g_uart_rx_bank]);
+    g_uart_rx_bank ^= 1U;
+    started = external_dma_start_rx(HAL_EXTERNAL_UART_RX_DMA, &adapter->RBR,
+        hal_shared_buffer_uncached(g_uart_rx_words[g_uart_rx_bank]), HAL_EXTERNAL_UART_RX_WORDS);
+    overrun |= (adapter->LSR & HAL_EXTERNAL_UART_LSR_OVERRUN) != 0U;
+    UART_RX_IRQ_RESTORE(interrupts);
+
+    /* The last word is reserved to recognize RX beyond the 256-byte window. */
+    if(!started || overrun || words[HAL_EXTERNAL_UART_RX_WORDS - 1U] != UINT32_MAX)
+        return 0U;
+    for(size_t index = 0U; index < HAL_EXTERNAL_UART_RX_WORDS; ++index)
+    {
+        uint32_t word = words[index];
+        if(word == UINT32_MAX)
+            break;
+        words[index] = UINT32_MAX;
+        if(g_uart_receive)
+            g_uart_receive(g_uart_receive_context, (uint8_t)word);
+    }
+    return 1U;
 }
 
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t len)
 {
     volatile uart_t *adapter = HAL_EXTERNAL_UART_ADAPTER;
+    uint32_t *words;
     size_t count;
-    uint32_t bit_time_numerator;
 
-    if(!data || len == 0U || !g_uart_active || hal_time_us() < g_uart_tx_ready_us)
+    if(!data || len == 0U || !g_uart_active || !dmac_is_idle(HAL_EXTERNAL_LINK_DMA))
         return 0U;
-    count = len < HAL_EXTERNAL_UART_FIFO_DEPTH ? len : HAL_EXTERNAL_UART_FIFO_DEPTH;
+    count = len < HAL_EXTERNAL_UART_BATCH ? len : HAL_EXTERNAL_UART_BATCH;
+    words = hal_shared_buffer_uncached(g_uart_tx_words);
     for(size_t i = 0U; i < count; i++)
-        adapter->THR = data[i];
+        words[i] = data[i];
 
-    /* TFL can report zero while UART1 is still sending. Wait for one FIFO
-       window to reach the wire before accepting another one. The additional
-       microsecond covers the resolution of the timestamp. */
-    bit_time_numerator = (uint32_t)count * HAL_EXTERNAL_UART_BITS_PER_BYTE * 1000000U;
-    g_uart_tx_ready_us = hal_time_us() +
-                        (bit_time_numerator + g_uart_baud - 1U) / g_uart_baud + 1U;
+    /* DMA follows UART hardware requests even when the foreground is busy.
+       Reuse the staging buffer only after the previous DMA transfer retired. */
+    __sync_synchronize();
+    g_uart_tx_pending = 1U;
+    g_uart_tx_drained_at = 0U;
+    dmac_set_single_mode(HAL_EXTERNAL_LINK_DMA, words, (void *)&adapter->THR,
+                         DMAC_ADDR_INCREMENT, DMAC_ADDR_NOCHANGE, DMAC_MSIZE_1,
+                         DMAC_TRANS_WIDTH_32, count);
     return count;
 }
 
 uint8_t hal_external_uart_tx_idle(void)
 {
-    return hal_time_us() >= g_uart_tx_ready_us;
+    uint64_t now;
+
+    if(!g_uart_tx_pending)
+        return 1U;
+    if(!dmac_is_idle(HAL_EXTERNAL_LINK_DMA))
+        return 0U;
+    now = hal_time_us();
+    if(g_uart_tx_drained_at == 0U)
+    {
+        /* After DMA retires, the FIFO and shifter can still contain nine
+           characters. UART FIFO/status readbacks proved unreliable on K210. */
+        const uint32_t wire_bits_us = (HAL_EXTERNAL_UART_FIFO_DEPTH + 1U) *
+                                      HAL_EXTERNAL_UART_BITS_PER_BYTE * 1000000U;
+        g_uart_tx_drained_at = now + (wire_bits_us + g_uart_baud - 1U) / g_uart_baud + 1U;
+    }
+    if(now < g_uart_tx_drained_at)
+        return 0U;
+    g_uart_tx_pending = 0U;
+    return 1U;
 }
 
 void hal_external_i2c_init(uint8_t address, const hal_external_i2c_callbacks_t *callbacks)
 {
+    volatile i2c_t *adapter = i2c[I2C_DEVICE_0];
+
     hal_external_i2c_stop();
+    hal_external_uart_stop();
     g_i2c_callbacks = callbacks;
-    g_i2c_skip_sdk_receive = 0U;
     PREPARE_EXTERNAL_I2C();
-    i2c_init_as_slave(I2C_DEVICE_0, address, 7U, &g_i2c_handler);
+    sysctl_clock_enable(SYSCTL_CLOCK_I2C0);
+    sysctl_clock_set_threshold(SYSCTL_THRESHOLD_I2C0, 3U);
+    adapter->enable = 0U;
+    adapter->con = I2C_CON_SPEED(1U) | I2C_CON_STOP_DET_IFADDRESSED;
+    adapter->sar = I2C_SAR_ADDRESS(address);
+    adapter->ss_scl_hcnt = I2C_SS_SCL_HCNT_COUNT(37U);
+    adapter->ss_scl_lcnt = I2C_SS_SCL_LCNT_COUNT(40U);
+    (void)adapter->clr_intr;
+    adapter->dma_rdlr = 0U;
+    for(size_t bank = 0U; bank < 2U; ++bank)
+    {
+        uint32_t *words = hal_shared_buffer_uncached(g_i2c_rx_words[bank]);
+        for(size_t index = 0U; index < HAL_EXTERNAL_I2C_DMA_WORDS; ++index)
+            words[index] = UINT32_MAX;
+    }
+    g_i2c_rx_bank = 0U;
+    g_i2c_rx_dma_failed = 0U;
+    sysctl_dma_select((sysctl_dma_channel_t)HAL_EXTERNAL_LINK_DMA,
+                     SYSCTL_DMA_SELECT_I2C0_RX_REQ);
+    i2c_target_start_rx(adapter);
+    adapter->intr_mask = I2C_INTR_MASK_RX_OVER | I2C_INTR_MASK_START_DET |
+                         I2C_INTR_MASK_STOP_DET | I2C_INTR_MASK_RD_REQ;
+    plic_set_priority(IRQN_I2C0_INTERRUPT, HAL_EXTERNAL_I2C_IRQ_PRIORITY);
+    plic_irq_register(IRQN_I2C0_INTERRUPT, i2c_target_irq, NULL);
+    plic_irq_enable(IRQN_I2C0_INTERRUPT);
+    adapter->enable = I2C_ENABLE_ENABLE;
     g_i2c_active = 1U;
 }
 
@@ -287,6 +455,8 @@ void hal_external_i2c_controller_start(
     PREPARE_EXTERNAL_I2C();
     i2c_init(I2C_DEVICE_0, address, 7U, frequency_hz);
     adapter = i2c[I2C_DEVICE_0];
+    /* The SDK enables DMA requests, but controller transfers use the IRQ. */
+    adapter->dma_cr = 0U;
     (void)adapter->clr_tx_abrt;
     (void)adapter->clr_intr;
     g_i2c_controller_tx = tx;
@@ -370,6 +540,9 @@ void hal_external_i2c_stop(void)
         return;
     adapter = i2c[I2C_DEVICE_0];
     adapter->intr_mask = 0U;
+    adapter->dma_cr = 0U;
+    if(!g_i2c_controller_active)
+        (void)external_dma_stop(HAL_EXTERNAL_LINK_DMA, hal_time_us() + HAL_EXTERNAL_DMA_STOP_US);
     adapter->enable = 0U;
     plic_irq_disable(IRQN_I2C0_INTERRUPT);
     plic_irq_unregister(IRQN_I2C0_INTERRUPT);
@@ -383,5 +556,4 @@ void hal_external_i2c_stop(void)
     g_i2c_controller_aborted = 0U;
     g_i2c_controller_active = 0U;
     g_i2c_active = 0U;
-    g_i2c_skip_sdk_receive = 0U;
 }

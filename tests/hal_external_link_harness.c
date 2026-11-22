@@ -4,20 +4,28 @@
 
 #include "hal_external_link_test_platform.h"
 #include "hal_external_link.h"
+#include "hal_shared_buffer.h"
 #include "hal_time.h"
 
 static uart_t g_uart;
 static i2c_t g_i2c;
+static dmac_t g_dmac;
+volatile dmac_t *dmac = &g_dmac;
+static const uint32_t *g_dma_words;
+static uint32_t *g_dma_rx_words;
+static uint32_t g_dma_held_word = UINT32_MAX;
+static size_t g_dma_count;
+static uint8_t g_dma_busy;
+static int g_dma_request = -1;
+static uint8_t g_dma_aborted;
 volatile uart_t *uart[1] = {&g_uart};
 volatile i2c_t *i2c[1] = {&g_i2c};
-static plic_irq_callback_t g_uart_rx_irq;
-static void *g_uart_rx_irq_context;
-static uint8_t g_uart_hardware_rx[8];
-static size_t g_uart_hardware_rx_size;
+static uint8_t g_uart_rx_busy;
+static uint8_t g_uart_rx_selected;
+static uint32_t *g_uart_rx_dma_words;
+static uint32_t g_uart_held_word = UINT32_MAX;
 static uint8_t g_uart_received[8];
 static size_t g_uart_received_size;
-static uint32_t g_uart_irq_register_calls;
-static uint32_t g_uart_irq_unregister_calls;
 static plic_irq_callback_t g_i2c_irq;
 static void *g_i2c_irq_context;
 static uint8_t g_i2c_irq_enabled;
@@ -34,6 +42,10 @@ static uint8_t g_i2c_source[32];
 static size_t g_i2c_source_size;
 static size_t g_i2c_source_position;
 static uint8_t g_i2c_fifo_gap;
+static uint8_t g_i2c_target_data[12];
+static size_t g_i2c_target_size;
+static size_t g_i2c_target_size_at_stop;
+static size_t g_i2c_target_overflows;
 static uint64_t g_now_us;
 
 uint64_t hal_time_us(void)
@@ -49,12 +61,123 @@ static void require_true(uint8_t condition, const char *message)
     exit(1);
 }
 
+void *hal_shared_buffer_uncached(void *pointer)
+{
+    return pointer;
+}
+
+void sysctl_dma_select(sysctl_dma_channel_t channel, int source)
+{
+    if(channel == DMAC_CHANNEL2)
+    {
+        require_true(source == SYSCTL_DMA_SELECT_UART1_RX_REQ,
+                     "UART receiver must select its own DMA request");
+        g_uart_rx_selected = 1U;
+        return;
+    }
+    require_true(channel == DMAC_CHANNEL1 &&
+                     (source == SYSCTL_DMA_SELECT_UART1_TX_REQ ||
+                      source == SYSCTL_DMA_SELECT_I2C0_RX_REQ),
+                 "external link must select DMA1 with the correct request");
+    g_dma_request = source;
+}
+
+int dmac_is_idle(int channel)
+{
+    require_true(channel == DMAC_CHANNEL1 || channel == DMAC_CHANNEL2,
+                 "external link DMA channels are reserved");
+    return channel == DMAC_CHANNEL2 ? !g_uart_rx_busy : !g_dma_busy;
+}
+
+void dmac_channel_disable(int channel)
+{
+    uint64_t bit = UINT64_C(1) << channel;
+    require_true(g_dmac.chen == ((bit << 32U) | (bit << 40U)),
+                 "stopping DMA must abort only the selected channel");
+    if(channel == DMAC_CHANNEL2)
+    {
+        if(g_uart_held_word != UINT32_MAX)
+        {
+            g_uart_rx_dma_words[7] = g_uart_held_word;
+            g_uart_held_word = UINT32_MAX;
+        }
+        g_uart_rx_busy = 0U;
+        return;
+    }
+    g_dma_aborted = 1U;
+    if(g_dma_request == SYSCTL_DMA_SELECT_I2C0_RX_REQ &&
+       g_dma_held_word != UINT32_MAX)
+    {
+        g_dma_rx_words[0] = g_dma_held_word;
+        g_dma_held_word = UINT32_MAX;
+    }
+    g_dma_busy = 0U;
+}
+
+void dmac_set_single_mode(int channel, const void *source, void *dest,
+                          int source_increment, int dest_increment,
+                          int burst_size, int width, size_t count)
+{
+    require_true(dmac_is_idle(channel) &&
+                     burst_size == DMAC_MSIZE_1 && width == DMAC_TRANS_WIDTH_32,
+                 "DMA must obey the hardware handshake and word width");
+    if(channel == DMAC_CHANNEL2)
+    {
+        require_true(g_uart_rx_selected && source == (const void *)&g_uart.RBR &&
+                         source_increment == DMAC_ADDR_NOCHANGE &&
+                         dest_increment == DMAC_ADDR_INCREMENT && count == 257U,
+                     "UART RX DMA must capture one bounded receive window");
+        g_uart_rx_dma_words = dest;
+        g_uart_rx_busy = 1U;
+        return;
+    }
+    if(g_dma_request == SYSCTL_DMA_SELECT_UART1_TX_REQ)
+    {
+        require_true(dest == (void *)&g_uart.THR &&
+                         source_increment == DMAC_ADDR_INCREMENT &&
+                         dest_increment == DMAC_ADDR_NOCHANGE,
+                     "UART DMA must write staged words to THR");
+        g_dma_words = source;
+    }
+    else
+    {
+        require_true(g_dma_request == SYSCTL_DMA_SELECT_I2C0_RX_REQ &&
+                         source == (const void *)&g_i2c.data_cmd &&
+                         source_increment == DMAC_ADDR_NOCHANGE &&
+                         dest_increment == DMAC_ADDR_INCREMENT,
+                     "I2C DMA must drain the target RX FIFO into SRAM");
+        g_dma_rx_words = dest;
+    }
+    g_dma_count = count;
+    g_dma_busy = 1U;
+}
+
 static void receive_uart_byte(void *context, uint8_t byte)
 {
     (void)context;
     require_true(g_uart_received_size < sizeof(g_uart_received),
                  "UART callback receive capacity exceeded");
     g_uart_received[g_uart_received_size++] = byte;
+}
+
+static void receive_i2c_target_byte(uint8_t byte)
+{
+    require_true(g_i2c_target_size < sizeof(g_i2c_target_data),
+                 "I2C target must not forward a duplicate SDK receive");
+    g_i2c_target_data[g_i2c_target_size++] = byte;
+}
+
+static void receive_i2c_target_event(hal_external_i2c_event_t event)
+{
+    if(event == HAL_EXTERNAL_I2C_EVENT_STOP)
+        g_i2c_target_size_at_stop = g_i2c_target_size;
+    else if(event == HAL_EXTERNAL_I2C_EVENT_OVERFLOW)
+        ++g_i2c_target_overflows;
+}
+
+static uint8_t send_i2c_target_byte(void)
+{
+    return 0xa5U;
 }
 
 static void reset_i2c_model(const uint8_t *source, size_t source_size,
@@ -143,6 +266,8 @@ static void run_i2c_transaction(const uint8_t *tx, size_t tx_size,
     hal_external_i2c_controller_start(
         0x42U, 100000U, tx, (uint32_t)tx_size,
         rx, (uint32_t)rx_size);
+    require_true(g_i2c.dma_cr == 0U,
+                 "controller must use IRQs without leaving DMA requests pending");
     require_true(g_i2c_command_count ==
                      (total < 8U ? total : 8U),
                  "controller must prime exactly one FIFO window");
@@ -177,74 +302,79 @@ int main(void)
     {
         uint32_t baud;
         uint32_t drain_us;
-    } faster_uart_rates[] = {{115200U, 696U}, {1000000U, 81U}};
+    } faster_uart_rates[] = {{115200U, 783U}, {1000000U, 91U}};
 
-    memcpy(g_uart_hardware_rx, data, 8U);
-    g_uart_hardware_rx_size = 8U;
     hal_external_uart_init(9600U, receive_uart_byte, NULL);
-    require_true(g_uart_irq_register_calls == 1U && g_uart_rx_irq != NULL,
-                 "UART init must register one RX interrupt");
+    require_true(g_uart_rx_busy && g_uart_rx_dma_words[0] == UINT32_MAX,
+                 "UART init must arm the receive bank");
 
-    /* These status values falsely suggested that the FIFO had drained on SEN0305. */
+    /* FIFO readbacks can report empty while the hardware is active. */
     g_uart.TFL = 0U;
     g_uart.LSR = 1U << 6;
-    g_uart.THR = 0xffU;
     g_now_us = 1000U;
-    require_true(hal_external_uart_send_ready(data, sizeof(data)) == 8U,
-                 "empty FIFO must accept exactly eight bytes");
-    require_true(g_uart.THR == 7U,
-                 "empty FIFO must queue the first eight bytes in order");
-
-    g_now_us += 4500U;
+    require_true(hal_external_uart_send_ready(data, 8U) == 8U &&
+                     g_dma_count == 8U && g_dma_words[0] == 0U &&
+                     g_dma_words[7] == 7U,
+                 "DMA must stage each byte as a UART word in order");
+    g_now_us += 10000U;
     require_true(hal_external_uart_send_ready(data + 8U, 2U) == 0U &&
-                     g_uart.THR == 7U && !hal_external_uart_tx_idle(),
-                 "an early poll must not refill a sending FIFO");
-    g_now_us += 3834U;
-    require_true(!hal_external_uart_tx_idle(),
-                 "rounding must not make the last stop bit end early");
-    ++g_now_us;
-    require_true(hal_external_uart_tx_idle(),
-                 "eight 9600 baud characters must drain after 8335 us");
+                     g_dma_words[0] == 0U && !hal_external_uart_tx_idle(),
+                 "busy DMA must keep its buffer regardless of elapsed time");
+    g_dma_busy = 0U;
     require_true(hal_external_uart_send_ready(data + 8U, 2U) == 2U &&
-                     g_uart.THR == 9U,
-                 "the next FIFO window must start with the unsent bytes");
-    g_now_us += 2084U;
+                     g_dma_count == 2U && g_dma_words[0] == 8U &&
+                     g_dma_words[1] == 9U,
+                 "the next transfer uses hardware flow control without a software gap");
+    g_dma_busy = 0U;
     require_true(!hal_external_uart_tx_idle(),
-                 "completion must wait for the final short window");
+                 "DMA completion does not mean the last stop bit left the wire");
+    g_now_us += 9375U;
+    require_true(!hal_external_uart_tx_idle(),
+                 "nine characters at 9600 baud must not complete early");
     ++g_now_us;
     require_true(hal_external_uart_tx_idle(),
-                 "two 9600 baud characters must drain after 2085 us");
+                 "the transmit FIFO and shifter must drain after 9376 us");
     require_true(hal_external_uart_send_ready(NULL, sizeof(data)) == 0U,
                  "null input must be a no-op");
-    memcpy(g_uart_hardware_rx, data, 8U);
-    g_uart_hardware_rx_size = 8U;
-    require_true(g_uart_rx_irq(g_uart_rx_irq_context) == 0,
-                 "UART RX interrupt must acknowledge input");
-    require_true(g_uart_hardware_rx_size == 0U &&
-                 g_uart_received_size == 8U &&
-                 memcmp(g_uart_received, data, 8U) == 0,
-                 "UART RX interrupt must preserve all FIFO bytes");
+    uint32_t *old_rx_bank = g_uart_rx_dma_words;
+    for(size_t i = 0U; i < 7U; ++i)
+        old_rx_bank[i] = data[i];
+    g_uart_held_word = data[7];
+    require_true(hal_external_uart_collect_rx() && g_uart_rx_busy &&
+                     g_uart_rx_dma_words != old_rx_bank &&
+                     g_uart_received_size == 8U &&
+                     memcmp(g_uart_received, data, 8U) == 0,
+                 "UART must rotate its receive bank and deliver partial DMA bursts");
+    g_uart_rx_dma_words[256] = 0x7aU;
+    require_true(!hal_external_uart_collect_rx() && g_uart_received_size == 8U,
+                 "overflow must not publish an incomplete UART frame");
     hal_external_uart_stop();
-    require_true(g_uart_irq_unregister_calls == 1U && g_uart_rx_irq == NULL,
-                 "UART stop must unregister its RX interrupt");
+    require_true(!g_uart_rx_busy && !hal_external_uart_collect_rx(),
+                 "UART stop must release the RX DMA channel");
 
     for(size_t i = 0U; i < sizeof(faster_uart_rates) / sizeof(faster_uart_rates[0]); ++i)
     {
         hal_external_uart_init(faster_uart_rates[i].baud, receive_uart_byte, NULL);
-        require_true(hal_external_uart_send_ready(data, 8U) == 8U,
-                     "the configured UART must accept its first FIFO window");
+        uint8_t batch[40];
+        memset(batch, 0xa5, sizeof(batch));
+        require_true(hal_external_uart_send_ready(batch, sizeof(batch)) == 32U &&
+                         g_dma_count == 32U && g_dma_words[31] == 0xa5U,
+                     "one foreground poll must stage more than a single FIFO window");
+        g_dma_busy = 0U;
+        require_true(!hal_external_uart_tx_idle(),
+                     "drain timing begins after DMA completes");
         g_now_us += faster_uart_rates[i].drain_us - 1U;
-        require_true(hal_external_uart_send_ready(data + 8U, 2U) == 0U &&
-                         !hal_external_uart_tx_idle(),
-                     "faster UART rates must still wait through the last stop bit");
+        require_true(!hal_external_uart_tx_idle(),
+                     "faster baud rates still wait for the last stop bit");
         ++g_now_us;
         require_true(hal_external_uart_tx_idle() &&
-                         hal_external_uart_send_ready(data + 8U, 2U) == 2U,
-                     "the next FIFO window must use the configured baud rate");
+                         hal_external_uart_send_ready(data, 8U) == 8U,
+                     "a new transfer can start after the previous one completed");
+        g_dma_aborted = 0U;
         hal_external_uart_stop();
-        require_true(hal_external_uart_tx_idle() &&
+        require_true(g_dma_aborted && hal_external_uart_tx_idle() &&
                          hal_external_uart_send_ready(data, 1U) == 0U,
-                     "resetting UART must clear the old drain time and disable writes");
+                     "stop must abort DMA, release its staging buffer and disable writes");
     }
 
     {
@@ -300,7 +430,46 @@ int main(void)
     require_true(g_i2c_irq_register_calls == 4U &&
                  g_i2c_irq_unregister_calls == 4U,
                  "each controller transaction must own one IRQ lifecycle");
-    puts("HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_irq=8 i2c_continuous=2 i2c_stop=1 i2c_abort=1");
+    {
+        static const uint8_t input[] = "HK123456789!";
+        static const hal_external_i2c_callbacks_t callbacks = {
+            .receive = receive_i2c_target_byte,
+            .transmit = send_i2c_target_byte,
+            .event = receive_i2c_target_event,
+        };
+
+        reset_i2c_model(NULL, 0U, 0U);
+        hal_external_i2c_init(0x32U, &callbacks);
+        require_true(g_dma_busy && g_dma_count >= 257U && g_i2c.sar == 0x32U &&
+                         g_i2c.dma_cr == I2C_DMA_CR_RDMAE,
+                     "target must arm hardware RX DMA before accepting writes");
+        uint32_t *first = g_dma_rx_words;
+        for(size_t i = 0U; i < sizeof(input) - 1U; ++i)
+            first[i] = input[i];
+        require_true(g_i2c_target_size == 0U,
+                     "bytes may arrive in the DMA buffer before the next interrupt");
+        invoke_i2c_irq(I2C_INTR_STAT_STOP_DET);
+        require_true(g_i2c_target_size_at_stop == sizeof(g_i2c_target_data) &&
+                         memcmp(g_i2c_target_data, input, g_i2c_target_size) == 0,
+                     "the target must deliver all DMA bytes before STOP");
+        require_true(g_dma_busy && g_dma_rx_words != first && first[0] == UINT32_MAX,
+                     "target must rearm the other buffer and recycle the previous one");
+        invoke_i2c_irq(I2C_INTR_STAT_RD_REQ | I2C_INTR_STAT_STOP_DET);
+        require_true(g_i2c.data_cmd == 0xa5U && g_dma_busy,
+                     "read events must leave RX DMA ready for the next write");
+        g_dma_rx_words[0] = 0xeeU;
+        invoke_i2c_irq(I2C_INTR_STAT_RX_OVER | I2C_INTR_STAT_STOP_DET);
+        require_true(g_i2c_target_overflows == 1U &&
+                         g_i2c_target_size == sizeof(g_i2c_target_data),
+                     "hardware RX overflow must discard a partial write");
+        g_i2c_target_size = 0U;
+        g_dma_held_word = 0x42U;
+        invoke_i2c_irq(I2C_INTR_STAT_STOP_DET);
+        require_true(g_i2c_target_size_at_stop == 1U && g_i2c_target_data[0] == 0x42U,
+                     "short writes held inside DMA must be flushed and reported at STOP");
+        hal_external_i2c_stop();
+    }
+    puts("HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_dma_rx=8 i2c_continuous=2 i2c_stop=1 i2c_abort=1 i2c_target_fifo=1");
     return 0;
 }
 
@@ -314,53 +483,15 @@ void uart_configure(int device, uint32_t baud, int width,
     (void)device; (void)baud; (void)width; (void)stop; (void)parity;
 }
 
-int uart_receive_data(int device, char *data, size_t length)
+void sysctl_clock_enable(int clock)
 {
-    size_t count;
-
-    (void)device;
-    count = length < g_uart_hardware_rx_size ?
-        length : g_uart_hardware_rx_size;
-    if(count != 0U)
-    {
-        memcpy(data, g_uart_hardware_rx, count);
-        memmove(g_uart_hardware_rx, g_uart_hardware_rx + count,
-                g_uart_hardware_rx_size - count);
-        g_uart_hardware_rx_size -= count;
-    }
-    return (int)count;
+    require_true(clock == SYSCTL_CLOCK_I2C0, "target must clock I2C0");
 }
 
-int uart_send_data(int device, const char *data, size_t length)
+void sysctl_clock_set_threshold(int clock, uint32_t divisor)
 {
-    (void)device; (void)data;
-    return (int)length;
-}
-
-void uart_irq_register(int device, int mode,
-                       plic_irq_callback_t callback, void *context,
-                       uint32_t priority)
-{
-    require_true(device == UART_DEVICE_1 && mode == UART_RECEIVE &&
-                 priority == 2U, "UART RX interrupt registration mismatch");
-    g_uart_rx_irq = callback;
-    g_uart_rx_irq_context = context;
-    g_uart_irq_register_calls++;
-}
-
-void uart_irq_unregister(int device, int mode)
-{
-    require_true(device == UART_DEVICE_1 && mode == UART_RECEIVE,
-                 "UART RX interrupt unregister mismatch");
-    g_uart_rx_irq = NULL;
-    g_uart_rx_irq_context = NULL;
-    g_uart_irq_unregister_calls++;
-}
-
-void i2c_init_as_slave(int device, uint32_t address, uint32_t address_width,
-                       const i2c_slave_handler_t *handler)
-{
-    (void)device; (void)address; (void)address_width; (void)handler;
+    require_true(clock == SYSCTL_THRESHOLD_I2C0 && divisor == 3U,
+                 "target must configure the I2C0 divider");
 }
 
 void i2c_init(int device, uint32_t address, uint32_t address_width,
@@ -368,6 +499,7 @@ void i2c_init(int device, uint32_t address, uint32_t address_width,
 {
     (void)device; (void)address; (void)address_width; (void)frequency;
     g_i2c.status = I2C_STATUS_ACTIVITY;
+    g_i2c.dma_cr = 3U;
 }
 
 int plic_irq_disable(int interrupt)
@@ -388,7 +520,7 @@ int plic_irq_enable(int interrupt)
 
 int plic_set_priority(int interrupt, uint32_t priority)
 {
-    require_true(interrupt == IRQN_I2C0_INTERRUPT && priority == 2U,
+    require_true(interrupt == IRQN_I2C0_INTERRUPT && priority == 4U,
                  "I2C IRQ priority mismatch");
     return 0;
 }

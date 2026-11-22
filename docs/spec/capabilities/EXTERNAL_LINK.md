@@ -115,17 +115,18 @@ UART write progress counts bytes accepted by the provider. Acceptance of the
 last byte is not success: terminal `HK_OK` requires an empty FIFO and an idle
 shift register. While those conditions are pending, progress includes
 `HK_EXTERNAL_LINK_PROGRESS_UART_DRAINING` and the operation remains borrowed.
+On K210, DMA1 feeds the UART TX FIFO from a fixed staging buffer. Each poll
+stages at most 32 bytes. After DMA completes, the driver allows time for the
+remaining FIFO bytes and the final stop bit to leave the wire.
 
 `hk_external_link_uart_read` is synchronous and non-blocking. It copies no more
 than the provider poll bound and may return `HK_OK` with zero bytes.
-The K210 provider uses the UART RX interrupt as the single producer for
-fixed-capacity storage while main-loop reads are its single consumer. This
-keeps full-duplex or loopback traffic from depending on the main-loop poll
-interval. If that bounded storage is exceeded, the next read returns
-`HK_ERR_OVERFLOW`, resets the UART receive path, and publishes zero bytes; the
-caller then continues from an explicit resynchronized state. Mode changes,
-failed/cancelled writes, close, and retirement stop the RX interrupt and
-clear its staged data before the storage can be reused by I2C target mode.
+On K210, DMA2 keeps the UART RX FIFO drained during long interrupts. A read
+finishes the current receive block and starts the other staging bank before
+publishing the completed bytes. If the receive window or the provider buffer
+overflows, the next read returns `HK_ERR_OVERFLOW`, resets UART, and publishes
+zero bytes. Mode changes, failed or cancelled writes, close, and retirement
+stop both UART DMA channels and clear staged data before switching to I2C.
 
 ## I2C controller and target semantics
 
@@ -171,6 +172,10 @@ zero-length preload issued during that READ takes effect on the following
 READ. Receiving a new WRITE payload discards the previous response tail.
 In stream mode, only WRITE events are queued. Reads after the response has
 been consumed return the same zero fill byte. All other flag bits must be zero.
+
+In I2C target mode, DMA1 drains the receive FIFO while the CPU is busy. At
+STOP, the driver finishes the DMA block before passing the received bytes to
+the provider. UART TX and I2C target RX use DMA1 in mutually exclusive modes.
 
 The K210 handoff has two bounded completed-event slots backed by two reusable
 payload buffers; READ notifications do not reserve a payload buffer. ISR and

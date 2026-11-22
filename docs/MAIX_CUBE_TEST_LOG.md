@@ -750,3 +750,37 @@ the complete first frame. BACK returned to the file list while the second
 frame was in progress. The USB command round trips were 16 ms for pause
 and 44 ms for BACK, including the list redraw. The longest observed GIF
 tick was 29.4 ms, including the LCD update.
+
+## UART and I2C over SP-MOD (2026-11-22)
+
+A NodeMCU 1.0 (ESP8266) exchanged data with RAM test builds on Cube.
+The diagnostic pin mapping used IO6 and IO7 on SP-MOD plus a common
+ground. The production build routes the same UART1 and I2C0 peripherals to
+Grove on IO24 and IO25. The maintainer accepted the SP-MOD results for
+Cube's UART and I2C hardware checks. The physical test covered the SP-MOD
+connector and its pin route.
+
+- I2C target mode passed 252 exchanges from approximately 32 to 270 kHz,
+  114 exchanges at approximately 6.4 kHz, and a separate 1,280-exchange
+  soak through automatic sleep. All ten interrupted reads recovered after
+  nine controller clock pulses and a STOP. Malformed writes were rejected
+  and valid requests worked after them. The mode-switch test confirmed
+  that switching from I2C to UART and back discarded an unread reply.
+- QR-CAMERA, APRILTAG, FACE DETECT, FACE RECOG and OBJECT DETECT produced
+  populated `GET_RESULTS` replies over I2C with replayed input frames.
+  Returning to the menu cleared each app's results.
+- UART echoed 170-byte frames during 640 × 480 QR scanning. The run passed
+  20 of 20 frames at 9,600 baud, 60 of 60 at 115,200 baud and 20 of 20 at
+  1 Mbaud. Byte capture before the DMA receive fix recorded a hardware RX
+  overrun and a 57-byte gap in a 170-byte request at 115,200 baud.
+- MicroPython echoed 160 bytes in each direction over UART. With a 250 ms
+  service deadline, two controller runs each passed 27 I2C operations,
+  covering write, read, and repeated START with payloads up to 256 bytes.
+  Both runs also reported NACK at an unassigned address. The USB test
+  client reported a framing error during cleanup after the second run.
+  Separate exit checks recovered native I2C after normal script completion,
+  explicit STOP, runtime timeout, and an exception.
+
+The physical bus logs are `build/cube-spmod-resume-i2c.log`,
+`build/cube-spmod-rx-uart.log`, `build/cube-spmod-deadline-python.log`,
+`build/cube-spmod-deadline-repeat.log`, and `build/cube-spmod-i2c-paced-retest.log`.

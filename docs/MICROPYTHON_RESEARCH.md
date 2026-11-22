@@ -487,9 +487,9 @@ The code audit led to these design adjustments.
   through VM hooks and cancellation points.
 - The binding RPC keeps its single-slot context until the final cancellation
   acknowledgement from core 0. This prevents an NLR unwind from leaving a
-  hardware operation pending. UART TX advances in nonblocking ticks using
-  the 8-byte FIFO and completes only at `TFL==0 && TEMT`. I2C has a 100 ms
-  deadline and cancellation points.
+  hardware operation pending. UART TX uses DMA to feed the FIFO and waits
+  for the last stop bit before completing. I2C has a 250 ms service deadline
+  and cancellation points.
 - The GC hook only updates the heartbeat. An exception inside the collector
   could leave it in an intermediate state.
 - Native iterator entry points poll the same stop and deadline hook. An

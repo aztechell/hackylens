@@ -77,7 +77,7 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
 
         self.assertIn("MICROPYTHON_BINDINGS_OK cases=15", result.stdout)
 
-    def test_uart_fifo_capacity_boundaries(self) -> None:
+    def test_external_link_dma_and_i2c_fifo_boundaries(self) -> None:
         compiler = self.compiler()
 
         with tempfile.TemporaryDirectory(prefix="hackylens-uart-hal-") as temp:
@@ -118,8 +118,8 @@ class MicroPythonBindingSafetyTests(unittest.TestCase):
             )
 
         self.assertIn(
-            "HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_irq=8 "
-            "i2c_continuous=2 i2c_stop=1 i2c_abort=1",
+            "HAL_EXTERNAL_LINK_OK uart_rates=3 depth=8 uart_dma_rx=8 "
+            "i2c_continuous=2 i2c_stop=1 i2c_abort=1 i2c_target_fifo=1",
             result.stdout,
         )
 

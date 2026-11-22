@@ -5,7 +5,9 @@ uses the `hackylens-cube` runtime profile. Its full build includes fifteen
 apps, with RECORDER and ACCELEROMETER available on Cube. See the
 [v0.9.0 release notes](releases/v0.9.0.md) for the release checks and the
 [hardware test log](MAIX_CUBE_TEST_LOG.md) for the builds, conditions, and
-results of individual trials. Physical Grove UART/I2C exchange on Cube was
+results of individual trials. A diagnostic build passed native
+[UART and I2C exchanges over SP-MOD](MAIX_CUBE_TEST_LOG.md#uart-and-i2c-over-sp-mod-2026-11-22).
+Physical Grove exchange on Cube was
 [waived for release acceptance](MAIX_CUBE_TEST_LOG.md#release-050-final-io-acceptance-2026-10-30).
 
 ## Hardware and composition

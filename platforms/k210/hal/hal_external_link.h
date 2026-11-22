@@ -8,6 +8,7 @@ typedef enum
 {
     HAL_EXTERNAL_I2C_EVENT_START = 0,
     HAL_EXTERNAL_I2C_EVENT_STOP,
+    HAL_EXTERNAL_I2C_EVENT_OVERFLOW,
 } hal_external_i2c_event_t;
 
 typedef struct
@@ -23,11 +24,10 @@ void hal_external_uart_init(uint32_t baud,
                             hal_external_uart_receive_fn receive,
                             void *context);
 void hal_external_uart_stop(void);
-size_t hal_external_uart_receive(uint8_t *data, size_t len);
-void hal_external_uart_send(const uint8_t *data, size_t len);
-/* Queue only bytes that fit in the UART TX FIFO right now.  This function
- * never waits for FIFO space and is therefore safe to call from core-0
- * service ticks that must keep STOP/watchdog polling responsive. */
+/* Publish captured RX bytes to the configured callback. Zero means data loss. */
+uint8_t hal_external_uart_collect_rx(void);
+/* Stage a bounded DMA transfer if the previous transfer has finished.
+ * Never wait for FIFO space or for bytes to leave the wire. */
 size_t hal_external_uart_send_ready(const uint8_t *data, size_t len);
 /* True only after both the TX FIFO and the shift register are empty. */
 uint8_t hal_external_uart_tx_idle(void);

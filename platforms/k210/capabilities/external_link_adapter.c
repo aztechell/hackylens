@@ -491,6 +491,11 @@ static void target_event(hal_external_i2c_event_t event)
 {
     if(event == HAL_EXTERNAL_I2C_EVENT_START)
         return;
+    if(event == HAL_EXTERNAL_I2C_EVENT_OVERFLOW)
+    {
+        target_latch_overflow();
+        return;
+    }
     if(s_external.target_read_active)
     {
         uint8_t active_slot = s_external.target_active_slot;
@@ -642,7 +647,7 @@ static hk_result_t k210_external_uart_read(
         return HK_ERR_INVALID_STATE;
     *received_bytes = 0U;
     __sync_synchronize();
-    if(state->uart_rx_dropped != 0U)
+    if(!hal_external_uart_collect_rx() || state->uart_rx_dropped != 0U)
     {
         reset_uart(state);
         return HK_ERR_OVERFLOW;

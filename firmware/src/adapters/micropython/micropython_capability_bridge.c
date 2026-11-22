@@ -58,7 +58,9 @@ _Static_assert(sizeof(vision_result_snapshot_t) <= MICROPYTHON_BINDING_MAILBOX_B
 
 #define MICROPYTHON_BINDING_RPC_TIMEOUT_US 500000ULL
 #define MICROPYTHON_BINDING_CAMERA_OPEN_TIMEOUT_US 2000000ULL
-#define MICROPYTHON_BINDING_I2C_TIMEOUT_US 100000ULL
+/* A full combined transfer takes about 46 ms on the wire. The main loop
+ * also needs time to start the transfer and publish its completion. */
+#define MICROPYTHON_BINDING_I2C_TIMEOUT_US 250000ULL
 #define MICROPYTHON_BINDING_I2C_HZ 100000U
 #define MICROPYTHON_BINDING_UART_BITS_PER_BYTE 10ULL
 #define MICROPYTHON_BINDING_UART_MIN_BAUD 1200ULL
