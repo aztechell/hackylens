@@ -226,15 +226,15 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=18 menu=16", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=19 menu=16", self.compile_profile(
             micropython=True, recorder=True
         ))
-        self.assertIn("APP_REGISTRY_OK apps=16 menu=14", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=17 menu=14", self.compile_profile(
             micropython=True, recorder=False
         ))
 
     def test_disabled_app_leaves_registry_and_stable_id_becomes_unavailable(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=15 menu=13", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=16 menu=13", self.compile_profile(
             micropython=False, recorder=False
         ))
 
@@ -364,7 +364,7 @@ int main(void)
             "apriltag": 5, "files": 6, "buttons": 7, "pong": 8,
             "object-detect": 9, "micropython": 10, "settings": 0,
             "power": 0, "recorder": 0, "accelerometer": 0, "face-recognition": 0,
-            "sky-glide": 0, "color-tracker": 0, "uart-logger": 0,
+            "sky-glide": 0, "color-tracker": 0, "uart-logger": 0, "object-gate": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
@@ -376,6 +376,7 @@ int main(void)
             "settings": "HKSETTINGS",
             "sky-glide": "HKSGLOGIC/HKSGPACED/HKSGBURST/HKSGINPUT",
             "uart-logger": "HKULMODE HKULMARK",
+            "object-gate": "HKOGBENCH/HKOGINFO",
             "micropython": (
                 "HKMPRUN HKMPTEST HKMPSTOP HKMPSTATUS HKMPLOG HKMPLIST "
                 "HKMPFORMAT-CONFIRM"
@@ -393,7 +394,7 @@ int main(void)
                 self.assertEqual(
                     app["limits"]["tick_interval_us"],
                     {"micropython": 5000, "apriltag": 5000, "files": 5000,
-                     "sky-glide": 5000, "uart-logger": 5000, "accelerometer": 100_000,
+                     "sky-glide": 5000, "uart-logger": 5000, "object-gate": 5000, "accelerometer": 100_000,
                      "color-tracker": 10_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
@@ -403,7 +404,8 @@ int main(void)
                      "camera": 1_000_000, "face-detect": 1_000_000,
                      "object-detect": 1_000_000, "apriltag": 1_000_000,
                      "files": 1_000_000, "micropython": 1_000_000,
-                     "recorder": 1_000_000, "uart-logger": 1_000_000}.get(app_id, 20_000),
+                     "recorder": 1_000_000, "uart-logger": 1_000_000,
+                     "object-gate": 1_000_000}.get(app_id, 20_000),
                 )
                 self.assertEqual(app["limits"]["render_budget_us"], 500_000)
                 if app_id in expected_debug:

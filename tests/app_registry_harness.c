@@ -142,6 +142,13 @@ const hk_app_v2_entry_t buttons_v2_entry = {
 const hk_app_v2_entry_t camera_v2_entry = {0};
 const hk_app_v2_entry_t color_tracker_v2_entry = {0};
 const hk_app_v2_entry_t logger_v2_entry = {0};
+const hk_app_v2_entry_t object_gate_v2_entry = {0};
+
+uint8_t object_gate_debug(const char *command)
+{
+    (void)command;
+    return 0U;
+}
 
 uint8_t logger_debug(const char *command)
 {
@@ -399,11 +406,13 @@ int main(void)
 
     CHECK(g_hk_generated_app_count ==
           12U + HK_ENABLE_APP_COLOR_TRACKER + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
-          HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION + HK_ENABLE_APP_UART_LOGGER);
+          HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION + HK_ENABLE_APP_UART_LOGGER +
+          HK_ENABLE_APP_OBJECT_GATE);
     CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER -
-          HK_ENABLE_APP_UART_LOGGER);
+          HK_ENABLE_APP_UART_LOGGER - HK_ENABLE_APP_OBJECT_GATE);
     CHECK(hk_app_for_id("color-tracker") && !hk_app_for_id("color-tracker")->menu_visible);
     CHECK(hk_app_for_id("uart-logger") && !hk_app_for_id("uart-logger")->menu_visible);
+    CHECK(hk_app_for_id("object-gate") && !hk_app_for_id("object-gate")->menu_visible);
     static const char *const menu_order[] = {
         "camera", "qr-camera", "face-detect",
 #if HK_ENABLE_APP_FACE_RECOGNITION

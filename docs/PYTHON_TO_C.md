@@ -79,3 +79,5 @@ data when comparing outputs across languages.
 
 The [UART Logger study](UART_LOGGER_STUDY.md) exercises this workflow with a
 continuous UART stream and incremental SD writes.
+The [Object Gate study](OBJECT_GATE_STUDY.md) compares both paths with a
+shared model on the K210 KPU and the same decoded detections.

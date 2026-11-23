@@ -1,0 +1,25 @@
+{
+  "c_live": "HKOGINFO active=1 loaded=1 processed=9 occupied=0 complete=0",
+  "python_live": {
+    "frames": 8,
+    "presented": 8,
+    "entries": 0,
+    "digest": 1145993600,
+    "load_us": 7641332,
+    "detect_us": 441558,
+    "policy_us": 444,
+    "present_us": 340726,
+    "window_us": 969650
+  },
+  "python_gc_bytes": [
+    3936,
+    9440,
+    4256
+  ],
+  "restored_link": "HKLINKINFO mode=I2C pins=IO34/IO35 uart=115200 i2c=0x32 bytes=0 rx=0 tx=0 bad=0",
+  "restored_firmware": "0.9.0",
+  "board": "huskylens-sen0305",
+  "camera_sensor": "OV2640",
+  "fixture_sha256": "8b1b522a258b064cea39d4d2d5216d222d1fd590151daa1c3c6e4be432e7f347",
+  "model_sha256": "33219de6ffa0b24b8c41a82d09888070c72be68356ca457f3b722d25fdff95ab"
+}

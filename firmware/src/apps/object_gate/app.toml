@@ -1,0 +1,9 @@
+id = "object-gate"
+name = "OBJECT GATE C"
+entry = "object_gate_v2_entry"
+sources = ["object_gate_app.c", "object_gate_core.c"]
+requires = ["camera", "object-detector", "display", "input", "time", "sd-card"]
+tick_ms = 5
+tick_budget_ms = 1000
+debug_entry = "object_gate_debug"
+debug = "HKOGBENCH/HKOGINFO"

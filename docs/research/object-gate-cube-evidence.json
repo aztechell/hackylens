@@ -1,0 +1,38 @@
+{
+  "c_live": "HKOGINFO active=1 loaded=1 processed=9 occupied=0 complete=0",
+  "python_live": {
+    "frames": 8,
+    "presented": 8,
+    "entries": 0,
+    "digest": 3101370752,
+    "load_us": 4730206,
+    "detect_us": 376960,
+    "policy_us": 447,
+    "present_us": 291232,
+    "window_us": 835375
+  },
+  "python_gc_bytes": [
+    3936,
+    9440,
+    4256
+  ],
+  "installed_script_bytes": 4285,
+  "installed_script_sha256": "43d379366ec59cc88619714dfcf949206982b9fa52be76961319922746b153a1",
+  "prototype_upload_seconds": 3.248690099979285,
+  "upload_to_running_seconds": 12.006002999958582,
+  "restored_link": "HKLINKINFO mode=I2C pins=IO6/IO7 uart=115200 i2c=0x32 bytes=0 rx=0 tx=0 bad=0",
+  "firmware": "0.9.0-spmod",
+  "native_cube_delta_bytes": {
+    "bin": 2368,
+    "data": 32,
+    "bss": 1024
+  },
+  "fixture_sha256": "8b1b522a258b064cea39d4d2d5216d222d1fd590151daa1c3c6e4be432e7f347",
+  "model_sha256": "33219de6ffa0b24b8c41a82d09888070c72be68356ca457f3b722d25fdff95ab",
+  "native_sen0305_build": {
+    "micropython": false,
+    "image_bytes": 1427128
+  },
+  "host_unittest_count": 296,
+  "native_cube_clean_build_seconds": 30.226
+}
