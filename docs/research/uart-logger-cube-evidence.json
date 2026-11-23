@@ -1,0 +1,295 @@
+{
+  "board": "sipeed-maix-cube",
+  "diagnostic_image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+  "logger_python_source_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+  "generator_source_sha256": "b530cc026f218029c56587a4289ad6d2b3e7951add06c7021fc3d99d5c5df218",
+  "python_script_bytes": 11505,
+  "gc_arena_bytes": 131072,
+  "native_sections": {
+    "no-logger": {
+      ".text": 1289784,
+      ".rodata": 206608,
+      ".data": 8896,
+      ".bss": 3067840,
+      "image_bytes": 1655032,
+      "image_sha256": "b5e780d3972eadf11939b2416cb53a7ad8ecacbeef1287167569f411602f01a2"
+    },
+    "with-logger": {
+      ".text": 1292360,
+      ".rodata": 207104,
+      ".data": 8896,
+      ".bss": 3068864,
+      "image_bytes": 1658104,
+      "image_sha256": "882ce34e59126c7bbac8ee1b0952dc51323807804e48dee2e448d3f0d6920e35"
+    }
+  },
+  "native_clean_build_seconds": 34.6813267,
+  "results": {
+    "c graph": {
+      "n": 5,
+      "fps": 9.866666666666667,
+      "frames": 296,
+      "missing_frames": 4,
+      "interval_ms": [
+        101.164,
+        102.681,
+        103.016
+      ],
+      "display_ms": [
+        37.641999999999996,
+        37.926500000000004,
+        38.103
+      ],
+      "sample_to_lcd_ms": [
+        43.6385,
+        53.63224999999999,
+        55.237
+      ],
+      "csv": []
+    },
+    "c parse": {
+      "n": 5,
+      "ms": 8.495,
+      "samples_per_second": 482165.97998822836,
+      "digest": 1974799667
+    },
+    "c record": {
+      "n": 5,
+      "fps": 9.833333333333334,
+      "frames": 295,
+      "missing_frames": 5,
+      "interval_ms": [
+        101.48,
+        104.43535,
+        139.866
+      ],
+      "display_ms": [
+        37.906,
+        38.193400000000004,
+        38.374
+      ],
+      "sample_to_lcd_ms": [
+        43.973,
+        53.908199999999994,
+        76.743
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL382996.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL636761.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL846183.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL979412.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL179521.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ]
+    },
+    "python graph": {
+      "n": 5,
+      "fps": 9.666666666666666,
+      "frames": 290,
+      "missing_frames": 10,
+      "interval_ms": [
+        102.634,
+        104.23720000000002,
+        118.19
+      ],
+      "display_ms": [
+        29.9055,
+        29.978,
+        30.047
+      ],
+      "sample_to_lcd_ms": [
+        70.27449999999999,
+        86.01965,
+        87.88
+      ],
+      "csv": []
+    },
+    "python memory": {
+      "n": 1,
+      "fps": 9.533333333333333,
+      "frames": 286,
+      "missing_frames": 14,
+      "interval_ms": [
+        102.807,
+        111.93260000000001,
+        145.421
+      ],
+      "display_ms": [
+        30.024,
+        30.101,
+        30.164
+      ],
+      "sample_to_lcd_ms": [
+        70.545,
+        86.1415,
+        112.531
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL274705.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ],
+      "gc_bytes": {
+        "after_collect": 17184,
+        "initialized": 17024,
+        "observed_peak": 129728
+      }
+    },
+    "python parse": {
+      "n": 5,
+      "ms": 3500.385,
+      "samples_per_second": 1170.1569970160426,
+      "digest": 1974799667
+    },
+    "python record": {
+      "n": 5,
+      "fps": 9.533333333333333,
+      "frames": 286,
+      "missing_frames": 14,
+      "interval_ms": [
+        102.796,
+        112.3468,
+        170.905
+      ],
+      "display_ms": [
+        30.019,
+        30.0948,
+        30.164
+      ],
+      "sample_to_lcd_ms": [
+        70.509,
+        86.06200000000001,
+        138.149
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL539933.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL588676.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL882731.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL931405.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL216095.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ]
+    }
+  },
+  "api_checks": {
+    "external_link": {
+      "previous": [
+        "I2C",
+        115200
+      ],
+      "restored": [
+        "I2C",
+        115200
+      ],
+      "pong_before": "UL WIRE 00 484b01832a0006004c4f47474552bb61",
+      "pong_after": "UL WIRE 00 484b01832a0006004c4f47474552bb61"
+    },
+    "storage_check": [
+      "UL API SD TL337193.CSV",
+      "[CAM] init",
+      "[CAM] pins PCLK=IO47 XCLK=IO46 HREF=IO45 PWDN=IO44 VSYNC=IO43 RST=IO42 SCCB=IO41/IO40",
+      "[CAM] safe size=320x240",
+      "[CAMBUS] backend=i2c addr7=0x21 configured_hz=100000 scl_low=0 scl_high=0",
+      "[CAM] xclk=20150000 sccb=100000",
+      "[CAM] sccb addr7=0x21 mid=0x7FA2 pid=0x7742",
+      "[CAM] sensor OV7740",
+      "[CAM] dvp burst=1 width=320",
+      "[CAM] dvp 320x240 RGB565 display",
+      "UL API BMP TL337193.BMP 240 320",
+      "UL API DONE"
+    ]
+  },
+  "installed": {
+    "firmware": "0.9.0-spmod",
+    "default_link": [
+      "I2C",
+      115200
+    ],
+    "upload_seconds": 7.9028302999795415,
+    "upload_to_run_seconds": 15.566283699998166,
+    "file_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+    "removed_sky_files": 12,
+    "flash_seconds": 43.722
+  },
+  "installed_graph_checks": {
+    "c": {
+      "plot_pixels": 384,
+      "samples": 96,
+      "positions_equal_reference": true,
+      "screenshot_sha256": "ef2b7898605bf2e8fc772c9d1ca0ed3499476c9cf682fb1bd0fd3f2ddd8095e9"
+    },
+    "python": {
+      "output": [
+        "UL PLAY READY",
+        "UL PLAY 180 0 0 0 0 2742212204 179 790 96"
+      ],
+      "sender": {
+        "samples": 180,
+        "cycles": 372392541,
+        "cycles_per_ms": 104000
+      },
+      "overlay_present_returned": true,
+      "restored": [
+        "I2C",
+        115200
+      ]
+    }
+  },
+  "physical_input": {
+    "status": "operator_confirmed",
+    "board": "sipeed-maix-cube",
+    "firmware": "0.9.0-spmod",
+    "c": [
+      "live chart and numeric sample",
+      "OK starts and publishes recording",
+      "POW exits",
+      "reopened from menu"
+    ],
+    "micropython": [
+      "PIN TO MENU and launch from shortcut",
+      "live chart",
+      "OK starts and publishes recording",
+      "POW exits"
+    ]
+  }
+}

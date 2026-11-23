@@ -136,6 +136,10 @@ static void upload(const char *name, const uint8_t *data, size_t size)
         require(userfs_upload_write(id, (uint32_t)offset,
                                     data + offset, chunk) == USERFS_OK,
                 "upload chunk");
+        char startup[USERFS_NAME_MAX + 1U];
+        userfs_result_t selection = userfs_get_startup(startup, sizeof(startup));
+        require(selection == USERFS_OK || selection == USERFS_ERROR_NOT_FOUND,
+                "refresh startup between upload chunks");
         offset += chunk;
     }
     require(userfs_upload_commit(id) == USERFS_OK, "upload commit");

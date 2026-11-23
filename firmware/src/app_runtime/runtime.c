@@ -480,7 +480,10 @@ hk_result_t hk_app_context_external_link(const hk_app_context_t *ctx,
         return HK_OK;
     }
     if(runtime->teardown_started) return HK_ERR_INVALID_STATE;
-    result = hk_external_link_open(runtime->ops.external_link, mode_features, &runtime->external_link);
+    if(runtime->ops.claim_external_link)
+        result = runtime->ops.claim_external_link(mode_features, &runtime->external_link);
+    else
+        result = hk_external_link_open(runtime->ops.external_link, mode_features, &runtime->external_link);
     if(result == HK_OK) *session = &runtime->external_link;
     return result;
 }

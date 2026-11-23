@@ -26,8 +26,10 @@ Display uses `hk_app_context_display(ctx, plane, &session)` and stable runtime
 storage. UI borrows that session by pointer; it never reconstructs a handle per
 frame. BASE and OVERLAY ownership and real frame/transaction generations remain.
 External Link now uses a runtime-owned connector session via
-`hk_app_context_external_link(ctx, mode_features, &session)`. Its retirement
-shares the original teardown deadline with Lights and Display. Service retirement must complete its logical
+`hk_app_context_external_link(ctx, mode_features, &session)`. The foreground
+claim hands the connector over from the default External Link protocol.
+Retirement shares the original teardown deadline with Lights and Display.
+Release resumes the default mode and baud rate. Service retirement must complete its logical
 invalidation before app storage is reused; a failed safe-off quarantines the
 affected resource. No generic broker owner or grant cleanup remains.
 

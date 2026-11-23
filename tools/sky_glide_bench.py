@@ -54,7 +54,7 @@ def source_for(mode, path):
     ).replace(b'FRAME_PATH = "auto"', f'FRAME_PATH = "{path}"'.encode(), 1)
 
 
-def upload_once(client, name, source):
+def upload_once(client, name, source, **upload_options):
     for item in client.list_files():
         if item.name == name:
             if item.size != len(source):
@@ -65,7 +65,7 @@ def upload_once(client, name, source):
                 if client.read_file(name, offset, len(expected)) != expected:
                     raise RuntimeError(f"refusing to replace a different USERFS file named {name}")
             return False
-    client.upload(name, source)
+    client.upload(name, source, **upload_options)
     return True
 
 

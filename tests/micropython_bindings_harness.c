@@ -799,9 +799,15 @@ int main(void)
     return 0;
 }
 
-void external_link_service_suspend(void) { g_external_suspend_calls++; }
-void external_link_service_resume(void)
+hk_result_t external_link_service_claim(uint64_t features, hk_external_link_t *session)
 {
+    g_external_suspend_calls++;
+    return hk_external_link_open(hk_external_link_service(), features, session);
+}
+
+void external_link_service_restore(const hk_external_link_t *session)
+{
+    assert(session && !session->service);
     g_external_resume_calls++;
     g_cleanup_events[g_cleanup_event_count++] = 1U;
 }

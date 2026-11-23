@@ -623,16 +623,64 @@ static mp_obj_t binding_camera_scan(mp_obj_t lease, mp_obj_t source_obj)
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(binding_camera_scan_obj, binding_camera_scan);
 
+static uint8_t binding_storage_step(micropython_binding_op_t op, const uint32_t *args,
+                                    const uint8_t *input, size_t length)
+{
+    uint8_t done;
+    if(binding_call(op, args, input, length, &done, sizeof(done)) != sizeof(done))
+        binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
+    return done;
+}
+
 static void binding_storage_wait(micropython_binding_op_t op, const uint32_t *args,
                                  const uint8_t *input, size_t length)
 {
-    uint8_t done;
-    do
+    while(!binding_storage_step(op, args, input, length))
     {
-        if(binding_call(op, args, input, length, &done, sizeof(done)) != sizeof(done))
-            binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
-    } while(!done);
+    }
 }
+
+static size_t binding_sd_write_step(const uint8_t *data, size_t length)
+{
+    uint8_t written[2];
+    if(length > MICROPYTHON_BINDING_DATA_MAX)
+        binding_raise(MICROPYTHON_BINDING_ERROR_LIMIT);
+    if(binding_call(MICROPYTHON_BINDING_OP_SD_WRITE, NULL, data, length,
+                    written, sizeof(written)) != sizeof(written))
+        binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
+    return written[0] | ((uint32_t)written[1] << 8U);
+}
+
+static mp_obj_t binding_sd_begin(mp_obj_t name_obj)
+{
+    size_t length;
+    const uint8_t *name = (const uint8_t *)mp_obj_str_get_data(name_obj, &length);
+    return mp_obj_new_bool(binding_storage_step(MICROPYTHON_BINDING_OP_SD_BEGIN, NULL,
+                                               name, length));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_sd_begin_obj, binding_sd_begin);
+
+static mp_obj_t binding_sd_append(mp_obj_t data_obj)
+{
+    mp_buffer_info_t input;
+    mp_get_buffer_raise(data_obj, &input, MP_BUFFER_READ);
+    return mp_obj_new_int_from_uint(binding_sd_write_step(input.buf, input.len));
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(binding_sd_append_obj, binding_sd_append);
+
+static mp_obj_t binding_sd_finish(void)
+{
+    return mp_obj_new_bool(binding_storage_step(MICROPYTHON_BINDING_OP_SD_FINISH, NULL,
+                                               NULL, 0U));
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_sd_finish_obj, binding_sd_finish);
+
+static mp_obj_t binding_sd_cancel(void)
+{
+    (void)binding_call(MICROPYTHON_BINDING_OP_SD_CANCEL, NULL, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_sd_cancel_obj, binding_sd_cancel);
 
 static mp_obj_t binding_sd_write(mp_obj_t name_obj, mp_obj_t data_obj)
 {
@@ -646,14 +694,10 @@ static mp_obj_t binding_sd_write(mp_obj_t name_obj, mp_obj_t data_obj)
     size_t offset = 0U;
     while(offset < input.len)
     {
-        uint8_t written[2];
         size_t take = input.len - offset;
         if(take > MICROPYTHON_BINDING_DATA_MAX)
             take = MICROPYTHON_BINDING_DATA_MAX;
-        if(binding_call(MICROPYTHON_BINDING_OP_SD_WRITE, NULL, data + offset, take,
-                        written, sizeof(written)) != sizeof(written))
-            binding_raise(MICROPYTHON_BINDING_ERROR_SD_IO);
-        offset += written[0] | ((uint32_t)written[1] << 8U);
+        offset += binding_sd_write_step(data + offset, take);
     }
     binding_storage_wait(MICROPYTHON_BINDING_OP_SD_FINISH, NULL, NULL, 0U);
     return mp_obj_new_int_from_uint(offset);
@@ -715,6 +759,10 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_camera_detect), MP_ROM_PTR(&binding_camera_detect_obj) },
     { MP_ROM_QSTR(MP_QSTR_camera_scan), MP_ROM_PTR(&binding_camera_scan_obj) },
     { MP_ROM_QSTR(MP_QSTR_sd_write), MP_ROM_PTR(&binding_sd_write_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sd_begin), MP_ROM_PTR(&binding_sd_begin_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sd_append), MP_ROM_PTR(&binding_sd_append_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sd_finish), MP_ROM_PTR(&binding_sd_finish_obj) },
+    { MP_ROM_QSTR(MP_QSTR_sd_cancel), MP_ROM_PTR(&binding_sd_cancel_obj) },
     { MP_ROM_QSTR(MP_QSTR_camera_save), MP_ROM_PTR(&binding_camera_save_obj) },
     { MP_ROM_QSTR(MP_QSTR_VISION_NONE), MP_ROM_INT(VISION_SOURCE_NONE) },
     { MP_ROM_QSTR(MP_QSTR_VISION_FACE), MP_ROM_INT(VISION_SOURCE_FACE) },

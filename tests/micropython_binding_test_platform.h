@@ -9,8 +9,6 @@
 #include <hackylens/capability/external_link.h>
 #include <hackylens/capability/time.h>
 
-void external_link_service_suspend(void);
-void external_link_service_resume(void);
 void settings_lights_suspend(uint32_t channels);
 void settings_lights_restore(uint32_t channels);
 uint32_t hk_input_state(void);

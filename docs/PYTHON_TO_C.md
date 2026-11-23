@@ -13,7 +13,7 @@ manifest build for every target that supplies the declared services.
 | `button()`, `buttons()` | `HK_APP_EVENT_INPUT`, `hk_input_get_state` | Use `pressed` for a discrete action and `state` for a hold. Maix Cube exposes BACK through POW as a finite pulse. |
 | `display_clear`, `display_rects`, `display_frame`, `display_text` | `hk_app_context_request_render`, then `hk_app_surface_*` in `render` | Keep RGB565 values and the draw order. Use `hk_app_surface_get_info` for the target's dimensions. The runtime submits the frame. |
 | LED, RGB and illumination | `hk_app_context_lights`, `hk_lights_*` | Claim the channels you use and check the requested channel is supported. |
-| External UART and I2C | `hk_app_context_external_link`, `hk_external_link_*` | Keep baud rates, addresses and byte formats. Handle operation completion and deadlines in events. |
+| External UART and I2C | `hk_app_context_external_link`, `hk_external_link_*` | Keep baud rates, addresses and byte formats. The foreground app borrows the connector and the default protocol resumes after teardown. |
 | `accelerometer_read()` | `hk_app_context_accelerometer`, `hk_accelerometer_read` | Keep the signed axes in mg. Check availability for boards without this sensor. |
 | `camera_open`, `camera_frame`, `camera_release`, `camera_close` | `hk_app_camera_open`, `hk_app_camera_acquire`, `hk_app_camera_release`, `hk_app_camera_close` | Python `None` while waiting for a frame maps to `HK_PENDING`. Retain at most one lease. |
 | `camera_find_color`, `camera_present` | `hk_app_camera_find_color`, `hk_app_camera_present` | Copy the six inclusive RGB565 thresholds, region and minimum component size. Both APIs use logical coordinates after mounting rotation. C returns zero pixels for no match. |
@@ -21,7 +21,7 @@ manifest build for every target that supplies the declared services.
 | `camera_model_open`, `camera_detect`, `camera_model_close` | `hk_app_camera_model_open_step`, `hk_app_camera_detect_begin`, `hk_app_camera_detect_poll`, `hk_app_camera_model_close` | Use the same model package on the SD card. Carry the source, rectangle and confidence semantics over unchanged. |
 | `vision_results()` | `hk_vision_read` | Copy the latest native detector publication into a `vision_result_snapshot_t`. This is independent of a leased camera frame. |
 | `camera_save` | `hk_app_camera_save_begin`, `hk_app_camera_save_step` | Keep the frame until the BMP24 is published. Use the same FAT 8.3 name under `/PYDATA`. |
-| `sd_write` | `hk_app_data_begin`, `hk_app_data_write`, `hk_app_data_finish` | Advance by `accepted` bytes. Handle an existing name, missing media or a full card. |
+| `sd_begin`, `sd_append`, `sd_finish`, `sd_cancel` | `hk_app_data_begin`, `hk_app_data_write`, `hk_app_data_finish`, `hk_app_data_cancel` | Keep the same block and advance by the accepted byte count. Retry a pending step on a later tick while continuing to receive input. |
 | `audio_available`, `audio_play`, `audio_record_into` | `hk_app_audio_info`, `hk_app_audio_play_begin`, `hk_app_audio_record_begin`, `hk_app_audio_poll` | Use signed 16-bit little-endian mono PCM. Query the sample rate and size limit. Keep the buffer in app or static storage until completion. |
 
 ## Translate the execution model
@@ -76,3 +76,6 @@ Use `--require-app` to make a missing target service an error. On each target,
 verify the app starts, processes input, releases its resources and can reopen
 after a normal exit or an interrupted operation. Use the same capture or sample
 data when comparing outputs across languages.
+
+The [UART Logger study](UART_LOGGER_STUDY.md) exercises this workflow with a
+continuous UART stream and incremental SD writes.

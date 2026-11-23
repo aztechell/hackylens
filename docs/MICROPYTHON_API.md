@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.micropython-api
 owner: micropython-runtime
-version: 1.6.0
+version: 1.7.0
 stability: experimental
 api-major: 1
 ---
@@ -246,8 +246,12 @@ current frame and detection result to microSD. Press BACK to stop.
 | --- | --- |
 | `camera_save(lease, name)` | Saves the leased frame as a 24-bit BMP in its logical orientation. Returns `None` on success. |
 | `sd_write(name, data)` | Creates a file from a bytes-like object and returns the number of bytes written. |
+| `sd_begin(name)` | Starts the writer. Retry with the same name while it returns `False`. |
+| `sd_append(data)` | Performs one write step on up to 256 bytes and returns the count accepted. Advance by that count, including on a short write. |
+| `sd_finish()` | Performs one publish step after all bytes are accepted. Retry while it returns `False`. |
+| `sd_cancel()` | Cancels the current data-file transaction. |
 
-Both functions write inside `/PYDATA` on a FAT32 microSD card. The firmware
+These calls write inside `/PYDATA` on a FAT32 microSD card. The firmware
 creates the directory when needed. Use a filename with a 1–8 character base
 and a 1–3 character extension. Letters, digits, underscores and hyphens are
 allowed. `camera_save` requires `.BMP`. The firmware reserves `.TMP` for

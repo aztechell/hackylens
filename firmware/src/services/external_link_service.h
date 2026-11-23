@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <hackylens/capability/external_link.h>
 
 #include "external_link_types.h"
 
@@ -13,12 +14,10 @@ void external_link_service_set_transport(external_link_transport_t transport);
 external_link_transport_t external_link_service_transport(void);
 void external_link_service_set_uart_baud(uint32_t baud);
 uint32_t external_link_service_uart_baud(void);
-/* Temporarily yields the descriptor-selected external connector pins to the
- * MicroPython binding owner. The selected transport remains configured
- * logically and is restored by resume(). */
-void external_link_service_suspend(void);
-void external_link_service_resume(void);
-uint8_t external_link_service_suspended(void);
+/* Yield the connector to one foreground session. Return it after retiring
+ * that same session so the default protocol can resume. */
+hk_result_t external_link_service_claim(uint64_t features, hk_external_link_t *session);
+void external_link_service_restore(const hk_external_link_t *session);
 void external_link_service_tick(void);
 uint8_t external_link_service_handle_debug_command(const char *command);
 void external_link_service_format_info(char *line, size_t line_size);

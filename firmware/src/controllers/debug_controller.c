@@ -9,7 +9,7 @@
 #include "../core/hk_screen.h"
 #include "../core/hk_string.h"
 #include "hk_config.h"
-#ifdef HK_SKY_GLIDE_BENCH
+#if defined(HK_SKY_GLIDE_BENCH) || defined(HK_UART_LOGGER_BENCH)
 #include "../capabilities/display_trace_private.h"
 #endif
 #if HK_ENABLE_CAMERA_FEATURE
@@ -62,7 +62,7 @@ static void debug_wdt_autostart(const char *value)
 
 void debug_uart_handle_command(const char *cmd)
 {
-#ifdef HK_SKY_GLIDE_BENCH
+#if defined(HK_SKY_GLIDE_BENCH) || defined(HK_UART_LOGGER_BENCH)
     if(hk_display_trace_debug(cmd))
         return;
 #endif

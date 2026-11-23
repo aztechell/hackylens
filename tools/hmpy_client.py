@@ -448,10 +448,12 @@ class HmpyClient:
             raise HmpyClientError("truncated READ response")
         return bytes(output)
 
-    def upload(self, name: str, data: bytes) -> None:
+    def upload(self, name: str, data: bytes, *, chunk_size: int = UPLOAD_DATA_MAX) -> None:
         content = bytes(data)
         if len(content) > FILE_MAX:
             raise ValueError("file exceeds HMPY v1 limit")
+        if not 1 <= chunk_size <= UPLOAD_DATA_MAX:
+            raise ValueError("invalid HMPY upload chunk size")
         response = self.request(
             MessageType.UPLOAD_BEGIN,
             pack_name(name) + struct.pack("<II", len(content), crc32(content)),
@@ -461,7 +463,7 @@ class HmpyClient:
         upload_id, next_offset = struct.unpack("<II", response)
         try:
             while next_offset < len(content):
-                chunk = content[next_offset : next_offset + UPLOAD_DATA_MAX]
+                chunk = content[next_offset : next_offset + chunk_size]
                 ack = self.request(
                     MessageType.UPLOAD_CHUNK,
                     struct.pack("<II", upload_id, next_offset) + chunk,

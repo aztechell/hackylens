@@ -65,11 +65,11 @@ const hk_app_t *hk_app_autostart_at(uint8_t index)
     return NULL;
 }
 
-/* Match metadata before dispatch: only the explicitly addressed diagnostic
- * service runs. Never broadcast a command into every inactive application. */
+/* Match the command name in metadata, then pass the complete line to its handler. */
 static uint8_t command_matches(const char *commands, const char *command)
 {
     if(!commands || !command || !command[0]) return 0U;
+    const size_t name_length = strcspn(command, " ");
     while(*commands)
     {
         const char *start;
@@ -78,7 +78,7 @@ static uint8_t command_matches(const char *commands, const char *command)
         start = commands;
         while(*commands && *commands != ' ' && *commands != '/') commands++;
         length = (size_t)(commands - start);
-        if(strlen(command) == length)
+        if(length && name_length == length)
         {
             size_t i;
             for(i = 0U; i < length; i++)

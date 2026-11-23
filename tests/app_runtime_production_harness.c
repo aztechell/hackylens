@@ -556,6 +556,11 @@ hk_result_t camera_light_retire(hk_deadline_t deadline)
 { (void)deadline; return HK_OK; }
 void app_data_retire(void) {}
 void app_camera_retire(void) {}
+hk_result_t external_link_service_claim(uint64_t features, hk_external_link_t *session)
+{
+    return hk_external_link_open(hk_external_link_service(), features, session);
+}
+void external_link_service_restore(const hk_external_link_t *session) { (void)session; }
 
 #ifndef APP_RUNTIME_PRODUCTION_REAL_SETTINGS_LIGHTS
 void settings_lights_suspend(uint32_t channels) { (void)channels; }

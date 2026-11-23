@@ -13,6 +13,9 @@
 #include "../storage/file_dir_scan.h"
 #include "../storage/file_mount.h"
 #include "debug_console_service.h"
+#ifdef HK_UART_LOGGER_BENCH
+#include "../storage/file_path.h"
+#endif
 
 #define PHOTO_TRANSFER_CHUNK (2U * SD_BLOCK_SIZE)
 
@@ -58,6 +61,21 @@ static uint8_t visit_photo(const fat_file_entry_t *entry,
     return 1U;
 }
 
+static void begin_transfer(void)
+{
+    if(!g_file.size || (g_file.attr & FAT_ATTR_DIR) || !fat_stream_open(&g_stream, &g_file, 0U))
+    {
+        debug_console_write_text("HKPHOTO ERR FILE READ\n");
+        return;
+    }
+    g_mount_generation = fat32_mount_generation();
+    g_open = 1U;
+    char line[48];
+    snprintf(line, sizeof(line), "HKPHOTO BEGIN %.12s %lu\n",
+             g_file.name, (unsigned long)g_file.size);
+    debug_console_write_text(line);
+}
+
 static void open_or_list(const char *name)
 {
     g_open = 0U;
@@ -92,18 +110,35 @@ static void open_or_list(const char *name)
         debug_console_write_text("HKPHOTO ERR NOT FOUND\n");
         return;
     }
-    if(!g_file.size || !fat_stream_open(&g_stream, &g_file, 0U))
+    begin_transfer();
+}
+
+#ifdef HK_UART_LOGGER_BENCH
+static void open_logger_csv(const char *name)
+{
+    g_open = 0U;
+    g_chunk_size = 0U;
+    if(strlen(name) != 12U || name[0] != 'T' || name[1] != 'L' || !str_eq_ci(name + 8, ".CSV"))
     {
-        debug_console_write_text("HKPHOTO ERR FILE READ\n");
+        debug_console_write_text("HKPHOTO ERR NAME\n");
         return;
     }
-    g_mount_generation = fat32_mount_generation();
-    g_open = 1U;
-    char line[48];
-    snprintf(line, sizeof(line), "HKPHOTO BEGIN %.12s %lu\n",
-             g_file.name, (unsigned long)g_file.size);
-    debug_console_write_text(line);
+    for(unsigned i = 2U; i < 8U; ++i)
+        if(name[i] < '0' || name[i] > '9')
+        {
+            debug_console_write_text("HKPHOTO ERR NAME\n");
+            return;
+        }
+    char path[sizeof("/PYDATA/TL000000.CSV")];
+    snprintf(path, sizeof(path), "/PYDATA/%.12s", name);
+    if(!file_mount_if_needed() || file_path_find(path, &g_file) != FILE_PATH_OK)
+    {
+        debug_console_write_text("HKPHOTO ERR NOT FOUND\n");
+        return;
+    }
+    begin_transfer();
 }
+#endif
 
 static void read_chunk(const char *offset_text)
 {
@@ -166,6 +201,10 @@ uint8_t debug_photo_handle_command(const char *command)
         read_chunk(command + 12U);
     else if(strncmp(command, "HKPHOTO ", 8U) == 0)
         open_or_list(command + 8U);
+#ifdef HK_UART_LOGGER_BENCH
+    else if(strncmp(command, "HKULFILE ", 9U) == 0)
+        open_logger_csv(command + 9U);
+#endif
     else
         return 0U;
     return 1U;

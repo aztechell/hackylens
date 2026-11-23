@@ -403,17 +403,12 @@ static hk_result_t binding_claim_external(void)
 
     if(g_external_owned)
         return HK_OK;
-    external_link_service_suspend();
     features =
         HK_EXTERNAL_LINK_FEATURE_UART |
         HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER;
-    result = hk_external_link_open(
-        hk_external_link_service(), features, &g_external);
+    result = external_link_service_claim(features, &g_external);
     if(result != HK_OK)
-    {
-        external_link_service_resume();
         return result;
-    }
     g_external_owned = 1U;
     return HK_OK;
 }
@@ -600,6 +595,9 @@ static micropython_binding_result_t binding_storage_execute(
     case MICROPYTHON_BINDING_OP_SD_FINISH:
         result = script_sd_finish(&g_storage_owner);
         break;
+    case MICROPYTHON_BINDING_OP_SD_CANCEL:
+        script_sd_abort(&g_storage_owner);
+        return MICROPYTHON_BINDING_OK;
 #if HK_ENABLE_CAMERA_FEATURE
     case MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN:
         result = camera_data_save_begin(&g_camera_owner, lease, (const char *)data,
@@ -1469,7 +1467,7 @@ hk_result_t micropython_capability_bridge_cleanup(void)
             &g_external, deadline);
         if(first == HK_OK) first = result;
         g_external_owned = 0U;
-        external_link_service_resume();
+        external_link_service_restore(&g_external);
     }
     result = hk_lights_retire(&g_illumination_lights, deadline);
     if(first == HK_OK) first = result;

@@ -72,15 +72,17 @@ hk_result_t hk_time_deadline_after_us(
 
 struct hk_external_link_service { uint8_t unused; };
 static const hk_external_link_service_t s_external_binding = {0};
+static uint8_t s_fail_uart_open;
 const hk_external_link_service_t *hk_external_link_service(void) { return &s_external_binding; }
 hk_result_t hk_external_link_open(
     const hk_external_link_service_t *service,
     uint64_t mode_features, hk_external_link_t *handle)
 {
-    if(!service || !handle || HK_CAPABILITY_ID_EXTERNAL_LINK != HK_CAPABILITY_ID_EXTERNAL_LINK ||
-       mode_features != (HK_EXTERNAL_LINK_FEATURE_UART |
-                         HK_EXTERNAL_LINK_FEATURE_I2C_TARGET))
+    if(!service || !handle || !mode_features ||
+       (mode_features & ~(HK_EXTERNAL_LINK_FEATURE_UART | HK_EXTERNAL_LINK_FEATURE_I2C_TARGET)))
         return HK_ERR_INVALID_ARGUMENT;
+    if(s_fail_uart_open && mode_features == HK_EXTERNAL_LINK_FEATURE_UART)
+        return HK_ERR_IO;
     s_request_capability_id = HK_CAPABILITY_ID_EXTERNAL_LINK;
     s_acquires++;
     *handle = (hk_external_link_t){service, mode_features};
@@ -454,8 +456,10 @@ int main(void)
     memcpy(s_uart_rx + ping_size, ping2, ping2_size);
     s_uart_rx_size = (uint32_t)(ping_size + ping2_size);
     external_link_service_tick();
-    external_link_service_suspend();
-    external_link_service_resume();
+    hk_external_link_t borrower = {0};
+    CHECK(external_link_service_claim(HK_EXTERNAL_LINK_FEATURE_UART, &borrower) == HK_OK);
+    CHECK(hk_external_link_retire(&borrower, HK_DEADLINE_IMMEDIATE) == HK_OK);
+    external_link_service_restore(&borrower);
     for(unsigned i = 0U; i < 4U; ++i) external_link_service_tick();
     CHECK(s_uart_tx_count == 5U);
 
@@ -472,13 +476,21 @@ int main(void)
     CHECK(memcmp(s_target_tx, expected, expected_size) == 0);
     CHECK(check_i2c_vision_results() == 0);
 
-    external_link_service_suspend();
-    external_link_service_suspend();
-    CHECK(external_link_service_suspended());
+    hk_external_link_t other = {0};
+    const uint32_t target_configs = s_target_configs;
+    CHECK(external_link_service_claim(HK_EXTERNAL_LINK_FEATURE_UART, &borrower) == HK_OK);
+    CHECK(external_link_service_claim(HK_EXTERNAL_LINK_FEATURE_UART, &other) == HK_ERR_BUSY);
+    external_link_service_restore(&other);
+    external_link_service_restore(&borrower);
+    CHECK(s_target_configs == target_configs);
     CHECK(s_releases >= 1U);
-    external_link_service_resume();
-    external_link_service_resume();
-    CHECK(!external_link_service_suspended());
+    CHECK(hk_external_link_retire(&borrower, HK_DEADLINE_IMMEDIATE) == HK_OK);
+    external_link_service_restore(&borrower);
+    external_link_service_restore(&borrower);
+    CHECK(s_target_configs == target_configs + 1U);
+    s_fail_uart_open = 1U;
+    CHECK(external_link_service_claim(HK_EXTERNAL_LINK_FEATURE_UART, &borrower) == HK_ERR_IO);
+    CHECK(!borrower.service && s_target_configs == target_configs + 2U);
     CHECK(s_acquires >= 2U && s_target_configs >= 2U);
     CHECK(s_cancel_calls == 0U);
     puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 vision_results=1 coalesced=1 fragmented=1 reset=1");

@@ -30,7 +30,7 @@ class CubeBoardTests(unittest.TestCase):
                          {"time", "input", "display", "lights", "external-link", "power", "accelerometer"})
         self.assertFalse(selected.disabled_apps)
         self.assertFalse(selected.absences)
-        self.assertEqual(len(firmware_attestation.FULL_APP_IDS - selected.disabled_apps), 17)
+        self.assertEqual(len(firmware_attestation.FULL_APP_IDS - selected.disabled_apps), 18)
         self.assertEqual(self.board.runtime_profile, "hackylens-cube")
         self.assertTrue(self.board.releaseable)
 

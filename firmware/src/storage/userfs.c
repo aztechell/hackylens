@@ -39,6 +39,9 @@ static uint8_t g_read_cache[USERFS_CACHE_SIZE] __attribute__((aligned(16)));
 static uint8_t g_prog_cache[USERFS_CACHE_SIZE] __attribute__((aligned(16)));
 static uint8_t g_lookahead[USERFS_LOOKAHEAD_SIZE] __attribute__((aligned(16)));
 static uint8_t g_file_cache[USERFS_CACHE_SIZE] __attribute__((aligned(16)));
+/* The launcher can read startup metadata between HMPY upload chunks. */
+static uint8_t g_upload_cache[USERFS_CACHE_SIZE] __attribute__((aligned(16)));
+static const struct lfs_file_config s_upload_config = { .buffer = g_upload_cache };
 static userfs_upload_t g_upload;
 static userfs_state_t g_state;
 static userfs_result_t g_last_error;
@@ -619,8 +622,8 @@ userfs_result_t userfs_upload_begin(const char *name, uint32_t size,
         g_upload.temporary[prefix + 8U] = '\0';
     }
     (void)lfs_remove(&g_lfs, g_upload.temporary);
-    result = userfs_file_open(&g_upload.file, g_upload.temporary,
-                              LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL);
+    result = lfs_file_opencfg(&g_lfs, &g_upload.file, g_upload.temporary,
+                            LFS_O_WRONLY | LFS_O_CREAT | LFS_O_EXCL, &s_upload_config);
     if(result < 0)
     {
         userfs_clear_upload();

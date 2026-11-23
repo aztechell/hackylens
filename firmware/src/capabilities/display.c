@@ -4,7 +4,7 @@
 #include "display_provider.h"
 #include "display_stage_private.h"
 
-#ifdef HK_SKY_GLIDE_BENCH
+#if defined(HK_SKY_GLIDE_BENCH) || defined(HK_UART_LOGGER_BENCH)
 #include <hackylens/capability/time.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -25,9 +25,13 @@ static struct
 
 uint8_t hk_display_trace_debug(const char *command)
 {
-    if(strncmp(command, "HKSGTRACE ", 10) != 0)
+    const char *action;
+    if(strncmp(command, "HKSGTRACE ", 10U) == 0)
+        action = command + 10U;
+    else if(strncmp(command, "HKDTRACE ", 9U) == 0)
+        action = command + 9U;
+    else
         return 0;
-    const char *action = command + 10;
     if(strcmp(action, "BASE") == 0 || strcmp(action, "OVERLAY") == 0)
     {
         if(hk_time_now_us(hk_time_service(), &trace.origin_us) != HK_OK)
@@ -338,14 +342,14 @@ hk_result_t hk_display_present(
     result = display_provider_for(handle, &provider);
     if(result == HK_OK)
     {
-#ifdef HK_SKY_GLIDE_BENCH
+#if defined(HK_SKY_GLIDE_BENCH) || defined(HK_UART_LOGGER_BENCH)
         uint64_t start = 0;
         const uint8_t recording = handle->plane == trace.plane &&
             hk_time_now_us(hk_time_service(), &start) == HK_OK;
 #endif
         result = provider->present(
             provider->context, handle, deadline, cancel);
-#ifdef HK_SKY_GLIDE_BENCH
+#if defined(HK_SKY_GLIDE_BENCH) || defined(HK_UART_LOGGER_BENCH)
         if(recording)
             trace_frame(start, result);
 #endif

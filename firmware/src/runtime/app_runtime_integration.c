@@ -8,6 +8,7 @@
 #include "hk_config.h"
 #include "app_services.h"
 #include "../app_runtime/surface_private.h"
+#include "../services/external_link_service.h"
 #include "../services/settings_lights.h"
 #include "../ui/display_binding.h"
 #if HK_ENABLE_CAMERA_FEATURE
@@ -67,6 +68,7 @@ static hk_result_t cleanup(void *user, hk_deadline_t deadline)
     app_runtime_integration_t *integration = user;
     hk_result_t result = HK_OK;
 
+    external_link_service_restore(&integration->switcher.runtime.external_link);
     app_data_retire();
 #if HK_ENABLE_CAMERA_FEATURE
     app_camera_retire();
@@ -355,6 +357,7 @@ hk_result_t app_runtime_integration_initialize(void)
         .prepare = prepare,
         .cleanup = cleanup,
         .claim_lights = claim_lights,
+        .claim_external_link = external_link_service_claim,
         .deadline_after_us = deadline_after_us,
     };
     result = hk_app_switch_init(

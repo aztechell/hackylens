@@ -1,0 +1,10 @@
+id = "uart-logger"
+name = "UART LOGGER C"
+entry = "logger_v2_entry"
+sources = ["uart_logger_app.c", "uart_logger_core.c"]
+requires = ["display", "input", "time", "external-link", "sd-card"]
+menu_icon = "label"
+tick_ms = 5
+tick_budget_ms = 1000
+debug_entry = "logger_debug"
+debug = "HKULMODE HKULMARK"

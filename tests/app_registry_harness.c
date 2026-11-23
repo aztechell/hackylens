@@ -141,6 +141,12 @@ const hk_app_v2_entry_t buttons_v2_entry = {
 };
 const hk_app_v2_entry_t camera_v2_entry = {0};
 const hk_app_v2_entry_t color_tracker_v2_entry = {0};
+const hk_app_v2_entry_t logger_v2_entry = {0};
+
+uint8_t logger_debug(const char *command)
+{
+    return strcmp(command, "HKULMARK 8") == 0;
+}
 const hk_app_v2_entry_t face_detect_v2_entry = {0};
 const hk_app_v2_entry_t face_recognition_v2_entry = {0};
 void face_recognition_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -393,9 +399,11 @@ int main(void)
 
     CHECK(g_hk_generated_app_count ==
           12U + HK_ENABLE_APP_COLOR_TRACKER + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
-          HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION);
-    CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER);
+          HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION + HK_ENABLE_APP_UART_LOGGER);
+    CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER -
+          HK_ENABLE_APP_UART_LOGGER);
     CHECK(hk_app_for_id("color-tracker") && !hk_app_for_id("color-tracker")->menu_visible);
+    CHECK(hk_app_for_id("uart-logger") && !hk_app_for_id("uart-logger")->menu_visible);
     static const char *const menu_order[] = {
         "camera", "qr-camera", "face-detect",
 #if HK_ENABLE_APP_FACE_RECOGNITION
@@ -429,7 +437,7 @@ int main(void)
     CHECK(strcmp(g_hk_generated_apps[0]->id,
                  HK_ENABLE_APP_ACCELEROMETER ? "accelerometer" : "apriltag") == 0);
     CHECK(strcmp(g_hk_generated_apps[g_hk_generated_app_count - 1U]->id,
-                 "terminal") == 0);
+                 "uart-logger") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(6U)->id, "files") == 0);
     CHECK(strcmp(hk_app_for_autostart_id(9U)->id, "object-detect") == 0);
     CHECK(strcmp(hk_app_autostart_at(5U)->id,
@@ -464,6 +472,8 @@ int main(void)
     CHECK(hk_app_registry_handle_debug_command("hkqr") == 1U);
     CHECK(s_debug_calls == 2U);
     CHECK(hk_app_registry_handle_debug_command("HKCAMX") == 0U);
+    CHECK(hk_app_registry_handle_debug_command("HKULMARK 8") == 1U);
+    CHECK(hk_app_registry_handle_debug_command("HKULMARKX 8") == 0U);
     CHECK(s_debug_calls == 2U);
 
     printf("APP_REGISTRY_OK apps=%u menu=%u\n",

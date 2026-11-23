@@ -38,7 +38,7 @@ static uint32_t g_tx_frames;
 static uint32_t g_bad_frames;
 static uint32_t g_rx_bytes;
 static uint32_t g_uart_baud = 115200U;
-static uint8_t g_suspended;
+static const hk_external_link_t *g_borrower;
 
 #define EXTERNAL_LINK_SERVICE_UART_RESPONSE_TIMEOUT_US UINT64_C(1000000)
 #define EXTERNAL_LINK_SERVICE_UART_TURNAROUND_US UINT64_C(1000)
@@ -211,7 +211,7 @@ void external_link_service_init(external_link_transport_t transport)
     g_uart_response_length = 0U;
     g_uart_response_not_before = 0U;
     g_uart_baud = settings_external_link_uart_baud();
-    g_suspended = 0U;
+    g_borrower = NULL;
     external_link_service_set_transport(transport);
 }
 
@@ -222,7 +222,7 @@ void external_link_service_set_transport(external_link_transport_t transport)
     g_transport = transport == EXTERNAL_LINK_I2C ?
         EXTERNAL_LINK_I2C : EXTERNAL_LINK_UART;
     service_cancel_uart();
-    if(g_suspended)
+    if(g_borrower)
         return;
     if(service_acquire() != HK_OK ||
        (already_acquired && service_configure() != HK_OK))
@@ -246,7 +246,7 @@ void external_link_service_set_uart_baud(uint32_t baud)
         baud = 115200U;
     g_uart_baud = baud;
     service_cancel_uart();
-    if(g_transport == EXTERNAL_LINK_UART && !g_suspended &&
+    if(g_transport == EXTERNAL_LINK_UART && !g_borrower &&
        (g_link.service != NULL))
         (void)service_configure();
 }
@@ -256,35 +256,40 @@ uint32_t external_link_service_uart_baud(void)
     return g_uart_baud;
 }
 
-void external_link_service_suspend(void)
+hk_result_t external_link_service_claim(uint64_t features, hk_external_link_t *session)
 {
-    if(g_suspended)
-        return;
+    const hk_external_link_service_t *provider = hk_external_link_service();
+    if(!session || !features || (features & ~HK_EXTERNAL_LINK_FEATURES_0_1))
+        return HK_ERR_INVALID_ARGUMENT;
+    if(!provider)
+        return HK_ERR_CAPABILITY_ABSENT;
+    if(g_borrower || session->service)
+        return HK_ERR_BUSY;
+
     service_cancel_uart();
-    if((g_link.service != NULL))
-        (void)hk_external_link_retire(
-            &g_link, HK_DEADLINE_IMMEDIATE);
-    g_suspended = 1U;
+    hk_result_t result = hk_external_link_retire(&g_link, HK_DEADLINE_IMMEDIATE);
+    if(result == HK_OK)
+        result = hk_external_link_open(provider, features, session);
+    if(result == HK_OK)
+        g_borrower = session;
+    else
+        (void)service_acquire();
+    return result;
 }
 
-void external_link_service_resume(void)
+void external_link_service_restore(const hk_external_link_t *session)
 {
-    if(!g_suspended)
+    if(!session || session != g_borrower || session->service)
         return;
-    g_suspended = 0U;
+    g_borrower = NULL;
     (void)service_acquire();
-}
-
-uint8_t external_link_service_suspended(void)
-{
-    return g_suspended;
 }
 
 void external_link_service_tick(void)
 {
     hk_result_t result;
 
-    if(g_suspended)
+    if(g_borrower)
         return;
     if(service_acquire() != HK_OK)
         return;
