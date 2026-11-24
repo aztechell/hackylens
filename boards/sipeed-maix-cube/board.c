@@ -126,22 +126,37 @@ static void cube_internal_flash_prepare(void)
     /* K210 SPI3 is dedicated to the on-board flash; no FPIOA route is needed. */
 }
 
+static uint8_t g_external_spmod;
+
+static void cube_external_connector_select(uint8_t alternate)
+{
+    fpioa_set_function(IO_EXTERNAL_UART_R, FUNC_RESV0);
+    fpioa_set_function(IO_EXTERNAL_UART_T, FUNC_RESV0);
+    fpioa_set_function(IO_EXTERNAL_SPMOD_UART_R, FUNC_RESV0);
+    fpioa_set_function(IO_EXTERNAL_SPMOD_UART_T, FUNC_RESV0);
+    g_external_spmod = alternate;
+}
+
 static void cube_external_uart_prepare(void)
 {
-    fpioa_set_function(IO_EXTERNAL_UART_R, IO_EXTERNAL_UART_R_FUNCTION);
-    fpioa_set_function(IO_EXTERNAL_UART_T, IO_EXTERNAL_UART_T_FUNCTION);
-    fpioa_set_io_pull(IO_EXTERNAL_UART_R, FPIOA_PULL_UP);
-    fpioa_set_io_driving(IO_EXTERNAL_UART_T, FPIOA_DRIVING_7);
+    int rx = g_external_spmod ? IO_EXTERNAL_SPMOD_UART_R : IO_EXTERNAL_UART_R;
+    int tx = g_external_spmod ? IO_EXTERNAL_SPMOD_UART_T : IO_EXTERNAL_UART_T;
+    fpioa_set_function(rx, IO_EXTERNAL_UART_R_FUNCTION);
+    fpioa_set_function(tx, IO_EXTERNAL_UART_T_FUNCTION);
+    fpioa_set_io_pull(rx, FPIOA_PULL_UP);
+    fpioa_set_io_driving(tx, FPIOA_DRIVING_7);
 }
 
 static void cube_external_i2c_prepare(void)
 {
-    fpioa_set_function(IO_EXTERNAL_I2C_R, IO_EXTERNAL_I2C_R_FUNCTION);
-    fpioa_set_function(IO_EXTERNAL_I2C_T, IO_EXTERNAL_I2C_T_FUNCTION);
-    fpioa_set_io_pull(IO_EXTERNAL_I2C_R, FPIOA_PULL_UP);
-    fpioa_set_io_pull(IO_EXTERNAL_I2C_T, FPIOA_PULL_UP);
-    fpioa_set_io_driving(IO_EXTERNAL_I2C_R, FPIOA_DRIVING_7);
-    fpioa_set_io_driving(IO_EXTERNAL_I2C_T, FPIOA_DRIVING_7);
+    int scl = g_external_spmod ? IO_EXTERNAL_SPMOD_I2C_R : IO_EXTERNAL_I2C_R;
+    int sda = g_external_spmod ? IO_EXTERNAL_SPMOD_I2C_T : IO_EXTERNAL_I2C_T;
+    fpioa_set_function(scl, IO_EXTERNAL_I2C_R_FUNCTION);
+    fpioa_set_function(sda, IO_EXTERNAL_I2C_T_FUNCTION);
+    fpioa_set_io_pull(scl, FPIOA_PULL_UP);
+    fpioa_set_io_pull(sda, FPIOA_PULL_UP);
+    fpioa_set_io_driving(scl, FPIOA_DRIVING_7);
+    fpioa_set_io_driving(sda, FPIOA_DRIVING_7);
 }
 
 const hk_board_ops_t hk_board_ops = {
@@ -154,4 +169,5 @@ const hk_board_ops_t hk_board_ops = {
     .sd_prepare = cube_sd_prepare,
     .external_uart_prepare = cube_external_uart_prepare,
     .external_i2c_prepare = cube_external_i2c_prepare,
+    .external_connector_select = cube_external_connector_select,
 };

@@ -12,6 +12,7 @@ typedef enum
     ITEM_RGB_SWITCH,
     ITEM_BRIGHTNESS,
     ITEM_AUTO_SLEEP,
+    ITEM_CONNECTOR,
     ITEM_CONNECTION,
     ITEM_UART_SPEED,
     ITEM_AUTOSTART,
@@ -25,7 +26,8 @@ typedef enum
 } settings_item_t;
 
 static const char *const transport_choices[] = {"UART", "I2C"};
-static const char *const grove_baud_choices[] = {"9600", "115200", "1000000"};
+static const char *const connector_choices[] = {"Grove", "SP-MOD"};
+static const char *const baud_choices[] = {"9600", "115200", "1000000"};
 static const char *const ui_color_choices[HK_UI_COLOR_COUNT] = {
     [HK_UI_COLOR_GREEN] = "Green",
     [HK_UI_COLOR_CYAN] = "Cyan",
@@ -77,8 +79,9 @@ static const settings_menu_item_t rgb_items[] = {
 };
 
 static const settings_menu_item_t connection_items[] = {
-    CHOICE(ITEM_CONNECTION, "Grove Mode", transport_choices, 2U),
-    CHOICE(ITEM_UART_SPEED, "Baud", grove_baud_choices, EXTERNAL_LINK_UART_SPEED_COUNT),
+    CHOICE(ITEM_CONNECTOR, "Port", connector_choices, 2U),
+    CHOICE(ITEM_CONNECTION, "Mode", transport_choices, 2U),
+    CHOICE(ITEM_UART_SPEED, "Baud", baud_choices, EXTERNAL_LINK_UART_SPEED_COUNT),
 };
 
 static const settings_menu_item_t startup_items[] = {
@@ -134,6 +137,7 @@ static int32_t settings_app_read(void *context, uint16_t id)
     case ITEM_BRIGHTNESS: return settings_screen_brightness();
     case ITEM_UI_COLOR: return settings_ui_color();
     case ITEM_AUTO_SLEEP: return settings_auto_sleep_minutes();
+    case ITEM_CONNECTOR: return settings_external_link_connector();
     case ITEM_CONNECTION: return settings_external_link_transport();
     case ITEM_UART_SPEED: return settings_external_link_uart_speed();
     case ITEM_AUTOSTART: return autostart_read(context);
@@ -179,6 +183,11 @@ static uint8_t settings_app_write(void *context, uint16_t id, int32_t value)
     case ITEM_BRIGHTNESS: settings_set_screen_brightness((uint8_t)value); screen_brightness_apply(); break;
     case ITEM_UI_COLOR: settings_set_ui_color((uint8_t)value); break;
     case ITEM_AUTO_SLEEP: settings_set_auto_sleep_minutes((uint8_t)value); activity_note(); break;
+    case ITEM_CONNECTOR:
+        if(external_link_service_set_connector((external_link_connector_t)value) != HK_OK)
+            return 0U;
+        settings_set_external_link_connector((external_link_connector_t)value);
+        break;
     case ITEM_CONNECTION:
         settings_set_external_link_transport((external_link_transport_t)value);
         external_link_service_set_transport(settings_external_link_transport());
@@ -344,14 +353,22 @@ static const settings_menu_definition_t pages[] = {
     [SETTINGS_PAGE_ROOT] = FULL_PAGE("SETTINGS", root_items),
     [SETTINGS_PAGE_SCREEN] = FULL_PAGE("SCREEN", screen_items),
     [SETTINGS_PAGE_LIGHTS] = FULL_PAGE("LIGHTS", lights_items),
-    [SETTINGS_PAGE_CONNECTION] = FULL_PAGE("CONNECTION", connection_items),
     [SETTINGS_PAGE_STARTUP] = FULL_PAGE("STARTUP", startup_items),
     [SETTINGS_PAGE_DEVICE] = FULL_PAGE("DEVICE", device_items),
     [SETTINGS_PAGE_SOUND] = FULL_PAGE("SOUND", sound_items),
     [SETTINGS_PAGE_RGB] = FULL_PAGE("RGB COLOR", rgb_items),
 };
 
-static const settings_menu_definition_t two_wire_page = DEFINITION("CONNECTION", connection_items, 1U);
+static const settings_menu_definition_t connection_pages[2][2] = {
+    {
+        [EXTERNAL_LINK_UART] = DEFINITION("CONNECTION", connection_items + 1, 2U),
+        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items + 1, 1U),
+    },
+    {
+        [EXTERNAL_LINK_UART] = FULL_PAGE("CONNECTION", connection_items),
+        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items, 2U),
+    },
+};
 static const settings_menu_definition_t root_without_sound =
     DEFINITION("SETTINGS", root_items, sizeof(root_items) / sizeof(root_items[0]) - 1U);
 
@@ -364,8 +381,9 @@ const settings_menu_definition_t *settings_app_page_definition(settings_page_t p
 {
     if(page == SETTINGS_PAGE_ROOT)
         return settings_app_menu_definition();
-    if(page == SETTINGS_PAGE_CONNECTION && settings_external_link_transport() == EXTERNAL_LINK_I2C)
-        return &two_wire_page;
+    if(page == SETTINGS_PAGE_CONNECTION)
+        return &connection_pages[external_link_service_has_connector_choice()]
+                                [settings_external_link_transport()];
     if((unsigned)page >= sizeof(pages) / sizeof(pages[0]) || !pages[page].item_count)
         return NULL;
     return &pages[page];

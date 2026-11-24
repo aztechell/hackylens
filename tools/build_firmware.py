@@ -703,36 +703,21 @@ def stage_board_port(stage: Path, board: Board) -> None:
     )
 
 
-def stage_cube_spmod(stage: Path) -> None:
-    header = stage / "board_config.h"
-    source = header.read_text(encoding="utf-8")
-    for transport in ("UART", "I2C"):
-        for role, original, alternate in (("R", 24, 6), ("T", 25, 7)):
-            macro = f"IO_EXTERNAL_{transport}_{role}"
-            for before, after in ((f"{macro} {original}", f"{macro} {alternate}"),
-                                  (f'{macro}_LABEL "IO{original}"', f'{macro}_LABEL "IO{alternate}"')):
-                pattern = rf"(?m)^#define {re.escape(before)}$"
-                source, replacements = re.subn(pattern, f"#define {after}", source)
-                if replacements != 1:
-                    raise RuntimeError(f"Cube SP-MOD override expected {before}")
-    header.write_text(source, encoding="utf-8")
-
-
 def write_config(stage: Path, disabled_apps: set[str],
                  wdt_fault_injection: bool = False, *,
                  audio_enabled: bool = False,
                  sky_glide_bench: bool = False,
-                 cube_spmod: bool = False,
+                 uart_logger_menu: bool = False,
                  uart_logger_bench: bool = False) -> None:
     version = read_firmware_version()
     if wdt_fault_injection:
         version += "-wdtfi"
     if sky_glide_bench:
         version += "-skybench"
-    if cube_spmod:
-        version += "-spmod"
     if uart_logger_bench:
         version += "-uartbench"
+    elif uart_logger_menu:
+        version += "-uartmenu"
     lines = [
         "#ifndef HK_CONFIG_H",
         "#define HK_CONFIG_H",
@@ -761,7 +746,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
                   littlefs: Path | None = None,
                   wdt_fault_injection: bool = False,
                   service_selection: service_bindings.Selection | None = None,
-                  *, sky_glide_bench: bool = False, cube_spmod: bool = False,
+                  *, sky_glide_bench: bool = False, uart_logger_menu: bool = False,
                   uart_logger_bench: bool = False) -> Path:
     target = TARGETS[target_name]
     stage = sdk / "src" / str(target["project"])
@@ -779,7 +764,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     copy_tree_files(ROOT / "firmware" / "include", stage / "firmware" / "include")
     copy_tree_files(ROOT / "sdk" / "include", stage / "sdk" / "include")
     registry = stage / "firmware" / "generated" / "app_registry"
-    if cube_spmod:
+    if uart_logger_menu or uart_logger_bench:
         menu = {"visible": True, "order": 136, "icon": "label"}
         apps = [dict(app, menu=menu) if app["id"] == "uart-logger" else app
                 for app in APP_MANIFEST_MODEL["apps"]]
@@ -789,8 +774,6 @@ def stage_target(sdk: Path, target_name: str, board: Board,
         copy_tree_files(app_composition.BUILD_REGISTRY_ROOT, registry)
     stage_platform_sources(stage, disabled_apps, service_selection)
     stage_board_port(stage, board)
-    if cube_spmod:
-        stage_cube_spmod(stage)
 
     for header in (ROOT / "firmware" / "assets").glob("*.h"):
         shutil.copy2(header, stage / header.name)
@@ -813,7 +796,7 @@ def stage_target(sdk: Path, target_name: str, board: Board,
     service_bindings.write_generated_c(service_selection, stage)
     write_config(stage, disabled_apps, wdt_fault_injection,
                  audio_enabled=board.drivers["audio"] != "none",
-                 sky_glide_bench=sky_glide_bench, cube_spmod=cube_spmod,
+                 sky_glide_bench=sky_glide_bench, uart_logger_menu=uart_logger_menu,
                  uart_logger_bench=uart_logger_bench)
     write_project_cmake(stage, micropython_package, board, disabled_apps,
                         sky_glide_bench=sky_glide_bench, uart_logger_bench=uart_logger_bench)
@@ -824,7 +807,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
                  disabled_apps: set[str], exclusions: list[dict[str, object]],
                  service_selection: service_bindings.Selection,
                  wdt_fault_injection: bool = False, *,
-                 sky_glide_bench: bool = False, cube_spmod: bool = False,
+                 sky_glide_bench: bool = False, uart_logger_menu: bool = False,
                  uart_logger_bench: bool = False) -> Path:
     target = TARGETS[name]
     project = str(target["project"])
@@ -838,7 +821,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
         output_name = output_name.with_name(
             f"{output_name.stem}-skybench{output_name.suffix}"
         )
-    local_suffix = ("-spmod" if cube_spmod else "") + ("-uartbench" if uart_logger_bench else "")
+    local_suffix = "-uartbench" if uart_logger_bench else "-uartmenu" if uart_logger_menu else ""
     if local_suffix:
         output_name = output_name.with_name(output_name.stem + local_suffix + output_name.suffix)
     out_image = ROOT / "build" / board.id / output_name
@@ -859,7 +842,7 @@ def build_target(name: str, board: Board, sdk: Path, toolchain_bin: Path,
     stage = stage_target(
         sdk, name, board, disabled_apps, micropython_package, littlefs,
         wdt_fault_injection, service_selection, sky_glide_bench=sky_glide_bench,
-        cube_spmod=cube_spmod, uart_logger_bench=uart_logger_bench,
+        uart_logger_menu=uart_logger_menu, uart_logger_bench=uart_logger_bench,
     )
     print(f"[STAGE] {stage}")
 
@@ -998,8 +981,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Enable Sky Glide measurements in a diagnostic image under build/.",
     )
-    parser.add_argument("--cube-spmod", action="store_true",
-                        help="Route Cube External Link to SP-MOD IO6/IO7 in a local image.")
+    parser.add_argument("--uart-logger-menu", action="store_true",
+                        help="Show UART LOGGER C in the menu of a local full image.")
     parser.add_argument("--uart-logger-bench", action="store_true",
                         help="Enable UART LOGGER measurements in a local image.")
     return parser.parse_args(argv)
@@ -1007,8 +990,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.cube_spmod and (args.target != "full" or "sky-glide" not in args.disable_app):
-        raise RuntimeError("--cube-spmod requires a full build with --disable-app sky-glide")
+    if args.uart_logger_menu and args.target != "full":
+        raise RuntimeError("--uart-logger-menu requires a full build")
     if args.uart_logger_bench and (args.target != "full" or args.sky_glide_bench
                                   or args.wdt_fault_injection):
         raise RuntimeError("--uart-logger-bench requires an independent full diagnostic build")
@@ -1060,10 +1043,12 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError("--sky-glide-bench requires Sky Glide and MicroPython")
     if args.uart_logger_bench and {"uart-logger", "micropython"} & disabled_apps:
         raise RuntimeError("--uart-logger-bench requires UART LOGGER and MicroPython")
+    if args.uart_logger_menu and "uart-logger" in disabled_apps:
+        raise RuntimeError("--uart-logger-menu requires UART LOGGER")
     build_target(
         args.target, board, sdk, toolchain, disabled_apps, exclusions,
         composition, args.wdt_fault_injection, sky_glide_bench=args.sky_glide_bench,
-        cube_spmod=args.cube_spmod, uart_logger_bench=args.uart_logger_bench,
+        uart_logger_menu=args.uart_logger_menu, uart_logger_bench=args.uart_logger_bench,
     )
     return 0
 

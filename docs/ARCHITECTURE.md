@@ -127,7 +127,8 @@ they do not require another ADR, evidence schema or governance checker.
 `services/vision_result_service.*` owns the latest BLOCK/ARROW result and
 QR payload. `services/external_link_protocol.*` encodes the
 [external link protocol](EXTERNAL_LINK_PROTOCOL.md#results-and-unified-items).
-`services/external_link_service.*` dispatches it over Grove UART1 or I2C0.
+`services/external_link_service.*` dispatches it over UART1 or I2C0 on the
+selected external connector.
 UART3 is reserved for the USB-serial console and HMPY.
 
 `drivers/camera_stream.h` exposes the IRQ-driven two-slot stream and frame
@@ -186,7 +187,8 @@ the previous setting. UI Color selects the accent used by the launcher and
 built-in views. The palette includes Green, Cyan, Amber, Pink, Blue and White.
 Camera frames, saved media and explicit script drawing colors
 retain their own colors. Auto Sleep can be disabled and applies while the
-launcher is idle. Grove Baud is shown in UART mode.
+launcher is idle. Connection shows Baud in UART mode. On Cube the same page
+selects Grove or SP-MOD.
 
 Device shows the total space of the mounted FAT32 data area and the progress
 of the used-space scan. The SD service counts FAT entries in batches while

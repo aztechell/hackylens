@@ -24,9 +24,10 @@ uses the Arduino ESP8266 3.1.2 package and its Xtensa compiler.
 
 ```powershell
 . .\env.ps1
-python tools/build_firmware.py full --board sipeed-maix-cube --cube-spmod --disable-app sky-glide --require-app uart-logger --uart-logger-bench
-python tools/uart_logger_fixture.py COM5 build/sipeed-maix-cube/hackylens-full-spmod-uartbench.bin
-python tools/uart_logger_bench.py --cube-port COM5 --sender-port COM3 --esp-core $espCore --esp-gcc $espCompiler --image build/sipeed-maix-cube/hackylens-full-spmod-uartbench.bin --out build/uart-logger/cube --memory-run
+python tools/build_firmware.py full --board sipeed-maix-cube --disable-app sky-glide --require-app uart-logger --uart-logger-bench
+python tools/uart_logger_fixture.py COM5 build/sipeed-maix-cube/hackylens-full-uartbench.bin
+python tools/hkflash.py cmd --board sipeed-maix-cube --port COM5 HKLINKSPMOD
+python tools/uart_logger_bench.py --cube-port COM5 --sender-port COM3 --esp-core $espCore --esp-gcc $espCompiler --image build/sipeed-maix-cube/hackylens-full-uartbench.bin --out build/uart-logger/cube --memory-run
 ```
 
 Set `$espCore` to the Arduino `hardware/esp8266/3.1.2` directory and
@@ -38,12 +39,14 @@ image and Python source. It saves each trial as JSONL, plus a CSV read from
 the card for each recording trial. Run physical button checks after the
 automated series.
 
-Build the everyday SP-MOD image by omitting `--uart-logger-bench`. Use
-`tools/hkflash.py flash` with this image and the Cube board and port. Upload
+Build the everyday UART Logger image with `--uart-logger-menu` instead of
+`--uart-logger-bench`. Use `tools/hkflash.py flash` with this image and the
+Cube board and port. Select SP-MOD under **Settings → Connection → Port**.
+Upload
 [`uart_logger.py`](../examples/uart_logger.py) over HMPY. In **MICRO-PYTHON**,
 select the script and choose **PIN TO MENU**. The native menu entry is
-**UART LOGGER C**. The SP-MOD option applies to the local Cube build. The
-SEN0305 wiring and hardware measurements are scheduled for a separate pass.
+**UART LOGGER C**. The SEN0305 wiring and hardware measurements are scheduled
+for a separate pass.
 
 ## Measurement
 

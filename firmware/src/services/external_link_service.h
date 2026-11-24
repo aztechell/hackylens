@@ -10,6 +10,8 @@
 #define EXTERNAL_LINK_I2C_ADDRESS 0x32U
 
 void external_link_service_init(external_link_transport_t transport);
+uint8_t external_link_service_has_connector_choice(void);
+hk_result_t external_link_service_set_connector(external_link_connector_t connector);
 void external_link_service_set_transport(external_link_transport_t transport);
 external_link_transport_t external_link_service_transport(void);
 void external_link_service_set_uart_baud(uint32_t baud);

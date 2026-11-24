@@ -33,8 +33,8 @@ model takes several seconds. The native reference is registered as
 ```powershell
 . .\env.ps1
 python tools/object_gate_replay.py tests/fixtures/object_gate_person.rgb
-python tools/uart_logger_fixture.py COM5 build/sipeed-maix-cube/hackylens-object-gate-spmod.bin
-python tools/object_gate_bench.py --port COM5 --image build/sipeed-maix-cube/hackylens-object-gate-spmod.bin --out build/object-gate-runs.jsonl
+python tools/uart_logger_fixture.py COM5 build/sipeed-maix-cube/hackylens-object-gate.bin
+python tools/object_gate_bench.py --port COM5 --image build/sipeed-maix-cube/hackylens-object-gate.bin --out build/object-gate-runs.jsonl
 ```
 
 For SEN0305, the runtime port in this test is COM10.
@@ -104,8 +104,8 @@ before capture, 9440 bytes allocated at the highest sample, and 4256
 bytes after collection in the Python heap. The shared model and planar
 input use firmware memory outside the Python GC arena.
 
-For the footprint comparison, build the same `--cube-spmod --disable-app
-sky-glide` profile twice, adding `--disable-app object-gate` to the
+For the footprint comparison, build the same `--disable-app sky-glide`
+profile twice, adding `--disable-app object-gate` to the
 baseline. Save its BIN and ELF before building the variant with Object
 Gate. Compare the raw BIN sizes and the ELF sections with
 `riscv64-unknown-elf-size -A`.

@@ -9,6 +9,12 @@ typedef enum
 
 typedef enum
 {
+    EXTERNAL_LINK_CONNECTOR_DEFAULT = 0,
+    EXTERNAL_LINK_CONNECTOR_ALTERNATE,
+} external_link_connector_t;
+
+typedef enum
+{
     EXTERNAL_LINK_UART_SPEED_9600 = 0,
     EXTERNAL_LINK_UART_SPEED_115200 = 1,
     EXTERNAL_LINK_UART_SPEED_1000000 = 2,

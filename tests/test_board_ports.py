@@ -232,7 +232,7 @@ class BoardDescriptorTests(unittest.TestCase):
         for route in renamed["routes"]:
             if route.get("runtime_mux_group") == "external-four-pin-mode":
                 route["runtime_mux_group"] = "invented-runtime-mux"
-        with self.assertRaisesRegex(board_contract.ContractError, "legacy exception"):
+        with self.assertRaisesRegex(board_contract.ContractError, "not a defined mux"):
             self.validate(renamed)
 
         shortened = copy.deepcopy(self.runtime.data)
@@ -255,6 +255,21 @@ class BoardDescriptorTests(unittest.TestCase):
         self.assertNotIn("external-uart", self.cube.present_kinds())
         self.assertNotIn("external-i2c", self.cube.present_kinds())
         self.assertEqual(self.cube.driver_supported_kinds(), {"processor"})
+
+    def test_cube_external_mux_covers_both_connectors(self) -> None:
+        board = board_contract.load_board("sipeed-maix-cube")
+        routes = [route for route in board.selected_routes()
+                  if route.get("runtime_mux_group") == "cube-external-link"]
+        self.assertEqual(len(routes), 8)
+        for function, pins in (("uart1-rx", {6, 24}), ("uart1-tx", {7, 25}),
+                               ("i2c0-sclk", {6, 24}), ("i2c0-sda", {7, 25})):
+            self.assertEqual({route["pin"] for route in routes
+                              if route["function"] == function}, pins)
+        invalid = copy.deepcopy(board.data)
+        del next(route for route in invalid["routes"]
+                 if route["macro"] == "IO_EXTERNAL_SPMOD_UART_R")["runtime_mux_group"]
+        with self.assertRaisesRegex(board_contract.ContractError, "duplicate function|duplicate pin"):
+            self.validate(invalid)
 
     def test_known_unsupported_services_are_not_driver_supported(self) -> None:
         self.assertIn("display", self.cube.present_kinds())

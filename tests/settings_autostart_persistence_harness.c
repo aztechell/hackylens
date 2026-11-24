@@ -27,6 +27,7 @@
 #include "../firmware/src/services/settings_persistence.h"
 #include "../firmware/src/services/settings_app_data.h"
 #include "../firmware/src/services/settings_service.h"
+#include "../firmware/src/services/external_link_service.h"
 #include "../firmware/src/storage/internal_flash.h"
 #include "../firmware/src/storage/settings_store.h"
 #include "../firmware/src/storage/fat32_volume.h"
@@ -137,6 +138,14 @@ uint8_t hk_fat_mounted(void) { return hk_sd_present(); }
 fat32_usage_t fat32_usage(void) { return s_usage; }
 uint8_t audio_service_available(void) { return 0U; }
 hk_result_t audio_service_set_volume(uint8_t percent) { (void)percent; return HK_OK; }
+static uint8_t s_connector_choice;
+static external_link_connector_t s_connector_routed;
+uint8_t external_link_service_has_connector_choice(void) { return s_connector_choice; }
+hk_result_t external_link_service_set_connector(external_link_connector_t connector)
+{
+    s_connector_routed = connector;
+    return HK_OK;
+}
 void external_link_service_set_transport(external_link_transport_t transport) { (void)transport; }
 void external_link_service_set_uart_baud(uint32_t baud) { (void)baud; }
 void activity_note(void) {}
@@ -401,6 +410,44 @@ static int test_object_classes(void)
     CHECK(settings_storage_flush());
     settings_storage_init();
     CHECK(object_detect_settings_class_mask() == OBJECT_DETECT_ALL_CLASSES);
+    return 0;
+}
+
+static int test_connection(void)
+{
+    settings_state_t state;
+    const char *title;
+    char value[24];
+
+    CHECK(settings_external_link_connector() == EXTERNAL_LINK_CONNECTOR_DEFAULT);
+    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 2U);
+    s_connector_choice = 1U;
+    settings_controller_reset(&state, settings_app_menu_definition());
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    CHECK(state.page == SETTINGS_PAGE_CONNECTION && state.menu.definition->item_count == 3U);
+    CHECK(settings_menu_visible_slot(&state.menu, 0U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "Port") == 0 && strcmp(value, "Grove") == 0);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_BACK);
+    CHECK(settings_external_link_connector() == EXTERNAL_LINK_CONNECTOR_DEFAULT);
+    CHECK(s_connector_routed == EXTERNAL_LINK_CONNECTOR_DEFAULT);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    CHECK(s_connector_routed == EXTERNAL_LINK_CONNECTOR_ALTERNATE);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    settings_press(&state, BUTTON_RIGHT);
+    settings_press(&state, BUTTON_OK);
+    CHECK(state.menu.index == 1U && state.menu.definition->item_count == 2U);
+    settings_storage_init();
+    CHECK(settings_external_link_connector() == EXTERNAL_LINK_CONNECTOR_ALTERNATE);
+    CHECK(settings_external_link_transport() == EXTERNAL_LINK_I2C);
+    s_connector_choice = 0U;
+    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 1U);
     return 0;
 }
 
@@ -790,6 +837,7 @@ int main(int argc, char **argv)
     CHECK(test_object_classes() == 0);
     CHECK(test_camera_and_qr_groups() == 0);
     CHECK(test_menu_order() == 0);
+    CHECK(test_connection() == 0);
 
     printf("SETTINGS_AUTOSTART_OK uint16=300 migrated_v4=10 record=%u\n",
            (unsigned)sizeof(settings_record_t));

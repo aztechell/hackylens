@@ -17,10 +17,16 @@ import gen_board
 
 class ExternalLinkServiceTests(unittest.TestCase):
     def test_native_service_uses_capability_and_restores_transport(self) -> None:
+        for board_id in ("huskylens-sen0305", "sipeed-maix-cube"):
+            with self.subTest(board=board_id):
+                self._check_service(board_id)
+
+    def _check_service(self, board_id: str) -> None:
         compiler = shutil.which("gcc") or shutil.which("cc")
         if not compiler:
             raise unittest.SkipTest("host C compiler not installed")
         with tempfile.TemporaryDirectory(prefix="hackylens-external-service-") as temp:
+            gen_board.write_board_config(gen_board.load_board(board_id), Path(temp) / "board_config.h")
             executable = Path(temp) / (
                 "external_link_service.exe" if os.name == "nt"
                 else "external_link_service"
@@ -32,7 +38,7 @@ class ExternalLinkServiceTests(unittest.TestCase):
                 f"-I{ROOT / 'firmware' / 'src' / 'services'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'capabilities'}",
                 f"-I{ROOT / 'firmware' / 'src' / 'core'}",
-                f"-I{gen_board.board_config_include_dir()}",
+                f"-I{temp}",
                 str(ROOT / "tests" / "external_link_service_harness.c"),
                 str(ROOT / "firmware" / "src" / "services" /
                     "external_link_service.c"),

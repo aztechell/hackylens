@@ -192,7 +192,7 @@ macro = "IO_EXTERNAL_UART_R"
 pin = 24
 function = "uart1-rx"
 peripheral = "uart1"
-runtime_mux_group = "grove-four-pin-mode"
+runtime_mux_group = "cube-external-link"
 
 [[routes]]
 id = "external-uart-tx"
@@ -200,7 +200,7 @@ macro = "IO_EXTERNAL_UART_T"
 pin = 25
 function = "uart1-tx"
 peripheral = "uart1"
-runtime_mux_group = "grove-four-pin-mode"
+runtime_mux_group = "cube-external-link"
 
 [[routes]]
 id = "external-i2c-clock"
@@ -208,7 +208,7 @@ macro = "IO_EXTERNAL_I2C_R"
 pin = 24
 function = "i2c0-sclk"
 peripheral = "i2c0"
-runtime_mux_group = "grove-four-pin-mode"
+runtime_mux_group = "cube-external-link"
 
 [[routes]]
 id = "external-i2c-data"
@@ -216,7 +216,39 @@ macro = "IO_EXTERNAL_I2C_T"
 pin = 25
 function = "i2c0-sda"
 peripheral = "i2c0"
-runtime_mux_group = "grove-four-pin-mode"
+runtime_mux_group = "cube-external-link"
+
+[[routes]]
+id = "spmod-uart-rx"
+macro = "IO_EXTERNAL_SPMOD_UART_R"
+pin = 6
+function = "uart1-rx"
+peripheral = "uart1"
+runtime_mux_group = "cube-external-link"
+
+[[routes]]
+id = "spmod-uart-tx"
+macro = "IO_EXTERNAL_SPMOD_UART_T"
+pin = 7
+function = "uart1-tx"
+peripheral = "uart1"
+runtime_mux_group = "cube-external-link"
+
+[[routes]]
+id = "spmod-i2c-clock"
+macro = "IO_EXTERNAL_SPMOD_I2C_R"
+pin = 6
+function = "i2c0-sclk"
+peripheral = "i2c0"
+runtime_mux_group = "cube-external-link"
+
+[[routes]]
+id = "spmod-i2c-data"
+macro = "IO_EXTERNAL_SPMOD_I2C_T"
+pin = 7
+function = "i2c0-sda"
+peripheral = "i2c0"
+runtime_mux_group = "cube-external-link"
 
 # Maix Cube 2757: Sipeed MaixPy-v1 cube.config.json and Maix-Cube-2757 schematic.
 # LCD D[7:0] uses K210's fixed shared SPI0/DVP octal data path.

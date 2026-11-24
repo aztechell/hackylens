@@ -34,6 +34,8 @@ void settings_set_auto_sleep_minutes(uint8_t minutes);
 void settings_set_feature_flags(uint8_t flags);
 external_link_transport_t settings_external_link_transport(void);
 void settings_set_external_link_transport(external_link_transport_t transport);
+external_link_connector_t settings_external_link_connector(void);
+void settings_set_external_link_connector(external_link_connector_t connector);
 external_link_uart_speed_t settings_external_link_uart_speed(void);
 uint32_t settings_external_link_uart_baud(void);
 void settings_set_external_link_uart_speed(external_link_uart_speed_t speed);

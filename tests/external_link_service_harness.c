@@ -5,6 +5,8 @@
 #include <hackylens/capability/external_link.h>
 #include <hackylens/capability/time.h>
 
+#include "board_config.h"
+#include "../firmware/src/internal/hk_board_port.h"
 #include "external_link_protocol.h"
 #include "external_link_service.h"
 #include "vision_result_service.h"
@@ -46,6 +48,32 @@ static uint8_t s_target_rx[HK_LINK_MAX_FRAME];
 static uint8_t s_target_tx[HK_LINK_MAX_FRAME];
 static uint32_t s_target_tx_size;
 
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+static uint8_t s_fail_next_open;
+static uint8_t s_live_mux_change;
+static uint8_t s_board_connector;
+static external_link_connector_t s_saved_connector;
+
+static void select_connector(uint8_t alternate)
+{
+    if(s_acquires != s_releases)
+        s_live_mux_change = 1U;
+    s_board_connector = alternate;
+}
+
+const hk_board_ops_t hk_board_ops = {.external_connector_select = select_connector};
+
+external_link_connector_t settings_external_link_connector(void)
+{
+    return s_saved_connector;
+}
+
+void settings_set_external_link_connector(external_link_connector_t connector)
+{
+    s_saved_connector = connector;
+}
+#endif
+
 struct hk_time { uint8_t binding; };
 static const hk_time_t s_time = {1U};
 const hk_time_t *hk_time_service(void) { return &s_time; }
@@ -83,6 +111,13 @@ hk_result_t hk_external_link_open(
         return HK_ERR_INVALID_ARGUMENT;
     if(s_fail_uart_open && mode_features == HK_EXTERNAL_LINK_FEATURE_UART)
         return HK_ERR_IO;
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    if(s_fail_next_open)
+    {
+        s_fail_next_open = 0U;
+        return HK_ERR_IO;
+    }
+#endif
     s_request_capability_id = HK_CAPABILITY_ID_EXTERNAL_LINK;
     s_acquires++;
     *handle = (hk_external_link_t){service, mode_features};
@@ -493,6 +528,34 @@ int main(void)
     CHECK(!borrower.service && s_target_configs == target_configs + 2U);
     CHECK(s_acquires >= 2U && s_target_configs >= 2U);
     CHECK(s_cancel_calls == 0U);
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    char info[128];
+    s_fail_uart_open = 0U;
+    CHECK(external_link_service_has_connector_choice());
+    CHECK(external_link_service_claim(HK_EXTERNAL_LINK_FEATURE_UART, &borrower) == HK_OK);
+    CHECK(external_link_service_set_connector(EXTERNAL_LINK_CONNECTOR_ALTERNATE) == HK_ERR_BUSY);
+    CHECK(hk_external_link_retire(&borrower, HK_DEADLINE_IMMEDIATE) == HK_OK);
+    external_link_service_restore(&borrower);
+
+    s_fail_next_open = 1U;
+    CHECK(external_link_service_set_connector(EXTERNAL_LINK_CONNECTOR_ALTERNATE) == HK_ERR_IO);
+    CHECK(!s_board_connector && s_acquires == s_releases + 1U);
+    CHECK(external_link_service_handle_debug_command("HKLINKSPMOD"));
+    CHECK(s_board_connector && s_saved_connector == EXTERNAL_LINK_CONNECTOR_ALTERNATE);
+    external_link_service_format_info(info, sizeof(info));
+    CHECK(strstr(info, "mode=I2C pins=IO6/IO7 "));
+
+    external_link_service_init(EXTERNAL_LINK_UART);
+    external_link_service_format_info(info, sizeof(info));
+    CHECK(strstr(info, "mode=UART pins=IO6/IO7 "));
+    CHECK(external_link_service_handle_debug_command("HKLINKGROVE"));
+    external_link_service_format_info(info, sizeof(info));
+    CHECK(strstr(info, "mode=UART pins=IO24/IO25 "));
+    CHECK(!s_live_mux_change && !s_board_connector);
+#else
+    CHECK(!external_link_service_has_connector_choice());
+    CHECK(external_link_service_set_connector(EXTERNAL_LINK_CONNECTOR_ALTERNATE) == HK_ERR_CAPABILITY_ABSENT);
+#endif
     puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 vision_results=1 coalesced=1 fragmented=1 reset=1");
     return 0;
 }

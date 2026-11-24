@@ -8,6 +8,7 @@
 
 #include "board_config.h"
 #include "../core/hk_string.h"
+#include "../internal/hk_board_port.h"
 #include "debug_console_service.h"
 #include "external_link_protocol.h"
 #include "settings_persistence.h"
@@ -19,6 +20,9 @@
 #define UART_RX_STAGING_BYTES 32U
 
 static external_link_transport_t g_transport = EXTERNAL_LINK_UART;
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+static external_link_connector_t g_connector;
+#endif
 typedef union
 {
     hk_link_stream_parser_t parser;
@@ -203,6 +207,19 @@ static void service_cancel_uart(void)
     hk_link_stream_reset(&g_uart_storage.parser);
 }
 
+static const char *link_pin_labels(void)
+{
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    if(g_connector == EXTERNAL_LINK_CONNECTOR_ALTERNATE)
+        return g_transport == EXTERNAL_LINK_I2C ?
+            IO_EXTERNAL_SPMOD_I2C_R_LABEL "/" IO_EXTERNAL_SPMOD_I2C_T_LABEL :
+            IO_EXTERNAL_SPMOD_UART_R_LABEL "/" IO_EXTERNAL_SPMOD_UART_T_LABEL;
+#endif
+    return g_transport == EXTERNAL_LINK_I2C ?
+        IO_EXTERNAL_I2C_R_LABEL "/" IO_EXTERNAL_I2C_T_LABEL :
+        IO_EXTERNAL_UART_R_LABEL "/" IO_EXTERNAL_UART_T_LABEL;
+}
+
 void external_link_service_init(external_link_transport_t transport)
 {
     memset(&g_uart_storage, 0, sizeof(g_uart_storage));
@@ -212,7 +229,49 @@ void external_link_service_init(external_link_transport_t transport)
     g_uart_response_not_before = 0U;
     g_uart_baud = settings_external_link_uart_baud();
     g_borrower = NULL;
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    g_connector = settings_external_link_connector();
+    hk_board_ops.external_connector_select(g_connector);
+#endif
     external_link_service_set_transport(transport);
+}
+
+uint8_t external_link_service_has_connector_choice(void)
+{
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    return 1U;
+#else
+    return 0U;
+#endif
+}
+
+hk_result_t external_link_service_set_connector(external_link_connector_t connector)
+{
+    if(connector != EXTERNAL_LINK_CONNECTOR_DEFAULT &&
+       connector != EXTERNAL_LINK_CONNECTOR_ALTERNATE)
+        return HK_ERR_INVALID_ARGUMENT;
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    if(connector == g_connector)
+        return HK_OK;
+    if(g_borrower)
+        return HK_ERR_BUSY;
+    service_cancel_uart();
+    hk_result_t result = hk_external_link_retire(&g_link, HK_DEADLINE_IMMEDIATE);
+    if(result != HK_OK)
+        return result;
+    hk_board_ops.external_connector_select(connector);
+    result = service_acquire();
+    if(result == HK_OK)
+        g_connector = connector;
+    else
+    {
+        hk_board_ops.external_connector_select(g_connector);
+        (void)service_acquire();
+    }
+    return result;
+#else
+    return connector == EXTERNAL_LINK_CONNECTOR_DEFAULT ? HK_OK : HK_ERR_CAPABILITY_ABSENT;
+#endif
 }
 
 void external_link_service_set_transport(external_link_transport_t transport)
@@ -228,11 +287,9 @@ void external_link_service_set_transport(external_link_transport_t transport)
        (already_acquired && service_configure() != HK_OK))
         return;
     if(g_transport == EXTERNAL_LINK_I2C)
-        printf("[LINK] I2C slave 0x32 " IO_EXTERNAL_I2C_R_LABEL "/"
-               IO_EXTERNAL_I2C_T_LABEL "\r\n");
+        printf("[LINK] I2C slave 0x32 %s\r\n", link_pin_labels());
     else
-        printf("[LINK] UART1 %u " IO_EXTERNAL_UART_R_LABEL "/"
-               IO_EXTERNAL_UART_T_LABEL "\r\n", (unsigned)g_uart_baud);
+        printf("[LINK] UART1 %u %s\r\n", (unsigned)g_uart_baud, link_pin_labels());
 }
 
 external_link_transport_t external_link_service_transport(void)
@@ -428,14 +485,11 @@ void external_link_service_format_info(char *line, size_t line_size)
 {
     if(line && line_size)
     {
-        const char *pins = g_transport == EXTERNAL_LINK_I2C
-            ? IO_EXTERNAL_I2C_R_LABEL "/" IO_EXTERNAL_I2C_T_LABEL
-            : IO_EXTERNAL_UART_R_LABEL "/" IO_EXTERNAL_UART_T_LABEL;
         snprintf(
             line, line_size,
             "HKLINKINFO mode=%s pins=%s uart=%u i2c=0x32 bytes=%u rx=%u tx=%u bad=%u\r\n",
             g_transport == EXTERNAL_LINK_I2C ? "I2C" : "UART",
-            pins,
+            link_pin_labels(),
             (unsigned)g_uart_baud,
             (unsigned)g_rx_bytes, (unsigned)g_rx_frames, (unsigned)g_tx_frames,
             (unsigned)g_bad_frames
@@ -455,6 +509,24 @@ uint8_t external_link_service_handle_debug_command(const char *command)
         debug_console_write_text(line);
         return 1U;
     }
+#ifdef IO_EXTERNAL_SPMOD_UART_R
+    uint8_t spmod = str_eq_ci(command, "HKLINKSPMOD");
+    if(spmod || str_eq_ci(command, "HKLINKGROVE"))
+    {
+        external_link_connector_t connector = spmod ?
+            EXTERNAL_LINK_CONNECTOR_ALTERNATE : EXTERNAL_LINK_CONNECTOR_DEFAULT;
+        if(external_link_service_set_connector(connector) != HK_OK)
+            debug_console_write_text("HKLINK ERROR connector\r\n");
+        else
+        {
+            settings_set_external_link_connector(connector);
+            settings_mark_dirty(1U);
+            external_link_service_format_info(line, sizeof(line));
+            debug_console_write_text(line);
+        }
+        return 1U;
+    }
+#endif
     if(str_eq_ci(command, "HKLINK9600"))
         speed = EXTERNAL_LINK_UART_SPEED_9600;
     else if(str_eq_ci(command, "HKLINK115200"))

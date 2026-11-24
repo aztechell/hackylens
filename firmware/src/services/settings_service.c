@@ -216,6 +216,20 @@ void settings_set_external_link_transport(external_link_transport_t transport)
         g_feature_flags &= (uint8_t)~SETTINGS_EXTERNAL_LINK_I2C_FLAG;
 }
 
+external_link_connector_t settings_external_link_connector(void)
+{
+    return (g_feature_flags & SETTINGS_EXTERNAL_LINK_SPMOD_FLAG) ?
+        EXTERNAL_LINK_CONNECTOR_ALTERNATE : EXTERNAL_LINK_CONNECTOR_DEFAULT;
+}
+
+void settings_set_external_link_connector(external_link_connector_t connector)
+{
+    if(connector == EXTERNAL_LINK_CONNECTOR_ALTERNATE)
+        g_feature_flags |= SETTINGS_EXTERNAL_LINK_SPMOD_FLAG;
+    else
+        g_feature_flags &= (uint8_t)~SETTINGS_EXTERNAL_LINK_SPMOD_FLAG;
+}
+
 external_link_uart_speed_t settings_external_link_uart_speed(void)
 {
     return g_external_link_uart_speed;

@@ -20,12 +20,14 @@ Physical Grove exchange on Cube was
 | Power and motion | AXP173 PMIC and MSA301 accelerometer on internal I2C1, SCL30/SDA31 |
 | Audio | ES8374 at `0x10` on internal I2C1, built-in speaker and microphone, I2S0 and DMA3 |
 | Lights | Active-low RGB, white illumination, and LCD backlight |
-| Grove | Pins 24/25 serve as UART1 RX/TX or I2C0 SCL/SDA. The modes are exclusive and use 3.3 V logic. |
+| External Link | Grove IO24/IO25 or SP-MOD IO6/IO7 serve as UART1 RX/TX or I2C0 SCL/SDA. Both connectors use 3.3 V logic. |
 | Storage | FAT32 microSD and internal littlefs for MicroPython scripts |
 
 The [board descriptor](../boards/sipeed-maix-cube/board.toml) defines the pin
 routes, defaults, and flash map. See [External Link](EXTERNAL_LINK_PROTOCOL.md#physical-port)
 for connector limits and protocol use.
+Choose the connector and protocol in **Settings → Connection**. The selected
+pins take effect on confirmation and the settings are saved across reboots.
 
 I/O banks 6 and 7 use 1.8 V for the camera and display data bus. The LCD
 requests a 15 MHz write clock and uses DMA0. KPU inference uses DMA5.

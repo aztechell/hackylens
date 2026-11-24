@@ -219,7 +219,12 @@ void settings_controller_handle_input(
     }
     if(state->page == SETTINGS_PAGE_CONNECTION && !state->menu.editing &&
        state->menu.definition != settings_app_page_definition(SETTINGS_PAGE_CONNECTION))
+    {
+        uint8_t index = state->menu.index;
         settings_open_page(state, SETTINGS_PAGE_CONNECTION);
+        uint8_t count = state->menu.definition->item_count;
+        state->menu.index = index < count ? index : count - 1U;
+    }
     state->dirty = 1U;
 }
 

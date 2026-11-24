@@ -44,19 +44,17 @@ descriptors cannot swap LCD, camera, or SD roles. Pins and functions MUST be
 unique except for the external-connector muxes below. Multiple
 different functions belonging to one peripheral instance are valid.
 
-`runtime_mux_group` is a narrowly scoped exception for the SEN0305 external
-connector (`external-four-pin-mode`, pins 34/35) and Cube Grove connector
-(`grove-four-pin-mode`, pins 24/25). Their UART and I2C modes remap the same two
-pins through the existing exclusive External Link service. The exact group
-name and complete macro/function/pin/
-peripheral set are allowlisted; descriptors cannot invent, move, shrink, or
-extend an exception. Every mode is still modeled as explicit routes and
-collision-checked. This private metadata is not a general runtime-routing,
-switching, arbitration, capability, or discovery API.
+`runtime_mux_group` assigns UART1 and I2C0 to the same two pins on the SEN0305
+Gravity connector (`external-four-pin-mode`, IO34/IO35). Cube's
+`cube-external-link` group includes Grove IO24/IO25 and SP-MOD IO6/IO7.
+Cube selects one connector through the exclusive External Link service, which
+retires the active session before the board releases the old pins. The
+validator checks the exact macro, function, pin, and peripheral set for each
+group and checks collisions against the other routes.
 
-The Board Port Contract introduces no runtime route switching or arbitration
-API. Firmware builds generate one private `build/generated/board_config.h`
-from `board.toml`. That header is build-local and is not a tracked source.
+Firmware builds generate the private `build/generated/board_config.h` from
+`board.toml`. The board port callback applies the pin map for Cube's
+selected connector.
 
 The optional private `[drivers]` table selects the exact driver tuple belonging
 to the runtime profile. Omitting it retains the original SEN0305 tuple. Cube
@@ -64,7 +62,7 @@ explicitly selects the ST7789 octal transport, OV7740, three-way input,
 AXP173 management bus and inverted Cube light outputs. Its display has no
 FPIOA MOSI route: the LCD octal data bus is the fixed K210 SPI0/DVP path.
 Its logical BACK is synthesized from AXP173 power-key events, so no fourth button route
-or default is permitted. PMIC I2C1 pins 30/31 are independent of Grove I2C0.
+or default is permitted. PMIC I2C1 pins 30/31 are independent of External Link I2C0.
 Driver and UI configuration is generated at build time; apps never select a
 board or access these routes directly.
 

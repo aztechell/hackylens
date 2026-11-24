@@ -47,7 +47,9 @@ def menu(link):
 
 
 def link_config(link):
-    line = command(link, "HKLINKINFO", r"HKLINKINFO mode=(UART|I2C) pins=IO6/IO7 .*")[-1]
+    line = command(link, "HKLINKINFO", r"HKLINKINFO mode=(UART|I2C) pins=IO(6/IO7|24/IO25) .*")[-1]
+    if "pins=IO6/IO7 " not in line:
+        raise RuntimeError("Select SP-MOD in Settings > Connection > Port before running the benchmark")
     mode, baud = re.search(r"mode=(\w+).* uart=(\d+)", line).groups()
     return mode, int(baud)
 
@@ -78,7 +80,7 @@ def python_run(link, mode, ready, verified, record):
     output = bytearray()
     try:
         hello = client.hello()
-        if hello.board != BOARD or not hello.firmware_version.endswith("-spmod-uartbench"):
+        if hello.board != BOARD or not hello.firmware_version.endswith("-uartbench"):
             raise RuntimeError(f"unexpected device {hello}")
         record["firmware_version"] = hello.firmware_version
         if name not in verified:

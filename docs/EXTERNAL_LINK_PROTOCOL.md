@@ -14,16 +14,15 @@ original HUSKYLENS command set or packet layout.
 ## Physical port
 
 The external connector is independent from the UART3 debug/PC connection.
-Use the cable that matches the board. The SEN0305 has a four-pin Gravity
-connector. The Maix Cube has a four-pin Grove connector with a 2.0 mm pitch
-and different contact positions.
+The SEN0305 uses its four-pin Gravity connector. The Maix Cube can use
+either its four-pin Grove connector (2.0 mm pitch) or IO6 and IO7 on SP-MOD.
 
-| SEN0305 Gravity | Maix Cube Grove | Descriptor route roles | UART mode | I2C mode |
+| SEN0305 Gravity | Maix Cube Grove | Maix Cube SP-MOD | UART mode | I2C mode |
 |---|---|---|---|---|
-| `T` | `25` | `IO_EXTERNAL_UART_T` / `IO_EXTERNAL_I2C_T` | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
-| `R` | `24` | `IO_EXTERNAL_UART_R` / `IO_EXTERNAL_I2C_R` | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
-| `-` | `G` | — | Ground | Ground |
-| `+` (power input) | `V` (3.3 V) | — | Board-specific supply | Board-specific supply |
+| `T` | `25` | `IO7` | UART1 TX, 9600/115200/1000000 8N1 | I2C0 SDA |
+| `R` | `24` | `IO6` | UART1 RX, 9600/115200/1000000 8N1 | I2C0 SCL |
+| `-` | `G` | `GND` | Ground | Ground |
+| `+` (power input) | `V` (3.3 V) | `3V3` | Board-specific supply | Board-specific supply |
 
 The selected board descriptor is the sole source of physical pin numbers.
 Use 3.3 V logic. For a USB-powered I2C test fixture, connect SDA, SCL and the
@@ -33,13 +32,17 @@ specifies a 3.3–5.0 V supply range and typical consumption of 320 mA at 3.3 V 
 See the [SEN0305 pinout](https://wiki.dfrobot.com/sen0305/#pinout) and the
 [Maix Cube pinout](https://dl.sipeed.com/fileList/MAIX/HDK/Sipeed-Maix-Cube/ProductSpecification/Sipeed%20Maix%20Cube%20Datasheet%20V1.0.pdf#page=3).
 
-I2C mode uses the camera as a 7-bit slave at address `0x32`. UART is the default.
-Set **Settings → Connection → Grove Mode** to UART or I2C. **Grove Mode** is
-the shared settings label for the external port on both boards. In UART mode,
-the **Baud** field selects 9600, 115200, or 1000000 and saves the choice. The PC
-debug console also accepts `HKLINKUART` and `HKLINKI2C`. `HKLINK9600`,
+I2C mode uses the camera as a 7-bit target at address `0x32`. Set **Mode** under
+**Settings → Connection** to UART or I2C. On Cube, **Port** selects Grove
+or SP-MOD independently of the mode. Grove is the default for settings saved
+before the connector selector was added. Confirm the change with OK to switch
+pins immediately and save the choice for the next boot. **Baud** appears in
+UART mode and selects 9600, 115200, or 1000000.
+
+The PC debug console accepts `HKLINKUART` and `HKLINKI2C`. `HKLINK9600`,
 `HKLINK115200`, and `HKLINK1000000` select UART and save the requested speed.
-`HKLINKINFO` reads the active mode, baud rate, and frame counters.
+On Cube, `HKLINKGROVE` and `HKLINKSPMOD` switch and save the connector.
+`HKLINKINFO` reads the selected pins, mode, baud rate, and frame counters.
 
 ### SEN0305 UART bench wiring
 

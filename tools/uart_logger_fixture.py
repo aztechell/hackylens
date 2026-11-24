@@ -62,7 +62,7 @@ def load_cube(port, image):
             for attempt in range(6):
                 send(link, "HKLINKINFO")
                 try:
-                    print(lines_until(link, r"HKLINKINFO .*pins=IO6/IO7.*", timeout=2)[-1])
+                    print(lines_until(link, r"HKLINKINFO mode=(UART|I2C) pins=IO(6/IO7|24/IO25) .*", timeout=2)[-1])
                     break
                 except TimeoutError:
                     if attempt == 5:

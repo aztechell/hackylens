@@ -225,19 +225,27 @@ ROUTE_ROLES = {
     "IO_EXTERNAL_UART_T": ("uart1-tx", "uart1"),
     "IO_EXTERNAL_I2C_R": ("i2c0-sclk", "i2c0"),
     "IO_EXTERNAL_I2C_T": ("i2c0-sda", "i2c0"),
+    "IO_EXTERNAL_SPMOD_UART_R": ("uart1-rx", "uart1"),
+    "IO_EXTERNAL_SPMOD_UART_T": ("uart1-tx", "uart1"),
+    "IO_EXTERNAL_SPMOD_I2C_R": ("i2c0-sclk", "i2c0"),
+    "IO_EXTERNAL_SPMOD_I2C_T": ("i2c0-sda", "i2c0"),
 }
-LEGACY_RUNTIME_MUX = {
+RUNTIME_MUX_ROUTES = {
     "external-four-pin-mode": frozenset({
         ("IO_EXTERNAL_UART_R", "uart1-rx", 34, "uart1"),
         ("IO_EXTERNAL_UART_T", "uart1-tx", 35, "uart1"),
         ("IO_EXTERNAL_I2C_R", "i2c0-sclk", 34, "i2c0"),
         ("IO_EXTERNAL_I2C_T", "i2c0-sda", 35, "i2c0"),
     }),
-    "grove-four-pin-mode": frozenset({
+    "cube-external-link": frozenset({
         ("IO_EXTERNAL_UART_R", "uart1-rx", 24, "uart1"),
         ("IO_EXTERNAL_UART_T", "uart1-tx", 25, "uart1"),
         ("IO_EXTERNAL_I2C_R", "i2c0-sclk", 24, "i2c0"),
         ("IO_EXTERNAL_I2C_T", "i2c0-sda", 25, "i2c0"),
+        ("IO_EXTERNAL_SPMOD_UART_R", "uart1-rx", 6, "uart1"),
+        ("IO_EXTERNAL_SPMOD_UART_T", "uart1-tx", 7, "uart1"),
+        ("IO_EXTERNAL_SPMOD_I2C_R", "i2c0-sclk", 6, "i2c0"),
+        ("IO_EXTERNAL_SPMOD_I2C_T", "i2c0-sda", 7, "i2c0"),
     }),
 }
 
@@ -506,7 +514,11 @@ def _validate_routes(data: dict[str, Any]) -> None:
                 left.get("runtime_mux_group") is not None
                 and left.get("runtime_mux_group") == right.get("runtime_mux_group")
             )
-            allowed = pin_collision and not function_collision and same_runtime_mux_group
+            allowed = same_runtime_mux_group and (
+                (pin_collision and not function_collision)
+                or (function_collision and not pin_collision
+                    and left["runtime_mux_group"] == "cube-external-link")
+            )
             if (pin_collision or function_collision) and not allowed:
                 what = "pin" if pin_collision else "function"
                 raise ContractError(
@@ -517,12 +529,12 @@ def _validate_routes(data: dict[str, Any]) -> None:
     for group, candidates in runtime_mux_groups.items():
         if data["support"] != "runtime":
             raise ContractError(
-                f"runtime_mux_group {group!r}: only runtime ports may preserve a legacy mux"
+                f"runtime_mux_group {group!r}: only runtime ports may use a mux"
             )
-        expected = LEGACY_RUNTIME_MUX.get(group)
+        expected = RUNTIME_MUX_ROUTES.get(group)
         if expected is None:
             raise ContractError(
-                f"runtime_mux_group {group!r}: not a defined legacy exception"
+                f"runtime_mux_group {group!r}: not a defined mux"
             )
         actual = {
             (route["macro"], route["function"], route["pin"], route["peripheral"])
@@ -531,7 +543,7 @@ def _validate_routes(data: dict[str, Any]) -> None:
         if actual != expected:
             raise ContractError(
                 f"runtime_mux_group {group!r}: routes must exactly match the "
-                "legacy preservation exception"
+                "defined mux"
             )
 
 
@@ -924,6 +936,9 @@ def validate_board_source(board: Board) -> None:
         for name, value in re.findall(r"\.([a-z0-9_]+)\s*=\s*([^,}]+)", body)
     }
     required = {"early_init"} | board.required_callbacks()
+    if any(route["macro"] == "IO_EXTERNAL_SPMOD_UART_R"
+           for route in board.selected_routes()):
+        required.add("external_connector_select")
     missing = sorted(name for name in required if callbacks.get(name) in {None, "NULL", "0"})
     if missing:
         raise ContractError(

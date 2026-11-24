@@ -108,7 +108,6 @@ def main():
     fixture = args.fixture.resolve(strict=True)
     if fixture.stat().st_size != 144 * 180 * 3:
         parser.error("fixture must contain exactly three 144x180 byte planes")
-    board = firmware.load_board(args.board)
     stage_target = firmware.stage_target
 
     def stage_with_replay(*args, **kwargs):
@@ -121,8 +120,6 @@ def main():
                                     build_dir="sdk-object-gate")
     build = ["full", "--board", args.board, "--disable-app", "sky-glide",
              "--require-app", "object-gate"]
-    if board.runtime_profile == "hackylens-cube":
-        build.append("--cube-spmod")
     return firmware.main(build)
 
 
