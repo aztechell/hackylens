@@ -38,6 +38,7 @@ class MicroPythonAppTests(unittest.TestCase):
                         / "micropython"
                         / "micropython_app.c"
                     ),
+                    str(ROOT / "firmware/src/apps/micropython/micropython_preview.c"),
                     "-o",
                     str(executable),
                 ],

@@ -24,71 +24,23 @@
 #define PY_FONT_W 12U
 #define PY_FONT_H 20U
 #define PY_MAX_GLYPHS (HK_DISPLAY_REQUIRED_WIDTH / PY_FONT_W)
+#define PY_CODE_FONT_W 8U
+#define PY_CODE_FONT_H 14U
+#define PY_CODE_ROW_PITCH 15U
+#define PY_CODE_MARGIN 6U
+#define PY_CODE_NUMBER_COLS 6U
+#define PY_CODE_X (PY_CODE_MARGIN + PY_CODE_NUMBER_COLS * PY_CODE_FONT_W + 4U)
+#define PY_CODE_COLUMNS ((HK_DISPLAY_REQUIRED_WIDTH - PY_CODE_MARGIN - PY_CODE_X) / PY_CODE_FONT_W)
+#define PY_CODE_MAX_GLYPHS (HK_DISPLAY_REQUIRED_WIDTH / PY_CODE_FONT_W)
 
 _Static_assert(PY_ACTION_ROW_Y0 + (MICROPYTHON_ACTION_COUNT - 1U) *
                PY_ACTION_ROW_PITCH + PY_ACTION_ROW_H <= HK_DISPLAY_REQUIRED_HEIGHT,
                "all script actions must fit on screen");
-
-static uint32_t small_text_next(const char **text)
-{
-    const uint8_t *cursor = (const uint8_t *)*text;
-    uint8_t first = *cursor++;
-    uint32_t codepoint;
-    uint8_t required;
-
-    if(first < 0x80U)
-    {
-        *text = (const char *)cursor;
-        return first;
-    }
-    if((first & 0xE0U) == 0xC0U)
-    {
-        codepoint = first & 0x1FU;
-        required = 1U;
-    }
-    else if((first & 0xF0U) == 0xE0U)
-    {
-        codepoint = first & 0x0FU;
-        required = 2U;
-    }
-    else
-    {
-        codepoint = first & 0x07U;
-        required = 3U;
-    }
-    while(required-- && (*cursor & 0xC0U) == 0x80U)
-        codepoint = (codepoint << 6) | (*cursor++ & 0x3FU);
-    *text = (const char *)cursor;
-    return codepoint;
-}
-
-static uint8_t small_glyph_coverage(uint32_t codepoint, uint16_t x,
-                                    uint16_t y)
-{
-    const uint8_t *glyph = hk_font_glyph(codepoint);
-    uint16_t source_x0 = (uint16_t)(x * HACKYLENS_FONT_W / PY_FONT_W);
-    uint16_t source_x1 = (uint16_t)((x + 1U) * HACKYLENS_FONT_W /
-                                    PY_FONT_W);
-    uint16_t source_y0 = (uint16_t)(y * HACKYLENS_FONT_H / PY_FONT_H);
-    uint16_t source_y1 = (uint16_t)((y + 1U) * HACKYLENS_FONT_H /
-                                    PY_FONT_H);
-    uint16_t covered = 0U;
-    uint16_t samples = 0U;
-
-    for(uint16_t source_y = source_y0; source_y < source_y1; source_y++)
-    {
-        for(uint16_t source_x = source_x0; source_x < source_x1; source_x++)
-        {
-            uint8_t bit = glyph[
-                source_y * HACKYLENS_FONT_ROW_BYTES + source_x / 8U] &
-                (uint8_t)(0x80U >> (source_x & 7U));
-
-            covered += bit ? 1U : 0U;
-            samples++;
-        }
-    }
-    return samples ? (uint8_t)((covered * 255U + samples / 2U) / samples) : 0U;
-}
+_Static_assert(MICROPYTHON_PREVIEW_LINES * PY_CODE_ROW_PITCH <= PY_BODY_H,
+               "all source rows must fit on screen");
+_Static_assert(HACKYLENS_FONT_W <= 2U * PY_CODE_FONT_W &&
+               HACKYLENS_FONT_H <= 2U * PY_CODE_FONT_H,
+               "the text palette covers at most four source pixels per sample");
 
 static uint16_t blend_color(uint16_t foreground, uint16_t background,
                             uint8_t coverage)
@@ -107,38 +59,83 @@ static uint16_t blend_color(uint16_t foreground, uint16_t background,
     return (uint16_t)((red << 11) | (green << 5) | blue);
 }
 
+static void draw_sized_text(uint16_t x, uint16_t y, uint16_t width,
+                             const char *text, uint16_t foreground,
+                             uint16_t background, uint8_t glyph_width,
+                             uint8_t glyph_height)
+{
+    const uint8_t *glyphs[PY_CODE_MAX_GLYPHS];
+    uint8_t source_columns[PY_FONT_W + 1U];
+    uint16_t glyph_count = 0U;
+    const char *cursor = text ? text : "";
+    if(x >= HK_DISPLAY_REQUIRED_WIDTH || y + glyph_height > HK_DISPLAY_REQUIRED_HEIGHT)
+        return;
+    if(width > HK_DISPLAY_REQUIRED_WIDTH - x)
+        width = HK_DISPLAY_REQUIRED_WIDTH - x;
+    while(*cursor && glyph_count < width / glyph_width)
+        glyphs[glyph_count++] = hk_font_glyph(utf8_next(&cursor));
+    if(!glyph_count)
+        return;
+    const uint16_t colors[] = {
+        background,
+        blend_color(foreground, background, 64U),
+        blend_color(foreground, background, 128U),
+        blend_color(foreground, background, 191U),
+        foreground,
+    };
+    for(uint8_t column = 0U; column <= glyph_width; ++column)
+        source_columns[column] = column * HACKYLENS_FONT_W / glyph_width;
+    for(uint8_t row = 0U; row < glyph_height; ++row)
+    {
+        uint8_t y0 = row * HACKYLENS_FONT_H / glyph_height;
+        uint8_t y1 = (row + 1U) * HACKYLENS_FONT_H / glyph_height;
+        uint8_t coverage_step[PY_FONT_W];
+        for(uint8_t column = 0U; column < glyph_width; ++column)
+            coverage_step[column] = 4U / ((y1 - y0) *
+                (source_columns[column + 1U] - source_columns[column]));
+        uint8_t *pixels = hk_ui_display_row_buffer();
+        for(uint16_t glyph = 0U; glyph < glyph_count; ++glyph)
+        {
+            for(uint8_t column = 0U; column < glyph_width; ++column)
+            {
+                uint8_t covered = 0U;
+                for(uint8_t sy = y0; sy < y1; ++sy)
+                {
+                    for(uint8_t sx = source_columns[column];
+                        sx < source_columns[column + 1U]; ++sx)
+                        if(glyphs[glyph][sy * HACKYLENS_FONT_ROW_BYTES + sx / 8U] &
+                           (0x80U >> (sx & 7U)))
+                            ++covered;
+                }
+                uint16_t color = colors[covered * coverage_step[column]];
+                *pixels++ = (uint8_t)(color >> 8);
+                *pixels++ = (uint8_t)color;
+            }
+        }
+        hk_ui_display_write_row(x, (uint16_t)(y + row), glyph_count * glyph_width,
+                                hk_ui_display_row_buffer());
+    }
+}
+
 static void draw_small_text(uint16_t x, uint16_t y, uint16_t width,
                             const char *text, uint16_t foreground,
                             uint16_t background)
 {
-    uint32_t glyphs[PY_MAX_GLYPHS];
-    uint16_t glyph_count = 0U;
-    const char *cursor = text ? text : "";
+    draw_sized_text(x, y, width, text, foreground, background,
+                    PY_FONT_W, PY_FONT_H);
+}
 
-    if(x >= HK_DISPLAY_REQUIRED_WIDTH || y + PY_FONT_H >
-       HK_DISPLAY_REQUIRED_HEIGHT)
-        return;
-    if(width > HK_DISPLAY_REQUIRED_WIDTH - x)
-        width = HK_DISPLAY_REQUIRED_WIDTH - x;
-    while(*cursor && glyph_count < width / PY_FONT_W)
-        glyphs[glyph_count++] = small_text_next(&cursor);
-    for(uint16_t row = 0U; row < PY_FONT_H; row++)
-    {
-        uint8_t *pixels = hk_ui_display_row_buffer();
+static void draw_code_text(uint16_t x, uint16_t y, uint16_t width,
+                           const char *text, uint16_t color)
+{
+    draw_sized_text(x, y, width, text, color, COLOR_BLACK, PY_CODE_FONT_W, PY_CODE_FONT_H);
+}
 
-        for(uint16_t column = 0U; column < width; column++)
-        {
-            uint16_t glyph = (uint16_t)(column / PY_FONT_W);
-            uint8_t coverage = glyph < glyph_count ?
-                small_glyph_coverage(glyphs[glyph],
-                                     (uint16_t)(column % PY_FONT_W), row) : 0U;
-            uint16_t color = blend_color(foreground, background, coverage);
-
-            pixels[column * 2U] = (uint8_t)(color >> 8);
-            pixels[column * 2U + 1U] = (uint8_t)color;
-        }
-        hk_ui_display_write_row(x, (uint16_t)(y + row), width, pixels);
-    }
+uint8_t micropython_view_code_columns(void)
+{
+    const uint8_t columns = PY_CODE_COLUMNS < MICROPYTHON_PREVIEW_COLUMNS ?
+                            PY_CODE_COLUMNS : MICROPYTHON_PREVIEW_COLUMNS;
+    return columns - columns % 4U;
 }
 
 static void draw_small_centered(uint16_t y, const char *text,
@@ -151,7 +148,7 @@ static void draw_small_centered(uint16_t y, const char *text,
 
     while(*cursor && glyphs < PY_MAX_GLYPHS)
     {
-        (void)small_text_next(&cursor);
+        (void)utf8_next(&cursor);
         glyphs++;
     }
     width = (uint16_t)(glyphs * PY_FONT_W);
@@ -191,7 +188,7 @@ static const char *mode_title(micropython_ui_mode_t mode)
     switch(mode)
     {
     case MICROPYTHON_UI_ACTIONS: return "PY ACTIONS";
-    case MICROPYTHON_UI_PREVIEW: return "PY CODE";
+    case MICROPYTHON_UI_PREVIEW: return "VIEW CODE";
     case MICROPYTHON_UI_CONSOLE: return "PY LOGS";
     case MICROPYTHON_UI_DELETE_CONFIRM: return "DELETE";
     default: return "MICRO-PYTHON";
@@ -234,6 +231,20 @@ static void format_size(char *output, size_t output_size, uint32_t bytes)
                  (unsigned long)(bytes / (1024U * 1024U)));
 }
 
+static void draw_code_info(const micropython_view_state_t *ui)
+{
+    char position[20];
+    snprintf(position, sizeof(position), "%sL%lu%s",
+             ui->preview_has_previous ? "< " : "",
+             (unsigned long)ui->preview_line,
+             ui->preview_has_next ? " >" : "");
+    uint16_t width = (uint16_t)(strlen(position) * PY_CODE_FONT_W);
+    uint16_t right = HK_DISPLAY_REQUIRED_WIDTH - PY_CODE_MARGIN - width;
+    draw_code_text(PY_CODE_MARGIN, 34U, right - PY_CODE_MARGIN * 2U,
+                   ui->selected_name, COLOR_WHITE);
+    draw_code_text(right, 34U, width, position, hk_ui_accent());
+}
+
 static void draw_info(const micropython_view_state_t *ui,
                       const micropython_runtime_status_t *runtime,
                       const userfs_status_t *filesystem)
@@ -273,10 +284,8 @@ static void draw_info(const micropython_view_state_t *ui,
     }
     else if(ui->mode == MICROPYTHON_UI_PREVIEW)
     {
-        char name[25];
-        fitted_text(name, sizeof(name), ui->selected_name, 24U);
-        snprintf(line, sizeof(line), "%s  LINE %lu", name,
-                 (unsigned long)ui->preview_line);
+        draw_code_info(ui);
+        return;
     }
     else
     {
@@ -365,15 +374,21 @@ static void draw_body(const micropython_view_state_t *ui,
     }
     if(ui->mode == MICROPYTHON_UI_PREVIEW)
     {
+        uint16_t gutter = blend_color(hk_ui_accent(), COLOR_BLACK, 155U);
+        hk_ui_display_fill_rect(PY_CODE_X - 2U, PY_BODY_Y, 1U, PY_BODY_H, gutter);
         for(uint8_t row = 0U; row < ui->preview_count; row++)
         {
-            snprintf(line, sizeof(line), "%5lu %s",
-                     (unsigned long)ui->preview_line_number[row],
-                     ui->preview[row]);
-            draw_small_text(
-                PY_TEXT_X, (uint16_t)(PY_BODY_Y + row * PY_TEXT_ROW_PITCH),
-                HK_DISPLAY_REQUIRED_WIDTH - PY_TEXT_X * 2U,
-                line, hk_ui_accent(), COLOR_BLACK);
+            uint16_t y = (uint16_t)(PY_BODY_Y + row * PY_CODE_ROW_PITCH);
+            if(ui->preview_line_number[row])
+                snprintf(line, sizeof(line), "%6lu",
+                         (unsigned long)ui->preview_line_number[row]);
+            else
+                memcpy(line, "     >", sizeof("     >"));
+            draw_code_text(PY_CODE_MARGIN, y, PY_CODE_NUMBER_COLS * PY_CODE_FONT_W,
+                           line, gutter);
+            draw_code_text(PY_CODE_X, y,
+                           micropython_view_code_columns() * PY_CODE_FONT_W,
+                           ui->preview[row], COLOR_WHITE);
         }
         return;
     }

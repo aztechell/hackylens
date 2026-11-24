@@ -48,7 +48,7 @@ typedef struct
     char startup[USERFS_NAME_MAX + 1U];
     char status[MICROPYTHON_STATUS_COLUMNS + 1U];
     char preview[MICROPYTHON_PREVIEW_LINES]
-                [MICROPYTHON_PREVIEW_COLUMNS + 1U];
+                [MICROPYTHON_PREVIEW_LINE_BYTES];
     uint32_t preview_line_number[MICROPYTHON_PREVIEW_LINES];
     uint32_t preview_line;
     uint8_t preview_count;
@@ -70,6 +70,7 @@ typedef struct
     uint8_t row_mask;
 } micropython_view_update_t;
 
+uint8_t micropython_view_code_columns(void);
 void micropython_view_render(
     const micropython_view_state_t *ui,
     const micropython_runtime_status_t *runtime,

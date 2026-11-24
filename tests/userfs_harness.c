@@ -220,7 +220,9 @@ int main(void)
     require(userfs_mount() == USERFS_ERROR_UNFORMATTED,
             "blank flash must not auto-format");
     require(userfs_format_explicit() == USERFS_OK, "explicit format");
+    uint32_t revision = userfs_revision();
     upload("main.py", old_script, old_size);
+    require(userfs_revision() != revision, "a committed upload changes the list revision");
     require(userfs_set_pinned("main.py", 1U) == USERFS_OK &&
             userfs_pin_count() == 1U && strcmp(userfs_pin_name(0U), "main.py") == 0,
             "pin is visible in the launcher");
@@ -239,11 +241,13 @@ int main(void)
             "repinning does not restore cleared boot shortcut");
     require(userfs_set_boot_shortcut("main.py") == USERFS_OK, "restore boot shortcut");
     require(userfs_set_startup("main.py") == USERFS_OK, "restore IDE startup");
+    revision = userfs_revision();
     require(userfs_list(list_count, &listed) == USERFS_OK && listed == 1U,
             "list scripts");
     require(read_file("main.py", readback, new_size + 1U) == old_size &&
             memcmp(readback, old_script, old_size) == 0,
             "read old script");
+    require(userfs_revision() == revision, "directory and source reads preserve the revision");
 
     require(userfs_unmount() == USERFS_OK, "unmount baseline");
     snapshot = malloc(sizeof(g_flash));

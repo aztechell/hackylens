@@ -250,6 +250,26 @@ int main(void)
     check(g_info_text_rows == 20U && g_region_count == 1U,
           "status replaces the information line");
 
+    ui.mode = MICROPYTHON_UI_PREVIEW;
+    ui.status[0] = '\0';
+    ui.preview_line = 123456U;
+    ui.preview_has_previous = ui.preview_has_next = 1U;
+    ui.preview_count = MICROPYTHON_PREVIEW_LINES;
+    uint8_t columns = micropython_view_code_columns();
+    check(columns == 32U, "wide display has 32 code columns");
+    for(uint8_t row = 0U; row < ui.preview_count; ++row)
+    {
+        memset(ui.preview[row], 'x', columns);
+        ui.preview[row][columns] = '\0';
+        ui.preview_line_number[row] = row % 2U ? 0U : ui.preview_line + row;
+    }
+    reset_calls();
+    update = (micropython_view_update_t){0U, 1U, 1U, 0U};
+    micropython_view_render(&ui, &runtime, &filesystem, &update);
+    check(g_region_presents == 1U && g_region_count == 2U &&
+          g_regions[1].y + g_regions[1].height == 240U,
+          "all code rows fit in one atomic body update");
+
     if(g_failures)
         return 1;
     puts("MICROPYTHON_VIEW_OK bounds=1 atomic=1 rows=2 regions=2 font=12");

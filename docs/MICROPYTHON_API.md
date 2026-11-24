@@ -23,6 +23,11 @@ files, previews source without loading the whole file, runs the selected file,
 shows scrollable output, changes startup selection, and deletes only after an
 explicit confirmation. Opening the app does not run the selected startup file.
 
+Tap LEFT or RIGHT to move in the script list, or hold either direction to
+scroll at a fixed rate. In **VIEW CODE**, the display wraps long lines and
+preserves indentation and source line numbers. LEFT and RIGHT page through
+the source, including while held. BACK returns to the script's actions.
+
 For power-on launch, pin a script to the menu, then select it under
 **SETTINGS → Startup**. It runs with the same lifecycle as the menu shortcut.
 BACK at boot skips autostart, and a watchdog reset also skips the script.

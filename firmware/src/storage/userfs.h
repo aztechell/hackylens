@@ -56,6 +56,8 @@ userfs_result_t userfs_unmount(void);
 /* Never called implicitly. UI/protocol must obtain explicit user confirmation. */
 userfs_result_t userfs_format_explicit(void);
 void userfs_get_status(userfs_status_t *status);
+/* Changes when files, launcher pins, startup selection, or mount state change. */
+uint32_t userfs_revision(void);
 
 userfs_result_t userfs_list(userfs_list_callback_t callback, void *context);
 userfs_result_t userfs_stat(const char *name, uint32_t *size);

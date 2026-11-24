@@ -5,6 +5,7 @@
 #include "../firmware/src/adapters/micropython/micropython_capability_bridge.h"
 #include "../firmware/src/apps/micropython/micropython_app.h"
 #include "../firmware/src/apps/micropython/micropython_view.h"
+#include "../firmware/src/apps/micropython/micropython_preview.h"
 #include "../firmware/src/config/input_config.h"
 #include "../firmware/src/services/debug_console_service.h"
 #include "../firmware/src/services/micropython_program.h"
@@ -23,7 +24,7 @@ static const char g_startup_source[] =
     "\tprint('two')\n"
     "abcdefghijklmnopqrstuvwxyz-THIS-LINE-IS-LONG\n"
     "line4\nline5\nline6\nline7\nline8\nline9\nline10\nline11\nline12";
-static fake_file_t g_files[] = {
+static fake_file_t g_files[40] = {
     {"notes.txt", "ignored", 7U, 1U},
     {"alpha.py", "print('alpha')\n", 15U, 1U},
     {"startup.py", g_startup_source, sizeof(g_startup_source) - 1U, 1U},
@@ -47,6 +48,11 @@ static uint8_t g_list_busy;
 static uint8_t g_camera_presented;
 static uint8_t g_display_presented;
 static unsigned g_render_count;
+static unsigned g_list_reads;
+static unsigned g_status_reads;
+static uint32_t g_revision = 1U;
+static uint64_t g_now_us;
+static uint32_t g_buttons;
 static micropython_view_update_t g_last_update;
 
 static void check(int condition, const char *message)
@@ -66,26 +72,36 @@ static fake_file_t *find_file(const char *name)
     return NULL;
 }
 
-static hk_input_snapshot_t pressed(uint32_t button)
+static void set_buttons(uint32_t buttons)
 {
-    hk_input_snapshot_t input = {button, button, button};
-    return input;
+    hk_input_event_t event = {
+        .timestamp_us = g_now_us,
+        .state = buttons,
+        .changed = g_buttons ^ buttons,
+        .pressed = buttons & ~g_buttons,
+        .released = g_buttons & ~buttons,
+    };
+    g_buttons = buttons;
+    micropython_handle_buttons(&event);
+}
+
+static void tick(void)
+{
+    g_now_us += 5000U;
+    micropython_tick(g_now_us);
 }
 
 static void press_button(uint32_t button)
 {
-    hk_input_snapshot_t input = pressed(button);
-    micropython_handle_buttons(&input);
-    input.state = 0U;
-    input.pressed = 0U;
-    micropython_tick(&input);
+    set_buttons(button);
+    set_buttons(0U);
+    tick();
 }
 
 static void render(void)
 {
-    hk_input_snapshot_t input = {0U, 0U, 0U};
     for(unsigned i = 0U; i < MICROPYTHON_CONSOLE_RENDER_TICKS; i++)
-        micropython_tick(&input);
+        tick();
 }
 
 static void select_action(uint8_t target)
@@ -162,14 +178,20 @@ userfs_result_t userfs_mount(void)
 
 void userfs_get_status(userfs_status_t *status)
 {
+    ++g_status_reads;
     memset(status, 0, sizeof(*status));
     status->state = USERFS_STATE_MOUNTED;
     status->total_bytes = 2U * 1024U * 1024U;
     status->used_bytes = 64U * 1024U;
 }
 
+uint32_t userfs_revision(void) { return g_revision; }
+
+uint8_t micropython_view_code_columns(void) { return 20U; }
+
 userfs_result_t userfs_list(userfs_list_callback_t callback, void *context)
 {
+    ++g_list_reads;
     if(g_list_busy)
         return USERFS_ERROR_BUSY;
     for(size_t i = 0U; i < sizeof(g_files) / sizeof(g_files[0]); i++)
@@ -215,6 +237,7 @@ userfs_result_t userfs_remove(const char *name)
     if(!file)
         return USERFS_ERROR_NOT_FOUND;
     file->present = 0U;
+    ++g_revision;
     if(strcmp(g_startup, name) == 0)
         g_startup[0] = '\0';
     return USERFS_OK;
@@ -225,6 +248,7 @@ userfs_result_t userfs_set_startup(const char *name)
     if(name && name[0] && !find_file(name))
         return USERFS_ERROR_NOT_FOUND;
     snprintf(g_startup, sizeof(g_startup), "%s", name ? name : "");
+    ++g_revision;
     return USERFS_OK;
 }
 
@@ -347,6 +371,87 @@ static void queue_output(const char *text)
     g_output_size += length;
 }
 
+static void test_list_repeat(void)
+{
+    for(unsigned i = 5U; i < 35U; ++i)
+    {
+        snprintf(g_files[i].name, sizeof(g_files[i].name), "scroll%02u.py", i);
+        g_files[i].present = 1U;
+    }
+    micropython_enter(NULL);
+    unsigned scans = g_list_reads;
+    unsigned status_reads = g_status_reads;
+    uint32_t start = g_view.selected_index;
+    set_buttons(BUTTON_RIGHT);
+    uint64_t pressed_at = g_now_us;
+    tick();
+    check(g_view.selected_index == start + 1U, "RIGHT tap updates on next UI tick");
+    g_now_us = pressed_at + MICROPYTHON_NAV_HOLD_US - 1U;
+    micropython_tick(g_now_us);
+    check(g_view.selected_index == start + 1U, "repeat waits for hold delay");
+    micropython_tick(++g_now_us);
+    check(g_view.selected_index == start + 2U, "first repeat advances one row");
+    g_now_us += MICROPYTHON_NAV_REPEAT_US * 4U;
+    micropython_tick(g_now_us);
+    check(g_view.selected_index == start + 3U, "late tick emits one repeat");
+    for(uint8_t i = 0U; i < 20U; ++i)
+    {
+        g_now_us += MICROPYTHON_NAV_REPEAT_US - 1U;
+        micropython_tick(g_now_us);
+        check(g_view.selected_index == start + 3U + i, "repeat cadence stays fixed");
+        micropython_tick(++g_now_us);
+    }
+    check(g_view.selected_index == start + 23U && g_view.list_top > 0U,
+          "hold scrolls through visible pages");
+    check(g_list_reads == scans + 1U && g_status_reads == status_reads,
+          "scroll only scans when the viewport leaves the cached window");
+    set_buttons(0U);
+    g_now_us += MICROPYTHON_NAV_REPEAT_US * 3U;
+    micropython_tick(g_now_us);
+    check(g_view.selected_index == start + 23U, "release stops repeat");
+    set_buttons(BUTTON_LEFT);
+    g_now_us += MICROPYTHON_NAV_HOLD_US;
+    micropython_tick(g_now_us);
+    check(g_view.selected_index == start + 21U, "LEFT has the same repeat");
+    set_buttons(0U);
+}
+
+static void test_preview_checkpoints(void)
+{
+    static char source[4600];
+    size_t size = 0U;
+    for(unsigned line = 1U; line <= 90U; ++line)
+        size += (size_t)snprintf(source + size, sizeof(source) - size,
+            "\tline%02u = 'abcdefghijklmnopqrstuvwxyz-\xd0\xb0'\r\n", line);
+    g_files[36] = (fake_file_t){"wrapped.py", source, (uint32_t)size, 1U};
+    for(uint8_t columns = 20U; columns <= 32U; columns += 12U)
+    {
+        micropython_view_state_t ui = {.selected_name = "wrapped.py"};
+        micropython_view_state_t pages[24];
+        unsigned index = 0U;
+        check(micropython_preview_open(&ui, columns) == USERFS_OK,
+              "long source opens on both widths");
+        while(ui.preview_has_next && index < 24U)
+        {
+            pages[index++] = ui;
+            check(micropython_preview_move(&ui, 1) == USERFS_OK, "next page");
+        }
+        check(index > 10U && !ui.preview_has_next, "scrolls to end of long source");
+        while(index)
+        {
+            check(micropython_preview_move(&ui, -1) == USERFS_OK, "previous page");
+            --index;
+            check(ui.preview_line == pages[index].preview_line &&
+                  ui.preview_count == pages[index].preview_count &&
+                  memcmp(ui.preview, pages[index].preview, sizeof(ui.preview)) == 0 &&
+                  memcmp(ui.preview_line_number, pages[index].preview_line_number,
+                         sizeof(ui.preview_line_number)) == 0,
+                  "backward page is rebuilt exactly across checkpoints");
+        }
+        check(!ui.preview_has_previous && ui.preview_line == 1U, "returns to source start");
+    }
+}
+
 int main(void)
 {
     hk_input_snapshot_t input = {0U, 0U, 0U};
@@ -361,10 +466,11 @@ int main(void)
           "enter never automatically runs startup");
     {
         unsigned renders = g_render_count;
-        for(unsigned i = 0U; i < MICROPYTHON_LIST_REFRESH_TICKS; i++)
-            micropython_tick(&input);
-        check(g_render_count == renders,
-              "unchanged periodic USERFS refresh performs no rendering");
+        unsigned scans = g_list_reads;
+        for(unsigned i = 0U; i < 240U; i++)
+            tick();
+        check(g_render_count == renders && g_list_reads == scans,
+              "idle list neither scans flash nor redraws");
     }
     {
         unsigned renders = g_render_count;
@@ -377,8 +483,11 @@ int main(void)
         check(g_render_count == renders + 1U && g_last_update.full,
               "script manager must restore its entire screen after camera close");
     }
+    unsigned reads = g_list_reads;
+    unsigned status_reads = g_status_reads;
     press_button(BUTTON_LEFT);
-    render();
+    check(g_list_reads == reads && g_status_reads == status_reads,
+          "tap uses cached names and storage status");
     check(!g_last_update.full && !g_last_update.body &&
           g_last_update.row_mask == 0x03U,
           "same-page list navigation redraws exactly old and new rows");
@@ -394,15 +503,21 @@ int main(void)
     press_button(BUTTON_OK);
     render();
     check(g_view.mode == MICROPYTHON_UI_PREVIEW, "view action opens source");
-    check(g_view.preview_line == 1U && g_view.preview_count == 9U,
+    check(g_view.preview_line == 1U && g_view.preview_count == MICROPYTHON_PREVIEW_LINES,
           "first source page has numbered lines");
     check(strcmp(g_view.preview[1], "    print('two')") == 0,
           "preview expands tabs and accepts CRLF");
-    check(g_view.preview[2][MICROPYTHON_PREVIEW_COLUMNS - 1U] == '>',
-          "preview marks truncated long lines");
+    check(strcmp(g_view.preview[2], "abcdefghijklmnopqrst") == 0 &&
+          strcmp(g_view.preview[3], "uvwxyz-THIS-LINE-IS-") == 0 &&
+          strcmp(g_view.preview[4], "LONG") == 0 &&
+          g_view.preview_line_number[2] == 3U &&
+          g_view.preview_line_number[3] == 0U &&
+          g_view.preview_line_number[4] == 0U &&
+          g_view.preview_line_number[5] == 4U,
+          "preview preserves every character and numbers the physical line once");
     press_button(BUTTON_RIGHT);
     render();
-    check(g_view.preview_line == 10U, "preview advances by one page");
+    check(g_view.preview_line == 11U, "preview advances by one page of visual rows");
     press_button(BUTTON_LEFT);
     render();
     check(g_view.preview_line == 1U, "preview returns to prior page");
@@ -461,11 +576,11 @@ int main(void)
         unsigned renders = g_render_count;
         micropython_poll_output(&input);
         for(unsigned i = 0U; i + 1U < MICROPYTHON_CONSOLE_RENDER_TICKS; i++)
-            micropython_tick(&input);
+            tick();
         check(g_render_count == renders,
               "live console output is coalesced for 100ms");
         for(unsigned i = 0U; i < MICROPYTHON_RENDER_TICKS; i++)
-            micropython_tick(&input);
+            tick();
         check(g_render_count == renders + 1U && g_last_update.body &&
               g_last_update.info && !g_last_update.full,
               "coalesced console output redraws body and info once");
@@ -513,8 +628,9 @@ int main(void)
     press_button(BUTTON_BACK);
     render();
     g_list_busy = 1U;
-    for(unsigned i = 0U; i < MICROPYTHON_LIST_REFRESH_TICKS; i++)
-        micropython_tick(&input);
+    ++g_revision;
+    for(unsigned i = 0U; i < 240U; i++)
+        tick();
     render();
     check(strstr(g_view.status, "busy") != NULL,
           "list busy error is visible without losing navigation state");
@@ -523,8 +639,9 @@ int main(void)
     snprintf(g_files[0].name, sizeof(g_files[0].name), "new.py");
     g_files[0].data = "print('new')\n";
     g_files[0].size = 13U;
-    for(unsigned i = 0U; i < MICROPYTHON_LIST_REFRESH_TICKS; i++)
-        micropython_tick(&input);
+    ++g_revision;
+    for(unsigned i = 0U; i < 240U; i++)
+        tick();
     render();
     check(strcmp(g_view.selected_name, "alpha.py") == 0 &&
           g_view.file_count == 4U,
@@ -584,10 +701,12 @@ int main(void)
     check(g_runtime.state == MICROPYTHON_RUNTIME_STOPPING && g_menu_count == prior_menu_count,
           "launcher BACK waits for the VM to stop");
     g_runtime.state = MICROPYTHON_RUNTIME_STOPPED;
-    const hk_app_event_t timer = {.kind = HK_APP_EVENT_TIMER};
+    const hk_app_event_t timer = {.kind = HK_APP_EVENT_TIMER, .timestamp_us = g_now_us + 5000U};
     check(micropython_v2_entry.event(NULL, &timer) == HK_OK &&
           g_menu_count == prior_menu_count + 1U, "launcher returns to menu after cleanup");
 
+    test_list_repeat();
+    test_preview_checkpoints();
     if(g_failures)
         return 1;
     puts("MICROPYTHON_APP_OK list=1 preview=1 actions=1 run=1 stop=1 logs=1");
