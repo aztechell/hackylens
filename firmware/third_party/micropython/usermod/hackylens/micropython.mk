@@ -5,3 +5,4 @@ HACKYLENS_USERMOD_DIR := $(USERMOD_DIR)
 # qstrs and MP_REGISTER_MODULE declarations.
 SRC_USERMOD += $(HACKYLENS_USERMOD_DIR)/../../../../src/apps/micropython/micropython_bindings.c
 CFLAGS_USERMOD += -I$(HACKYLENS_USERMOD_DIR)/../../../../include
+CFLAGS_USERMOD += -I$(HACKYLENS_USERMOD_DIR)/../../../../../sdk/include

@@ -143,6 +143,12 @@ const hk_app_v2_entry_t camera_v2_entry = {0};
 const hk_app_v2_entry_t color_tracker_v2_entry = {0};
 const hk_app_v2_entry_t logger_v2_entry = {0};
 const hk_app_v2_entry_t object_gate_v2_entry = {0};
+const hk_app_v2_entry_t kibble_lm_v2_entry = {0};
+
+uint8_t kibble_lm_debug(const char *command)
+{
+    return strcmp(command, "HKKLINFO") == 0;
+}
 
 uint8_t object_gate_debug(const char *command)
 {
@@ -407,7 +413,7 @@ int main(void)
     CHECK(g_hk_generated_app_count ==
           12U + HK_ENABLE_APP_COLOR_TRACKER + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
           HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION + HK_ENABLE_APP_UART_LOGGER +
-          HK_ENABLE_APP_OBJECT_GATE);
+          HK_ENABLE_APP_OBJECT_GATE + HK_ENABLE_APP_KIBBLE_LM);
     CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER -
           HK_ENABLE_APP_UART_LOGGER - HK_ENABLE_APP_OBJECT_GATE);
     CHECK(hk_app_for_id("color-tracker") && !hk_app_for_id("color-tracker")->menu_visible);
@@ -428,7 +434,11 @@ int main(void)
 #if HK_ENABLE_APP_MICROPYTHON
         "micropython",
 #endif
-        "terminal", "buttons", "pong", "sky-glide", "settings", "power",
+        "terminal", "buttons", "pong", "sky-glide",
+#if HK_ENABLE_APP_KIBBLE_LM
+        "kibble-lm",
+#endif
+        "settings", "power",
     };
     CHECK(g_menu_item_count == sizeof(menu_order) / sizeof(menu_order[0]));
     for(uint8_t index = 0U; index < g_menu_item_count; index++)

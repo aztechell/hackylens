@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
+#include <hackylens/app/kibble.h>
 #include <hackylens/capability/time.h>
 #include <hackylens/capability/vision.h>
 
@@ -607,6 +609,62 @@ static mp_obj_t binding_camera_detect(mp_obj_t lease)
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(binding_camera_detect_obj, binding_camera_detect);
 
+static mp_obj_t binding_kibble_open_step(void)
+{
+    uint8_t status[MICROPYTHON_BINDING_KIBBLE_STATUS_BYTES];
+    size_t length;
+    micropython_binding_result_t result = micropython_binding_call(
+        MICROPYTHON_BINDING_OP_KIBBLE_OPEN, NULL, NULL, 0U,
+        status, sizeof(status), &length);
+    if(result == MICROPYTHON_BINDING_ERROR_IO && length && !status[length - 1U])
+        mp_raise_msg_varg(&mp_type_OSError, MP_ERROR_TEXT("%s"), (const char *)status);
+    if(result != MICROPYTHON_BINDING_OK)
+        binding_raise(result);
+    return mp_obj_new_bool(length != 0U);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_kibble_open_step_obj, binding_kibble_open_step);
+
+static mp_obj_t binding_kibble_start(mp_obj_t prompt_obj, mp_obj_t seed_obj)
+{
+    size_t length;
+    if(!mp_obj_is_str(prompt_obj))
+        mp_raise_ValueError(MP_ERROR_TEXT("prompt must be a string"));
+    const char *prompt = mp_obj_str_get_data(prompt_obj, &length);
+    if(!length || length > HK_KIBBLE_PROMPT_MAX)
+        mp_raise_ValueError(MP_ERROR_TEXT("prompt must be 1 to 24 ASCII bytes"));
+    const uint32_t arguments[6] = {binding_uint(seed_obj, UINT32_MAX)};
+    (void)binding_call(MICROPYTHON_BINDING_OP_KIBBLE_START, arguments,
+                       (const uint8_t *)prompt, length, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(binding_kibble_start_obj, binding_kibble_start);
+
+static mp_obj_t binding_kibble_poll(void)
+{
+    hk_kibble_token_t token;
+    size_t length = binding_call(MICROPYTHON_BINDING_OP_KIBBLE_POLL, NULL,
+                                 NULL, 0U, (uint8_t *)&token, sizeof(token));
+    if(!length)
+        return mp_const_none;
+    if(length != sizeof(token))
+        binding_raise(MICROPYTHON_BINDING_ERROR_IO);
+    mp_obj_t items[] = {
+        mp_obj_new_str(token.text, strlen(token.text)),
+        mp_obj_new_bool(token.end),
+        mp_obj_new_int_from_uint(token.accelerator_us),
+        mp_obj_new_int_from_uint(token.cpu_us),
+    };
+    return mp_obj_new_tuple(MP_ARRAY_SIZE(items), items);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_kibble_poll_obj, binding_kibble_poll);
+
+static mp_obj_t binding_kibble_close(void)
+{
+    (void)binding_call(MICROPYTHON_BINDING_OP_KIBBLE_CLOSE, NULL, NULL, 0U, NULL, 0U);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(binding_kibble_close_obj, binding_kibble_close);
+
 static mp_obj_t binding_camera_scan(mp_obj_t lease, mp_obj_t source_obj)
 {
     uint32_t lease_id = binding_uint(lease, UINT32_MAX);
@@ -758,6 +816,11 @@ static const mp_rom_map_elem_t hackylens_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_camera_model_close), MP_ROM_PTR(&binding_camera_model_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_camera_detect), MP_ROM_PTR(&binding_camera_detect_obj) },
     { MP_ROM_QSTR(MP_QSTR_camera_scan), MP_ROM_PTR(&binding_camera_scan_obj) },
+    { MP_ROM_QSTR(MP_QSTR_KIBBLE_MAX_TOKENS), MP_ROM_INT(HK_KIBBLE_GENERATION_MAX) },
+    { MP_ROM_QSTR(MP_QSTR_kibble_open_step), MP_ROM_PTR(&binding_kibble_open_step_obj) },
+    { MP_ROM_QSTR(MP_QSTR_kibble_start), MP_ROM_PTR(&binding_kibble_start_obj) },
+    { MP_ROM_QSTR(MP_QSTR_kibble_poll), MP_ROM_PTR(&binding_kibble_poll_obj) },
+    { MP_ROM_QSTR(MP_QSTR_kibble_close), MP_ROM_PTR(&binding_kibble_close_obj) },
     { MP_ROM_QSTR(MP_QSTR_sd_write), MP_ROM_PTR(&binding_sd_write_obj) },
     { MP_ROM_QSTR(MP_QSTR_sd_begin), MP_ROM_PTR(&binding_sd_begin_obj) },
     { MP_ROM_QSTR(MP_QSTR_sd_append), MP_ROM_PTR(&binding_sd_append_obj) },

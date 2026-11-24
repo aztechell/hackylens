@@ -20,7 +20,7 @@ EXPECTED_APPS = {
     "terminal", "camera", "qr-camera", "face-detect", "apriltag",
     "object-detect", "files", "buttons", "pong", "sky-glide", "settings", "power",
     "micropython", "recorder", "accelerometer", "face-recognition", "color-tracker", "uart-logger",
-    "object-gate",
+    "object-gate", "kibble-lm",
 }
 CAMERA_APPS = {
     "camera", "qr-camera", "face-detect", "apriltag", "object-detect", "face-recognition",

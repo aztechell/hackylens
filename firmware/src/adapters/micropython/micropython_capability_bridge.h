@@ -8,6 +8,7 @@
 #define MICROPYTHON_BINDING_DATA_MAX 256U
 #define MICROPYTHON_BINDING_RECT_BYTES 10U
 #define MICROPYTHON_BINDING_RECTS_MAX 256U
+#define MICROPYTHON_BINDING_KIBBLE_STATUS_BYTES 32U
 #define MICROPYTHON_BINDING_RECTS_BYTES \
     (MICROPYTHON_BINDING_RECTS_MAX * MICROPYTHON_BINDING_RECT_BYTES)
 
@@ -51,6 +52,10 @@ typedef enum
     MICROPYTHON_BINDING_OP_CAMERA_SAVE_BEGIN,
     MICROPYTHON_BINDING_OP_CAMERA_SAVE_STEP,
     MICROPYTHON_BINDING_OP_DISPLAY_FRAME,
+    MICROPYTHON_BINDING_OP_KIBBLE_OPEN,
+    MICROPYTHON_BINDING_OP_KIBBLE_START,
+    MICROPYTHON_BINDING_OP_KIBBLE_POLL,
+    MICROPYTHON_BINDING_OP_KIBBLE_CLOSE,
 } micropython_binding_op_t;
 
 typedef enum
@@ -76,6 +81,7 @@ void micropython_capability_bridge_prepare(uint32_t run_id);
 void micropython_capability_bridge_tick(void);
 hk_result_t micropython_capability_bridge_cleanup(void);
 void micropython_capability_bridge_release_camera(void);
+void micropython_capability_bridge_release_kibble(void);
 void micropython_capability_bridge_release_storage(void);
 uint8_t micropython_capability_bridge_camera_presented(void);
 uint8_t micropython_capability_bridge_display_presented(void);

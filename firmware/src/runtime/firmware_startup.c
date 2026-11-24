@@ -63,6 +63,9 @@ static uint8_t firmware_app_enter(
     {
 #if HK_ENABLE_APP_MICROPYTHON
         micropython_capability_bridge_release_storage();
+#if HK_ENABLE_APP_KIBBLE_LM
+        micropython_capability_bridge_release_kibble();
+#endif
 #endif
 #if HK_ENABLE_CAMERA_FEATURE && HK_ENABLE_APP_MICROPYTHON
         hmpy_session_stop_camera();

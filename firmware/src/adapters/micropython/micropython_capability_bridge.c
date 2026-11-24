@@ -26,13 +26,17 @@
 #include "hk_config.h"
 #endif
 
-#if HK_ENABLE_APP_MICROPYTHON || HK_ENABLE_CAMERA_FEATURE
+#if HK_ENABLE_APP_MICROPYTHON || HK_ENABLE_CAMERA_FEATURE || HK_ENABLE_APP_KIBBLE_LM
 #include "../../core/hk_menu.h"
 #include "../../core/hk_screen.h"
 #endif
 #if HK_ENABLE_APP_MICROPYTHON
 #include "../../services/script_sd_store.h"
 static const char g_storage_owner;
+#endif
+#if HK_ENABLE_APP_KIBBLE_LM
+#include "../../services/kibble_session.h"
+static const char g_kibble_owner;
 #endif
 #if HK_ENABLE_CAMERA_FEATURE
 #include "../../controllers/camera_client_preview.h"
@@ -532,6 +536,15 @@ void micropython_capability_bridge_release_camera(void)
 #endif
 }
 
+void micropython_capability_bridge_release_kibble(void)
+{
+#if HK_ENABLE_APP_KIBBLE_LM
+    hk_deadline_t deadline = HK_DEADLINE_IMMEDIATE;
+    (void)binding_deadline_after(250000U, &deadline);
+    kibble_session_close(&g_kibble_owner, deadline);
+#endif
+}
+
 uint8_t micropython_capability_bridge_camera_presented(void)
 {
 #if HK_ENABLE_CAMERA_FEATURE
@@ -817,6 +830,92 @@ static void binding_audio_progress(micropython_binding_control_t *control)
 }
 #endif
 
+#if HK_ENABLE_APP_KIBBLE_LM
+static micropython_binding_result_t binding_kibble_execute(
+    micropython_binding_control_t *control, uint32_t seed)
+{
+    switch(control->operation)
+    {
+    case MICROPYTHON_BINDING_OP_KIBBLE_OPEN:
+    {
+        const hk_app_t *app = hk_menu_active_app();
+        if(hk_screen_get() == SCREEN_APP && (!app || strcmp(app->id, "micropython") != 0))
+            return MICROPYTHON_BINDING_ERROR_BUSY;
+        const char *status;
+        hk_result_t result = kibble_session_open_step(&g_kibble_owner, &status);
+        if(result == HK_PENDING)
+            return MICROPYTHON_BINDING_OK;
+        if(result == HK_OK)
+        {
+            control->data[0] = 1U;
+            control->output_length = 1U;
+        }
+        else if(result == HK_ERR_IO)
+        {
+            size_t length = strlen(status) + 1U;
+            if(length <= MICROPYTHON_BINDING_KIBBLE_STATUS_BYTES)
+            {
+                for(size_t i = 0U; i < length; ++i)
+                    control->data[i] = (uint8_t)status[i];
+                control->output_length = (uint32_t)length;
+            }
+        }
+        return binding_external_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_KIBBLE_START:
+    {
+        char prompt[HK_KIBBLE_PROMPT_MAX + 1U];
+        size_t length = control->input_length;
+        if(!length || length >= sizeof(prompt))
+            return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+        for(size_t i = 0U; i < length; ++i)
+        {
+            uint8_t ch = control->data[i];
+            if(ch < 32U || ch > 126U)
+                return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+            prompt[i] = (char)ch;
+        }
+        prompt[length] = '\0';
+        return binding_external_result(kibble_session_start(&g_kibble_owner, prompt, seed));
+    }
+    case MICROPYTHON_BINDING_OP_KIBBLE_POLL:
+    {
+        hk_kibble_token_t token;
+        hk_result_t result = kibble_session_poll(&g_kibble_owner, &token);
+        if(result == HK_PENDING)
+            return MICROPYTHON_BINDING_OK;
+        if(result == HK_OK)
+        {
+            const uint8_t *bytes = (const uint8_t *)&token;
+            for(size_t i = 0U; i < sizeof(token); ++i)
+                control->data[i] = bytes[i];
+            control->output_length = sizeof(token);
+        }
+        return binding_external_result(result);
+    }
+    case MICROPYTHON_BINDING_OP_KIBBLE_CLOSE:
+        micropython_capability_bridge_release_kibble();
+        return MICROPYTHON_BINDING_OK;
+    default:
+        return MICROPYTHON_BINDING_ERROR_INVALID_ARGUMENT;
+    }
+}
+#endif
+
+static void binding_cancel_owned_operation(uint32_t operation)
+{
+    (void)operation;
+#if HK_ENABLE_APP_MICROPYTHON
+    if(binding_is_storage_operation(operation))
+        micropython_capability_bridge_release_storage();
+#endif
+#if HK_ENABLE_APP_KIBBLE_LM
+    if(operation >= MICROPYTHON_BINDING_OP_KIBBLE_OPEN &&
+       operation <= MICROPYTHON_BINDING_OP_KIBBLE_CLOSE)
+        micropython_capability_bridge_release_kibble();
+#endif
+}
+
 static micropython_binding_result_t binding_execute(
     micropython_binding_control_t *control,
     uint32_t ticket, uint32_t run_id)
@@ -840,6 +939,15 @@ static micropython_binding_result_t binding_execute(
 
     switch(op)
     {
+    case MICROPYTHON_BINDING_OP_KIBBLE_OPEN:
+    case MICROPYTHON_BINDING_OP_KIBBLE_START:
+    case MICROPYTHON_BINDING_OP_KIBBLE_POLL:
+    case MICROPYTHON_BINDING_OP_KIBBLE_CLOSE:
+#if HK_ENABLE_APP_KIBBLE_LM
+        return binding_kibble_execute(control, a[0]);
+#else
+        return MICROPYTHON_BINDING_ERROR_UNAVAILABLE;
+#endif
     case MICROPYTHON_BINDING_OP_CAMERA_OPEN:
     case MICROPYTHON_BINDING_OP_CAMERA_CLOSE:
     case MICROPYTHON_BINDING_OP_CAMERA_FRAME:
@@ -1384,10 +1492,7 @@ void micropython_capability_bridge_tick(void)
     run_id = control->run_id;
     if(binding_request_cancelled(control, ticket, run_id))
     {
-#if HK_ENABLE_APP_MICROPYTHON
-        if(binding_is_storage_operation(control->operation))
-            micropython_capability_bridge_release_storage();
-#endif
+        binding_cancel_owned_operation(control->operation);
         binding_complete_request(control, ticket,
                                  MICROPYTHON_BINDING_ERROR_TIMEOUT, 1U);
         return;
@@ -1424,10 +1529,7 @@ void micropython_capability_bridge_tick(void)
         (uint8_t)(cancelled || result != MICROPYTHON_BINDING_OK));
     if(cancelled)
     {
-#if HK_ENABLE_APP_MICROPYTHON
-        if(binding_is_storage_operation(control->operation))
-            micropython_capability_bridge_release_storage();
-#endif
+        binding_cancel_owned_operation(control->operation);
         result = MICROPYTHON_BINDING_ERROR_TIMEOUT;
     }
     binding_complete_request(control, ticket, result, cancelled);
@@ -1446,6 +1548,7 @@ hk_result_t micropython_capability_bridge_cleanup(void)
     __sync_synchronize();
     micropython_capability_bridge_release_storage();
     micropython_capability_bridge_release_camera();
+    micropython_capability_bridge_release_kibble();
 #if HK_ENABLE_AUDIO_FEATURE
     result = audio_service_cancel(HK_AUDIO_OWNER_PYTHON);
     if(first == HK_OK) first = result;

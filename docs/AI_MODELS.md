@@ -73,6 +73,22 @@ When the model is ready, the debug UART accepts `HKKL` to generate from the
 preset or `HKKL <prompt>` for up to 24 printable ASCII characters.
 `HKKLINFO` reports the text and the inference and generation timings.
 
+Upload [kibble_lm.py](../examples/kibble_lm.py) to run the MicroPython app from
+**MICRO-PYTHON → RUN** or **PIN TO MENU**. It uses the same SD package and
+controls as the native app. The script implements prompt selection, the
+generation loop, text layout, and scrolling. Both apps call the same firmware
+session for tokenization, KPU inference, CPU projection, and sampling.
+On Maix Cube use POW for BACK.
+
+With the updated firmware running and the matching package on the microSD,
+run the hardware check on each board. It compares two prompts at seed 210,
+exercises LCD output and script STOP, and reopens the native app after STOP.
+
+```powershell
+python tools/kibble_lm_check.py --board huskylens-sen0305 --port COM10 --out build/kibble-sen.json
+python tools/kibble_lm_check.py --board sipeed-maix-cube --port COM5 --out build/kibble-cube.json
+```
+
 ### FACE DETECT
 
 FACE DETECT continues to load:

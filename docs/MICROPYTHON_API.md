@@ -1,7 +1,7 @@
 ---
 contract-id: hackylens.micropython-api
 owner: micropython-runtime
-version: 1.7.0
+version: 1.8.0
 stability: experimental
 api-major: 1
 ---
@@ -293,6 +293,24 @@ Call `camera_model_close()` before opening another model. Closing the camera
 or ending the Python run releases the model. An incompatible model or
 manifest raises `ValueError`. Missing SD files or KPU errors raise `OSError`.
 The [KPU detector example](../examples/kpu_detector.py) runs on both boards.
+
+## KibbleLM text generation
+
+[KibbleLM v0.2](AI_MODELS.md#kibblelm) uses the model and CPU package on
+microSD. The firmware build must include KibbleLM.
+
+| API | Result |
+|---|---|
+| `kibble_open_step()` | load the model in steps. Returns `True` when ready and `False` while loading |
+| `kibble_start(prompt, seed)` | start from a string of 1–24 printable ASCII characters and an unsigned 32-bit seed |
+| `kibble_poll()` | `None` while working, otherwise `(text, end, accelerator_us, cpu_us)` for one token |
+| `kibble_close()` | cancel generation and release the model |
+
+Poll until `end` is true or `KIBBLE_MAX_TOKENS` (48) text tokens have arrived.
+On end of sequence, `text` is empty. A loaded session can start a new prompt
+after the previous generation finishes. Invalid arguments raise `ValueError`
+and package load failures raise `OSError` with the loader's message. Script
+exit and STOP release the model so a native app can use the KPU.
 
 ## QR and AprilTag
 
