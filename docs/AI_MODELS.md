@@ -52,6 +52,27 @@ confidence to distinguish valid inference from an unsuitable image.
 
 ## Included consumers
 
+### KibbleLM
+
+KibbleLM generates an English story continuation on the LCD. It uses the
+shared KModel v4 runtime for four KPU convolutions. Its CPU output projection,
+embedding table, and tokenizer are stored in `cpu.bin` beside the model.
+Place both exported files under the directory in the export manifest on a FAT32 card.
+The firmware descriptor pins the CRC of each file. Copy the matching generated
+`kibble_model_contract.h` into `firmware/src/core/` before building for a
+different checkpoint.
+
+Choose a prompt with LEFT or RIGHT and tap OK to generate. While the story is
+on screen, LEFT scrolls back and RIGHT scrolls forward. A tap moves one line
+and holding the button keeps scrolling. The view follows new text when it
+reaches the bottom. At the generation limit, the display ends at a word
+boundary. Hold OK to clear the story and return to choosing a prompt. BACK
+leaves the app.
+
+When the model is ready, the debug UART accepts `HKKL` to generate from the
+preset or `HKKL <prompt>` for up to 24 printable ASCII characters.
+`HKKLINFO` reports the text and the inference and generation timings.
+
 ### FACE DETECT
 
 FACE DETECT continues to load:

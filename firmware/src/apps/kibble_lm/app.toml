@@ -1,0 +1,11 @@
+id = "kibble-lm"
+name = "KibbleLM"
+entry = "kibble_lm_v2_entry"
+sources = ["kibble_lm_app.c"]
+requires = ["display", "input", "time", "sd-card"]
+menu_order = 137
+menu_icon = "label"
+tick_ms = 5
+tick_budget_ms = 150
+debug_entry = "kibble_lm_debug"
+debug = "HKKL [prompt]/HKKLINFO"
