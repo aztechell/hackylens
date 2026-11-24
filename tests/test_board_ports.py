@@ -827,7 +827,7 @@ class ArtifactAndFlashSafetyTests(unittest.TestCase):
             self.assertTrue(document["release_qualified"])
             self.assertEqual(
                 set(document["composition"]["enabled_apps"]),
-                firmware_attestation.FULL_APP_IDS - {"accelerometer", "recorder"},
+                firmware_attestation.FULL_APP_IDS - {"accelerometer", "axp173", "recorder"},
             )
             mutation = copy.deepcopy(document)
             mutation["composition"]["enabled_apps"].append("invented")

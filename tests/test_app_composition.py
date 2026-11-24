@@ -19,7 +19,7 @@ from check_app_composition import disabled_resource_sections
 EXPECTED_APPS = {
     "terminal", "camera", "qr-camera", "face-detect", "apriltag",
     "object-detect", "files", "buttons", "pong", "sky-glide", "settings", "power",
-    "micropython", "recorder", "accelerometer", "face-recognition", "color-tracker", "uart-logger",
+    "micropython", "recorder", "accelerometer", "axp173", "face-recognition", "color-tracker", "uart-logger",
     "object-gate", "kibble-lm",
 }
 CAMERA_APPS = {

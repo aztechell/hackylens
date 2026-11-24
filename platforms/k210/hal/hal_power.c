@@ -336,6 +336,11 @@ uint8_t hal_power_read_register(uint8_t reg, uint8_t *value)
     return hal_onboard_i2c_read(POWER_ADDRESS, reg, value);
 }
 
+uint8_t hal_power_read_registers(uint8_t reg, uint8_t *values, uint8_t count)
+{
+    return hal_onboard_i2c_read_bytes(POWER_ADDRESS, reg, values, count);
+}
+
 uint8_t hal_power_write_register(uint8_t reg, uint8_t value)
 {
     return hal_onboard_i2c_write(POWER_ADDRESS, reg, value);

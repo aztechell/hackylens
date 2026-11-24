@@ -100,7 +100,7 @@ class ReleaseBundleTests(unittest.TestCase):
             attestation = json.loads((stage / f"{stem}-attestation.json").read_bytes())
             self.assertTrue(attestation["release_qualified"])
             self.assertEqual(attestation["composition"]["disabled_apps"],
-                             ["accelerometer", "recorder"] if identifier == "huskylens-sen0305" else [])
+                             ["accelerometer", "axp173", "recorder"] if identifier == "huskylens-sen0305" else [])
             manifest = json.loads((stage / f"{stem}-release.json").read_bytes())
             self.assertEqual(manifest["board_id"], identifier)
             self.assertEqual(manifest["version"], self.version)

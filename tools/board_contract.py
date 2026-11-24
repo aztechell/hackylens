@@ -127,7 +127,7 @@ RUNTIME_REQUIRED_SERVICES = frozenset({
     "processor", "internal-flash", "display", "camera", "buttons",
     "lights", "sd-card", "external-uart", "external-i2c",
 })
-SERVICE_KINDS = RUNTIME_REQUIRED_SERVICES | {"audio", "accelerometer"}
+SERVICE_KINDS = RUNTIME_REQUIRED_SERVICES | {"audio", "accelerometer", "axp173-monitor"}
 PREPARE_CALLBACKS = {
     "display": "display_prepare",
     "camera": "camera_prepare",
@@ -800,6 +800,9 @@ def validate_board_data(data: dict[str, Any], *, board_dir: Path | None = None) 
     accelerometer_enabled = support == "runtime" and drivers["accelerometer"] == "msa301"
     if accelerometer_enabled != ("accelerometer" in data["available"]):
         raise ContractError("accelerometer: service availability must match the MSA301 driver")
+    axp173_enabled = support == "runtime" and drivers["power"] == "axp173"
+    if axp173_enabled != ("axp173-monitor" in data["available"]):
+        raise ContractError("axp173-monitor: service availability must match the AXP173 driver")
     _validate_defaults(data)
     _validate_flash(data)
     _validate_programming(data, board_dir)

@@ -38,13 +38,18 @@ class CubeHardwareTests(unittest.TestCase):
         if not compiler:
             self.skipTest("host C compiler unavailable")
         with tempfile.TemporaryDirectory(prefix="hackylens-cube-pek-") as temp:
-            executable = Path(temp) / ("axp173.exe" if os.name == "nt" else "axp173")
+            directory = Path(temp)
+            executable = directory / ("axp173.exe" if os.name == "nt" else "axp173")
+            (directory / "hk_config.h").write_text("#define HK_ENABLE_APP_AXP173 1\n", encoding="ascii")
             subprocess.run([
                 compiler, "-std=c11", "-O1", "-Wall", "-Wextra", "-Werror",
+                f"-I{directory}",
                 f"-I{ROOT / 'firmware/src/drivers'}",
+                f"-I{ROOT / 'firmware/src/services'}",
                 f"-I{ROOT / 'platforms/k210/hal'}",
                 str(ROOT / "tests/axp173_harness.c"),
-                str(ROOT / "firmware/src/drivers/axp173.c"), "-o", str(executable),
+                str(ROOT / "firmware/src/drivers/axp173.c"),
+                str(ROOT / "firmware/src/services/axp173_monitor.c"), "-o", str(executable),
             ], check=True, cwd=ROOT)
             result = subprocess.run([str(executable)], check=True, capture_output=True,
                                     text=True, timeout=30)

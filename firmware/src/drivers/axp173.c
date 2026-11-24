@@ -13,10 +13,56 @@
 #define AXP173_POLL_US 20000ULL
 #define AXP173_RETRY_US 100000ULL
 #define AXP173_PREPARE_RETRY_US 500000ULL
+#define AXP173_ADC_ENABLE1 0x82U
+#define AXP173_ADC_ENABLE2 0x83U
 static uint8_t s_pek_ready;
 static uint8_t s_probe_backoff_armed;
 static uint8_t s_consumed_events;
 static uint64_t s_next_poll_us;
+static uint8_t s_monitor_running;
+static uint8_t s_added_adc1;
+static uint8_t s_added_adc2;
+
+static void monitor_enable_adc(uint8_t reg, uint8_t mask, uint8_t *added)
+{
+    uint8_t enabled;
+    if(!hal_power_read_register(reg, &enabled))
+        return;
+    *added |= mask & (uint8_t)~enabled;
+    if((enabled & mask) != mask)
+        (void)hal_power_write_register(reg, enabled | mask);
+}
+
+static void monitor_restore_adc(uint8_t reg, uint8_t *added)
+{
+    uint8_t enabled;
+    if(*added && hal_power_read_register(reg, &enabled) &&
+       (!(enabled & *added) || hal_power_write_register(reg, enabled & (uint8_t)~*added)))
+        *added = 0U;
+}
+
+void axp173_monitor_adc_begin(void)
+{
+    if(s_monitor_running)
+        return;
+    s_monitor_running = 1U;
+    /* Preserve TS sensing, which can participate in charge protection. */
+    monitor_enable_adc(AXP173_ADC_ENABLE1, 0xfeU, &s_added_adc1);
+    monitor_enable_adc(AXP173_ADC_ENABLE2, 0x80U, &s_added_adc2);
+}
+
+uint8_t axp173_monitor_adc_end(void)
+{
+    s_monitor_running = 0U;
+    monitor_restore_adc(AXP173_ADC_ENABLE1, &s_added_adc1);
+    monitor_restore_adc(AXP173_ADC_ENABLE2, &s_added_adc2);
+    return s_added_adc1 == 0U && s_added_adc2 == 0U;
+}
+
+uint8_t axp173_read_registers(uint8_t reg, uint8_t *values, uint8_t count)
+{
+    return hal_power_read_registers(reg, values, count);
+}
 
 static uint8_t prepare_pek(uint8_t log_result)
 {
@@ -86,6 +132,8 @@ uint8_t axp173_poll_back_press(uint64_t now_us)
         return 0U;
     }
     s_next_poll_us = now_us + AXP173_POLL_US;
+    if(!s_monitor_running && (s_added_adc1 || s_added_adc2))
+        (void)axp173_monitor_adc_end();
     if(!hal_power_read_register(AXP173_IRQ_STATUS3, &status))
     {
         s_next_poll_us = now_us + AXP173_RETRY_US;

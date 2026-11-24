@@ -15,7 +15,7 @@ class ServiceBindingTests(unittest.TestCase):
         runtime = bindings.select(load_board("huskylens-sen0305"), set(), set(), set())
         self.assertEqual({item.name for item in runtime.bindings},
                          {"time", "input", "lights", "display", "external-link", "power"})
-        self.assertEqual(runtime.disabled_apps, frozenset({"accelerometer", "recorder"}))
+        self.assertEqual(runtime.disabled_apps, frozenset({"accelerometer", "axp173", "recorder"}))
         cube_runtime = bindings.select(load_board("sipeed-maix-cube"), set(), set(), set())
         self.assertEqual(cube_runtime.disabled_apps, frozenset())
         self.assertIn("accelerometer", {item.name for item in cube_runtime.bindings})
@@ -28,7 +28,7 @@ class ServiceBindingTests(unittest.TestCase):
 
     def test_excluded_binding_cannot_be_satisfied_by_present_resource(self):
         selection = bindings.select(load_board("huskylens-sen0305"), set(), set(), {"display"})
-        self.assertEqual(len(selection.disabled_apps), 20)
+        self.assertEqual(len(selection.disabled_apps), 21)
         self.assertIn("hk_display_binding = {0}", bindings.generated_c(selection))
         with self.assertRaisesRegex(ValueError, "Time"):
             bindings.select(load_board("huskylens-sen0305"), set(), set(), {"time"})

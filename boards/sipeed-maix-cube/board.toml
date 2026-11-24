@@ -16,6 +16,7 @@ available = [
   "external-i2c",
   "audio",
   "accelerometer",
+  "axp173-monitor",
 ]
 
 [[routes]]

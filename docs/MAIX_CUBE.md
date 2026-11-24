@@ -1,8 +1,8 @@
 # Sipeed Maix Cube
 
 HackyLens supports Maix Cube 2757 from v0.5.0. The `sipeed-maix-cube` board
-uses the `hackylens-cube` runtime profile. Its full build includes fifteen
-apps, with RECORDER and ACCELEROMETER available on Cube. See the
+uses the `hackylens-cube` runtime profile. Its full build includes RECORDER,
+ACCELEROMETER, and AXP173 on Cube. See the
 [v0.9.0 release notes](releases/v0.9.0.md) for the release checks and the
 [hardware test log](MAIX_CUBE_TEST_LOG.md) for the builds, conditions, and
 results of individual trials. A diagnostic build passed native
@@ -73,6 +73,24 @@ tap, double tap, motion, and free-fall status. `LIVE` marks an active flag.
 `SEEN` marks an event since opening the app or clearing the view with OK.
 MicroPython reads the same XYZ data via `hackylens.acceleration_mg()`.
 See the [accelerometer contract](spec/capabilities/ACCELEROMETER.md).
+
+## AXP173 power diagnostics
+
+Open **AXP173** from the launcher. LEFT/RIGHT changes pages, OK toggles the
+register view, and POW returns to the launcher. The pages show battery
+voltage, currents, power, and charging state, followed by input readings,
+charger settings, rail voltage setpoints, ADC configuration and temperature,
+coulomb counters in hexadecimal, and interrupt masks and flags.
+
+The battery percentage marked `~` estimates charge from the measured voltage.
+Charging and load can change that estimate. The app enables additional ADC
+channels while open and restores their previous enable state on exit. It
+reads charger, regulator, and coulomb-counter settings without changing them.
+The register view lists the documented readable addresses from the
+[AXP173 datasheet](https://manuals.plus/m/ae4d7772bf0616d33560f2abd2d632f80a8cb3513e08ea2b6337a69dad7dfc26).
+`--` means the reading is unavailable. From the debug console, `HKAPP axp173`
+opens the app, `HKAXPINFO` shows sampling status, and `HKAXPREGS` dumps the
+latest scan.
 
 ## Build and artifacts
 

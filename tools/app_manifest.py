@@ -49,6 +49,7 @@ DETECTOR_REQUIREMENTS = {
     "object-detector": {"camera", "sd-card"},
 }
 FIRMWARE_SERVICES = frozenset({"camera", "sd-card", "internal-flash", "settings", "audio",
+                               "axp173-monitor",
                                *DETECTOR_REQUIREMENTS})
 OPTIONAL_FALLBACKS = {
     "display": "headless",

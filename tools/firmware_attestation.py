@@ -95,7 +95,8 @@ def _build_profile(
     if wdt_fault_injection:
         return FAULT_BUILD_PROFILE
     supported = board.driver_supported_kinds()
-    hardware_apps = {"accelerometer": "accelerometer", "recorder": "audio"}
+    hardware_apps = {"accelerometer": "accelerometer", "axp173": "axp173-monitor",
+                     "recorder": "audio"}
     expected_exclusions = [
         {"app": app, "code": "driver-unsupported", "missing": [kind]}
         for app, kind in sorted(hardware_apps.items()) if kind not in supported

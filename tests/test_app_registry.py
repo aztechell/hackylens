@@ -54,7 +54,7 @@ class AppRegistryTests(unittest.TestCase):
             definitions = []
             for app in self.model["apps"]:
                 enabled = {"micropython": micropython, "recorder": recorder,
-                           "accelerometer": recorder}.get(
+                           "accelerometer": recorder, "axp173": recorder}.get(
                     app["id"], True
                 )
                 definitions.append(
@@ -226,7 +226,7 @@ int main(void)
         return result.stdout
 
     def test_all_apps_registry_runtime(self) -> None:
-        self.assertIn("APP_REGISTRY_OK apps=20 menu=17", self.compile_profile(
+        self.assertIn("APP_REGISTRY_OK apps=21 menu=18", self.compile_profile(
             micropython=True, recorder=True
         ))
         self.assertIn("APP_REGISTRY_OK apps=18 menu=15", self.compile_profile(
@@ -356,7 +356,7 @@ int main(void)
     def test_launcher_order_and_stable_autostart_debug_and_tick(self) -> None:
         expected_order = [
             "camera", "qr-camera", "face-detect", "face-recognition",
-            "object-detect", "apriltag", "files", "recorder", "accelerometer",
+            "object-detect", "apriltag", "files", "recorder", "accelerometer", "axp173",
             "micropython", "terminal", "buttons", "pong", "sky-glide", "kibble-lm",
             "settings", "power",
         ]
@@ -366,7 +366,7 @@ int main(void)
             "object-detect": 9, "micropython": 10, "settings": 0,
             "power": 0, "recorder": 0, "accelerometer": 0, "face-recognition": 0,
             "sky-glide": 0, "color-tracker": 0, "uart-logger": 0, "object-gate": 0,
-            "kibble-lm": 0,
+            "kibble-lm": 0, "axp173": 0,
         }
         expected_debug = {
             "camera": "HKCAMERA HKCAM",
@@ -376,6 +376,7 @@ int main(void)
             "apriltag": "HKTAG/HKTAGINFO",
             "object-detect": "HKOBJECT/HKOBJECTINFO",
             "settings": "HKSETTINGS",
+            "axp173": "HKAXPINFO HKAXPREGS",
             "sky-glide": "HKSGLOGIC/HKSGPACED/HKSGBURST/HKSGINPUT",
             "uart-logger": "HKULMODE HKULMARK",
             "object-gate": "HKOGBENCH/HKOGINFO",
@@ -398,11 +399,11 @@ int main(void)
                     app["limits"]["tick_interval_us"],
                     {"micropython": 5000, "apriltag": 5000, "files": 5000,
                      "sky-glide": 5000, "uart-logger": 5000, "object-gate": 5000, "accelerometer": 100_000,
-                     "color-tracker": 10_000, "kibble-lm": 5000}.get(app_id, 20000),
+                     "color-tracker": 10_000, "kibble-lm": 5000, "axp173": 30_000}.get(app_id, 20000),
                 )
                 self.assertEqual(
                     app["limits"]["tick_budget_us"],
-                    {"accelerometer": 100_000, "color-tracker": 1_000_000,
+                    {"accelerometer": 100_000, "axp173": 100_000, "color-tracker": 1_000_000,
                      "qr-camera": 3_000_000, "face-recognition": 3_000_000,
                      "camera": 1_000_000, "face-detect": 1_000_000,
                      "object-detect": 1_000_000, "apriltag": 1_000_000,

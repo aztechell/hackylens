@@ -28,6 +28,7 @@ DEBUG_HANDLER(object_detect)
 DEBUG_HANDLER(apriltag)
 DEBUG_HANDLER(micropython)
 DEBUG_HANDLER(accelerometer)
+DEBUG_HANDLER(axp173)
 
 static void dummy_draw_icon(
     uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
@@ -203,6 +204,7 @@ const hk_app_v2_entry_t files_v2_entry = {
 const hk_app_v2_entry_t micropython_v2_entry = {0};
 const hk_app_v2_entry_t recorder_v2_entry = {0};
 const hk_app_v2_entry_t accelerometer_v2_entry = {0};
+const hk_app_v2_entry_t axp173_v2_entry = {0};
 
 void accelerometer_draw_icon(uint16_t x, uint16_t y, uint16_t color, uint16_t bg)
 {
@@ -413,7 +415,7 @@ int main(void)
     CHECK(g_hk_generated_app_count ==
           12U + HK_ENABLE_APP_COLOR_TRACKER + HK_ENABLE_APP_MICROPYTHON + HK_ENABLE_APP_RECORDER +
           HK_ENABLE_APP_ACCELEROMETER + HK_ENABLE_APP_FACE_RECOGNITION + HK_ENABLE_APP_UART_LOGGER +
-          HK_ENABLE_APP_OBJECT_GATE + HK_ENABLE_APP_KIBBLE_LM);
+          HK_ENABLE_APP_OBJECT_GATE + HK_ENABLE_APP_KIBBLE_LM + HK_ENABLE_APP_AXP173);
     CHECK(g_menu_item_count == g_hk_generated_app_count - HK_ENABLE_APP_COLOR_TRACKER -
           HK_ENABLE_APP_UART_LOGGER - HK_ENABLE_APP_OBJECT_GATE);
     CHECK(hk_app_for_id("color-tracker") && !hk_app_for_id("color-tracker")->menu_visible);
@@ -430,6 +432,9 @@ int main(void)
 #endif
 #if HK_ENABLE_APP_ACCELEROMETER
         "accelerometer",
+#endif
+#if HK_ENABLE_APP_AXP173
+        "axp173",
 #endif
 #if HK_ENABLE_APP_MICROPYTHON
         "micropython",

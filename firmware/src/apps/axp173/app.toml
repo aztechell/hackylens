@@ -1,0 +1,11 @@
+id = "axp173"
+name = "AXP173"
+entry = "axp173_v2_entry"
+sources = ["axp173_app.c"]
+requires = ["display", "time", "input", "axp173-monitor"]
+menu_order = 95
+menu_icon = "label"
+tick_ms = 30
+tick_budget_ms = 100
+debug = "HKAXPINFO HKAXPREGS"
+debug_entry = "axp173_handle_debug_command"
