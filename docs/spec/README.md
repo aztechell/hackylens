@@ -1,5 +1,15 @@
 # Technical references
 
+## Candidate architecture specification
+
+- [HackyLens Architecture Specification v0.1](v0.1/README.md)
+- [Portable service contracts](v0.1/SERVICES.md)
+- [Conformance plan](v0.1/CONFORMANCE.md)
+- [K210 implementation mapping](../implementation/K210_SPEC_MAPPING.md)
+
+The candidate specification has an independent version. The concrete firmware
+contracts below remain unchanged; no conformance claim is made by extraction.
+
 [Architecture](../ARCHITECTURE.md) describes the current implementation.
 These references describe public interfaces, resource lifetimes and physical
 board constraints. Headers and behavioral tests should change with their docs.
