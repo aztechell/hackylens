@@ -1,4 +1,4 @@
-"""RAM loaders and serial fixture for the Cube UART logger study."""
+"""Cube RAM loader and NodeMCU serial fixture for the UART Logger study."""
 
 import argparse
 import binascii
@@ -16,9 +16,10 @@ from sky_glide_bench import lines_until, send
 
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+SENDER_TX_PINS = {"D1": 5, "D2": 4}
 
 
-def build_sender(platform, out):
+def build_sender(platform, out, sender_tx="D1"):
     core, compiler = platform
     out.mkdir(parents=True, exist_ok=True)
     elf = out / "sender.elf"
@@ -26,6 +27,7 @@ def build_sender(platform, out):
     subprocess.run([
         str(compiler), "-Os", "-ffreestanding", "-fno-builtin", "-nostdlib",
         "-mlongcalls", "-mtext-section-literals", "-I", str(core / "tools/sdk/include"),
+        f"-DUART_LOGGER_TX_GPIO={SENDER_TX_PINS[sender_tx]}",
         f"-Wl,-T,{source.with_suffix('.ld')}",
         f"-Wl,-T,{core / 'tools/sdk/ld/eagle.rom.addr.v6.ld'}",
         str(source), "-o", str(elf),

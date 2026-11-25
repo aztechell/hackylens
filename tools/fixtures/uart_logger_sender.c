@@ -5,8 +5,20 @@
 extern void ets_delay_us(uint32_t us);
 extern void ets_wdt_disable(void);
 
+#ifndef UART_LOGGER_TX_GPIO
+#define UART_LOGGER_TX_GPIO 5
+#endif
+
+#if UART_LOGGER_TX_GPIO == 4
+#define WIRE_RX (1U << 5)
+#define WIRE_RX_MUX PERIPHS_IO_MUX_GPIO5_U
+#elif UART_LOGGER_TX_GPIO == 5
 #define WIRE_RX (1U << 4)
-#define WIRE_TX (1U << 5)
+#define WIRE_RX_MUX PERIPHS_IO_MUX_GPIO4_U
+#else
+#error UART logger fixture expects D1 or D2
+#endif
+#define WIRE_TX (1U << UART_LOGGER_TX_GPIO)
 #define CPU2X_ADDRESS 0x3ff00014U
 
 static uint32_t cycles(void)
@@ -178,7 +190,7 @@ void probe_entry(void)
     GPIO_REG_WRITE(GPIO_ENABLE_W1TC_ADDRESS, WIRE_RX | WIRE_TX);
     PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO4_U, FUNC_GPIO4);
     PIN_FUNC_SELECT(PERIPHS_IO_MUX_GPIO5_U, FUNC_GPIO5);
-    PIN_PULLUP_EN(PERIPHS_IO_MUX_GPIO4_U);
+    PIN_PULLUP_EN(WIRE_RX_MUX);
     GPIO_REG_WRITE(GPIO_OUT_W1TS_ADDRESS, WIRE_TX);
     GPIO_REG_WRITE(GPIO_ENABLE_W1TS_ADDRESS, WIRE_TX);
 

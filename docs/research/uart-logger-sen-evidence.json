@@ -1,0 +1,209 @@
+{
+  "board": "huskylens-sen0305",
+  "firmware_mode": "diagnostic from RAM",
+  "diagnostic_image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+  "logger_python_source_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+  "generator_source_sha256": "cc519efcd43f23b9fc0d2dfbec7c2630c8e7e6c8f2f514bab9634b779d1daf62",
+  "benchmark_attempts": 31,
+  "valid_trials": 31,
+  "node_mcu": {
+    "tx": "D2",
+    "rx": "D1",
+    "wire": "Gravity",
+    "baud": 115200
+  },
+  "csv_matches": 11,
+  "link_restored": "HKLINKINFO mode=I2C pins=IO34/IO35 uart=115200 i2c=0x32",
+  "original_scripts_preserved": true,
+  "temporary_scripts_removed": 5,
+  "results": {
+    "c graph": {
+      "runs": 5,
+      "fps": 9.633333333333333,
+      "frames": 289,
+      "missing_frames": 11,
+      "interval_ms": [
+        104.44200000000001,
+        104.8409,
+        107.157
+      ],
+      "display_ms": [
+        47.752,
+        48.09459999999999,
+        48.311
+      ],
+      "sample_to_lcd_ms": [
+        53.445,
+        63.389,
+        65.935
+      ]
+    },
+    "c parse": {
+      "runs": 5,
+      "median_ms": 8.461,
+      "packets_per_second": 484103.5338612457,
+      "digest": 1974799667
+    },
+    "c record": {
+      "runs": 5,
+      "fps": 9.666666666666666,
+      "frames": 290,
+      "missing_frames": 10,
+      "interval_ms": [
+        104.53,
+        105.01780000000001,
+        154.026
+      ],
+      "display_ms": [
+        48.054500000000004,
+        48.396,
+        48.594
+      ],
+      "sample_to_lcd_ms": [
+        55.2425,
+        63.69865,
+        94.982
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL159941.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL297908.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL496346.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL627633.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL826011.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ]
+    },
+    "python graph": {
+      "runs": 5,
+      "fps": 9.2,
+      "frames": 276,
+      "missing_frames": 24,
+      "interval_ms": [
+        108.499,
+        110.81175000000002,
+        113.484
+      ],
+      "display_ms": [
+        37.408500000000004,
+        37.482,
+        37.529
+      ],
+      "sample_to_lcd_ms": [
+        77.0195,
+        92.3035,
+        94.804
+      ]
+    },
+    "python memory": {
+      "runs": 1,
+      "fps": 9.033333333333333,
+      "frames": 271,
+      "missing_frames": 29,
+      "interval_ms": [
+        108.694,
+        118.77815000000001,
+        154.328
+      ],
+      "display_ms": [
+        37.542,
+        37.614,
+        37.632
+      ],
+      "sample_to_lcd_ms": [
+        77.339,
+        92.243,
+        137.537
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL917317.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ],
+      "gc_bytes": {
+        "after_collect": 17184,
+        "initialized": 17024,
+        "observed_peak": 129792
+      }
+    },
+    "python parse": {
+      "runs": 5,
+      "median_ms": 3491.059,
+      "packets_per_second": 1173.2829493858453,
+      "digest": 1974799667
+    },
+    "python record": {
+      "runs": 5,
+      "fps": 9.033333333333333,
+      "frames": 271,
+      "missing_frames": 29,
+      "interval_ms": [
+        108.6765,
+        116.12299999999999,
+        262.166
+      ],
+      "display_ms": [
+        37.5305,
+        37.602,
+        37.693
+      ],
+      "sample_to_lcd_ms": [
+        77.231,
+        92.3995,
+        245.684
+      ],
+      "csv": [
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL202991.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL250646.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL532785.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL580441.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        },
+        {
+          "bytes": 13173,
+          "path": "/PYDATA/TL862458.CSV",
+          "sha256": "c5122431bbc8e28ee6a36cd9319e578074cecebe55f53b842f05d76d7287d985"
+        }
+      ]
+    }
+  },
+  "i2c_ping_after_restore": {
+    "address": "0x32",
+    "response_hex": "484b01832c000400484b4932b2d7",
+    "crc_verified": true
+  }
+}

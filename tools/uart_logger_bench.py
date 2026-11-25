@@ -1,4 +1,4 @@
-"""Compare C and MicroPython UART loggers on one Cube diagnostic image."""
+"""Compare C and MicroPython UART loggers on one board's diagnostic image."""
 
 import argparse
 from datetime import datetime, timezone
@@ -13,11 +13,12 @@ import hkflash
 from hmpy_client import HmpyClient, HmpyClientError
 from hmpy_protocol import MessageType, ProtocolDecodeError
 from sky_glide_bench import command, distribution, lines_until, read_trace, send, upload_once
-from uart_logger_fixture import build_sender, sender_port
+from uart_logger_fixture import SENDER_TX_PINS, build_sender, sender_port
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "examples" / "uart_logger.py"
 BOARD = "sipeed-maix-cube"
+BOARD_PINS = {"sipeed-maix-cube": "IO6/IO7", "huskylens-sen0305": "IO34/IO35"}
 CASES = (("c", "graph"), ("python", "graph"), ("c", "record"), ("python", "record"))
 WARMUP = 100
 TOTAL = 1600
@@ -46,10 +47,10 @@ def menu(link):
     command(link, "HKPING", r"HKPONG")
 
 
-def link_config(link):
-    line = command(link, "HKLINKINFO", r"HKLINKINFO mode=(UART|I2C) pins=IO(6/IO7|24/IO25) .*")[-1]
-    if "pins=IO6/IO7 " not in line:
-        raise RuntimeError("Select SP-MOD in Settings > Connection > Port before running the benchmark")
+def link_config(link, board=BOARD):
+    line = command(link, "HKLINKINFO", r"HKLINKINFO mode=(UART|I2C) pins=IO\d+/IO\d+ .*")[-1]
+    if f"pins={BOARD_PINS[board]} " not in line:
+        raise RuntimeError(f"{board} benchmark expects {BOARD_PINS[board]}. Current line: {line}")
     mode, baud = re.search(r"mode=(\w+).* uart=(\d+)", line).groups()
     return mode, int(baud)
 
@@ -80,7 +81,7 @@ def python_run(link, mode, ready, verified, record):
     output = bytearray()
     try:
         hello = client.hello()
-        if hello.board != BOARD or not hello.firmware_version.endswith("-uartbench"):
+        if hello.board != record["board"] or not hello.firmware_version.endswith("-uartbench"):
             raise RuntimeError(f"unexpected device {hello}")
         record["firmware_version"] = hello.firmware_version
         if name not in verified:
@@ -210,7 +211,7 @@ def trial(link, transmitter, out, record, verified):
         "python": lambda ready: python_run(link, mode, ready, verified, record),
     }
     menu(link)
-    default = link_config(link)
+    default = link_config(link, record["board"])
     sender_started = False
 
     def start_sender():
@@ -256,7 +257,7 @@ def trial(link, transmitter, out, record, verified):
         if sender_started and "sender" not in record:
             record["sender"] = transmitter.finish(TOTAL, timeout=36)
         menu(link)
-        restored = link_config(link)
+        restored = link_config(link, record["board"])
         record["link_before"] = default
         record["link_after"] = restored
         if restored != default:
@@ -268,27 +269,31 @@ def run_cases(args):
     results = args.out / "runs.jsonl"
     sources = hashlib.sha256(SCRIPT.read_bytes()).hexdigest()
     image = hashlib.sha256(args.image.read_bytes()).hexdigest()
+    configuration = (args.board, args.sender_tx, image, sources)
     done = set()
     if results.exists():
         for text in results.read_text(encoding="utf-8").splitlines():
             row = json.loads(text)
-            if row.get("ok") and (row["image_sha256"], row["source_sha256"]) != (image, sources):
-                raise RuntimeError("choose a new output directory when changing the image or script")
-            if row.get("ok"):
-                done.add((row["run"], row["language"], row["mode"]))
-    esptool, sender_image = build_sender((args.esp_core, args.esp_gcc), args.out)
+            if not row.get("ok"):
+                continue
+            recorded = (row["board"], row.get("sender_tx", "D1"), row["image_sha256"], row["source_sha256"])
+            if recorded != configuration:
+                raise RuntimeError("choose a new output directory when changing the board, TX pin, image or script")
+            done.add((row["run"], row["language"], row["mode"]))
+    esptool, sender_image = build_sender((args.esp_core, args.esp_gcc), args.out, args.sender_tx)
     verified = set()
     serial = hkflash.require_serial()
     with sender_port(args.sender_port, esptool, sender_image) as tx, \
-            hkflash.open_runtime_serial(serial, args.cube_port, 115200) as cube:
+            hkflash.open_runtime_serial(serial, args.port, 115200) as link:
         for attempt in range(4):
             try:
-                command(cube, "HKPING", r"HKPONG")
+                command(link, "HKPING", r"HKPONG")
                 break
             except TimeoutError:
                 if attempt == 3:
                     raise
-        print(f"Cube {args.cube_port}, NodeMCU {args.sender_port} at {tx.cycles_per_ms} cycles/ms", flush=True)
+        print(f"{args.board} {args.port}, NodeMCU {args.sender_port} TX {args.sender_tx} "
+              f"at {tx.cycles_per_ms} cycles/ms", flush=True)
         groups = ((args.parse_runs, (("c", "parse"), ("python", "parse"))), (args.runs, CASES),
                   (int(args.memory_run), (("python", "memory"),)))
         for runs, cases in groups:
@@ -298,12 +303,12 @@ def run_cases(args):
                     if (index, language, mode) in done:
                         continue
                     for attempt in range(1, 4):
-                        row = {"date_utc": datetime.now(timezone.utc).isoformat(), "board": BOARD,
+                        row = {"date_utc": datetime.now(timezone.utc).isoformat(), "board": args.board,
                                "run": index, "language": language, "mode": mode, "attempt": attempt,
-                               "image_sha256": image, "source_sha256": sources}
+                               "image_sha256": image, "source_sha256": sources, "sender_tx": args.sender_tx}
                         print(f"Starting {index} {language} {mode} (attempt {attempt})", flush=True)
                         try:
-                            trial(cube, tx, args.out, row, verified)
+                            trial(link, tx, args.out, row, verified)
                             row["ok"] = True
                             print(f"{index} {language} {mode} {row['metrics']}", flush=True)
                             break
@@ -318,13 +323,16 @@ def run_cases(args):
                             with results.open("a", encoding="utf-8") as log:
                                 log.write(json.dumps(row, sort_keys=True) + "\n")
                         time.sleep(10.2)
-                        cube.reset_input_buffer()
+                        link.reset_input_buffer()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cube-port", required=True)
+    parser.add_argument("--board", choices=tuple(BOARD_PINS), default=BOARD)
+    parser.add_argument("--port", "--cube-port", required=True)
     parser.add_argument("--sender-port", required=True)
+    parser.add_argument("--sender-tx", choices=tuple(SENDER_TX_PINS), default="D1",
+                        help="NodeMCU pin connected to the board's RX")
     parser.add_argument("--esp-core", type=Path, required=True)
     parser.add_argument("--esp-gcc", type=Path, required=True)
     parser.add_argument("--image", type=Path, required=True)

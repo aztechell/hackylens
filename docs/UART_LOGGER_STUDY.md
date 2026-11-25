@@ -1,10 +1,10 @@
-# UART Logger on Maix Cube
+# UART Logger on Maix Cube and SEN0305
 
 UART Logger is the second HackyLens workload for comparing a MicroPython
 prototype with a native C port. Both applications receive an external UART
 stream, plot the last 96 samples and optionally write a CSV on microSD.
 The chart updates up to 10 times per second. OK starts a recording, then
-publishes it on a second press. A short POW press returns to the menu and
+publishes it on a second press. BACK (POW on Cube) returns to the menu and
 cancels an unfinished recording. Published files use `/PYDATA/TLxxxxxx.CSV`.
 The screen shows the latest value, missing sequence count and recording state.
 
@@ -34,10 +34,10 @@ Set `$espCore` to the Arduino `hardware/esp8266/3.1.2` directory and
 `$espCompiler` to the full path of `xtensa-lx106-elf-gcc` in that package's
 toolchain. The loader runs the diagnostic image from Cube RAM. The runner
 loads the sender into NodeMCU RAM and calibrates its cycle counter. The runner
-continues an earlier series when given the same output directory, firmware
-image and Python source. It saves each trial as JSONL, plus a CSV read from
-the card for each recording trial. Run physical button checks after the
-automated series.
+continues an earlier series when given the same output directory, board, TX
+pin, firmware image and Python source. It saves each trial as JSONL, plus a
+CSV read from the card for each recording trial. Run physical button checks
+after the automated series.
 
 Build the everyday UART Logger image with `--uart-logger-menu` instead of
 `--uart-logger-bench`. Use `tools/hkflash.py flash` with this image and the
@@ -45,8 +45,25 @@ Cube board and port. Select SP-MOD under **Settings → Connection → Port**.
 Upload
 [`uart_logger.py`](../examples/uart_logger.py) over HMPY. In **MICRO-PYTHON**,
 select the script and choose **PIN TO MENU**. The native menu entry is
-**UART LOGGER C**. The SEN0305 wiring and hardware measurements are scheduled
-for a separate pass.
+**UART LOGGER C**.
+
+## Reproduce on SEN0305
+
+Use the Gravity port and a FAT32 microSD card. The tested wiring puts NodeMCU
+D2 (GPIO4, TX) on SEN0305 `R` (IO34) and D1 (GPIO5, RX) on `T` (IO35). Join
+GND and power each board over USB. Set the sender's TX option to match the wire
+attached to `R`. The logger borrows the connector in UART mode and restores the
+configured External Link mode on exit.
+
+Build the diagnostic image and boot it on SEN0305 before starting the runner.
+The SEN0305 measurements below used a RAM boot. The runner verifies each CSV
+against a reference and records the display timing for each trial.
+
+```powershell
+. .\env.ps1
+python tools/build_firmware.py full --board huskylens-sen0305 --require-app uart-logger --uart-logger-bench
+python tools/uart_logger_bench.py --board huskylens-sen0305 --port COM10 --sender-port COM3 --sender-tx D2 --esp-core $espCore --esp-gcc $espCompiler --image build/huskylens-sen0305/hackylens-full-uartbench.bin --out build/uart-logger/sen --memory-run
+```
 
 ## Measurement
 
@@ -163,12 +180,45 @@ through `SAVED`, exit through POW and reopening from the menu. The operator
 also pinned the MicroPython script and confirmed the shortcut, live chart,
 recording and exit through POW.
 
+## SEN0305 results
+
+[Raw runs and LCD traces](research/uart-logger-sen-runs.jsonl.gz) ·
+[Build and hardware evidence](research/uart-logger-sen-evidence.json)
+
+Five parser replays per implementation accepted all 4,096 packets and
+produced digest `1974799667`. The median was 8.461 ms in C (484,104 packets/s)
+and 3,491.059 ms in MicroPython (1,173 packets/s).
+
+There were five live runs per language and mode, plus one Python memory
+run. Each accepted all 1,600 packets at 50 Hz. Across 33,600 packets there
+were zero CRC errors, sequence gaps, stale packets or UART errors. All
+eleven recordings matched the 13,173-byte reference byte for byte.
+
+| Path | Mode | FPS | Frames | Missed frames | Frame interval p50 / p95 / max, ms | Sample to LCD p50 / p95 / max, ms |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| C | Chart | 9.63 | 289 | 11 | 104.44 / 104.84 / 107.16 | 53.45 / 63.39 / 65.94 |
+| MicroPython | Chart | 9.20 | 276 | 24 | 108.50 / 110.81 / 113.48 | 77.02 / 92.30 / 94.80 |
+| C | Chart + CSV | 9.67 | 290 | 10 | 104.53 / 105.02 / 154.03 | 55.24 / 63.70 / 94.98 |
+| MicroPython | Chart + CSV | 9.03 | 271 | 29 | 108.68 / 116.12 / 262.17 | 77.23 / 92.40 / 245.68 |
+
+The median final LCD transfer in the chart run was 47.75 ms on the C base
+plane and 37.41 ms on the Python overlay plane. The sample-to-LCD measure
+also includes the time from sample acceptance to the start of the transfer.
+In the separate Python memory run, 17,024 bytes were live before the loop,
+the observed peak was 129,792 bytes and 17,184 bytes remained after GC.
+
 An independent C check sent 180 packets on the installed image and
 compared the 384 plotted pixels for the last 96 samples with the reference.
 The screenshot command reads the BASE shadow. On the same installed image
 a temporary probe of the Python play path accepted 180 packets with the
 reference digest, displayed the last 96 samples and completed the OVERLAY
 present call. The probe was then removed from USERFS.
+
+After the timed runs, the installed firmware was started and the five
+temporary scripts were removed. The 11 pre-existing scripts were still
+listed. On the same Gravity wires, NodeMCU sent an I²C PING to SEN0305 at
+`0x32` and verified the PONG payload and CRC. The benchmark CSVs remain on
+microSD. Manual confirmation of OK and BACK on SEN0305 is pending.
 
 ## Porting observations
 
