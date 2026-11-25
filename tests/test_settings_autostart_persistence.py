@@ -52,6 +52,7 @@ class SettingsAutostartPersistenceTests(unittest.TestCase):
                 f"-I{ROOT / 'platforms/k210/hal'}",
                 f"-I{gen_board.board_config_include_dir(board)}",
                 str(ROOT / "tests/settings_autostart_persistence_harness.c"),
+                str(ROOT / "tests/settings_scan_fake.c"),
                 str(ROOT / "firmware/src/storage/settings_store.c"),
                 str(ROOT / "firmware/src/services/settings_payload_codec.c"),
                 str(ROOT / "firmware/src/services/settings_persistence.c"),

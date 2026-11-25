@@ -162,6 +162,11 @@ uint8_t hal_external_i2c_controller_idle(void)
     return (uint8_t)(!s_i2c_aborted && s_i2c_active);
 }
 
+hal_i2c_probe_result_t hal_external_i2c_probe(uint8_t address)
+{
+    return address == 0x42U ? HAL_I2C_PROBE_ACK : HAL_I2C_PROBE_NACK;
+}
+
 uint32_t hal_external_i2c_target_lock(void)
 {
     s_target_locked = 1U;

@@ -420,13 +420,13 @@ static int test_connection(void)
     char value[24];
 
     CHECK(settings_external_link_connector() == EXTERNAL_LINK_CONNECTOR_DEFAULT);
-    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 2U);
+    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 3U);
     s_connector_choice = 1U;
     settings_controller_reset(&state, settings_app_menu_definition());
     settings_press(&state, BUTTON_RIGHT);
     settings_press(&state, BUTTON_RIGHT);
     settings_press(&state, BUTTON_OK);
-    CHECK(state.page == SETTINGS_PAGE_CONNECTION && state.menu.definition->item_count == 3U);
+    CHECK(state.page == SETTINGS_PAGE_CONNECTION && state.menu.definition->item_count == 4U);
     CHECK(settings_menu_visible_slot(&state.menu, 0U, &title, value, sizeof(value), NULL, NULL));
     CHECK(strcmp(title, "Port") == 0 && strcmp(value, "Grove") == 0);
     settings_press(&state, BUTTON_OK);
@@ -442,12 +442,26 @@ static int test_connection(void)
     settings_press(&state, BUTTON_OK);
     settings_press(&state, BUTTON_RIGHT);
     settings_press(&state, BUTTON_OK);
-    CHECK(state.menu.index == 1U && state.menu.definition->item_count == 2U);
+    CHECK(state.menu.index == 1U && state.menu.definition->item_count == 3U);
+    settings_press(&state, BUTTON_RIGHT);
+    CHECK(settings_menu_visible_slot(&state.menu, 2U, &title, value, sizeof(value), NULL, NULL));
+    CHECK(strcmp(title, "I2C Scan") == 0 && strcmp(value, ">") == 0);
+    settings_press(&state, BUTTON_OK);
+    CHECK(state.page == SETTINGS_PAGE_I2C_SCAN && state.scan.operation.result == HK_PENDING);
+    settings_controller_tick(&state, 0U);
+    CHECK(state.scan.operation.result == HK_OK && settings_scan_page_count(&state.scan) == 2U);
+    settings_press(&state, BUTTON_RIGHT);
+    CHECK(state.scan.page == 1U);
+    settings_press(&state, BUTTON_OK);
+    CHECK(state.scan.page == 0U && state.scan.operation.result == HK_PENDING);
+    settings_press(&state, BUTTON_BACK);
+    CHECK(state.page == SETTINGS_PAGE_CONNECTION && state.menu.index == 2U);
+    CHECK(state.scan.operation.result == HK_ERR_CANCELLED);
     settings_storage_init();
     CHECK(settings_external_link_connector() == EXTERNAL_LINK_CONNECTOR_ALTERNATE);
     CHECK(settings_external_link_transport() == EXTERNAL_LINK_I2C);
     s_connector_choice = 0U;
-    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 1U);
+    CHECK(settings_app_page_definition(SETTINGS_PAGE_CONNECTION)->item_count == 2U);
     return 0;
 }
 

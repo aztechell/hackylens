@@ -39,6 +39,13 @@ before the connector selector was added. Confirm the change with OK to switch
 pins immediately and save the choice for the next boot. **Baud** appears in
 UART mode and selects 9600, 115200, or 1000000.
 
+Open **I2C Scan** in the same menu to probe the selected connector. The
+scanner lists responding 7-bit addresses from 0x08 through 0x77. Each
+transaction sends the address and checks ACK before STOP. Probe the bus
+while other controllers are idle. OK repeats the scan, LEFT/RIGHT changes
+result pages, and BACK returns to Connection. The link resumes its
+configured mode when the scan finishes or is cancelled.
+
 The PC debug console accepts `HKLINKUART` and `HKLINKI2C`. `HKLINK9600`,
 `HKLINK115200`, and `HKLINK1000000` select UART and save the requested speed.
 On Cube, `HKLINKGROVE` and `HKLINKSPMOD` switch and save the connector.

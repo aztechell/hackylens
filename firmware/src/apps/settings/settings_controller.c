@@ -135,6 +135,35 @@ static void settings_order_tick(settings_state_t *state, uint32_t buttons)
     }
 }
 
+static void settings_scan_start(settings_state_t *state)
+{
+    state->scan.page = 0U;
+    external_link_scan_start(&state->scan.operation);
+    state->dirty = 1U;
+}
+
+static void settings_scan_handle_input(settings_state_t *state, uint32_t pressed)
+{
+    if(pressed & HK_INPUT_BUTTON_BACK)
+    {
+        external_link_scan_stop(&state->scan.operation);
+        state->page = SETTINGS_PAGE_CONNECTION;
+        state->dirty = 1U;
+    }
+    else if(state->scan.operation.result != HK_PENDING)
+    {
+        if(pressed & HK_INPUT_BUTTON_OK)
+            settings_scan_start(state);
+        else if(pressed & (HK_INPUT_BUTTON_LEFT | HK_INPUT_BUTTON_RIGHT))
+        {
+            uint8_t pages = settings_scan_page_count(&state->scan);
+            uint8_t step = (pressed & HK_INPUT_BUTTON_RIGHT) ? 1U : pages - 1U;
+            state->scan.page = (state->scan.page + step) % pages;
+            state->dirty = 1U;
+        }
+    }
+}
+
 static hk_input_snapshot_t snapshot_from_event(const hk_input_event_t *event)
 {
     hk_input_snapshot_t snapshot = {0};
@@ -159,6 +188,8 @@ void settings_controller_exit(settings_state_t *state)
 {
     if(!state)
         return;
+    if(state->page == SETTINGS_PAGE_I2C_SCAN)
+        external_link_scan_stop(&state->scan.operation);
     settings_menu_close(&state->menu);
 }
 
@@ -169,6 +200,11 @@ void settings_controller_handle_input(
 
     if(!state || !event || !settings_menu_active(&state->menu))
         return;
+    if(state->page == SETTINGS_PAGE_I2C_SCAN)
+    {
+        settings_scan_handle_input(state, event->pressed);
+        return;
+    }
     if(state->page == SETTINGS_PAGE_MENU_ORDER)
     {
         if(event->pressed)
@@ -197,6 +233,14 @@ void settings_controller_handle_input(
             state->parent_index = state->menu.index;
             settings_open_page(state, SETTINGS_PAGE_RGB);
             state->dirty = 1U;
+            return;
+        }
+        if(state->page == SETTINGS_PAGE_CONNECTION && !state->menu.editing &&
+           state->menu.definition->items[state->menu.index].id == SETTINGS_PAGE_I2C_SCAN)
+        {
+            state->scan = (settings_scan_t){0};
+            state->page = SETTINGS_PAGE_I2C_SCAN;
+            settings_scan_start(state);
             return;
         }
     }
@@ -234,6 +278,12 @@ void settings_controller_tick(settings_state_t *state, uint32_t buttons)
 
     if(!state)
         return;
+    if(state->page == SETTINGS_PAGE_I2C_SCAN)
+    {
+        if(external_link_scan_step(&state->scan.operation))
+            state->dirty = 1U;
+        return;
+    }
     if(state->page == SETTINGS_PAGE_MENU_ORDER)
     {
         settings_order_tick(state, buttons);

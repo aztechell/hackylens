@@ -43,6 +43,19 @@ uint8_t hal_external_i2c_controller_aborted(void);
 uint32_t hal_external_i2c_controller_tx_accepted(void);
 uint32_t hal_external_i2c_controller_rx_received(void);
 uint8_t hal_external_i2c_controller_idle(void);
+
+typedef enum
+{
+    HAL_I2C_PROBE_ACK = 0,
+    HAL_I2C_PROBE_NACK,
+    HAL_I2C_PROBE_BUSY,
+    HAL_I2C_PROBE_TIMEOUT,
+    HAL_I2C_PROBE_UNAVAILABLE,
+} hal_i2c_probe_result_t;
+
+/* Probe the selected external route while UART and I2C0 are quiescent. */
+hal_i2c_probe_result_t hal_external_i2c_probe(uint8_t address);
+
 /* Serialize target response publication with the I2C0 ISR. */
 uint32_t hal_external_i2c_target_lock(void);
 void hal_external_i2c_target_unlock(uint32_t state);

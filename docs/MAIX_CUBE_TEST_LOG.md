@@ -784,3 +784,25 @@ connector and its pin route.
 The physical bus logs are `build/cube-spmod-resume-i2c.log`,
 `build/cube-spmod-rx-uart.log`, `build/cube-spmod-deadline-python.log`,
 `build/cube-spmod-deadline-repeat.log`, and `build/cube-spmod-i2c-paced-retest.log`.
+
+## Settings I2C Scan over SP-MOD (2026-11-25)
+
+Cube ran a diagnostic build from RAM with SP-MOD selected. A NodeMCU 1.0
+running a RAM fixture connected D1 (SCL) to IO6, D2 (SDA) to IO7, and GND
+to GND. The test submitted navigation and rescan events to the Settings
+input handler over USB. Each complete scan generated 112 START/STOP pairs
+across `0x08`–`0x77`. The fixture counted zero data bytes after the addresses.
+
+- The scan reported only `0x42` or only `0x57` when that address replied.
+  The LCD capture showed `FOUND 1` and `0x42`.
+- With target responses disabled, the scan reported zero devices. Holding
+  SDA low returned busy, and holding SCL low returned a timeout. After
+  releasing the lines, a new scan found `0x42` again.
+- BACK cancelled after eight probes and returned to Connection. Cube
+  acknowledged its target address `0x32` after every trial. A protocol PING
+  after cancellation returned the expected PONG payload and CRC.
+
+Cube then booted its installed firmware and reported the original SP-MOD
+and I2C settings. The local transcript, counters and LCD capture are
+`build/i2c-scan/cube-scan-spmod.log`, `build/i2c-scan/cube-scan-evidence.json`
+and `build/i2c-scan/cube-scan-found.png`.

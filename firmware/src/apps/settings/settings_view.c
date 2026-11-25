@@ -88,6 +88,50 @@ static void draw_menu_order(hk_app_panel_t *panel, const settings_order_editor_t
                        hk_ui_accent(), HK_PANEL_CENTER);
 }
 
+static const char *scan_status(hk_result_t result)
+{
+    switch(result)
+    {
+    case HK_PENDING: return "SCANNING";
+    case HK_ERR_BUSY: return "BUS BUSY";
+    case HK_ERR_DEADLINE_EXCEEDED: return "SCL TIMEOUT";
+    case HK_ERR_CAPABILITY_ABSENT:
+    case HK_ERR_FEATURE_UNAVAILABLE: return "UNAVAILABLE";
+    default: return "SCAN ERROR";
+    }
+}
+
+static void draw_scan(hk_app_panel_t *panel, const settings_scan_t *scan)
+{
+    const external_link_scan_t *operation = &scan->operation;
+    char heading[16], hint[22] = "OK RESCAN";
+    hk_app_panel_chrome(panel, "I2C SCAN");
+    if(operation->result != HK_OK || operation->count == 0U)
+        hk_app_panel_status(panel, 102U, operation->result == HK_OK ?
+                            "NO DEVICES" : scan_status(operation->result));
+    else
+    {
+        snprintf(heading, sizeof(heading), "FOUND %u", (unsigned)operation->count);
+        hk_app_panel_status(panel, 37U, heading);
+        const uint16_t column_width = (panel->width - 12U) / SETTINGS_SCAN_COLUMNS;
+        const unsigned first = scan->page * SETTINGS_SCAN_PAGE_SIZE;
+        for(unsigned i = 0U; i < SETTINGS_SCAN_PAGE_SIZE && first + i < operation->count; ++i)
+        {
+            char address[5];
+            snprintf(address, sizeof(address), "0x%02X",
+                     (unsigned)external_link_scan_address(operation, first + i));
+            hk_app_panel_label(panel, 6U + (i % SETTINGS_SCAN_COLUMNS) * column_width,
+                              70U + (i / SETTINGS_SCAN_COLUMNS) * 25U, column_width,
+                              address, hk_ui_accent(), HK_PANEL_CENTER);
+        }
+        uint8_t pages = settings_scan_page_count(scan);
+        if(pages > 1U)
+            snprintf(hint, sizeof(hint), "<%u/%u> OK RESCAN", (unsigned)scan->page + 1U,
+                     (unsigned)pages);
+    }
+    hk_app_panel_status(panel, 212U, operation->result == HK_PENDING ? "BACK CANCEL" : hint);
+}
+
 hk_result_t settings_view_render(hk_app_surface_t *surface, const settings_state_t *state)
 {
     if(!surface || !state || !state->menu.definition)
@@ -97,6 +141,11 @@ hk_result_t settings_view_render(hk_app_surface_t *surface, const settings_state
     if(state->page == SETTINGS_PAGE_MENU_ORDER)
     {
         draw_menu_order(&panel, &state->order);
+        return panel.result;
+    }
+    if(state->page == SETTINGS_PAGE_I2C_SCAN)
+    {
+        draw_scan(&panel, &state->scan);
         return panel.result;
     }
     hk_app_panel_chrome(&panel, menu->definition->title);

@@ -20,6 +20,7 @@ typedef enum
     SETTINGS_PAGE_SOUND,
     SETTINGS_PAGE_RGB,
     SETTINGS_PAGE_MENU_ORDER,
+    SETTINGS_PAGE_I2C_SCAN,
 } settings_page_t;
 
 enum

@@ -8,6 +8,7 @@
 #include "board_config.h"
 #include "../firmware/src/internal/hk_board_port.h"
 #include "external_link_protocol.h"
+#include "external_link_scan.h"
 #include "external_link_service.h"
 #include "vision_result_service.h"
 
@@ -27,6 +28,8 @@ static uint32_t s_acquires;
 static uint32_t s_releases;
 static uint32_t s_uart_configs;
 static uint32_t s_target_configs;
+static uint32_t s_probe_calls;
+static uint8_t s_probe_fault;
 static uint32_t s_cancel_calls;
 static uint32_t s_poll_calls;
 static uint32_t s_request_capability_id;
@@ -107,7 +110,7 @@ hk_result_t hk_external_link_open(
     uint64_t mode_features, hk_external_link_t *handle)
 {
     if(!service || !handle || !mode_features ||
-       (mode_features & ~(HK_EXTERNAL_LINK_FEATURE_UART | HK_EXTERNAL_LINK_FEATURE_I2C_TARGET)))
+       (mode_features & ~HK_EXTERNAL_LINK_FEATURES_0_1))
         return HK_ERR_INVALID_ARGUMENT;
     if(s_fail_uart_open && mode_features == HK_EXTERNAL_LINK_FEATURE_UART)
         return HK_ERR_IO;
@@ -158,6 +161,57 @@ hk_result_t hk_external_link_configure_i2c_target(
         return HK_ERR_INVALID_ARGUMENT;
     s_target_configs++;
     return HK_OK;
+}
+
+hk_result_t hk_external_link_configure_i2c_controller(
+    const hk_external_link_t *handle,
+    const hk_external_link_i2c_controller_config_t *config)
+{
+    return handle->mode_features == HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER &&
+           config->frequency_hz == 100000U ? HK_OK : HK_ERR_INVALID_ARGUMENT;
+}
+
+hk_result_t hk_external_link_i2c_probe(const hk_external_link_t *handle, uint8_t address,
+                                       uint8_t *acknowledged)
+{
+    if(handle->mode_features != HK_EXTERNAL_LINK_FEATURE_I2C_CONTROLLER ||
+       address != 0x08U + s_probe_calls++)
+        return HK_ERR_INVALID_ARGUMENT;
+    if(s_probe_fault)
+        return HK_ERR_BUSY;
+    *acknowledged = address == 0x08U || address == 0x42U || address == 0x77U;
+    return HK_OK;
+}
+
+static int test_scan_restore(void)
+{
+    external_link_scan_t scan = {0};
+    external_link_service_set_transport(EXTERNAL_LINK_I2C);
+    uint32_t before = s_target_configs;
+    external_link_scan_start(&scan);
+    CHECK(scan.result == HK_PENDING && scan.link.service && before == s_target_configs);
+    CHECK(!external_link_scan_step(&scan) && s_probe_calls == 8U);
+    for(unsigned step = 1U; step < 14U; ++step)
+        CHECK(external_link_scan_step(&scan) == (step == 13U));
+    CHECK(scan.result == HK_OK && !scan.link.service && s_probe_calls == 112U);
+    CHECK(scan.count == 3U && external_link_scan_address(&scan, 0U) == 0x08U &&
+          external_link_scan_address(&scan, 1U) == 0x42U &&
+          external_link_scan_address(&scan, 2U) == 0x77U);
+    CHECK(s_target_configs == ++before);
+    CHECK(external_link_service_transport() == EXTERNAL_LINK_I2C);
+
+    external_link_scan_start(&scan);
+    external_link_scan_stop(&scan);
+    CHECK(scan.result == HK_ERR_CANCELLED && !scan.link.service && s_target_configs == ++before);
+    external_link_scan_stop(&scan);
+    CHECK(s_target_configs == before);
+
+    s_probe_calls = 0U;
+    s_probe_fault = 1U;
+    external_link_scan_start(&scan);
+    CHECK(external_link_scan_step(&scan) && scan.result == HK_ERR_BUSY);
+    CHECK(!scan.link.service && s_target_configs == before + 1U);
+    return 0;
 }
 
 hk_result_t hk_external_link_uart_read(
@@ -556,6 +610,7 @@ int main(void)
     CHECK(!external_link_service_has_connector_choice());
     CHECK(external_link_service_set_connector(EXTERNAL_LINK_CONNECTOR_ALTERNATE) == HK_ERR_CAPABILITY_ABSENT);
 #endif
+    CHECK(test_scan_restore() == 0);
     puts("EXTERNAL_LINK_SERVICE_OK protocol=v1 reacquire=1 uart_async=1 target=1 vision_results=1 coalesced=1 fragmented=1 reset=1");
     return 0;
 }

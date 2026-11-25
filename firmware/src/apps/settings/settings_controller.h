@@ -6,8 +6,12 @@
 #include "settings_menu.h"
 #include "../../core/hk_menu.h"
 #include "../../config/settings_menu_layout.h"
+#include "../../services/external_link_scan.h"
 
 #define SETTINGS_ORDER_VISIBLE_ROWS (SETTINGS_MENU_VISIBLE_ROWS - 1U)
+#define SETTINGS_SCAN_COLUMNS 3U
+#define SETTINGS_SCAN_ROWS 5U
+#define SETTINGS_SCAN_PAGE_SIZE (SETTINGS_SCAN_COLUMNS * SETTINGS_SCAN_ROWS)
 
 typedef struct
 {
@@ -24,11 +28,24 @@ typedef struct
 
 typedef struct
 {
+    external_link_scan_t operation;
+    uint8_t page;
+} settings_scan_t;
+
+static inline uint8_t settings_scan_page_count(const settings_scan_t *scan)
+{
+    return scan->operation.count ?
+        (scan->operation.count + SETTINGS_SCAN_PAGE_SIZE - 1U) / SETTINGS_SCAN_PAGE_SIZE : 1U;
+}
+
+typedef struct
+{
     settings_menu_session_t menu;
     union
     {
         settings_startup_choices_t startup;
         settings_order_editor_t order;
+        settings_scan_t scan;
     };
     const hk_input_t *input;
     uint8_t close_requested;

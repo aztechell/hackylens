@@ -337,6 +337,29 @@ static hk_result_t k210_external_configure_i2c_controller(
     return result;
 }
 
+static hk_result_t k210_external_i2c_probe(
+    void *context, const hk_external_link_t *session, uint8_t address,
+    uint8_t *acknowledged)
+{
+    k210_external_state_t *state = (k210_external_state_t *)context;
+    hk_result_t result = validate_state(state, session);
+    if(result != HK_OK)
+        return result;
+    if(state->mode != HK_EXTERNAL_LINK_MODE_I2C_CONTROLLER)
+        return HK_ERR_INVALID_STATE;
+    if(state->operation.state == K210_EXTERNAL_OP_IN_FLIGHT)
+        return HK_ERR_BUSY;
+
+    switch(hal_external_i2c_probe(address))
+    {
+    case HAL_I2C_PROBE_ACK:  *acknowledged = 1U; return HK_OK;
+    case HAL_I2C_PROBE_NACK: *acknowledged = 0U; return HK_OK;
+    case HAL_I2C_PROBE_BUSY: return HK_ERR_BUSY;
+    case HAL_I2C_PROBE_TIMEOUT: return HK_ERR_DEADLINE_EXCEEDED;
+    default: return HK_ERR_FEATURE_UNAVAILABLE;
+    }
+}
+
 static uint8_t target_event_index(uint8_t offset)
 {
     return (uint8_t)((s_external.target_event_head + offset) & 1U);
@@ -1009,6 +1032,7 @@ const hk_external_link_service_t hk_external_link_binding = {
     .uart_write_begin = k210_external_uart_write_begin,
     .uart_read = k210_external_uart_read,
     .i2c_transfer_begin = k210_external_i2c_transfer_begin,
+    .i2c_probe = k210_external_i2c_probe,
     .poll = k210_external_poll,
     .cancel = k210_external_cancel,
     .target_poll = k210_external_target_poll,

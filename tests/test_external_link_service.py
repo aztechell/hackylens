@@ -43,6 +43,8 @@ class ExternalLinkServiceTests(unittest.TestCase):
                 str(ROOT / "firmware" / "src" / "services" /
                     "external_link_service.c"),
                 str(ROOT / "firmware" / "src" / "services" /
+                    "external_link_scan.c"),
+                str(ROOT / "firmware" / "src" / "services" /
                     "external_link_protocol.c"),
                 str(ROOT / "firmware" / "src" / "services" /
                     "vision_result_service.c"),

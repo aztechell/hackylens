@@ -67,8 +67,15 @@ struct hk_external_link_service
     hk_external_link_provider_operation_fn cancel;
     hk_external_link_provider_target_poll_fn target_poll;
     hk_external_link_provider_target_preload_fn target_preload;
+    hk_result_t (*i2c_probe)(void *context, const hk_external_link_t *session,
+                             uint8_t address, uint8_t *acknowledged);
     uint32_t reserved;
 };
 extern const hk_external_link_service_t hk_external_link_binding;
+
+/* Optional firmware operation on a claimed controller session. Sends only
+ * the 7-bit write address, consumes its ACK, then ends the transaction. */
+hk_result_t hk_external_link_i2c_probe(const hk_external_link_t *handle,
+                                       uint8_t address, uint8_t *acknowledged);
 
 #endif

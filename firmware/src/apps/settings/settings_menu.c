@@ -7,7 +7,7 @@
 
 typedef enum
 {
-    ITEM_LED_SWITCH = SETTINGS_PAGE_MENU_ORDER + 1,
+    ITEM_LED_SWITCH = SETTINGS_PAGE_I2C_SCAN + 1,
     ITEM_LED_BRIGHTNESS,
     ITEM_RGB_SWITCH,
     ITEM_BRIGHTNESS,
@@ -81,6 +81,7 @@ static const settings_menu_item_t rgb_items[] = {
 static const settings_menu_item_t connection_items[] = {
     CHOICE(ITEM_CONNECTOR, "Port", connector_choices, 2U),
     CHOICE(ITEM_CONNECTION, "Mode", transport_choices, 2U),
+    PAGE(SETTINGS_PAGE_I2C_SCAN, "I2C Scan"),
     CHOICE(ITEM_UART_SPEED, "Baud", baud_choices, EXTERNAL_LINK_UART_SPEED_COUNT),
 };
 
@@ -261,6 +262,7 @@ static uint8_t settings_app_format(void *context, uint16_t id, char *value, size
     case SETTINGS_PAGE_DEVICE:
     case SETTINGS_PAGE_MENU_ORDER:
     case SETTINGS_PAGE_RGB:
+    case SETTINGS_PAGE_I2C_SCAN:
         label = ">";
         break;
     case ITEM_BOARD:
@@ -361,12 +363,12 @@ static const settings_menu_definition_t pages[] = {
 
 static const settings_menu_definition_t connection_pages[2][2] = {
     {
-        [EXTERNAL_LINK_UART] = DEFINITION("CONNECTION", connection_items + 1, 2U),
-        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items + 1, 1U),
+        [EXTERNAL_LINK_UART] = DEFINITION("CONNECTION", connection_items + 1, 3U),
+        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items + 1, 2U),
     },
     {
         [EXTERNAL_LINK_UART] = FULL_PAGE("CONNECTION", connection_items),
-        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items, 2U),
+        [EXTERNAL_LINK_I2C] = DEFINITION("CONNECTION", connection_items, 3U),
     },
 };
 static const settings_menu_definition_t root_without_sound =

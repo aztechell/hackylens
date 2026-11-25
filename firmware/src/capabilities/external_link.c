@@ -27,6 +27,21 @@ static hk_result_t provider_for(const hk_external_link_t *handle,
     return HK_OK;
 }
 
+hk_result_t hk_external_link_i2c_probe(const hk_external_link_t *handle,
+                                       uint8_t address, uint8_t *acknowledged)
+{
+    if(address < 0x08U || address > 0x77U || !acknowledged)
+        return HK_ERR_INVALID_ARGUMENT;
+    const hk_external_link_service_t *provider;
+    hk_result_t result = provider_for(handle, &provider);
+    if(result != HK_OK)
+        return result;
+    if(!provider->i2c_probe)
+        return HK_ERR_FEATURE_UNAVAILABLE;
+    return quarantine_internal(handle, provider->i2c_probe(
+        provider->context, handle, address, acknowledged));
+}
+
 static hk_result_t validate_view(
     const hk_buffer_view_t *view, uint32_t access, uint32_t maximum,
     uint8_t allow_empty)
