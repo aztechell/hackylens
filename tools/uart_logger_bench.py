@@ -10,6 +10,7 @@ import struct
 import time
 
 import hkflash
+from board_contract import board_ids, load_board
 from hmpy_client import HmpyClient, HmpyClientError
 from hmpy_protocol import MessageType, ProtocolDecodeError
 from sky_glide_bench import command, distribution, lines_until, read_trace, send, upload_once
@@ -18,7 +19,6 @@ from uart_logger_fixture import SENDER_TX_PINS, build_sender, sender_port
 
 SCRIPT = Path(__file__).resolve().parents[1] / "examples" / "uart_logger.py"
 BOARD = "sipeed-maix-cube"
-BOARD_PINS = {"sipeed-maix-cube": "IO6/IO7", "huskylens-sen0305": "IO34/IO35"}
 CASES = (("c", "graph"), ("python", "graph"), ("c", "record"), ("python", "record"))
 WARMUP = 100
 TOTAL = 1600
@@ -49,9 +49,15 @@ def menu(link):
 
 def link_config(link, board=BOARD):
     line = command(link, "HKLINKINFO", r"HKLINKINFO mode=(UART|I2C) pins=IO\d+/IO\d+ .*")[-1]
-    if f"pins={BOARD_PINS[board]} " not in line:
-        raise RuntimeError(f"{board} benchmark expects {BOARD_PINS[board]}. Current line: {line}")
-    mode, baud = re.search(r"mode=(\w+).* uart=(\d+)", line).groups()
+    mode, pins, baud = re.search(r"mode=(\w+) pins=(\S+) uart=(\d+)", line).groups()
+    routes = {route["macro"]: route["pin"] for route in load_board(board).data["routes"]}
+    prefix = "IO_EXTERNAL_SPMOD" if "IO_EXTERNAL_SPMOD_UART_R" in routes else "IO_EXTERNAL"
+    rx, tx = f"{prefix}_{mode}_R", f"{prefix}_{mode}_T"
+    if rx not in routes or tx not in routes:
+        raise RuntimeError(f"{board} has no benchmark route for {mode}")
+    expected = f"IO{routes[rx]}/IO{routes[tx]}"
+    if pins != expected:
+        raise RuntimeError(f"{board} benchmark expects {expected}. Current line: {line}")
     return mode, int(baud)
 
 
@@ -328,7 +334,7 @@ def run_cases(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--board", choices=tuple(BOARD_PINS), default=BOARD)
+    parser.add_argument("--board", choices=board_ids(), default=BOARD)
     parser.add_argument("--port", "--cube-port", required=True)
     parser.add_argument("--sender-port", required=True)
     parser.add_argument("--sender-tx", choices=tuple(SENDER_TX_PINS), default="D1",
