@@ -1,0 +1,13 @@
+{"event":"prepare","app":"A","outcome":"success"}
+{"event":"start","app":"A","instance":1,"state_nonzero_bytes":0}
+{"event":"return","action":"open-a","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"timer","app":"A","instance":1,"sequence":1,"timestamp_us":1001750,"scheduled_us":1000500,"observed_us":1001750}
+{"event":"return","action":"poll","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"return","action":"poll","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"return","action":"poll","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"timer","app":"A","instance":1,"sequence":2,"timestamp_us":1002250,"scheduled_us":1002250,"observed_us":1002250}
+{"event":"return","action":"poll","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"runtime_close","app":"A","instance":1,"sequence":3,"timestamp_us":1002250}
+{"event":"stop","app":"A","instance":1,"deadline_us":1102250,"now_us":1002250}
+{"event":"retire","deadline_us":1102250,"now_us":1002250,"outcome":"success"}
+{"event":"return","action":"close","outcome":"success","active_app":"none","first_error":"success"}

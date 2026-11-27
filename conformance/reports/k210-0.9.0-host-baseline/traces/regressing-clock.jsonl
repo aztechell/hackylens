@@ -1,0 +1,4 @@
+{"event":"clock","now_us":1000000}
+{"event":"read_result","outcome":"success","value":1000000}
+{"event":"clock","now_us":999999}
+{"event":"read_result","outcome":"clock_failure","value":null}

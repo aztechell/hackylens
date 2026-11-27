@@ -1,0 +1,47 @@
+requirement_id,scope,normative_source,scenario_ids
+ARC-01,Core,README.md#architecture,CT-01
+ARC-02,Core,README.md#architecture,CT-01
+ARC-03,Core,README.md#architecture,CT-01 CT-20
+ARC-04,Core,README.md#architecture,CT-01
+CMP-01,Core,README.md#composition,CT-02
+CMP-02,Core,README.md#composition,CT-02
+CMP-03,Core,README.md#composition,CT-02
+LIF-01,Core,README.md#lifecycle,CT-03
+LIF-02,Core,README.md#lifecycle,CT-03
+LIF-03,Core,README.md#lifecycle,CT-03
+LIF-04,Core,README.md#lifecycle,CT-04
+LIF-05,Core,README.md#lifecycle,CT-05
+LIF-06,Core,README.md#lifecycle,CT-05
+LIF-07,Core,README.md#lifecycle,CT-06
+LIF-08,Core,README.md#lifecycle,CT-06 CT-20
+LIF-09,Core,README.md#lifecycle,CT-07
+OWN-01,Core,README.md#ownership,CT-08
+OWN-02,Core,README.md#ownership,CT-07 CT-08
+OWN-03,Core,README.md#ownership,CT-08 CT-18
+OWN-04,Core,README.md#ownership,CT-06 CT-08 CT-18
+OWN-05,Core,README.md#ownership,CT-06 CT-08 CT-18
+TIM-01,Core,README.md#time-and-errors,CT-04 CT-09
+TIM-02,Core,README.md#time-and-errors,CT-09
+TIM-03,Core,README.md#time-and-errors,CT-09
+ERR-01,Core,README.md#time-and-errors,CT-08
+ERR-02,Core,README.md#time-and-errors,CT-05
+SCR-01,Shared Script,README.md#shared-script,CT-17
+SCR-02,Shared Script,README.md#shared-script,CT-17 CT-20
+SCR-03,Shared Script,README.md#shared-script,CT-17 CT-20
+SCR-04,Shared Script,README.md#shared-script,CT-18 CT-20
+SCR-05,Shared Script,README.md#shared-script,CT-18 CT-20
+REC-01,Recovery,README.md#recovery,CT-19
+REC-02,Recovery,README.md#recovery,CT-19
+S-TIME-01,Core,SERVICES.md,CT-09
+S-INPUT-01,Input,SERVICES.md,CT-10
+S-INPUT-02,Input,SERVICES.md,CT-10
+S-LIGHT-01,Lights,SERVICES.md,CT-11
+S-LIGHT-02,Lights,SERVICES.md,CT-11
+S-DISP-01,Display,SERVICES.md,CT-12
+S-DISP-02,Display,SERVICES.md,CT-12
+S-RENDER-01,Native Render,SERVICES.md,CT-13
+S-RENDER-02,Native Render,SERVICES.md,CT-13
+S-LINK-01,External Link,SERVICES.md,CT-14
+S-LINK-02,External Link,SERVICES.md,CT-14
+S-POWER-01,Power,SERVICES.md,CT-15
+S-ACCEL-01,Accelerometer,SERVICES.md,CT-16

@@ -1,0 +1,13 @@
+{"event":"external_link","action":"open","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-uart","outcome":"success","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"begin-uart","outcome":"pending","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"poll","outcome":"pending","route_calls":1,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":32,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"configure-i2c","outcome":"conflict","route_calls":1,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"save-token","outcome":"success","route_calls":1,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"close","outcome":"success","route_calls":2,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":false}
+{"event":"external_link","action":"open","outcome":"success","route_calls":2,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"configure-uart","outcome":"success","route_calls":3,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"begin-uart","outcome":"pending","route_calls":3,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":2,"live_claim":true}
+{"event":"external_link","action":"poll-saved","outcome":"stale","route_calls":3,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":2,"live_claim":true}
+{"event":"external_link","action":"expire","outcome":"success","route_calls":3,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":2,"live_claim":true}
+{"event":"external_link","action":"poll","outcome":"deadline","route_calls":5,"wire_tx":32,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":2,"live_claim":true}

@@ -1,0 +1,3 @@
+{"event":"prepare","app":"A","outcome":"io"}
+{"event":"retire","deadline_us":1100000,"now_us":1000000,"outcome":"success"}
+{"event":"return","action":"open-a","outcome":"io","active_app":"none","first_error":"io"}

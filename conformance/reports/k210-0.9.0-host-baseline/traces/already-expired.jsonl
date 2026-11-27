@@ -1,0 +1,2 @@
+{"event":"clock","now_us":1000000}
+{"event":"sleep_result","outcome":"deadline","now_us":1000000}

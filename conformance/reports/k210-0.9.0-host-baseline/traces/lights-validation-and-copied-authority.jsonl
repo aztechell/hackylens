@@ -1,0 +1,6 @@
+{"event":"lights","action":"claim:0:2:0:200","outcome":"success","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"copy:1:0:0:200","outcome":"success","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"set:1:2:500:200","outcome":"authority_denied","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"set:0:1:500:200","outcome":"authority_denied","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"set:0:2:1001:200","outcome":"invalid_argument","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"set:0:2:500:200","outcome":"success","effects":1,"active":2,"safe_off":0}

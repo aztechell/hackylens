@@ -1,0 +1,16 @@
+[
+  {"id":"target-before-deadline","operation":"sleep","start_us":1000000,"target_us":1012000,"deadline_us":1020000,"cancel_at_us":null,"freeze":false,"expect":"success","waits":true},
+  {"id":"target-wins-three-way-race","operation":"sleep","start_us":1000000,"target_us":1010000,"deadline_us":1010000,"cancel_at_us":1010000,"freeze":false,"expect":"success","waits":true},
+  {"id":"cancel-wins-at-deadline","operation":"sleep","start_us":1000000,"target_us":1020000,"deadline_us":1010000,"cancel_at_us":1010000,"freeze":false,"expect":"cancelled","waits":true},
+  {"id":"cancel-between-checks","operation":"sleep","start_us":1000000,"target_us":1020000,"deadline_us":1020000,"cancel_at_us":1005100,"freeze":false,"expect":"cancelled","waits":true},
+  {"id":"earlier-deadline","operation":"sleep","start_us":1000000,"target_us":1010001,"deadline_us":1006501,"cancel_at_us":null,"freeze":false,"expect":"deadline","waits":true},
+  {"id":"already-expired","operation":"sleep","start_us":1000000,"target_us":1001000,"deadline_us":0,"cancel_at_us":null,"freeze":false,"expect":"deadline","waits":false},
+  {"id":"reached-at-entry","operation":"sleep","start_us":1000000,"target_us":1000000,"deadline_us":0,"cancel_at_us":1000000,"freeze":false,"expect":"success","waits":false},
+  {"id":"frozen-clock","operation":"sleep","start_us":1000000,"target_us":1000001,"deadline_us":1000001,"cancel_at_us":null,"freeze":true,"expect":"clock_failure","waits":true},
+  {"id":"unbounded-deadline-rejected","operation":"sleep","start_us":1000000,"target_us":1000001,"deadline_us":18446744073709551615,"cancel_at_us":null,"freeze":false,"expect":"invalid_argument","waits":false},
+  {"id":"regressing-clock","operation":"read","samples_us":[1000000,999999],"expect":["success","clock_failure"]},
+  {"id":"finite-zero-interval","operation":"deadline","start_us":1000000,"interval_us":0,"expect":"success"},
+  {"id":"maximum-interval","operation":"deadline","start_us":1000000,"interval":"max","expect":"success"},
+  {"id":"excessive-interval","operation":"deadline","start_us":1000000,"interval":"over_max","expect":"limit"},
+  {"id":"deadline-overflow","operation":"deadline","start_us":18446744073709551612,"interval_us":5,"expect":"limit"}
+]

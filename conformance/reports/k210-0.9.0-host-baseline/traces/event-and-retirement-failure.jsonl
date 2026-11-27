@@ -1,0 +1,8 @@
+{"event":"prepare","app":"A","outcome":"success"}
+{"event":"start","app":"A","instance":1,"state_nonzero_bytes":0}
+{"event":"return","action":"open-a","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"media","app":"A","instance":1,"sequence":1,"timestamp_us":1000011}
+{"event":"runtime_close","app":"A","instance":1,"sequence":2,"timestamp_us":0}
+{"event":"stop","app":"A","instance":1,"deadline_us":1100011,"now_us":1000011}
+{"event":"retire","deadline_us":1100011,"now_us":1000011,"outcome":"internal"}
+{"event":"return","action":"send-media","outcome":"io","active_app":"none","first_error":"io"}

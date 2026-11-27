@@ -6,6 +6,9 @@
 #include "core1_executor.h"
 #include "../firmware/src/adapters/micropython/micropython_capability_bridge.h"
 #include "stub_micropython.h"
+#ifdef HK_K210_SCRIPT_RUNTIME_TRACE
+#include "k210_script_runtime_fixture.h"
+#endif
 
 #define CHECK(condition) do { if(!(condition)) { \
     fprintf(stderr, "FAIL line=%d: %s\n", __LINE__, #condition); \
@@ -152,8 +155,54 @@ static void run_worker(void)
     s_job_complete = 1U;
 }
 
-int main(void)
+#ifdef HK_K210_SCRIPT_RUNTIME_TRACE
+void hk_test_vm_configure(const char *source, hk_test_vm_behavior_t behavior)
 {
+    s_expected_source = source;
+    s_throw_exception = behavior == HK_TEST_VM_THROWS;
+    s_check_interrupt = behavior == HK_TEST_VM_CHECKS_INTERRUPT;
+}
+
+void hk_test_vm_return_from_worker(void)
+{
+    return_from_worker();
+}
+
+void hk_test_vm_acknowledge_executor(void)
+{
+    s_job_complete = 1;
+}
+
+void hk_test_vm_set_clock(uint64_t now_us)
+{
+    s_now_us = now_us;
+}
+
+uint8_t hk_test_vm_executor_acknowledged(void)
+{
+    return s_job_complete;
+}
+
+uint32_t hk_test_vm_cleanup_calls(void)
+{
+    return s_cleanup_count;
+}
+
+uint32_t hk_test_vm_prepared_runs(void)
+{
+    return s_prepare_count;
+}
+#endif
+
+int main(int argc, char **argv)
+{
+#ifdef HK_K210_SCRIPT_RUNTIME_TRACE
+    if(argc > 1)
+        return hk_test_vm_runtime_trace(argc, argv);
+#else
+    (void)argc;
+    (void)argv;
+#endif
     micropython_runtime_status_t before = {0}, after = {0};
 
     s_expected_source = "A";

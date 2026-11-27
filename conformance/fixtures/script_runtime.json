@@ -1,0 +1,54 @@
+[
+  {
+    "id": "terminal-script-failure-survives-rejected-run-before-executor-ack",
+    "scenario": "CT-18",
+    "event": "script_runtime",
+    "preserve_terminal_result": true,
+    "actions": ["start-exception", "worker-returns", "poll", "try-start", "try-invalid-start", "executor-acknowledges", "poll", "start-cooperative", "worker-returns", "executor-acknowledges", "poll"],
+    "expect": [
+      {"accepted": true, "state": "starting", "run": 1, "cleanup_calls": 0},
+      {"state": "error", "exit_reason": "exception", "executor_acknowledged": false, "cleanup_calls": 0, "output_pending": 3},
+      {"state": "error", "exit_reason": "exception", "executor_acknowledged": false, "cleanup_calls": 1},
+      {"accepted": false, "state": "error", "exit_reason": "exception", "run": 1, "cleanup_calls": 1, "prepared_runs": 1, "output_pending": 3},
+      {"accepted": false, "state": "error", "exit_reason": "exception", "run": 1, "cleanup_calls": 1, "prepared_runs": 1, "output_pending": 3},
+      {"state": "error", "exit_reason": "exception", "executor_acknowledged": true, "cleanup_calls": 1},
+      {"state": "error", "exit_reason": "exception", "cleanup_calls": 1},
+      {"accepted": true, "state": "starting", "exit_reason": "none", "run": 2, "prepared_runs": 2, "output_pending": 0},
+      {"state": "finished", "exit_reason": "complete", "cleanup_calls": 1},
+      {"state": "finished", "exit_reason": "complete", "executor_acknowledged": true},
+      {"state": "finished", "exit_reason": "complete", "cleanup_calls": 2}
+    ]
+  },
+  {
+    "id": "stop-acknowledgement-does-not-retire-live-worker",
+    "scenario": "CT-18",
+    "event": "script_runtime",
+    "actions": ["start-cooperative", "stop", "poll", "try-start", "worker-returns", "poll", "executor-acknowledges", "poll"],
+    "expect": [
+      {"accepted": true, "state": "starting", "run": 1, "cleanup_calls": 0},
+      {"accepted": true, "state": "stopping", "exit_reason": "none", "executor_acknowledged": false, "cleanup_calls": 0},
+      {"state": "stopping", "exit_reason": "none", "cleanup_calls": 0},
+      {"accepted": false, "state": "stopping", "exit_reason": "none", "run": 1, "cleanup_calls": 0, "prepared_runs": 1},
+      {"state": "stopped", "exit_reason": "requested", "executor_acknowledged": false, "cleanup_calls": 0},
+      {"state": "stopped", "exit_reason": "requested", "cleanup_calls": 1},
+      {"state": "stopped", "exit_reason": "requested", "executor_acknowledged": true},
+      {"state": "stopped", "exit_reason": "requested", "cleanup_calls": 1}
+    ]
+  },
+  {
+    "id": "finite-script-expiry-retires-after-worker-returns",
+    "scenario": "CT-18",
+    "event": "script_runtime",
+    "actions": ["start-cooperative", "advance-to-deadline", "poll", "try-start", "worker-returns", "poll", "executor-acknowledges", "poll"],
+    "expect": [
+      {"accepted": true, "state": "starting", "deadline_us": 4000, "cleanup_calls": 0},
+      {"state": "starting", "deadline_us": 4000, "cleanup_calls": 0},
+      {"state": "starting", "cleanup_calls": 0},
+      {"accepted": false, "state": "starting", "run": 1, "cleanup_calls": 0, "prepared_runs": 1},
+      {"state": "stopped", "exit_reason": "timeout", "executor_acknowledged": false, "cleanup_calls": 0},
+      {"state": "stopped", "exit_reason": "timeout", "cleanup_calls": 1},
+      {"state": "stopped", "exit_reason": "timeout", "executor_acknowledged": true},
+      {"state": "stopped", "exit_reason": "timeout", "cleanup_calls": 1}
+    ]
+  }
+]

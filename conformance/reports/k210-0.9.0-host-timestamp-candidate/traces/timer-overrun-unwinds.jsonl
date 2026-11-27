@@ -1,0 +1,9 @@
+{"event":"prepare","app":"A","outcome":"success"}
+{"event":"start","app":"A","instance":1,"state_nonzero_bytes":0}
+{"event":"return","action":"open-a","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"timer","app":"A","instance":1,"sequence":1,"timestamp_us":1000500,"scheduled_us":1000500,"observed_us":1000500}
+{"event":"runtime_close","app":"A","instance":1,"sequence":2,"timestamp_us":1000601}
+{"event":"stop","app":"A","instance":1,"deadline_us":1100601,"now_us":1000601}
+{"event":"retire","deadline_us":1100601,"now_us":1000601,"outcome":"success"}
+{"event":"return","action":"poll","outcome":"deadline","active_app":"none","first_error":"success"}
+{"event":"return","action":"poll","outcome":"success","active_app":"none","first_error":"success"}

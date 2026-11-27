@@ -1,0 +1,10 @@
+{"event":"external_link","action":"open","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-i2c","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"hold-rx","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"begin-i2c","outcome":"pending","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"poll","outcome":"pending","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":true,"rx_changed":0,"tx_progress":1,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"expire","outcome":"success","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":true,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"close","outcome":"deadline","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":true,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":true}
+{"event":"external_link","action":"retire","outcome":"deadline","route_calls":2,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":false}
+{"event":"external_link","action":"peer-completes","outcome":"success","route_calls":2,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":false}
+{"event":"external_link","action":"open-competitor","outcome":"internal","route_calls":2,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":1,"live_claim":false}

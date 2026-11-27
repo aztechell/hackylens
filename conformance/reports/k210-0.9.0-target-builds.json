@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "specification": "0.1.0",
+  "evidence_kind": "cross-build",
+  "implementation_revision": "7d3e7dbfc94ded50e40af0d35dd226b14286fca5",
+  "firmware_overrides_sha256": {
+    "firmware/src/app_runtime/runtime.c": "e04738ea4ffee5363da2f0cb2f1683b52b6f133fad5fa1dd3c03682d51e69787",
+    "firmware/src/app_runtime/runtime_private.h": "473049d3aeafeccdb5e9fae67cccd95d9226ac90391969b3b2b4011bd61119be",
+    "firmware/src/runtime/app_runtime_integration.c": "1e5ee015058b2e021c14f29a144f4d55c7c277b349588723fcd0a5f8cdc29dd6",
+    "firmware/src/services/micropython_runtime.c": "fa7cb20af885c436ffb3d44b91e2f56a05947065075891c9004326fd777e99f2"
+  },
+  "declared_profiles": [
+    "Core",
+    "Shared Script",
+    "Recovery"
+  ],
+  "execution_model": {
+    "foreground_native_slots": 1,
+    "services_core": 0,
+    "script_executor_core": 1,
+    "script_request_slots": 1
+  },
+  "declared_limits": {
+    "native_teardown_us": {
+      "value": 100000,
+      "source": "firmware/src/app_runtime/runtime_private.h",
+      "macro": "HK_APP_RUNTIME_TEARDOWN_BUDGET_US"
+    },
+    "time_interval_us": {
+      "value": 300000000,
+      "source": "firmware/include/hackylens/capability/time.h",
+      "macro": "HK_TIME_MAX_SLEEP_US"
+    },
+    "time_check_slice_us": {
+      "value": 5000,
+      "source": "firmware/include/hackylens/capability/time.h",
+      "macro": "HK_TIME_CANCEL_PROBE_MAX_US"
+    },
+    "script_heap_bytes": {
+      "value": 131072,
+      "source": "firmware/src/services/micropython_runtime.h",
+      "macro": "MICROPYTHON_RUNTIME_HEAP_BYTES"
+    },
+    "script_source_bytes": {
+      "value": 65535,
+      "source": "firmware/src/services/micropython_runtime.h",
+      "macro": "MICROPYTHON_RUNTIME_SOURCE_MAX"
+    },
+    "script_stack_bytes": {
+      "value": 24576,
+      "source": "firmware/src/services/micropython_runtime.c",
+      "macro": "MICROPYTHON_STACK_LIMIT_BYTES"
+    },
+    "script_output_ring_bytes": {
+      "value": 4096,
+      "source": "firmware/src/services/micropython_runtime.c",
+      "macro": "MICROPYTHON_OUTPUT_BYTES"
+    },
+    "script_default_limit_ms": {
+      "value": 30000,
+      "source": "firmware/src/services/micropython_runtime.h",
+      "macro": "MICROPYTHON_RUNTIME_DEFAULT_LIMIT_MS"
+    },
+    "script_max_limit_ms": {
+      "value": 300000,
+      "source": "firmware/src/services/micropython_runtime.h",
+      "macro": "MICROPYTHON_RUNTIME_MAX_LIMIT_MS"
+    },
+    "script_ordinary_request_limit_us": {
+      "value": 500000,
+      "source": "firmware/src/adapters/micropython/micropython_capability_bridge.c",
+      "macro": "MICROPYTHON_BINDING_RPC_TIMEOUT_US"
+    },
+    "stop_watchdog_grace_us": {
+      "value": 2000000,
+      "source": "firmware/src/services/micropython_runtime.c",
+      "macro": "MICROPYTHON_WATCHDOG_STOP_GRACE_US"
+    },
+    "expiry_watchdog_grace_us": {
+      "value": 5000000,
+      "source": "firmware/src/services/micropython_runtime.c",
+      "macro": "MICROPYTHON_WATCHDOG_DEADLINE_GRACE_US"
+    },
+    "watchdog_requested_timeout_ms": {
+      "value": 2000,
+      "source": "firmware/src/services/micropython_runtime.c",
+      "macro": "MICROPYTHON_WATCHDOG_TIMEOUT_MS"
+    }
+  },
+  "recovery_policy": {
+    "trigger": "noncooperation after the applicable grace period",
+    "mechanism": "WDT1 reset",
+    "scope": "device boot",
+    "observed_on_hardware": false
+  },
+  "boards": [
+    {
+      "board_id": "huskylens-sen0305",
+      "attestation": {
+        "attestation_type": "hackylens-firmware-build",
+        "board_id": "huskylens-sen0305",
+        "build_profile": "hackylens-full",
+        "composition": {
+          "capabilities_sha256": "8d4241c13c8f0f083353130fb86d2c57aab96f94f69af71d0ab7372c7687e9b3",
+          "disabled_apps": [
+            "accelerometer",
+            "axp173",
+            "recorder"
+          ],
+          "disabled_capabilities": [],
+          "enabled_apps": [
+            "apriltag",
+            "buttons",
+            "camera",
+            "color-tracker",
+            "face-detect",
+            "face-recognition",
+            "files",
+            "kibble-lm",
+            "micropython",
+            "object-detect",
+            "object-gate",
+            "pong",
+            "power",
+            "qr-camera",
+            "settings",
+            "sky-glide",
+            "terminal",
+            "uart-logger"
+          ],
+          "exclusions": [
+            {
+              "app": "accelerometer",
+              "code": "driver-unsupported",
+              "missing": [
+                "accelerometer"
+              ]
+            },
+            {
+              "app": "axp173",
+              "code": "driver-unsupported",
+              "missing": [
+                "axp173-monitor"
+              ]
+            },
+            {
+              "app": "recorder",
+              "code": "driver-unsupported",
+              "missing": [
+                "audio"
+              ]
+            }
+          ]
+        },
+        "firmware_version": "0.9.0",
+        "image": {
+          "sha256": "9e0c5cc16fcdb012b01fb8c3c75a5867d126df1c51f3b4c45870fd7e63d33383",
+          "size": 1652408
+        },
+        "platform_id": "kendryte-k210",
+        "release_qualified": true,
+        "runtime_profile": "hackylens-full",
+        "schema": 2,
+        "target": "full",
+        "wdt_fault_injection": false
+      },
+      "capabilities": {
+        "absences": [
+          {
+            "code": "resource-absent",
+            "detail": [
+              "accelerometer"
+            ],
+            "id": "accelerometer"
+          }
+        ],
+        "bindings": [
+          "platforms/k210/capabilities/time_adapter.c",
+          "platforms/k210/capabilities/input_adapter.c",
+          "platforms/k210/capabilities/display_adapter.c",
+          "platforms/k210/capabilities/external_link_adapter.c",
+          "platforms/k210/capabilities/lights_adapter.c",
+          "platforms/k210/capabilities/power_adapter.c"
+        ],
+        "board": "huskylens-sen0305"
+      },
+      "binding_versions": {
+        "platforms/k210/capabilities/time_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/input_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/display_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/external_link_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/lights_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/power_adapter.c": "0.1.0"
+      },
+      "native_descriptor_limits": {
+        "apriltag": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "buttons": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "camera": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "color-tracker": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 10000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "face-detect": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "face-recognition": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 3000000,
+          "render_budget_us": 500000
+        },
+        "files": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "kibble-lm": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 150000,
+          "render_budget_us": 500000
+        },
+        "micropython": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "object-detect": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "object-gate": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "pong": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "power": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "qr-camera": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 3000000,
+          "render_budget_us": 500000
+        },
+        "settings": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "sky-glide": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "terminal": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "uart-logger": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        }
+      },
+      "compiler": {
+        "id": "GNU",
+        "version": "8.2.0",
+        "isa": "rv64imafc",
+        "abi": "lp64f",
+        "cmake_version": "4.2.3"
+      },
+      "board_sha256": "7a73ba2fed59b69ac4d3521ddb0e3ded5b32ee26d8827c76cc360dbcc67b5848"
+    },
+    {
+      "board_id": "sipeed-maix-cube",
+      "attestation": {
+        "attestation_type": "hackylens-firmware-build",
+        "board_id": "sipeed-maix-cube",
+        "build_profile": "hackylens-full",
+        "composition": {
+          "capabilities_sha256": "e976adf960de187f1a59e99c8792dec8498944e9d6f425d0d35352b11588b74a",
+          "disabled_apps": [],
+          "disabled_capabilities": [],
+          "enabled_apps": [
+            "accelerometer",
+            "apriltag",
+            "axp173",
+            "buttons",
+            "camera",
+            "color-tracker",
+            "face-detect",
+            "face-recognition",
+            "files",
+            "kibble-lm",
+            "micropython",
+            "object-detect",
+            "object-gate",
+            "pong",
+            "power",
+            "qr-camera",
+            "recorder",
+            "settings",
+            "sky-glide",
+            "terminal",
+            "uart-logger"
+          ],
+          "exclusions": []
+        },
+        "firmware_version": "0.9.0",
+        "image": {
+          "sha256": "53e7a561ad8dcdc1e864a2e9f5cc4b4ac01d7c50e67dff51d807f94faf933f13",
+          "size": 1685880
+        },
+        "platform_id": "kendryte-k210",
+        "release_qualified": true,
+        "runtime_profile": "hackylens-cube",
+        "schema": 2,
+        "target": "full",
+        "wdt_fault_injection": false
+      },
+      "capabilities": {
+        "absences": [],
+        "bindings": [
+          "platforms/k210/capabilities/time_adapter.c",
+          "platforms/k210/capabilities/input_adapter.c",
+          "platforms/k210/capabilities/display_adapter.c",
+          "platforms/k210/capabilities/external_link_adapter.c",
+          "platforms/k210/capabilities/lights_adapter.c",
+          "platforms/k210/capabilities/power_adapter.c",
+          "platforms/k210/capabilities/accelerometer_adapter.c"
+        ],
+        "board": "sipeed-maix-cube"
+      },
+      "binding_versions": {
+        "platforms/k210/capabilities/time_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/input_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/display_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/external_link_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/lights_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/power_adapter.c": "0.1.0",
+        "platforms/k210/capabilities/accelerometer_adapter.c": "0.2.0"
+      },
+      "native_descriptor_limits": {
+        "accelerometer": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 100000,
+          "tick_budget_us": 100000,
+          "render_budget_us": 500000
+        },
+        "apriltag": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "axp173": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 30000,
+          "tick_budget_us": 100000,
+          "render_budget_us": 500000
+        },
+        "buttons": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "camera": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "color-tracker": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 10000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "face-detect": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "face-recognition": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 3000000,
+          "render_budget_us": 500000
+        },
+        "files": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "kibble-lm": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 150000,
+          "render_budget_us": 500000
+        },
+        "micropython": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "object-detect": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "object-gate": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "pong": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "power": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "qr-camera": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 3000000,
+          "render_budget_us": 500000
+        },
+        "recorder": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        },
+        "settings": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "sky-glide": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "terminal": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 20000,
+          "tick_budget_us": 20000,
+          "render_budget_us": 500000
+        },
+        "uart-logger": {
+          "static_ram_bytes": 1048576,
+          "stack_bytes": 16384,
+          "state_bytes": 1024,
+          "tick_interval_us": 5000,
+          "tick_budget_us": 1000000,
+          "render_budget_us": 500000
+        }
+      },
+      "compiler": {
+        "id": "GNU",
+        "version": "8.2.0",
+        "isa": "rv64imafc",
+        "abi": "lp64f",
+        "cmake_version": "4.2.3"
+      },
+      "board_sha256": "1612d7251fafece0d7ced3d8fe473e7e7f801bdd781560b5af3a4618d355d949"
+    }
+  ]
+}

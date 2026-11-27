@@ -9,6 +9,10 @@
 #include "audio_service.h"
 #include "display_stage_private.h"
 #include "vision_result_service.h"
+#ifdef HK_K210_SHARED_SCRIPT_TRACE
+#include "k210_shared_script_fixture.h"
+#include "lights_normative_backend.h"
+#endif
 
 #define LCD_OVERLAY_COMMAND_MAX 256U
 #define LCD_OVERLAY_TEXT_MAX 1024U
@@ -212,6 +216,34 @@ static void reset_run(void)
     g_run_id++;
     micropython_capability_bridge_prepare(g_run_id);
 }
+
+#ifdef HK_K210_SHARED_SCRIPT_TRACE
+uint32_t hk_test_k210_script_prepare(void)
+{
+    reset_run();
+    lights_normative_backend_set_now(g_now_us);
+    return g_run_id;
+}
+
+void hk_test_k210_script_schedule(hk_test_script_schedule_t schedule)
+{
+    g_sleep_calls = 0;
+    g_interrupt_poll = 0;
+    g_schedule = schedule == HK_TEST_SCRIPT_TIMEOUT_BEFORE_DISPATCH
+        ? SCHEDULE_TIMEOUT_BEFORE_TICK : SCHEDULE_TICK_EACH_SLEEP;
+    g_interrupt_on_poll = schedule == HK_TEST_SCRIPT_STOP_BEFORE_DISPATCH ? 1 : 0;
+}
+
+uint32_t hk_test_k210_script_unwind_calls(void)
+{
+    return g_vm_hook_calls;
+}
+
+uint32_t hk_test_k210_script_unwind_before_ack(void)
+{
+    return g_unwind_before_ack;
+}
+#endif
 
 static micropython_binding_result_t call_binding(
     micropython_binding_op_t operation, const uint32_t arguments[6],
@@ -776,8 +808,15 @@ static void test_vision_binding(void)
                  empty.height == 0U, "producer exit clears its result");
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+#ifdef HK_K210_SHARED_SCRIPT_TRACE
+    if(argc > 1)
+        return hk_test_k210_script_trace(argc, argv);
+#else
+    (void)argc;
+    (void)argv;
+#endif
     test_timeout_cancels_before_dispatch();
     test_stop_acknowledged_before_vm_unwind();
     test_uart_timeout_prevents_late_completion();
@@ -974,6 +1013,7 @@ hk_result_t hk_display_stage_keep_last_clear(
     return HK_OK;
 }
 
+#ifndef HK_K210_SHARED_SCRIPT_TRACE
 struct hk_lights_service { uint8_t unused; };
 static const hk_lights_service_t s_lights_binding = {0};
 const hk_lights_service_t *hk_lights_service(void) { return &s_lights_binding; }
@@ -1032,6 +1072,7 @@ hk_result_t hk_lights_set_rgb(
     g_light_writes++;
     return HK_OK;
 }
+#endif
 
 struct hk_external_link_service { uint8_t unused; };
 static const hk_external_link_service_t s_external_binding = {0};
@@ -1235,6 +1276,10 @@ hk_result_t hk_time_deadline_after_us(
 static void test_sleep_ms(uint32_t duration_ms)
 {
     g_sleep_calls++;
+#ifdef HK_K210_SHARED_SCRIPT_TRACE
+    lights_normative_backend_set_now(g_now_us);
+    hk_test_k210_script_before_dispatch();
+#endif
     if(g_schedule == SCHEDULE_TIMEOUT_BEFORE_TICK && g_sleep_calls == 1U)
     {
         g_now_us += 600000ULL;

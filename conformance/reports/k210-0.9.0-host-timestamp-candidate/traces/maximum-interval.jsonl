@@ -1,0 +1,2 @@
+{"event":"clock","now_us":1000000}
+{"event":"deadline_result","outcome":"success","value":301000000}

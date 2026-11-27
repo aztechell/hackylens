@@ -1,0 +1,1211 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "schema_version": 1,
+    "specification": "0.1.0",
+    "implementation": "HackyLens K210",
+    "implementation_version": "0.9.0",
+    "implementation_revision": "7d3e7dbfc94ded50e40af0d35dd226b14286fca5",
+    "source_variant": "working-tree",
+    "changed_inputs": [
+      "firmware/src/app_runtime/runtime.c",
+      "firmware/src/app_runtime/runtime_private.h",
+      "firmware/src/services/micropython_runtime.c",
+      "tests/app_runtime_host_support.c",
+      "tests/k210_external_link_harness.c",
+      "tests/k210_external_link_peer.h",
+      "tests/k210_script_runtime_fixture.h",
+      "tests/k210_shared_script_fixture.h",
+      "tests/lights_normative_k210_backend.c",
+      "tests/micropython_bindings_harness.c",
+      "tests/micropython_runtime_harness.c"
+    ],
+    "evaluated_scopes": [
+      "Core",
+      "Lights",
+      "External Link",
+      "Shared Script"
+    ],
+    "environment": {
+      "kind": "host-controlled-clock",
+      "platform": "Windows-11-10.0.26300-SP0",
+      "compiler": "gcc.EXE (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r6) 15.2.0",
+      "flags": [
+        "-std=c11",
+        "-O1",
+        "-Wall",
+        "-Wextra",
+        "-Werror"
+      ]
+    },
+    "configuration": "K210 Time binding with host hooks, native runtime with simulated providers, Lights and External Link with peripheral hooks, the MicroPython capability bridge with a controlled scheduler, MicroPython runtime with a VM stub and controlled executor, and SEN0305 composition fixtures",
+    "bindings": {
+      "Time": {
+        "version": "0.1",
+        "features": [
+          "monotonic_us",
+          "sleep_until"
+        ]
+      },
+      "Lights": {
+        "version": "0.1",
+        "features": [
+          "backlight",
+          "illumination",
+          "rgb"
+        ]
+      },
+      "External Link": {
+        "version": "0.1",
+        "features": [
+          "uart",
+          "i2c_controller",
+          "i2c_target"
+        ]
+      }
+    },
+    "limits": {
+      "Time": {
+        "max_interval_us": 300000000,
+        "max_slice_us": 5000
+      },
+      "Lights": {
+        "channel_mask": 7,
+        "max_level": 1000
+      },
+      "External Link": {
+        "poll_bytes": 32,
+        "i2c_transfer_bytes": 256,
+        "active_operations": 1
+      },
+      "Shared Script": {
+        "observed_pending_requests": 1
+      }
+    },
+    "fixtures_sha256": {
+      "CT-09": "415e43ebb849887d90ec381729f20c576965e7d452cade1cff62d95d226cd0a7",
+      "lifecycle": "360e4ac94350c0b3826df57539100015299eea2ab97669b90d6c55bd382c7f44",
+      "CT-11": "27b39046369a889f53ae575b936c40e4f8fdc1706c9da87eeeba48ecae6ababf",
+      "external_link": "9c058c02c398405578232ddf34a9c5e38d9911697fdbeb7342982b3b8c31d08f",
+      "shared_script": "2b552600866c589ac140a5d455a71c962475e381527e8eeeadc2c160f054f0bf",
+      "script_runtime": "1fea4afc52efc432ad616f2dac412470b0dbbf4c4239398bb7ace74fa44de352",
+      "CT-02": "a2706938af662281c09d6f2124e897cd69849c10ca4308e7b1da2804d98c2e19"
+    },
+    "input_sha256": {
+      "conformance/adapters/k210/collect.py": "4b1ae16d67ff8d13fa9fcb3973c6b5dd12317af6469ee83afb05387433aab307",
+      "conformance/adapters/k210/time_trace.c": "695f0ebd76161a42a74a154ae0089efec1fe0a239da52fbc4c2044e5f64bff81",
+      "firmware/src/capabilities/time.c": "9fde5767f5ceeac5fc6e385eae7885fcc24813ae1ff295a40c2be45e596542d2",
+      "firmware/src/capabilities/time_provider.h": "ac1541fa0ff2cc385ec38a20c1d48730465ca2d2af7c97637fba1d31cc0d0a09",
+      "firmware/include/hackylens/capability/time.h": "74346ac2f0b593f9d8c651dd3ce1c3450dc0d4e480ce17494dc05c2a899dd5e0",
+      "firmware/include/hackylens/capability/common.h": "089d7a97b7a9c332481861f24a375eebdef68d69011ad6a1234c241b48e5cda4",
+      "platforms/k210/capabilities/time_adapter.c": "35e7584019be8bd53522c32fdfca878eefbbf7025795988d445f39ad45f64671",
+      "platforms/k210/hal/hal_time.h": "6b2484cd88a69aec0776029407791f65151bf3b9af8db28843b85af84fedb45e",
+      "tests/k210_time_adapter_stubs/atomic.h": "86dd2e8111e2a17e0e0a4600cc40397680241b60b3b80e43cca458bbbfe9a9c9",
+      "tests/k210_time_adapter_stubs/sleep.h": "30f9f17fcc7a2c5b879f8c209d737f0d19f57f2e238fd616c0d7554cc1632f55",
+      "conformance/adapters/k210/lifecycle_trace.c": "f6597c67e50d52fdad8472f21d9c77c979f85d47c3ef5b3081fdc016cb6463e5",
+      "firmware/src/app_runtime/runtime.c": "e04738ea4ffee5363da2f0cb2f1683b52b6f133fad5fa1dd3c03682d51e69787",
+      "firmware/src/app_runtime/surface.c": "b75a83603d34589316d56a78e2fda24322aeea376ed2fec23c8033979b0cfc26",
+      "firmware/src/app_runtime/switch.c": "0286ca6985e6e722ff70ae22c3326dfa2c03502ddc519126f89c56523a52a80a",
+      "firmware/src/capabilities/lights.c": "acb21b4dd0ed26288d4d8052e74a7a7baff4379dd09efa449c82c4cccba2ca45",
+      "firmware/src/capabilities/display.c": "f56bdf2c321162bfbecb465058ccd878bf63023dc0aa91d1e1a566549aa4db64",
+      "firmware/src/capabilities/input.c": "5594305ab081f2205c303f979f7e56f5ddd9ddecb729fdb2171f9f2ffebac95c",
+      "firmware/src/capabilities/input_state.c": "0ca02ea58a44a3e7faf0a6283cdbb66fc4aed621e4ccaad2a3c490f31b505633",
+      "tests/time_normative_fake_backend.c": "2e7c2aba5cf5f96c6e897e60373aafc95caf15c4b4e0556f6c40c9b811c912a3",
+      "tests/lights_normative_fake_backend.c": "64d66a33edbf76b7a5c497883ff652d56ec982e9ada4bed8b4e269892f72f9c1",
+      "tests/input_normative_fake_backend.c": "9fbefcc53c0d29118f22da6ece1370c086f6ba2cc4a65169837695b8996e1194",
+      "tests/capability_fake_display.c": "4eb4b5d37c659a2139a2775f7935395860f03028f873ff70346c06a3d157c46d",
+      "tests/capability_fake_external_link.c": "e70f3460edf7cfb681b2bf387dcec8ae7a55d1c4acf1c44a1dfa0bbb52604e9d",
+      "tests/app_runtime_host_support.c": "f9acbaee8331001539a70fc44b99859ef00a22e4d246f527040a997f766b0b88",
+      "firmware/src/app_runtime/runtime_private.h": "473049d3aeafeccdb5e9fae67cccd95d9226ac90391969b3b2b4011bd61119be",
+      "firmware/src/app_runtime/switch.h": "e06fdc05762a020d0ec0e5042cd6189739987b871ee84250821f2f4c63fc280e",
+      "sdk/include/hackylens/app/context.h": "72b5203985336fe449d2b22ff598b949ad16b4c60828f3975101199e39920094",
+      "sdk/include/hackylens/app/runtime.h": "223cd8f1072845ed21a191e404214e7f99df1e0e859394a998fad3a99273da8a",
+      "tests/app_runtime_host_support.h": "3a002324b36389c863a0730ab7c2d5edaebc3a24afe1f2e7560c935f4fe0a0a9",
+      "conformance/adapters/k210/lights_trace.c": "4f88b2c765bc633c6635c0edb8ed347b5ccaa6243a222e72b2b62c9c62150582",
+      "tests/lights_normative_k210_backend.c": "ad09b22a909306f369cc165941408629fef8aa892d9b2dc18f01927b11466396",
+      "platforms/k210/capabilities/lights_adapter.c": "09eb67a5308ba7dc189aeec79c1f810fdcc221d01ccd8f5f63c9903c98348e3b",
+      "conformance/adapters/k210/external_link_trace.c": "680dcc306484cf0c37acee6f7d08c29f311f93fc3114a5fd61dfe439de828bd1",
+      "tests/k210_external_link_harness.c": "cc5af429b6fdf48ba59efc97ed75e23b980e0a229b6cc5bb02ecb4cf75736684",
+      "tests/external_link_normative_suite.c": "0935ecd840fd0f25aa81554946b68aec25ecafd4f11644a55740a17c0bf622c8",
+      "firmware/src/capabilities/external_link.c": "954cd0b292769c71012b64e0ff75ecd6e9d967694c7809ee94003a80241243d9",
+      "platforms/k210/capabilities/external_link_adapter.c": "6af6b95a57fe1e64e10a9ab5a917fb4de85ab8d60d3bf84af98c65f59dee2a79",
+      "firmware/include/hackylens/capability/external_link.h": "64bf2fc42800cac741382ca9059b5dfd23adba0fb3303a1b9818af35d1ab0c45",
+      "firmware/src/capabilities/external_link_provider.h": "ad998f164061be70e3e182671f811e4289f7daf2b3d5009ef8704ba4e85e6e84",
+      "platforms/k210/hal/hal_external_link.h": "684ab50995543d06bedb279a64d4ff7597e6e649ecb75e8c688d1b179953302a",
+      "tests/k210_external_link_peer.h": "9b810c18765e344a5f8b63ef5fc554b34bb062dce9c012ac03de9f320c541c90",
+      "tests/external_link_normative_suite.h": "1ce0ab5c4d3f10f8ac69f418854423a39bf0a340dcfd4f6b3a816c1877a56e44",
+      "conformance/adapters/k210/shared_script_trace.c": "b0163514bb929e92c13a6549a4ae049a96b48f750be45d8e3454e0c99d76fa8c",
+      "tests/micropython_bindings_harness.c": "b319ff17f092f6c3b39dac992fb9cd064ceaa81685fc83b7a2babbfdf522eee9",
+      "firmware/src/adapters/micropython/micropython_capability_bridge.c": "ca432a07952646e2da2149322bd3541147ca66286e683ac50bf4f085498ed86a",
+      "firmware/src/core/shared_buffer.c": "19ffea222ed258a908e47f06235534e7ab5e8d7e21184d6b4f0658116b74fd84",
+      "firmware/src/services/vision_result_service.c": "fa0a5fe6d04174b8cbe6d14c263364922b779e57e0d335e55fc896d0cdf74aed",
+      "tests/hal_shared_buffer_fake.c": "28a5066b23374f7505a8e17c7cd9b99e5e4b9649ffa1b313fa8379f6a1926586",
+      "firmware/src/adapters/micropython/micropython_capability_bridge.h": "48b21abbd715c486b3d552c41806ed61d4c6b71b6ff4d61845d0658b34f32b09",
+      "tests/k210_shared_script_fixture.h": "5828a89f368aea023e7f9848d4f6cc2f1cb142c81cac2465063719429ff3954f",
+      "tests/micropython_binding_test_platform.h": "a73c95acac5513ad4677e9d1bf54960315a3094137c672e98c46afda8fda2f3e",
+      "tests/lights_normative_backend.h": "9992bf7f1ba6530b07781b3fbc9d42a38e9a762970b90998bceab740fed95304",
+      "conformance/adapters/k210/script_runtime_trace.c": "a3a257d0f1bbd2df695af13408bce6883b94017dd599c645234721b2cd021360",
+      "tests/micropython_runtime_harness.c": "e6abe4c234e9d40d8dcafc55621022b23f82b40891c27a1e51372b7c571bbb68",
+      "firmware/src/services/micropython_runtime.c": "fa7cb20af885c436ffb3d44b91e2f56a05947065075891c9004326fd777e99f2",
+      "firmware/src/services/micropython_runtime.h": "467b37ec9cd3ac65cde273b46d29d5c938a56442914165a34c1c9028ff82e827",
+      "firmware/src/services/core1_executor.h": "62c2b5f0b5050dd56d3512aaf0b29f4874fc66ef9f7e6ff54f02ed41ef9f0ac1",
+      "tests/k210_script_runtime_fixture.h": "4b555036485c1c4a260c2d0294ef36cd64a5c20ef8f5b506ef4c13538bb384df",
+      "tests/fixtures/micropython_runtime_stub/stub_micropython.h": "6f5a8810dd4c81244bcf49775c8f95f0d86c57e7bab5c710985f6bf1894e4c6d",
+      "tests/fixtures/micropython_runtime_stub/port/micropython_embed.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "tests/fixtures/micropython_runtime_stub/py/compile.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "tests/fixtures/micropython_runtime_stub/py/gc.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "tests/fixtures/micropython_runtime_stub/py/parse.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "tests/fixtures/micropython_runtime_stub/py/runtime.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "tests/fixtures/micropython_runtime_stub/py/stackctrl.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+      "conformance/adapters/k210/composition_trace.py": "03ef7316fa06e5f5c9c6cd8e8274ae665869c807ee81b3363b8081be5c384383",
+      "conformance/adapters/k210/registry_trace.c": "777fb4f9d56b50219fc6aa2bf502a85cd03e8a81358420853aa94ccc456bb2fa",
+      "firmware/src/core/hk_app_registry.c": "5410fa588ef5f8076e71de29acb6470253557b70c8c351088f954ddac72ba451",
+      "firmware/src/core/hk_app_registry.h": "8be09dcc8d94e9d048c8fea8d43a27c21915b17329568a33f807d2b53dd29b14",
+      "firmware/src/core/hk_app.h": "e7d1514ccfe77ca631db8ff280d7a25080c8aea28073c7619bbb40781bdd521c",
+      "firmware/src/core/hk_events.h": "7f33101fc88729d4ff6dc859abfc53bcecfc2d0a3ad837e41e4b839b4d6116f5",
+      "tools/app_composition.py": "974032956d98f2804a709cdc11c51b21eafac802ac502712a27f3a6dd266cc09",
+      "tools/board_contract.py": "cbf935ab591a71d4c4f6e331f092d1f3c4e53b9289654857afae5623319c656c",
+      "tools/service_bindings.py": "cb691209eaf59ab65f4b23642fc40b4535a93ddc1573953e9d542d5f729c442a",
+      "tools/app_manifest.py": "29ef0e37f79c3caa1ba5b6b5e2c53514342fe479c95f76e7140b439ecf2c9f7b",
+      "tools/app_registry.py": "2a3f26ba6d1dc17335cdad98d87e206bb8149329295a7f0cc92ec638009b7eef",
+      "boards/huskylens-sen0305/board.toml": "7a73ba2fed59b69ac4d3521ddb0e3ded5b32ee26d8827c76cc360dbcc67b5848",
+      "tests/fixtures/app_manifests/valid/alpha-tool/app.toml": "396e76dc41d2de4b531f08816bb8d325eea3efd9507179026b848b5470bea3b3",
+      "tests/fixtures/app_manifests/valid/alpha-tool/include/alpha_tool.h": "754e37b1b96a06ecbeeb4a65eca18237de40b69abaad55b9b7a7dac7f2304fc6",
+      "tests/fixtures/app_manifests/valid/alpha-tool/src/alpha_tool.c": "f1d115bf52d537225d73522b20a829becd80e68f23056db03b19d1815a07fb2b",
+      "tests/fixtures/app_manifests/valid/alpha-tool/tests/alpha_tool_test.c": "703cebd6ec8c2e1c4f074f0a1ab908fd8785778158a0549b09eb46da8d5e64c4",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/app.toml": "74c6fe4e674158c5eab960a55c80148b9147b8ada8d9b7d196df020cf1b078ce",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/include/zeta_legacy.h": "fa2d7a7669bbc7f898cbe798bf07b18dedad8903dfc5b32d08150a43b0ad4d52",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/src/zeta_legacy.c": "7087d30286a3065a1e4fa97e8e09ad7332ea731c873847b4a0a7d4f7d22f3d5a",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/src/zeta_view.c": "ef50add5778539ce5652c3a1b65be8b7e886aefba933f8b2d42bd1ad17c10084",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/tests/__pycache__/zeta_legacy_test.cpython-314-pytest-9.0.2.pyc": "8463e90bf346503d3fc299d11739f32b4d6a56b4853538df210f2811bbff95a2",
+      "tests/fixtures/app_manifests/valid/zeta-legacy/tests/zeta_legacy_test.py": "b180b3e769adf0248726025e9a23054518d1bd0c51204cd167b46db304a5710e"
+    }
+  },
+  "manifest_sha256": "16a7efaa1d4e1743600d1ec039ad9159c01a46fcef09a434d32215d3c7c20e34",
+  "suite_sha256": {
+    "conformance/runner/run.py": "9cc9c574338dcfcdf758d74010f067d47511ca9648142778194c8b8d07820782",
+    "conformance/oracle/time.py": "2386fce8954754f8d73426a8c16d1d379c4ec786754e61e560c0d2ad50b77485",
+    "conformance/oracle/lifecycle.py": "69d6066f33655daf19750655d15f6a0054b3924c228990f110eebf13e79c24b7",
+    "conformance/oracle/composition.py": "f3a20bbd331464c7dfafd0feeac123ed4c41dca8d1cd567984ae7ccd5a7083ed",
+    "conformance/oracle/lights.py": "24d6162b47e2970e0fbcaeb9ca12f6c20d0737415bc9d0514f4ae3f023ffa736",
+    "conformance/oracle/external_link.py": "83938eb978b186d33f62ea765fd3a5e9ebc47b4c98e134b116f061588952aeff",
+    "conformance/oracle/shared_script.py": "38f88a341165169da6c2c02bb8b2ec9d0e8c7724ddfd68c2ffb31c87d822ec5a",
+    "conformance/fixtures/composition.json": "a2706938af662281c09d6f2124e897cd69849c10ca4308e7b1da2804d98c2e19",
+    "conformance/fixtures/time.json": "415e43ebb849887d90ec381729f20c576965e7d452cade1cff62d95d226cd0a7",
+    "conformance/fixtures/lights.json": "27b39046369a889f53ae575b936c40e4f8fdc1706c9da87eeeba48ecae6ababf",
+    "conformance/fixtures/lifecycle.json": "360e4ac94350c0b3826df57539100015299eea2ab97669b90d6c55bd382c7f44",
+    "conformance/fixtures/external_link.json": "9c058c02c398405578232ddf34a9c5e38d9911697fdbeb7342982b3b8c31d08f",
+    "conformance/fixtures/shared_script.json": "2b552600866c589ac140a5d455a71c962475e381527e8eeeadc2c160f054f0bf",
+    "conformance/fixtures/script_runtime.json": "1fea4afc52efc432ad616f2dac412470b0dbbf4c4239398bb7ace74fa44de352",
+    "docs/spec/v0.1/requirements.csv": "7f4f84d8ce7f28a6c3027de8ec7c0f61ffa360e41e86781cd8dc602a4ecf5650",
+    "docs/spec/v0.1/README.md": "6baf2c434f73474947bda294ce90bfc5c980e9a7b92a6304a0d9e7f577981ada",
+    "docs/spec/v0.1/SERVICES.md": "8cb1d3eecf127617c6e1a7850d97f8e86780794b4514d8e400e78eac1f00fb44",
+    "docs/spec/v0.1/CONFORMANCE.md": "50cb23940f1922b0b54a98083688df2ccee174b6e886cdcda100c69410fe37bc",
+    "docs/spec/v0.1/SPEC_RATIONALE.md": "9291cd1a2053b06afa23f9435b6529306a1aa5994dd2214158c7d0a28d657434"
+  },
+  "requirements": [
+    {
+      "id": "ARC-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-01"
+      ],
+      "status": "NOT RUN",
+      "reason": "No independent result for this requirement."
+    },
+    {
+      "id": "ARC-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-01"
+      ],
+      "status": "NOT RUN",
+      "reason": "No independent result for this requirement."
+    },
+    {
+      "id": "ARC-03",
+      "scope": "Core",
+      "scenarios": [
+        "CT-01",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "ARC-04",
+      "scope": "Core",
+      "scenarios": [
+        "CT-01"
+      ],
+      "status": "NOT RUN",
+      "reason": "No independent result for this requirement."
+    },
+    {
+      "id": "CMP-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-02"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "CMP-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-02"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "CMP-03",
+      "scope": "Core",
+      "scenarios": [
+        "CT-02"
+      ],
+      "status": "PASS",
+      "reason": "Equivalent manifest inputs produced identical registries. Compiled lookup preserved the disabled app ID and the peer's identity.",
+      "evidence": [
+        {
+          "path": "traces/equivalent-manifest-ordering.jsonl",
+          "sha256": "fa07d608b54211e2a3ea4365b964e7b23be1eaf246dcbe908ac2c5a9900cd139"
+        },
+        {
+          "path": "traces/preserve-disabled-autostart-id.jsonl",
+          "sha256": "ef23b4b2db411d0801566c8d3a10927dc7603221697c92927263d650ac3b743e"
+        }
+      ]
+    },
+    {
+      "id": "LIF-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-03"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-03"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-03",
+      "scope": "Core",
+      "scenarios": [
+        "CT-03"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-04",
+      "scope": "Core",
+      "scenarios": [
+        "CT-04"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-05",
+      "scope": "Core",
+      "scenarios": [
+        "CT-05"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-06",
+      "scope": "Core",
+      "scenarios": [
+        "CT-05"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-07",
+      "scope": "Core",
+      "scenarios": [
+        "CT-06"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-08",
+      "scope": "Core",
+      "scenarios": [
+        "CT-06",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "LIF-09",
+      "scope": "Core",
+      "scenarios": [
+        "CT-07"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "OWN-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-08"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "OWN-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-07",
+        "CT-08"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "OWN-03",
+      "scope": "Core",
+      "scenarios": [
+        "CT-08",
+        "CT-18"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "OWN-04",
+      "scope": "Core",
+      "scenarios": [
+        "CT-06",
+        "CT-08",
+        "CT-18"
+      ],
+      "status": "NOT RUN",
+      "reason": "No independent result for this requirement."
+    },
+    {
+      "id": "OWN-05",
+      "scope": "Core",
+      "scenarios": [
+        "CT-06",
+        "CT-08",
+        "CT-18"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "TIM-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-04",
+        "CT-09"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "TIM-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-09"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "TIM-03",
+      "scope": "Core",
+      "scenarios": [
+        "CT-09"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "ERR-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-08"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "ERR-02",
+      "scope": "Core",
+      "scenarios": [
+        "CT-05"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "SCR-01",
+      "scope": "Shared Script",
+      "scenarios": [
+        "CT-17"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "SCR-02",
+      "scope": "Shared Script",
+      "scenarios": [
+        "CT-17",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "SCR-03",
+      "scope": "Shared Script",
+      "scenarios": [
+        "CT-17",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "SCR-04",
+      "scope": "Shared Script",
+      "scenarios": [
+        "CT-18",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "SCR-05",
+      "scope": "Shared Script",
+      "scenarios": [
+        "CT-18",
+        "CT-20"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "REC-01",
+      "scope": "Recovery",
+      "scenarios": [
+        "CT-19"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "REC-02",
+      "scope": "Recovery",
+      "scenarios": [
+        "CT-19"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-TIME-01",
+      "scope": "Core",
+      "scenarios": [
+        "CT-09"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "S-INPUT-01",
+      "scope": "Input",
+      "scenarios": [
+        "CT-10"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-INPUT-02",
+      "scope": "Input",
+      "scenarios": [
+        "CT-10"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-LIGHT-01",
+      "scope": "Lights",
+      "scenarios": [
+        "CT-11"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "S-LIGHT-02",
+      "scope": "Lights",
+      "scenarios": [
+        "CT-11"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "S-DISP-01",
+      "scope": "Display",
+      "scenarios": [
+        "CT-12"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-DISP-02",
+      "scope": "Display",
+      "scenarios": [
+        "CT-12"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-RENDER-01",
+      "scope": "Native Render",
+      "scenarios": [
+        "CT-13"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-RENDER-02",
+      "scope": "Native Render",
+      "scenarios": [
+        "CT-13"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-LINK-01",
+      "scope": "External Link",
+      "scenarios": [
+        "CT-14"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "S-LINK-02",
+      "scope": "External Link",
+      "scenarios": [
+        "CT-14"
+      ],
+      "status": "NOT RUN",
+      "reason": "The host observations provide partial evidence. Full requirement evaluation is pending."
+    },
+    {
+      "id": "S-POWER-01",
+      "scope": "Power",
+      "scenarios": [
+        "CT-15"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    },
+    {
+      "id": "S-ACCEL-01",
+      "scope": "Accelerometer",
+      "scenarios": [
+        "CT-16"
+      ],
+      "status": "NOT APPLICABLE",
+      "reason": "Outside the declared evaluation scope."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "CT-02",
+      "covered_observations": [
+        "CMP-01",
+        "CMP-02",
+        "CMP-03"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "reject-invalid-identity",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/reject-invalid-identity.jsonl",
+            "sha256": "cfcaf2fef6b039ad858ebb3fc6ea31360eff499806ec8e51b783590a9cafbddf"
+          }
+        },
+        {
+          "id": "reject-duplicate-identity",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/reject-duplicate-identity.jsonl",
+            "sha256": "cfcaf2fef6b039ad858ebb3fc6ea31360eff499806ec8e51b783590a9cafbddf"
+          }
+        },
+        {
+          "id": "exclude-absent-required-service",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/exclude-absent-required-service.jsonl",
+            "sha256": "471b0adbbc57af2b561b3097f9e14e03c30fc4c6b3a092d527217cfcc2ea10b9"
+          }
+        },
+        {
+          "id": "reject-explicitly-required-app",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/reject-explicitly-required-app.jsonl",
+            "sha256": "188304b6bf290742368d09f5d8e4bbd55d49295d8e603721ed6fe36172ea7f7b"
+          }
+        },
+        {
+          "id": "admit-with-optional-service-absent",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/admit-with-optional-service-absent.jsonl",
+            "sha256": "4fb7943c64778c2426435c9f4bfd211769cdc9b65732f1236173e21c003f225a"
+          }
+        },
+        {
+          "id": "equivalent-manifest-ordering",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/equivalent-manifest-ordering.jsonl",
+            "sha256": "fa07d608b54211e2a3ea4365b964e7b23be1eaf246dcbe908ac2c5a9900cd139"
+          }
+        },
+        {
+          "id": "preserve-disabled-autostart-id",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/preserve-disabled-autostart-id.jsonl",
+            "sha256": "ef23b4b2db411d0801566c8d3a10927dc7603221697c92927263d650ac3b743e"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-03",
+      "covered_observations": [
+        "LIF-01",
+        "LIF-02",
+        "LIF-03"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "switch-foreground",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/switch-foreground.jsonl",
+            "sha256": "4bbb163bf77ac543e9810c53b72e69f5a8b6ec07d6c924d80976d5d987057507"
+          }
+        },
+        {
+          "id": "ordered-events-through-close",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/ordered-events-through-close.jsonl",
+            "sha256": "810b49658cf6abb0920b1403f849c20aeaf483a12b2521f8810165943f1ec39f"
+          }
+        },
+        {
+          "id": "retained-close-during-start",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/retained-close-during-start.jsonl",
+            "sha256": "5fc2238b23345b390c4a5f857a58057e849165ea3d779ff733a53417249b67b7"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-04",
+      "covered_observations": [
+        "LIF-04",
+        "TIM-01"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "timer-skips-missed-periods",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/timer-skips-missed-periods.jsonl",
+            "sha256": "4ec3d265a03ae70e370aa0d27e89e17cbc615128f67648e5e49f811f79eb9204"
+          }
+        },
+        {
+          "id": "timer-overrun-unwinds",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/timer-overrun-unwinds.jsonl",
+            "sha256": "b90679375a6d0d5670dc58e3bb23b8d81e462d66862a51639aab7ede78f0c4d8"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-05",
+      "covered_observations": [
+        "LIF-05",
+        "LIF-06",
+        "ERR-02"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "invalid-descriptor",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/invalid-descriptor.jsonl",
+            "sha256": "6c7aec13cc5a35f247b6b0bfeaf4b4397264bf6b1081bb68a5514aee39bb32dd"
+          }
+        },
+        {
+          "id": "partial-preparation",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/partial-preparation.jsonl",
+            "sha256": "4cdb2e271fd0e34c16cafe0109eaef950331ccb1422a02eff257d0f032c0b004"
+          }
+        },
+        {
+          "id": "start-failure",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/start-failure.jsonl",
+            "sha256": "8f7ae6a0302c274df4c02ca2987b1f0fd3d8fbec8b12270ebf5453beac5a8cb4"
+          }
+        },
+        {
+          "id": "event-and-retirement-failure",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/event-and-retirement-failure.jsonl",
+            "sha256": "c7a8d39d9e932a1beb7dcf0cc47b037cd7a925f992c70a690d0fb8435d3060f9"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-06",
+      "covered_observations": [
+        "LIF-07",
+        "LIF-08"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "expired-stop-keeps-retirement",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/expired-stop-keeps-retirement.jsonl",
+            "sha256": "385f33d76fbd3b67794128be0be4f9d613e66782295390901faaefacb637771c"
+          }
+        },
+        {
+          "id": "deadline-clock-failure-keeps-retirement",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/deadline-clock-failure-keeps-retirement.jsonl",
+            "sha256": "bcb7cd247bec692ebbf36c8e0b3ec5eb50931b52b8d7f1c8aaa3ba8df55af9e2"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-07",
+      "covered_observations": [
+        "LIF-09",
+        "OWN-02"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "wakeup-after-switch",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/wakeup-after-switch.jsonl",
+            "sha256": "e762217468f2fda2aa2b465f847d4da2fb3d1db91730e58925beb3c160dc8e46"
+          }
+        },
+        {
+          "id": "instance-identity-exhaustion-blocks-reuse",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/instance-identity-exhaustion-blocks-reuse.jsonl",
+            "sha256": "d6c6a1da966cad4a1bf38f55198bc43e4d107c2d316b905cb5576c8b88d4514f"
+          }
+        },
+        {
+          "id": "copied-context-cannot-borrow-from-next-instance",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/copied-context-cannot-borrow-from-next-instance.jsonl",
+            "sha256": "bd204e0551d87f4a972fcb1966541ecc43838edc895eb7f2c7583d2aad8c4fd5"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-08",
+      "covered_observations": [
+        "OWN-01",
+        "OWN-02",
+        "OWN-03",
+        "ERR-01"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "connector-claims-and-validation-before-effects",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/connector-claims-and-validation-before-effects.jsonl",
+            "sha256": "74188839c6e8953d712f0d9012febeb81841bd57c74f90e0a089f15b3272c525"
+          }
+        },
+        {
+          "id": "cancelled-transfer-releases-peripheral-borrow",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/cancelled-transfer-releases-peripheral-borrow.jsonl",
+            "sha256": "d268f98baf9c0357ad6090c4048f6bb5c91a670dbd56d3d0d8a4f5215fec5ef4"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-09",
+      "covered_observations": [
+        "S-TIME-01",
+        "TIM-01",
+        "TIM-02",
+        "TIM-03"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "target-before-deadline",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/target-before-deadline.jsonl",
+            "sha256": "dd4d86223ac2059bc6c43c154de0e60924a233986e95ff1ae882f30ea019c772"
+          }
+        },
+        {
+          "id": "target-wins-three-way-race",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/target-wins-three-way-race.jsonl",
+            "sha256": "5cac976dbdfe971cec6e20e4534ba4a09d88196649c63843dc97013ce4f42d54"
+          }
+        },
+        {
+          "id": "cancel-wins-at-deadline",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/cancel-wins-at-deadline.jsonl",
+            "sha256": "662dc7cbefe57d96296e7474aa7a845f971f641d0e26087b1f3b29912ba08055"
+          }
+        },
+        {
+          "id": "cancel-between-checks",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/cancel-between-checks.jsonl",
+            "sha256": "662dc7cbefe57d96296e7474aa7a845f971f641d0e26087b1f3b29912ba08055"
+          }
+        },
+        {
+          "id": "earlier-deadline",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/earlier-deadline.jsonl",
+            "sha256": "3af61364d7aff4118f9398d48458c8f8e7a098b64f7d9120e2f7c07078b07d6e"
+          }
+        },
+        {
+          "id": "already-expired",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/already-expired.jsonl",
+            "sha256": "a8bebad2f546e797e31bd42ac2dd3a8c9059def962a38d203bd367ce7f628d9e"
+          }
+        },
+        {
+          "id": "reached-at-entry",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/reached-at-entry.jsonl",
+            "sha256": "7e8e31b314bf9eea45bb293628e0d2851317dd5ac0110a72a39159395c714184"
+          }
+        },
+        {
+          "id": "frozen-clock",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/frozen-clock.jsonl",
+            "sha256": "60f35a16618596c5ae3a6ec8123428c1a80f500ba5aebc3849831845a0fa9323"
+          }
+        },
+        {
+          "id": "unbounded-deadline-rejected",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/unbounded-deadline-rejected.jsonl",
+            "sha256": "585a568b7755e7caf3db8be9599843b44d5b910816866d8afd61bb0714e2efa8"
+          }
+        },
+        {
+          "id": "regressing-clock",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/regressing-clock.jsonl",
+            "sha256": "948a83b08b57aa3094d0840798371e2b66a2484e4fe174faf380b331c4bf9af0"
+          }
+        },
+        {
+          "id": "finite-zero-interval",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/finite-zero-interval.jsonl",
+            "sha256": "8a005affb39b8184faf9b34d599768dba941665e1db21e0d7ee7f44a2369651a"
+          }
+        },
+        {
+          "id": "maximum-interval",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/maximum-interval.jsonl",
+            "sha256": "6c3b3c0416170462e31c69479dbcb2085e97d19cc38e3cef94cd99b30442a8a2"
+          }
+        },
+        {
+          "id": "excessive-interval",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/excessive-interval.jsonl",
+            "sha256": "da11e5dae4ae18eda293d8126ab4ee9b0b1fbea19ea821e751216fdf8893aa8d"
+          }
+        },
+        {
+          "id": "deadline-overflow",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/deadline-overflow.jsonl",
+            "sha256": "1aa4a1a3e747a049e7031117a2f02214b60f4fc6f8683c3cc362ebc19ed6df8b"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-11",
+      "covered_observations": [
+        "S-LIGHT-01",
+        "S-LIGHT-02"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "lights-atomic-overlap",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/lights-atomic-overlap.jsonl",
+            "sha256": "8ca4996056e5f1c372dfac4c1811453fe0254e76342b5794a65ff9a8d60911a6"
+          }
+        },
+        {
+          "id": "lights-validation-and-copied-authority",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/lights-validation-and-copied-authority.jsonl",
+            "sha256": "7224b0cc88cab61e1a318426f0f24f41f05b7f3beba1d4aa0b09394f5027bd80"
+          }
+        },
+        {
+          "id": "lights-close-retry",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/lights-close-retry.jsonl",
+            "sha256": "401daeb595d80ed707ee9cbc514c0f3aa89b9f5a1936b1473b8964c2acc2ddf3"
+          }
+        },
+        {
+          "id": "lights-retirement-quarantines-locally",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/lights-retirement-quarantines-locally.jsonl",
+            "sha256": "f7af257f65d49abe98fae46ea374766975ab0acbf999314a61458e37b43dd8de"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-14",
+      "covered_observations": [
+        "S-LINK-01",
+        "S-LINK-02"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "held-transfer-completes-before-buffer-release",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/held-transfer-completes-before-buffer-release.jsonl",
+            "sha256": "3b26c68fe507adb0386f602d5554e58311e84aeb258f6b95e6158265c9ef62c4"
+          }
+        },
+        {
+          "id": "stale-link-operation-cannot-affect-reopened-connector",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/stale-link-operation-cannot-affect-reopened-connector.jsonl",
+            "sha256": "0cc027b6fc48d098202f329d5fba1ce4b312bc31f32d225b2e432c5bbd2fb481"
+          }
+        },
+        {
+          "id": "expired-retirement-quiesces-borrow-and-quarantines-connector",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/expired-retirement-quiesces-borrow-and-quarantines-connector.jsonl",
+            "sha256": "bffbbdbd04413622cabb726d2682bb3994a9ff110068783e376084a7b2206ec8"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-17",
+      "covered_observations": [
+        "SCR-01",
+        "SCR-03"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "native-and-script-lights-normalize-units-and-results",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/native-and-script-lights-normalize-units-and-results.jsonl",
+            "sha256": "d68c3537ac1839541fa1011c6700f2f1e6c6ad4ba4b2b4da0dab0e2ee50fcab5"
+          }
+        },
+        {
+          "id": "native-and-script-share-exclusive-light-authority",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/native-and-script-share-exclusive-light-authority.jsonl",
+            "sha256": "fba3e12d9d8c2076a5e6e8de99645baa8e02600cc56f9f316c5f76a1e095b1ac"
+          }
+        },
+        {
+          "id": "second-script-request-cannot-overwrite-in-flight-request",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/second-script-request-cannot-overwrite-in-flight-request.jsonl",
+            "sha256": "774933d66115e6350a6f518aac32392a4e8e99c863fab98baaf158c171856226"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-18",
+      "covered_observations": [
+        "SCR-04",
+        "SCR-05",
+        "OWN-05"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "script-expiry-acknowledged-before-slot-reuse",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/script-expiry-acknowledged-before-slot-reuse.jsonl",
+            "sha256": "5e3dc74b6534a9c020a0f1ccabb9bfeb928c69ae58f359680d23670a4a5347a8"
+          }
+        },
+        {
+          "id": "script-stop-waits-for-consumer-before-unwind",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/script-stop-waits-for-consumer-before-unwind.jsonl",
+            "sha256": "80cf3b82c50bebdf38be334ca14c7dbcb65600e88550f5742b914f0b4fc3a0e1"
+          }
+        },
+        {
+          "id": "terminal-script-failure-survives-rejected-run-before-executor-ack",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/terminal-script-failure-survives-rejected-run-before-executor-ack.jsonl",
+            "sha256": "e70f1af32cacde41a7bd62f4e358c902020423c5c63567829cb8304dfd4a272f"
+          }
+        },
+        {
+          "id": "stop-acknowledgement-does-not-retire-live-worker",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/stop-acknowledgement-does-not-retire-live-worker.jsonl",
+            "sha256": "35ff81504ba7418cea04c7a27332f5c796a9f1fd3e7cce44fa0d48c59497146f"
+          }
+        },
+        {
+          "id": "finite-script-expiry-retires-after-worker-returns",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/finite-script-expiry-retires-after-worker-returns.jsonl",
+            "sha256": "765594c99fdbad6fa35bd5171f2b6d9a1b03aba71988569e46f9b881014c1000"
+          }
+        }
+      ]
+    },
+    {
+      "id": "CT-20",
+      "covered_observations": [
+        "ARC-03",
+        "SCR-02",
+        "SCR-03",
+        "SCR-05"
+      ],
+      "coverage": "partial",
+      "checks": [
+        {
+          "id": "repeated-script-drain-at-observed-capacity",
+          "status": "PASS",
+          "evidence": {
+            "path": "traces/repeated-script-drain-at-observed-capacity.jsonl",
+            "sha256": "4ea48af3f505df9dae2c47bacfd5d4fa555c1bc1f7898913aeb9ecc34bbe80ce"
+          }
+        }
+      ]
+    }
+  ]
+}

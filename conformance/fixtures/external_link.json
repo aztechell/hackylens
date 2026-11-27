@@ -1,0 +1,64 @@
+[
+  {
+    "id": "connector-claims-and-validation-before-effects",
+    "scenario": "CT-08",
+    "actions": ["open", "open-competitor", "configure-invalid-version", "configure-invalid-baud", "copy-claim", "configure-copy", "configure-uart", "begin-invalid-borrow"],
+    "expect": [
+      {"outcome": "success", "live_claim": true}, {"outcome": "conflict", "route_calls": 0},
+      {"outcome": "incompatible_version", "route_calls": 0}, {"outcome": "invalid_argument", "route_calls": 0},
+      {"outcome": "success"},
+      {"outcome": "stale", "route_calls": 0}, {"outcome": "success", "route_calls": 1},
+      {"outcome": "invalid_argument", "route_calls": 1, "wire_tx": 0, "token": 0}
+    ]
+  },
+  {
+    "id": "cancelled-transfer-releases-peripheral-borrow",
+    "scenario": "CT-08",
+    "actions": ["open", "configure-i2c", "hold-rx", "begin-i2c", "poll", "begin-again-i2c", "cancel", "peer-completes", "poll"],
+    "expect": [
+      {"outcome": "success"}, {"outcome": "success"}, {"outcome": "success"}, {"outcome": "pending"},
+      {"outcome": "pending", "pending_rx": true, "rx_changed": 0, "tx_progress": 1, "rx_progress": 0},
+      {"outcome": "conflict", "pending_rx": true}, {"outcome": "cancelled", "pending_rx": false},
+      {"outcome": "success", "late_writes": 0, "rx_changed": 0},
+      {"outcome": "cancelled", "pending_rx": false, "rx_progress": 0}
+    ]
+  },
+  {
+    "id": "held-transfer-completes-before-buffer-release",
+    "scenario": "CT-14",
+    "actions": ["open", "configure-i2c", "hold-rx", "begin-i2c", "poll", "peer-completes", "poll", "close"],
+    "expect": [
+      {"outcome": "success"}, {"outcome": "success"}, {"outcome": "success"}, {"outcome": "pending"},
+      {"outcome": "pending", "pending_rx": true, "rx_changed": 0},
+      {"outcome": "success", "pending_rx": false, "late_writes": 8, "rx_changed": 8},
+      {"outcome": "success", "rx_progress": 8, "pending_rx": false},
+      {"outcome": "success", "live_claim": false}
+    ]
+  },
+  {
+    "id": "stale-link-operation-cannot-affect-reopened-connector",
+    "scenario": "CT-14",
+    "actions": ["open", "configure-uart", "begin-uart", "poll", "configure-i2c", "save-token", "close", "open", "configure-uart", "begin-uart", "poll-saved", "expire", "poll"],
+    "different_tokens_at": [2, 9],
+    "expect": [
+      {"outcome": "success"}, {"outcome": "success"}, {"outcome": "pending"},
+      {"outcome": "pending", "tx_progress": 32, "wire_tx": 32}, {"outcome": "conflict", "route_calls": 1},
+      {"outcome": "success"}, {"outcome": "success", "live_claim": false}, {"outcome": "success"},
+      {"outcome": "success"}, {"outcome": "pending"}, {"outcome": "stale", "wire_tx": 32},
+      {"outcome": "success"}, {"outcome": "deadline", "wire_tx": 32, "tx_progress": 0}
+    ]
+  },
+  {
+    "id": "expired-retirement-quiesces-borrow-and-quarantines-connector",
+    "scenario": "CT-14",
+    "actions": ["open", "configure-i2c", "hold-rx", "begin-i2c", "poll", "expire", "close", "retire", "peer-completes", "open-competitor"],
+    "expect": [
+      {"outcome": "success"}, {"outcome": "success"}, {"outcome": "success"}, {"outcome": "pending"},
+      {"outcome": "pending", "pending_rx": true}, {"outcome": "success"},
+      {"outcome": "deadline", "pending_rx": true, "live_claim": true},
+      {"outcome": "deadline", "pending_rx": false, "live_claim": false},
+      {"outcome": "success", "late_writes": 0, "rx_changed": 0},
+      {"outcome": "internal", "live_claim": false}
+    ]
+  }
+]

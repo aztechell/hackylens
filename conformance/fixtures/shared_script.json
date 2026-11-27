@@ -1,0 +1,75 @@
+[
+  {
+    "id": "native-and-script-lights-normalize-units-and-results",
+    "scenario": "CT-17",
+    "actions": ["native-claim-led", "native-claim-rgb", "native-led", "native-invalid-led", "native-rgb", "native-release-led", "native-release-rgb", "script-prepare", "script-led", "script-invalid-led", "script-rgb", "script-cleanup"],
+    "expect": [
+      {"outcome": "success", "effects": 0}, {"outcome": "success", "effects": 0},
+      {"outcome": "success", "effects": 1, "led": 630}, {"outcome": "invalid_argument", "effects": 1, "led": 630},
+      {"outcome": "success", "effects": 2, "rgb": [1000,500,0]}, {"outcome": "success", "effects": 3, "led": 0},
+      {"outcome": "success", "effects": 4, "rgb": [0,0,0]}, {"outcome": "success", "effects": 4},
+      {"outcome": "success", "effects": 5, "led": 630}, {"outcome": "invalid_argument", "effects": 5, "led": 630},
+      {"outcome": "success", "effects": 6, "rgb": [1000,500,0]}, {"outcome": "success", "effects": 8, "led": 0, "rgb": [0,0,0]}
+    ]
+  },
+  {
+    "id": "native-and-script-share-exclusive-light-authority",
+    "scenario": "CT-17",
+    "actions": ["script-prepare", "native-claim-led", "script-led", "native-led", "script-cleanup", "native-led", "native-release-led", "script-prepare", "script-led", "native-claim-led", "script-cleanup", "native-claim-led"],
+    "expect": [
+      {"outcome": "success", "effects": 0}, {"outcome": "success", "effects": 0}, {"outcome": "conflict", "effects": 0, "led": 0},
+      {"outcome": "success", "effects": 1, "led": 630}, {"outcome": "success", "effects": 1, "led": 630},
+      {"outcome": "success", "effects": 2, "led": 630}, {"outcome": "success", "effects": 3, "led": 0},
+      {"outcome": "success", "effects": 3}, {"outcome": "success", "effects": 4, "led": 630},
+      {"outcome": "conflict", "effects": 4, "led": 630}, {"outcome": "success", "effects": 5, "led": 0},
+      {"outcome": "success", "effects": 5}
+    ]
+  },
+  {
+    "id": "second-script-request-cannot-overwrite-in-flight-request",
+    "scenario": "CT-17",
+    "actions": ["script-prepare", "script-contended-led", "consumer-tick", "script-cleanup"],
+    "expect": [
+      {"outcome": "success", "effects": 0, "second_attempts": 0},
+      {"outcome": "success", "second_attempts": 1, "second_outcome": "conflict", "second_effects": 0, "effects": 1, "led": 630},
+      {"outcome": "success", "effects": 1, "led": 630}, {"outcome": "success", "effects": 2, "led": 0}
+    ]
+  },
+  {
+    "id": "script-expiry-acknowledged-before-slot-reuse",
+    "scenario": "CT-18",
+    "actions": ["script-prepare", "script-expiry-led", "consumer-tick", "script-led", "script-cleanup"],
+    "expect": [
+      {"outcome": "success", "effects": 0}, {"outcome": "deadline", "acknowledged": true, "effects": 0, "led": 0},
+      {"outcome": "success", "effects": 0, "led": 0}, {"outcome": "success", "effects": 1, "led": 630},
+      {"outcome": "success", "effects": 2, "led": 0}
+    ]
+  },
+  {
+    "id": "script-stop-waits-for-consumer-before-unwind",
+    "scenario": "CT-18",
+    "actions": ["script-prepare", "script-stop-led", "consumer-tick", "script-cleanup", "script-led"],
+    "expect": [
+      {"outcome": "success", "effects": 0},
+      {"outcome": "inactive", "acknowledged": true, "unwind_calls": 1, "early_unwinds": 0, "effects": 0},
+      {"outcome": "success", "effects": 0}, {"outcome": "success", "effects": 0, "run": 0},
+      {"outcome": "inactive", "effects": 0}
+    ]
+  },
+  {
+    "id": "repeated-script-drain-at-observed-capacity",
+    "scenario": "CT-20",
+    "repeat": 32,
+    "actions": ["script-prepare", "script-contended-led", "script-rgb", "native-claim-led", "native-claim-rgb", "script-cleanup", "native-claim-led", "native-claim-rgb", "native-release-led", "native-release-rgb"],
+    "expect": [
+      {"outcome": "success", "effects": 0, "led": 0, "rgb": [0,0,0], "second_attempts": 0},
+      {"outcome": "success", "effects": 1, "led": 630, "second_attempts": 1, "second_outcome": "conflict", "second_effects": 0},
+      {"outcome": "success", "effects": 2, "rgb": [1000,500,0]},
+      {"outcome": "conflict", "effects": 2}, {"outcome": "conflict", "effects": 2},
+      {"outcome": "success", "effects": 4, "led": 0, "rgb": [0,0,0], "run": 0},
+      {"outcome": "success", "effects": 4}, {"outcome": "success", "effects": 4},
+      {"outcome": "success", "effects": 5}, {"outcome": "success", "effects": 6}
+    ],
+    "cumulative_per_cycle": {"effects": 6, "second_attempts": 1}
+  }
+]

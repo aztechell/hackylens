@@ -1,0 +1,5 @@
+{"event":"shared_script","action":"script-prepare","outcome":"success","effects":0,"led":0,"rgb":[0,0,0],"run":1,"second_attempts":0,"second_outcome":"absent","second_effects":0,"acknowledged":false,"unwind_calls":0,"early_unwinds":0}
+{"event":"shared_script","action":"script-stop-led","outcome":"inactive","effects":0,"led":0,"rgb":[0,0,0],"run":1,"second_attempts":0,"second_outcome":"absent","second_effects":0,"acknowledged":true,"unwind_calls":1,"early_unwinds":0}
+{"event":"shared_script","action":"consumer-tick","outcome":"success","effects":0,"led":0,"rgb":[0,0,0],"run":1,"second_attempts":0,"second_outcome":"absent","second_effects":0,"acknowledged":true,"unwind_calls":1,"early_unwinds":0}
+{"event":"shared_script","action":"script-cleanup","outcome":"success","effects":0,"led":0,"rgb":[0,0,0],"run":0,"second_attempts":0,"second_outcome":"absent","second_effects":0,"acknowledged":true,"unwind_calls":1,"early_unwinds":0}
+{"event":"shared_script","action":"script-led","outcome":"inactive","effects":0,"led":0,"rgb":[0,0,0],"run":0,"second_attempts":0,"second_outcome":"absent","second_effects":0,"acknowledged":true,"unwind_calls":1,"early_unwinds":0}

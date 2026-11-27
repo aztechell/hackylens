@@ -7,6 +7,15 @@
 #include "external_link_provider.h"
 #include "external_link_normative_suite.h"
 #include "hal_external_link.h"
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+#include "k210_external_link_peer.h"
+
+static uint32_t s_route_calls;
+static uint32_t s_late_rx_writes;
+static uint8_t s_hold_rx;
+static uint8_t *s_held_rx;
+static uint32_t s_held_rx_bytes;
+#endif
 
 #define TEST_LEASES 2U
 #define TEST_BYTES 256U
@@ -59,6 +68,9 @@ void hal_external_uart_init(uint32_t baud,
                             hal_external_uart_receive_fn receive,
                             void *context)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    s_route_calls++;
+#endif
     (void)baud;
     s_i2c_active = 0U;
     s_target_callbacks = NULL;
@@ -70,6 +82,9 @@ void hal_external_uart_init(uint32_t baud,
 
 void hal_external_uart_stop(void)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    s_route_calls++;
+#endif
     s_uart_receive = NULL;
     s_uart_receive_context = NULL;
     s_uart_rx_head = 0U;
@@ -112,6 +127,9 @@ uint8_t hal_external_uart_tx_idle(void)
 void hal_external_i2c_init(
     uint8_t address, const hal_external_i2c_callbacks_t *callbacks)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    s_route_calls++;
+#endif
     (void)address;
     s_i2c_active = 1U;
     s_target_callbacks = callbacks;
@@ -131,6 +149,16 @@ void hal_external_i2c_controller_start(
     s_i2c_tx_size = tx_size;
     if(tx_size != 0U)
         memcpy(s_i2c_tx, tx, tx_size);
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    s_route_calls++;
+    if(s_hold_rx && rx_size != 0U)
+    {
+        s_held_rx = rx;
+        s_held_rx_bytes = rx_size;
+        s_i2c_rx_size = 0;
+        return;
+    }
+#endif
     for(uint32_t index = 0U; index < rx_size; ++index)
     {
         uint8_t value = s_i2c_source_position < s_i2c_source_size ?
@@ -159,6 +187,10 @@ uint32_t hal_external_i2c_controller_rx_received(void)
 
 uint8_t hal_external_i2c_controller_idle(void)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    if(s_held_rx)
+        return 0;
+#endif
     return (uint8_t)(!s_i2c_aborted && s_i2c_active);
 }
 
@@ -193,6 +225,11 @@ void hal_external_i2c_target_unlock(uint32_t state)
 
 void hal_external_i2c_stop(void)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    s_route_calls++;
+    s_held_rx = NULL;
+    s_held_rx_bytes = 0;
+#endif
     s_i2c_active = 0U;
     s_target_callbacks = NULL;
     s_i2c_rx_head = 0U;
@@ -268,6 +305,34 @@ static uint32_t backend_uart_tx_bytes(void)
 {
     return s_uart_tx_size;
 }
+
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+void hk_test_k210_link_set_now(uint64_t now_us)
+{
+    backend_set_now(now_us);
+}
+
+void hk_test_k210_link_hold_rx(void)
+{
+    s_hold_rx = 1;
+}
+
+void hk_test_k210_link_complete_rx(void)
+{
+    if(!s_held_rx)
+        return;
+    memset(s_held_rx, 0x5a, s_held_rx_bytes);
+    s_late_rx_writes += s_held_rx_bytes;
+    s_i2c_rx_size = s_held_rx_bytes;
+    s_held_rx = NULL;
+    s_held_rx_bytes = 0;
+}
+
+hk_test_k210_link_peer_t hk_test_k210_link_observe(void)
+{
+    return (hk_test_k210_link_peer_t){s_route_calls, s_uart_tx_size, s_late_rx_writes, s_held_rx != NULL};
+}
+#endif
 
 static int backend_uart_receive(const uint8_t *data, size_t size)
 {
@@ -533,8 +598,18 @@ static int run_target_stream_tests(void)
     return 0;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+#ifdef HK_K210_EXTERNAL_LINK_TRACE
+    if(argc > 1)
+    {
+        backend_reset();
+        return hk_test_k210_link_trace(argc, argv);
+    }
+#else
+    (void)argc;
+    (void)argv;
+#endif
     const external_link_normative_backend_t backend = {
         backend_reset,
         backend_set_now,

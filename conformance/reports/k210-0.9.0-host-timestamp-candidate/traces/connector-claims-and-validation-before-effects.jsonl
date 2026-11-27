@@ -1,0 +1,8 @@
+{"event":"external_link","action":"open","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"open-competitor","outcome":"conflict","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-invalid-version","outcome":"incompatible_version","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-invalid-baud","outcome":"invalid_argument","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"copy-claim","outcome":"success","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-copy","outcome":"stale","route_calls":0,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"configure-uart","outcome":"success","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}
+{"event":"external_link","action":"begin-invalid-borrow","outcome":"invalid_argument","route_calls":1,"wire_tx":0,"late_writes":0,"pending_rx":false,"rx_changed":0,"tx_progress":0,"rx_progress":0,"token":0,"live_claim":true}

@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "specification": "0.1.0",
+  "implementation": "HackyLens K210",
+  "implementation_version": "0.9.0",
+  "implementation_revision": "7d3e7dbfc94ded50e40af0d35dd226b14286fca5",
+  "source_variant": "working-tree",
+  "changed_inputs": [
+    "firmware/src/app_runtime/runtime.c",
+    "firmware/src/app_runtime/runtime_private.h",
+    "firmware/src/services/micropython_runtime.c",
+    "tests/app_runtime_host_support.c",
+    "tests/k210_external_link_harness.c",
+    "tests/k210_external_link_peer.h",
+    "tests/k210_script_runtime_fixture.h",
+    "tests/k210_shared_script_fixture.h",
+    "tests/lights_normative_k210_backend.c",
+    "tests/micropython_bindings_harness.c",
+    "tests/micropython_runtime_harness.c"
+  ],
+  "evaluated_scopes": [
+    "Core",
+    "Lights",
+    "External Link",
+    "Shared Script"
+  ],
+  "environment": {
+    "kind": "host-controlled-clock",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "compiler": "gcc.EXE (MinGW-W64 x86_64-ucrt-posix-seh, built by Brecht Sanders, r6) 15.2.0",
+    "flags": [
+      "-std=c11",
+      "-O1",
+      "-Wall",
+      "-Wextra",
+      "-Werror"
+    ]
+  },
+  "configuration": "K210 Time binding with host hooks, native runtime with simulated providers, Lights and External Link with peripheral hooks, the MicroPython capability bridge with a controlled scheduler, MicroPython runtime with a VM stub and controlled executor, and SEN0305 composition fixtures",
+  "bindings": {
+    "Time": {
+      "version": "0.1",
+      "features": [
+        "monotonic_us",
+        "sleep_until"
+      ]
+    },
+    "Lights": {
+      "version": "0.1",
+      "features": [
+        "backlight",
+        "illumination",
+        "rgb"
+      ]
+    },
+    "External Link": {
+      "version": "0.1",
+      "features": [
+        "uart",
+        "i2c_controller",
+        "i2c_target"
+      ]
+    }
+  },
+  "limits": {
+    "Time": {
+      "max_interval_us": 300000000,
+      "max_slice_us": 5000
+    },
+    "Lights": {
+      "channel_mask": 7,
+      "max_level": 1000
+    },
+    "External Link": {
+      "poll_bytes": 32,
+      "i2c_transfer_bytes": 256,
+      "active_operations": 1
+    },
+    "Shared Script": {
+      "observed_pending_requests": 1
+    }
+  },
+  "fixtures_sha256": {
+    "CT-09": "415e43ebb849887d90ec381729f20c576965e7d452cade1cff62d95d226cd0a7",
+    "lifecycle": "360e4ac94350c0b3826df57539100015299eea2ab97669b90d6c55bd382c7f44",
+    "CT-11": "27b39046369a889f53ae575b936c40e4f8fdc1706c9da87eeeba48ecae6ababf",
+    "external_link": "9c058c02c398405578232ddf34a9c5e38d9911697fdbeb7342982b3b8c31d08f",
+    "shared_script": "2b552600866c589ac140a5d455a71c962475e381527e8eeeadc2c160f054f0bf",
+    "script_runtime": "1fea4afc52efc432ad616f2dac412470b0dbbf4c4239398bb7ace74fa44de352",
+    "CT-02": "a2706938af662281c09d6f2124e897cd69849c10ca4308e7b1da2804d98c2e19"
+  },
+  "input_sha256": {
+    "conformance/adapters/k210/collect.py": "4b1ae16d67ff8d13fa9fcb3973c6b5dd12317af6469ee83afb05387433aab307",
+    "conformance/adapters/k210/time_trace.c": "695f0ebd76161a42a74a154ae0089efec1fe0a239da52fbc4c2044e5f64bff81",
+    "firmware/src/capabilities/time.c": "9fde5767f5ceeac5fc6e385eae7885fcc24813ae1ff295a40c2be45e596542d2",
+    "firmware/src/capabilities/time_provider.h": "ac1541fa0ff2cc385ec38a20c1d48730465ca2d2af7c97637fba1d31cc0d0a09",
+    "firmware/include/hackylens/capability/time.h": "74346ac2f0b593f9d8c651dd3ce1c3450dc0d4e480ce17494dc05c2a899dd5e0",
+    "firmware/include/hackylens/capability/common.h": "089d7a97b7a9c332481861f24a375eebdef68d69011ad6a1234c241b48e5cda4",
+    "platforms/k210/capabilities/time_adapter.c": "35e7584019be8bd53522c32fdfca878eefbbf7025795988d445f39ad45f64671",
+    "platforms/k210/hal/hal_time.h": "6b2484cd88a69aec0776029407791f65151bf3b9af8db28843b85af84fedb45e",
+    "tests/k210_time_adapter_stubs/atomic.h": "86dd2e8111e2a17e0e0a4600cc40397680241b60b3b80e43cca458bbbfe9a9c9",
+    "tests/k210_time_adapter_stubs/sleep.h": "30f9f17fcc7a2c5b879f8c209d737f0d19f57f2e238fd616c0d7554cc1632f55",
+    "conformance/adapters/k210/lifecycle_trace.c": "f6597c67e50d52fdad8472f21d9c77c979f85d47c3ef5b3081fdc016cb6463e5",
+    "firmware/src/app_runtime/runtime.c": "e04738ea4ffee5363da2f0cb2f1683b52b6f133fad5fa1dd3c03682d51e69787",
+    "firmware/src/app_runtime/surface.c": "b75a83603d34589316d56a78e2fda24322aeea376ed2fec23c8033979b0cfc26",
+    "firmware/src/app_runtime/switch.c": "0286ca6985e6e722ff70ae22c3326dfa2c03502ddc519126f89c56523a52a80a",
+    "firmware/src/capabilities/lights.c": "acb21b4dd0ed26288d4d8052e74a7a7baff4379dd09efa449c82c4cccba2ca45",
+    "firmware/src/capabilities/display.c": "f56bdf2c321162bfbecb465058ccd878bf63023dc0aa91d1e1a566549aa4db64",
+    "firmware/src/capabilities/input.c": "5594305ab081f2205c303f979f7e56f5ddd9ddecb729fdb2171f9f2ffebac95c",
+    "firmware/src/capabilities/input_state.c": "0ca02ea58a44a3e7faf0a6283cdbb66fc4aed621e4ccaad2a3c490f31b505633",
+    "tests/time_normative_fake_backend.c": "2e7c2aba5cf5f96c6e897e60373aafc95caf15c4b4e0556f6c40c9b811c912a3",
+    "tests/lights_normative_fake_backend.c": "64d66a33edbf76b7a5c497883ff652d56ec982e9ada4bed8b4e269892f72f9c1",
+    "tests/input_normative_fake_backend.c": "9fbefcc53c0d29118f22da6ece1370c086f6ba2cc4a65169837695b8996e1194",
+    "tests/capability_fake_display.c": "4eb4b5d37c659a2139a2775f7935395860f03028f873ff70346c06a3d157c46d",
+    "tests/capability_fake_external_link.c": "e70f3460edf7cfb681b2bf387dcec8ae7a55d1c4acf1c44a1dfa0bbb52604e9d",
+    "tests/app_runtime_host_support.c": "f9acbaee8331001539a70fc44b99859ef00a22e4d246f527040a997f766b0b88",
+    "firmware/src/app_runtime/runtime_private.h": "473049d3aeafeccdb5e9fae67cccd95d9226ac90391969b3b2b4011bd61119be",
+    "firmware/src/app_runtime/switch.h": "e06fdc05762a020d0ec0e5042cd6189739987b871ee84250821f2f4c63fc280e",
+    "sdk/include/hackylens/app/context.h": "72b5203985336fe449d2b22ff598b949ad16b4c60828f3975101199e39920094",
+    "sdk/include/hackylens/app/runtime.h": "223cd8f1072845ed21a191e404214e7f99df1e0e859394a998fad3a99273da8a",
+    "tests/app_runtime_host_support.h": "3a002324b36389c863a0730ab7c2d5edaebc3a24afe1f2e7560c935f4fe0a0a9",
+    "conformance/adapters/k210/lights_trace.c": "4f88b2c765bc633c6635c0edb8ed347b5ccaa6243a222e72b2b62c9c62150582",
+    "tests/lights_normative_k210_backend.c": "ad09b22a909306f369cc165941408629fef8aa892d9b2dc18f01927b11466396",
+    "platforms/k210/capabilities/lights_adapter.c": "09eb67a5308ba7dc189aeec79c1f810fdcc221d01ccd8f5f63c9903c98348e3b",
+    "conformance/adapters/k210/external_link_trace.c": "680dcc306484cf0c37acee6f7d08c29f311f93fc3114a5fd61dfe439de828bd1",
+    "tests/k210_external_link_harness.c": "cc5af429b6fdf48ba59efc97ed75e23b980e0a229b6cc5bb02ecb4cf75736684",
+    "tests/external_link_normative_suite.c": "0935ecd840fd0f25aa81554946b68aec25ecafd4f11644a55740a17c0bf622c8",
+    "firmware/src/capabilities/external_link.c": "954cd0b292769c71012b64e0ff75ecd6e9d967694c7809ee94003a80241243d9",
+    "platforms/k210/capabilities/external_link_adapter.c": "6af6b95a57fe1e64e10a9ab5a917fb4de85ab8d60d3bf84af98c65f59dee2a79",
+    "firmware/include/hackylens/capability/external_link.h": "64bf2fc42800cac741382ca9059b5dfd23adba0fb3303a1b9818af35d1ab0c45",
+    "firmware/src/capabilities/external_link_provider.h": "ad998f164061be70e3e182671f811e4289f7daf2b3d5009ef8704ba4e85e6e84",
+    "platforms/k210/hal/hal_external_link.h": "684ab50995543d06bedb279a64d4ff7597e6e649ecb75e8c688d1b179953302a",
+    "tests/k210_external_link_peer.h": "9b810c18765e344a5f8b63ef5fc554b34bb062dce9c012ac03de9f320c541c90",
+    "tests/external_link_normative_suite.h": "1ce0ab5c4d3f10f8ac69f418854423a39bf0a340dcfd4f6b3a816c1877a56e44",
+    "conformance/adapters/k210/shared_script_trace.c": "b0163514bb929e92c13a6549a4ae049a96b48f750be45d8e3454e0c99d76fa8c",
+    "tests/micropython_bindings_harness.c": "b319ff17f092f6c3b39dac992fb9cd064ceaa81685fc83b7a2babbfdf522eee9",
+    "firmware/src/adapters/micropython/micropython_capability_bridge.c": "ca432a07952646e2da2149322bd3541147ca66286e683ac50bf4f085498ed86a",
+    "firmware/src/core/shared_buffer.c": "19ffea222ed258a908e47f06235534e7ab5e8d7e21184d6b4f0658116b74fd84",
+    "firmware/src/services/vision_result_service.c": "fa0a5fe6d04174b8cbe6d14c263364922b779e57e0d335e55fc896d0cdf74aed",
+    "tests/hal_shared_buffer_fake.c": "28a5066b23374f7505a8e17c7cd9b99e5e4b9649ffa1b313fa8379f6a1926586",
+    "firmware/src/adapters/micropython/micropython_capability_bridge.h": "48b21abbd715c486b3d552c41806ed61d4c6b71b6ff4d61845d0658b34f32b09",
+    "tests/k210_shared_script_fixture.h": "5828a89f368aea023e7f9848d4f6cc2f1cb142c81cac2465063719429ff3954f",
+    "tests/micropython_binding_test_platform.h": "a73c95acac5513ad4677e9d1bf54960315a3094137c672e98c46afda8fda2f3e",
+    "tests/lights_normative_backend.h": "9992bf7f1ba6530b07781b3fbc9d42a38e9a762970b90998bceab740fed95304",
+    "conformance/adapters/k210/script_runtime_trace.c": "a3a257d0f1bbd2df695af13408bce6883b94017dd599c645234721b2cd021360",
+    "tests/micropython_runtime_harness.c": "e6abe4c234e9d40d8dcafc55621022b23f82b40891c27a1e51372b7c571bbb68",
+    "firmware/src/services/micropython_runtime.c": "fa7cb20af885c436ffb3d44b91e2f56a05947065075891c9004326fd777e99f2",
+    "firmware/src/services/micropython_runtime.h": "467b37ec9cd3ac65cde273b46d29d5c938a56442914165a34c1c9028ff82e827",
+    "firmware/src/services/core1_executor.h": "62c2b5f0b5050dd56d3512aaf0b29f4874fc66ef9f7e6ff54f02ed41ef9f0ac1",
+    "tests/k210_script_runtime_fixture.h": "4b555036485c1c4a260c2d0294ef36cd64a5c20ef8f5b506ef4c13538bb384df",
+    "tests/fixtures/micropython_runtime_stub/stub_micropython.h": "6f5a8810dd4c81244bcf49775c8f95f0d86c57e7bab5c710985f6bf1894e4c6d",
+    "tests/fixtures/micropython_runtime_stub/port/micropython_embed.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "tests/fixtures/micropython_runtime_stub/py/compile.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "tests/fixtures/micropython_runtime_stub/py/gc.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "tests/fixtures/micropython_runtime_stub/py/parse.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "tests/fixtures/micropython_runtime_stub/py/runtime.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "tests/fixtures/micropython_runtime_stub/py/stackctrl.h": "1a6411b0a9b1e243cb4350e9dbf732dac4fbe830261ec8a341f62c69d4ae36db",
+    "conformance/adapters/k210/composition_trace.py": "03ef7316fa06e5f5c9c6cd8e8274ae665869c807ee81b3363b8081be5c384383",
+    "conformance/adapters/k210/registry_trace.c": "777fb4f9d56b50219fc6aa2bf502a85cd03e8a81358420853aa94ccc456bb2fa",
+    "firmware/src/core/hk_app_registry.c": "5410fa588ef5f8076e71de29acb6470253557b70c8c351088f954ddac72ba451",
+    "firmware/src/core/hk_app_registry.h": "8be09dcc8d94e9d048c8fea8d43a27c21915b17329568a33f807d2b53dd29b14",
+    "firmware/src/core/hk_app.h": "e7d1514ccfe77ca631db8ff280d7a25080c8aea28073c7619bbb40781bdd521c",
+    "firmware/src/core/hk_events.h": "7f33101fc88729d4ff6dc859abfc53bcecfc2d0a3ad837e41e4b839b4d6116f5",
+    "tools/app_composition.py": "974032956d98f2804a709cdc11c51b21eafac802ac502712a27f3a6dd266cc09",
+    "tools/board_contract.py": "cbf935ab591a71d4c4f6e331f092d1f3c4e53b9289654857afae5623319c656c",
+    "tools/service_bindings.py": "cb691209eaf59ab65f4b23642fc40b4535a93ddc1573953e9d542d5f729c442a",
+    "tools/app_manifest.py": "29ef0e37f79c3caa1ba5b6b5e2c53514342fe479c95f76e7140b439ecf2c9f7b",
+    "tools/app_registry.py": "2a3f26ba6d1dc17335cdad98d87e206bb8149329295a7f0cc92ec638009b7eef",
+    "boards/huskylens-sen0305/board.toml": "7a73ba2fed59b69ac4d3521ddb0e3ded5b32ee26d8827c76cc360dbcc67b5848",
+    "tests/fixtures/app_manifests/valid/alpha-tool/app.toml": "396e76dc41d2de4b531f08816bb8d325eea3efd9507179026b848b5470bea3b3",
+    "tests/fixtures/app_manifests/valid/alpha-tool/include/alpha_tool.h": "754e37b1b96a06ecbeeb4a65eca18237de40b69abaad55b9b7a7dac7f2304fc6",
+    "tests/fixtures/app_manifests/valid/alpha-tool/src/alpha_tool.c": "f1d115bf52d537225d73522b20a829becd80e68f23056db03b19d1815a07fb2b",
+    "tests/fixtures/app_manifests/valid/alpha-tool/tests/alpha_tool_test.c": "703cebd6ec8c2e1c4f074f0a1ab908fd8785778158a0549b09eb46da8d5e64c4",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/app.toml": "74c6fe4e674158c5eab960a55c80148b9147b8ada8d9b7d196df020cf1b078ce",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/include/zeta_legacy.h": "fa2d7a7669bbc7f898cbe798bf07b18dedad8903dfc5b32d08150a43b0ad4d52",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/src/zeta_legacy.c": "7087d30286a3065a1e4fa97e8e09ad7332ea731c873847b4a0a7d4f7d22f3d5a",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/src/zeta_view.c": "ef50add5778539ce5652c3a1b65be8b7e886aefba933f8b2d42bd1ad17c10084",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/tests/__pycache__/zeta_legacy_test.cpython-314-pytest-9.0.2.pyc": "8463e90bf346503d3fc299d11739f32b4d6a56b4853538df210f2811bbff95a2",
+    "tests/fixtures/app_manifests/valid/zeta-legacy/tests/zeta_legacy_test.py": "b180b3e769adf0248726025e9a23054518d1bd0c51204cd167b46db304a5710e"
+  }
+}

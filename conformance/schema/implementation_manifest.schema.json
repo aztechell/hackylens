@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "HackyLens conformance implementation manifest v1",
+  "type": "object",
+  "required": ["schema_version", "specification", "implementation", "implementation_version",
+               "implementation_revision", "source_variant", "evaluated_scopes", "environment",
+               "configuration", "bindings", "limits", "fixtures_sha256", "input_sha256"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "specification": {"const": "0.1.0"},
+    "implementation": {"type": "string", "minLength": 1},
+    "implementation_version": {"type": "string", "minLength": 1},
+    "implementation_revision": {"type": "string", "minLength": 1},
+    "source_variant": {"type": "string", "minLength": 1},
+    "evaluated_scopes": {"type": "array", "contains": {"const": "Core"}, "uniqueItems": true,
+                         "items": {"enum": ["Core", "Shared Script", "Recovery", "Input", "Lights",
+                                             "Display", "Native Render", "External Link", "Power", "Accelerometer"]}},
+    "environment": {"type": "object", "required": ["kind"],
+                    "properties": {"kind": {"type": "string", "minLength": 1}}},
+    "configuration": {"type": "string", "minLength": 1},
+    "bindings": {"type": "object", "required": ["Time"], "additionalProperties": {
+      "type": "object", "required": ["version", "features"], "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "features": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    }},
+    "limits": {"type": "object", "required": ["Time"], "properties": {"Time": {
+      "type": "object", "required": ["max_interval_us", "max_slice_us"], "properties": {
+        "max_interval_us": {"type": "integer", "minimum": 1, "maximum": 18446744073709551614},
+        "max_slice_us": {"type": "integer", "minimum": 1, "maximum": 18446744073709551614}
+      }
+    }}},
+    "fixtures_sha256": {"$ref": "#/$defs/digests"},
+    "input_sha256": {"$ref": "#/$defs/digests"}
+  },
+  "$defs": {
+    "digests": {"type": "object", "minProperties": 1,
+                "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+  }
+}

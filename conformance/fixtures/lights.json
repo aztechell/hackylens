@@ -1,0 +1,22 @@
+[
+  {
+    "id": "lights-atomic-overlap",
+    "actions": ["claim:0:2:0:200", "claim:1:3:0:200", "claim:2:1:0:200", "set:2:1:700:200"],
+    "expect": [["success",0,0,0], ["conflict",0,0,0], ["success",0,0,0], ["success",1,1,0]]
+  },
+  {
+    "id": "lights-validation-and-copied-authority",
+    "actions": ["claim:0:2:0:200", "copy:1:0:0:200", "set:1:2:500:200", "set:0:1:500:200", "set:0:2:1001:200", "set:0:2:500:200"],
+    "expect": [["success",0,0,0], ["success",0,0,0], ["authority_denied",0,0,0], ["authority_denied",0,0,0], ["invalid_argument",0,0,0], ["success",1,2,0]]
+  },
+  {
+    "id": "lights-close-retry",
+    "actions": ["claim:0:2:0:200", "set:0:2:500:200", "close:0:0:0:100", "claim:1:2:0:200", "close:0:0:0:200", "claim:1:2:0:200"],
+    "expect": [["success",0,0,0], ["success",1,2,0], ["deadline",1,2,0], ["conflict",1,2,0], ["success",2,0,2], ["success",2,0,2]]
+  },
+  {
+    "id": "lights-retirement-quarantines-locally",
+    "actions": ["claim:0:6:0:200", "set:0:2:500:200", "retire:0:0:0:100", "claim:1:2:0:200", "claim:1:4:0:200", "claim:2:1:0:200", "set:2:1:500:200"],
+    "expect": [["success",0,0,0], ["success",1,2,0], ["deadline",1,2,0], ["invalid_state",1,2,0], ["invalid_state",1,2,0], ["success",1,2,0], ["success",2,3,0]]
+  }
+]

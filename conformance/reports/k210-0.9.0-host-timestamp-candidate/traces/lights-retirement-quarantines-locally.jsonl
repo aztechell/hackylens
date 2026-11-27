@@ -1,0 +1,7 @@
+{"event":"lights","action":"claim:0:6:0:200","outcome":"success","effects":0,"active":0,"safe_off":0}
+{"event":"lights","action":"set:0:2:500:200","outcome":"success","effects":1,"active":2,"safe_off":0}
+{"event":"lights","action":"retire:0:0:0:100","outcome":"deadline","effects":1,"active":2,"safe_off":0}
+{"event":"lights","action":"claim:1:2:0:200","outcome":"invalid_state","effects":1,"active":2,"safe_off":0}
+{"event":"lights","action":"claim:1:4:0:200","outcome":"invalid_state","effects":1,"active":2,"safe_off":0}
+{"event":"lights","action":"claim:2:1:0:200","outcome":"success","effects":1,"active":2,"safe_off":0}
+{"event":"lights","action":"set:2:1:500:200","outcome":"success","effects":2,"active":3,"safe_off":0}

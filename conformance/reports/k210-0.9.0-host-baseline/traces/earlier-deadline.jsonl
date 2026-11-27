@@ -1,0 +1,6 @@
+{"event":"clock","now_us":1000000}
+{"event":"wait","now_us":1000000,"duration_us":5000}
+{"event":"clock","now_us":1005000}
+{"event":"wait","now_us":1005000,"duration_us":1501}
+{"event":"clock","now_us":1006501}
+{"event":"sleep_result","outcome":"deadline","now_us":1006501}

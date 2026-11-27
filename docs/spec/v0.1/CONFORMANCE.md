@@ -31,3 +31,6 @@ A claim identifies exact implementation and specification revisions, profiles, f
 Adapters translate calls and results but MUST NOT implement the behavior under test. Extract binding-neutral fixtures and trace oracles from existing harnesses; run against another implementation. Report timing endpoints and configured limits separately from sampled latency; percentiles are not WCET. Physical connector claims require an external peer. Recovery needs observed independent recovery, not only post-reset status. Fault injection is isolated from production.
 
 Minimum report fields: specification, implementation revision, configuration, profiles, extensions/bindings, declared limits, suite revision, case results with evidence, unresolved requirement IDs. No independent suite execution is asserted by this document.
+
+The [host conformance suite](../../../conformance/README.md) describes the
+implemented observations and links to their evidence bundles.

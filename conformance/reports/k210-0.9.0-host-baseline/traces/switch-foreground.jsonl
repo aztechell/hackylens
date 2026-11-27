@@ -1,0 +1,13 @@
+{"event":"prepare","app":"A","outcome":"success"}
+{"event":"start","app":"A","instance":1,"state_nonzero_bytes":0}
+{"event":"return","action":"open-a","outcome":"success","active_app":"A","first_error":"success"}
+{"event":"runtime_close","app":"A","instance":1,"sequence":1,"timestamp_us":0}
+{"event":"stop","app":"A","instance":1,"deadline_us":1100000,"now_us":1000000}
+{"event":"retire","deadline_us":1100000,"now_us":1000000,"outcome":"success"}
+{"event":"prepare","app":"B","outcome":"success"}
+{"event":"start","app":"B","instance":2,"state_nonzero_bytes":0}
+{"event":"return","action":"open-b","outcome":"success","active_app":"B","first_error":"success"}
+{"event":"runtime_close","app":"B","instance":2,"sequence":1,"timestamp_us":0}
+{"event":"stop","app":"B","instance":2,"deadline_us":1100000,"now_us":1000000}
+{"event":"retire","deadline_us":1100000,"now_us":1000000,"outcome":"success"}
+{"event":"return","action":"close","outcome":"success","active_app":"none","first_error":"success"}

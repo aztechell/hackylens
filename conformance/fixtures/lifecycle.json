@@ -1,0 +1,192 @@
+[
+  {
+    "id": "switch-foreground",
+    "scenario": "CT-03",
+    "actions": ["open-a","open-b","close"],
+    "observations": [
+      "prepare A success",
+      "start A",
+      "return open-a success A success",
+      "runtime_close A",
+      "stop A",
+      "retire success",
+      "prepare B success",
+      "start B",
+      "return open-b success B success",
+      "runtime_close B",
+      "stop B",
+      "retire success",
+      "return close success none success"
+    ]
+  },
+  {
+    "id": "ordered-events-through-close",
+    "scenario": "CT-03",
+    "actions": ["open-a","send-media","send-media","close"],
+    "check_timestamps": true,
+    "observations": [
+      "prepare A success",
+      "start A",
+      "return open-a success A success",
+      "media A",
+      "return send-media success A success",
+      "media A",
+      "return send-media success A success",
+      "runtime_close A",
+      "stop A",
+      "retire success",
+      "return close success none success"
+    ]
+  },
+  {
+    "id": "retained-close-during-start",
+    "scenario": "CT-03",
+    "actions": ["close-during-start","open-a","send-media"],
+    "observations": [
+      "prepare A success",
+      "start A",
+      "request_close pending",
+      "runtime_close A",
+      "stop A",
+      "retire success",
+      "return open-a cancelled none success",
+      "return send-media success none success"
+    ]
+  },
+  {
+    "id": "invalid-descriptor",
+    "scenario": "CT-05",
+    "actions": ["open-invalid"],
+    "observations": [
+      "return open-invalid invalid_argument none success"
+    ]
+  },
+  {
+    "id": "timer-skips-missed-periods",
+    "scenario": "CT-04",
+    "actions": ["open-a", "advance-1750", "poll", "poll", "advance-499", "poll", "advance-1", "poll", "close"],
+    "timer_delays_us": [1250, 0],
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success",
+      "timer A", "return poll success A success", "return poll success A success",
+      "return poll success A success", "timer A", "return poll success A success",
+      "runtime_close A", "stop A", "retire success", "return close success none success"
+    ]
+  },
+  {
+    "id": "timer-overrun-unwinds",
+    "scenario": "CT-04",
+    "actions": ["overrun-timer", "open-a", "advance-500", "poll", "poll"],
+    "timer_delays_us": [0],
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success",
+      "timer A", "runtime_close A", "stop A", "retire success",
+      "return poll deadline none success", "return poll success none success"
+    ]
+  },
+  {
+    "id": "partial-preparation",
+    "scenario": "CT-05",
+    "actions": ["prepare-fails","open-a"],
+    "observations": [
+      "prepare A io",
+      "retire success",
+      "return open-a io none io"
+    ]
+  },
+  {
+    "id": "start-failure",
+    "scenario": "CT-05",
+    "actions": ["start-fails","open-a"],
+    "observations": [
+      "prepare A success",
+      "start A",
+      "stop A",
+      "retire success",
+      "return open-a io none io"
+    ]
+  },
+  {
+    "id": "event-and-retirement-failure",
+    "scenario": "CT-05",
+    "actions": ["retire-fails","event-fails","open-a","send-media"],
+    "observations": [
+      "prepare A success",
+      "start A",
+      "return open-a success A success",
+      "media A",
+      "runtime_close A",
+      "stop A",
+      "retire internal",
+      "return send-media io none io"
+    ]
+  },
+  {
+    "id": "wakeup-after-switch",
+    "scenario": "CT-07",
+    "actions": ["open-a","send-media","send-wakeup","open-b","send-wakeup","close"],
+    "observations": [
+      "prepare A success",
+      "start A",
+      "return open-a success A success",
+      "media A",
+      "return send-media success A success",
+      "wakeup A",
+      "return send-wakeup success A success",
+      "runtime_close A",
+      "stop A",
+      "retire success",
+      "prepare B success",
+      "start B",
+      "return open-b success B success",
+      "return send-wakeup stale B success",
+      "runtime_close B",
+      "stop B",
+      "retire success",
+      "return close success none success"
+    ]
+  },
+  {
+    "id": "expired-stop-keeps-retirement",
+    "scenario": "CT-06",
+    "actions": ["overrun-stop", "open-a", "close"],
+    "expired_at_retire": true,
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success",
+      "runtime_close A", "stop A", "retire success", "return close io none io"
+    ]
+  },
+  {
+    "id": "instance-identity-exhaustion-blocks-reuse",
+    "scenario": "CT-07",
+    "actions": ["exhaust-instance-identity", "open-a", "send-media", "send-wakeup", "close", "open-b", "send-wakeup"],
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success",
+      "media A", "return send-media success A success", "wakeup A", "return send-wakeup success A success",
+      "runtime_close A", "stop A", "retire success", "return close success none success",
+      "return open-b invalid_state none success", "return send-wakeup stale none success"
+    ]
+  },
+  {
+    "id": "copied-context-cannot-borrow-from-next-instance",
+    "scenario": "CT-07",
+    "actions": ["open-a", "send-media", "open-b", "probe-saved-context", "send-media", "close"],
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success", "media A", "return send-media success A success",
+      "runtime_close A", "stop A", "retire success", "prepare B success", "start B", "return open-b success B success",
+      "media B", "saved_context stale", "return send-media success B success",
+      "runtime_close B", "stop B", "retire success", "return close success none success"
+    ]
+  },
+  {
+    "id": "deadline-clock-failure-keeps-retirement",
+    "scenario": "CT-06",
+    "actions": ["open-a", "fail-deadline-clock", "close"],
+    "expired_at_stop": true,
+    "expired_at_retire": true,
+    "observations": [
+      "prepare A success", "start A", "return open-a success A success",
+      "runtime_close A", "stop A", "retire success", "return close internal none internal"
+    ]
+  }
+]

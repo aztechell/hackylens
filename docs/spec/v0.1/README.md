@@ -75,3 +75,10 @@ One foreground native instance is the unit of execution. Persistent services and
 No mandatory CPU, core count, interpreter, heap size, framebuffer, accelerator, filesystem, IDE, wire protocol or dynamic native loader. No promise of native sandboxing, forced preemption, hard real-time/WCET, safety certification or electrical fail-safe. Actuator safety requires separate system-level policy.
 
 Specification revisions are independent of firmware, SDK, service ABI and protocol versions. Normative changes require a revision and compatibility note; requirement IDs cannot be reused for unrelated behavior. Existing implementation contracts remain unchanged.
+
+## Supporting documents
+
+- [Requirement rationale and observable criteria](SPEC_RATIONALE.md)
+- [Specification glossary](SPEC_GLOSSARY.md)
+- [Execution, ownership and portability viewpoints](VIEWPOINTS.md)
+- [Requirement matrix](requirements.csv) and [conformance plan](CONFORMANCE.md)

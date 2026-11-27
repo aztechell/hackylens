@@ -1,0 +1,9 @@
+[
+  {"id":"reject-invalid-identity", "variants":["invalid-id"], "expect":[{"outcome":"rejected", "phase":"manifest"}]},
+  {"id":"reject-duplicate-identity", "variants":["duplicate-id"], "expect":[{"outcome":"rejected", "phase":"manifest"}]},
+  {"id":"exclude-absent-required-service", "variants":["no-input"], "expect":[{"outcome":"accepted", "enabled":["zeta-legacy"], "reserved_ids":[42,43]}]},
+  {"id":"reject-explicitly-required-app", "variants":["require-alpha-without-input"], "expect":[{"outcome":"rejected", "phase":"admission"}]},
+  {"id":"admit-with-optional-service-absent", "variants":["no-display"], "expect":[{"outcome":"accepted", "enabled":["alpha-tool","zeta-legacy"], "fallbacks":[{"app":"alpha-tool","service":"display","behavior":"headless"}]}]},
+  {"id":"equivalent-manifest-ordering", "variants":["normal","reordered"], "same_registry":true, "expect":[{"outcome":"accepted", "enabled":["alpha-tool","zeta-legacy"], "reserved_ids":[42,43], "persisted_lookup":"alpha-tool", "peer_lookup":"zeta-legacy"},{"outcome":"accepted", "enabled":["alpha-tool","zeta-legacy"], "reserved_ids":[42,43], "persisted_lookup":"alpha-tool", "peer_lookup":"zeta-legacy"}]},
+  {"id":"preserve-disabled-autostart-id", "variants":["normal","disable-alpha"], "expect":[{"outcome":"accepted", "enabled":["alpha-tool","zeta-legacy"], "reserved_ids":[42,43], "persisted_lookup":"alpha-tool", "persistable":true, "peer_lookup":"zeta-legacy"},{"outcome":"accepted", "enabled":["zeta-legacy"], "reserved_ids":[42,43], "persisted_lookup":null, "persistable":true, "peer_lookup":"zeta-legacy"}]}
+]
