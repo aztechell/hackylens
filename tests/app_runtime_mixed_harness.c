@@ -21,6 +21,8 @@ typedef struct
     uint64_t now_step_us;
     hk_app_event_kind_t events[16];
     uint64_t sequences[16];
+    uint64_t timestamps[16];
+    uint64_t input_source_timestamp;
     uint8_t event_count;
     uint8_t back_during_start;
     uint8_t back_input_during_start;
@@ -83,9 +85,13 @@ static hk_result_t app_event(
     if(s_fixture->event_count >= 16U || event->sequence == 0U)
         return HK_ERR_LIMIT;
     s_fixture->events[s_fixture->event_count] = event->kind;
+    s_fixture->timestamps[s_fixture->event_count] = event->timestamp_us;
     s_fixture->sequences[s_fixture->event_count++] = event->sequence;
     if(event->kind == HK_APP_EVENT_INPUT)
+    {
+        s_fixture->input_source_timestamp = event->data.input.timestamp_us;
         return hk_app_context_wakeup_token(ctx, 77U, &s_fixture->token);
+    }
     if(event->kind == HK_APP_EVENT_TIMER)
     {
         static const hk_display_rect_t region = {1, 2, 3U, 4U};
@@ -339,6 +345,7 @@ static hk_result_t render_abort(void *user)
 static int reset_fixture(fixture_t *fixture)
 {
     hk_app_runtime_ops_t runtime_ops = {
+        .now_us = fake_now,
         .user = fixture,
         .prepare = prepare,
         .cleanup = cleanup,
@@ -409,9 +416,12 @@ static int check_mixed_switch_and_events(void)
     input.pressed = HK_INPUT_BUTTON_BACK;
     CHECK(hk_app_switch_input(&fixture.switcher, &input, &consumed) == HK_OK);
     CHECK(consumed && fixture.events[4] == HK_APP_EVENT_INPUT);
+    CHECK(fixture.timestamps[4] == fixture.timestamps[3]);
+    CHECK(fixture.input_source_timestamp == input.timestamp_us);
     CHECK(hk_app_switch_active(&fixture.switcher) == &v2);
     CHECK(hk_app_switch_close(&fixture.switcher, HK_APP_STOP_BACK) == HK_OK);
     CHECK(fixture.events[5] == HK_APP_EVENT_RUNTIME_CLOSE);
+    CHECK(fixture.timestamps[5] == fixture.now_us);
     for(uint8_t index = 0U; index < fixture.event_count; index++)
         CHECK(fixture.sequences[index] == (uint64_t)index + 1U);
     CHECK(fixture.stop_reason == HK_APP_STOP_BACK);

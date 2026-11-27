@@ -208,6 +208,7 @@ hk_result_t hk_app_runtime_host_init(hk_app_runtime_host_t *host)
         .prepare = prepare,
         .cleanup = cleanup,
         .deadline_after_us = deadline_after_us,
+        .now_us = host_now_us,
     };
     switch_ops = (hk_app_switch_ops_t){
         .user = host,

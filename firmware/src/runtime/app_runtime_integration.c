@@ -348,6 +348,7 @@ hk_result_t app_runtime_integration_initialize(void)
     if(!s_integration.time)
         return HK_ERR_CAPABILITY_ABSENT;
     runtime_ops = (hk_app_runtime_ops_t){
+        .now_us = now_us,
         .user = &s_integration,
         .time = s_integration.time,
         .input = hk_input_service(),

@@ -208,16 +208,21 @@ static hk_result_t terminate_running(
 {
     hk_app_event_t event;
     hk_result_t result;
+    uint64_t timestamp_us;
 
     if(!runtime || runtime->state != HK_APP_RUNTIME_RUNNING ||
        !runtime->descriptor || runtime->callback_active ||
        runtime->teardown_started)
         return HK_ERR_INVALID_STATE;
     reason = normalized_reason(reason);
+    if(!runtime->ops.now_us ||
+       runtime->ops.now_us(runtime->ops.user, &timestamp_us) != HK_OK ||
+       timestamp_us < runtime->last_event_timestamp_us)
+        timestamp_us = runtime->last_event_timestamp_us;
     event = (hk_app_event_t){
         sizeof(hk_app_event_t), HK_APP_EVENT_VERSION,
         HK_APP_EVENT_RUNTIME_CLOSE, 0U,
-        ++runtime->event_sequence, 0U,
+        ++runtime->event_sequence, timestamp_us,
         {.close = {reason, 0U}},
     };
     runtime->stage = HK_APP_STAGE_RUNNING;
@@ -273,6 +278,7 @@ hk_result_t hk_app_runtime_launch(
     runtime->first_error = HK_OK;
     runtime->stop_reason = HK_APP_STOP_COMPLETED;
     runtime->event_sequence = 0U;
+    runtime->last_event_timestamp_us = 0U;
     memset(&runtime->context, 0, sizeof(runtime->context));
     runtime->context.struct_size = sizeof(runtime->context);
     runtime->context.struct_version = HK_APP_CONTEXT_VERSION;
@@ -348,12 +354,22 @@ hk_result_t hk_app_runtime_event(
     hk_app_runtime_t *runtime,
     const hk_app_event_t *event)
 {
+    hk_app_event_t ordered_event;
+
     if(!runtime || !event)
         return HK_ERR_INVALID_ARGUMENT;
     if(!event_is_valid(event))
         return HK_ERR_INVALID_ARGUMENT;
     if(runtime->state != HK_APP_RUNTIME_RUNNING || runtime->callback_active)
         return HK_ERR_INVALID_STATE;
+    if(event->timestamp_us < runtime->last_event_timestamp_us)
+    {
+        ordered_event = *event;
+        ordered_event.struct_size = sizeof(ordered_event);
+        ordered_event.timestamp_us = runtime->last_event_timestamp_us;
+        event = &ordered_event;
+    }
+    runtime->last_event_timestamp_us = event->timestamp_us;
     runtime->stage = HK_APP_STAGE_RUNNING;
     (void)enter_callback(runtime);
     return dispatch_result(

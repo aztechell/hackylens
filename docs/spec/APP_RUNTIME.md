@@ -123,10 +123,14 @@ they do not expose raw SD blocks, filesystem internals, or platform paths.
 
 A runtime-close event is delivered exactly once immediately before a normal
 running-instance teardown enters `STOPPING`. It contains the retained stop
-reason and is ordered after all previously accepted events. Its failure is
-retained but cannot cancel or skip teardown. Start failure has not reached the
-running event surface and therefore proceeds directly through the documented
-failure unwind.
+reason and is ordered after all previously accepted events. The outer event
+timestamp is monotonic within an instance. When a queued event has an older
+source timestamp, runtime advances the outer timestamp to the last delivered
+one and preserves the event payload. Runtime Close samples Time and uses the
+last delivered timestamp if Time fails or returns an earlier value. Runtime
+Close callback failure is retained and teardown still runs. Start failure
+proceeds directly through the documented failure unwind before the running
+event surface is reached.
 
 A terminal `event` or `render` callback failure uses that same running instance
 termination path. Runtime first retains the original callback error, then

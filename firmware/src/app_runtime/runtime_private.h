@@ -69,6 +69,7 @@ typedef struct
     hk_app_runtime_claim_lights_fn claim_lights;
     hk_app_runtime_claim_link_fn claim_external_link;
     hk_app_runtime_deadline_after_fn deadline_after_us;
+    hk_result_t (*now_us)(void *user, uint64_t *value);
 } hk_app_runtime_ops_t;
 
 typedef struct hk_app_runtime
@@ -82,6 +83,7 @@ typedef struct hk_app_runtime
     hk_display_rect_t invalidations[HK_APP_MAX_INVALIDATIONS];
     hk_deadline_t teardown_deadline;
     uint64_t event_sequence;
+    uint64_t last_event_timestamp_us;
     hk_app_runtime_state_t state;
     hk_app_runtime_stage_t stage;
     hk_app_stop_reason_t stop_reason;
