@@ -1,0 +1,2524 @@
+{
+  "schema_version": 1,
+  "analysis": {
+    "path": "tools/reproduce_workloads.py",
+    "sha256": "7bd0aeac7ee5d6ad8d8578dcc544e662a030deb241d925967093f858adefda3f"
+  },
+  "sources": {
+    "object-gate-cube": {
+      "runs": {
+        "path": "docs/research/object-gate-cube-runs.jsonl",
+        "sha256": "d6279c52d2a4a79d6e5d4e4b9623418f725772d9ed006667be9c420f218ff84c"
+      },
+      "metadata": {
+        "path": "docs/research/object-gate-cube-evidence.json",
+        "sha256": "fb3a02f6df39fa6ebfa1a005264e0a3cffda94f91427a5e694852fb601d11f93"
+      }
+    },
+    "object-gate-sen": {
+      "runs": {
+        "path": "docs/research/object-gate-sen-runs.jsonl",
+        "sha256": "3cb91ef4810b32c4440b2d0726b3f61b095f0abb51cb510a75fe81c855deda98"
+      },
+      "metadata": {
+        "path": "docs/research/object-gate-sen-evidence.json",
+        "sha256": "97a92bd522964c730c6d0e8c9a96daf4ef624043001cc2a4e01a14457c513fed"
+      }
+    },
+    "sky-glide": {
+      "runs": {
+        "path": "docs/research/sky-glide-runs.jsonl.gz",
+        "sha256": "d34a239c7dcd14607c72c908648abcde033920846017cc1181af65b140f128a3"
+      },
+      "metadata": {
+        "path": "docs/research/sky-glide-evidence.json",
+        "sha256": "5532e039fbfc53eefd7313c1ff337de473e2ab08bee511e863ef8aa441fd18d3"
+      }
+    },
+    "uart-logger-cube": {
+      "runs": {
+        "path": "docs/research/uart-logger-cube-runs.jsonl.gz",
+        "sha256": "f2d51989f3c4d3e53dca1a223504cd8a29ec0ad9973be91e4bbef0cb11a7a4b2"
+      },
+      "metadata": {
+        "path": "docs/research/uart-logger-cube-evidence.json",
+        "sha256": "dc91b7401c44b7325ae62f3b79d6b190ac69962a9d29135ed3d0a00fe2e2954d"
+      }
+    },
+    "uart-logger-sen": {
+      "runs": {
+        "path": "docs/research/uart-logger-sen-runs.jsonl.gz",
+        "sha256": "841c5f534045dea46c305ba8f966177d1e300d02922596a36c3e92b259265693"
+      },
+      "metadata": {
+        "path": "docs/research/uart-logger-sen-evidence.json",
+        "sha256": "938498e3398b6078b6f2c9e959eea635477171dc197f78675e8c9b67f92208d0"
+      }
+    }
+  },
+  "attempts": 225,
+  "valid": 222,
+  "failed": 3,
+  "replay_digests": [
+    {
+      "workload": "object-gate",
+      "board": "huskylens-sen0305",
+      "mode": "tensor-replay",
+      "image_sha256": "a264debb2777b8f97788c2a4c6e7876b3afce4b7c12fc2ceb5978919187fc53b",
+      "digests_by_variant": {
+        "c": [
+          809083552
+        ],
+        "python": [
+          809083552
+        ]
+      },
+      "match": true
+    },
+    {
+      "workload": "object-gate",
+      "board": "sipeed-maix-cube",
+      "mode": "tensor-replay",
+      "image_sha256": "153f6c4c1addd78b0f82743750a69fa83cd366382b39a74458c26aaf3692c44c",
+      "digests_by_variant": {
+        "c": [
+          3065711780
+        ],
+        "python": [
+          3065711780
+        ]
+      },
+      "match": true
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "logic",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "digests_by_variant": {
+        "c": [
+          "1f4800"
+        ],
+        "combined": [
+          "1f4800"
+        ],
+        "legacy": [
+          "1f4800"
+        ]
+      },
+      "match": true
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "logic",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "digests_by_variant": {
+        "c": [
+          "1f4800"
+        ],
+        "combined": [
+          "1f4800"
+        ],
+        "legacy": [
+          "1f4800"
+        ]
+      },
+      "match": true
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "parse",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "digests_by_variant": {
+        "c": [
+          1974799667
+        ],
+        "python": [
+          1974799667
+        ]
+      },
+      "match": true
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "parse",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "digests_by_variant": {
+        "c": [
+          1974799667
+        ],
+        "python": [
+          1974799667
+        ]
+      },
+      "match": true
+    }
+  ],
+  "groups": [
+    {
+      "workload": "object-gate",
+      "board": "huskylens-sen0305",
+      "mode": "tensor-replay",
+      "variant": "c",
+      "image_sha256": "a264debb2777b8f97788c2a4c6e7876b3afce4b7c12fc2ceb5978919187fc53b",
+      "script_sha256": "43d379366ec59cc88619714dfcf949206982b9fa52be76961319922746b153a1",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "detect_us_per_frame": {
+          "n": 5,
+          "median": 52802.708333333336,
+          "min": 52479.916666666664,
+          "max": 53118.708333333336,
+          "mad": 75.5
+        },
+        "entries": {
+          "n": 5,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 8.082152384942141,
+          "min": 8.068040474669715,
+          "max": 8.093223139604053,
+          "mad": 0.01053587121841737
+        },
+        "frames": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        },
+        "kpu_submissions": {
+          "n": 5,
+          "median": 28,
+          "min": 28,
+          "max": 28,
+          "mad": 0
+        },
+        "kpu_us_per_frame": {
+          "n": 5,
+          "median": 12957.041666666666,
+          "min": 12808.333333333334,
+          "max": 13123.708333333334,
+          "mad": 49.41666666666788
+        },
+        "model_load_ms": {
+          "n": 5,
+          "median": 7146.044,
+          "min": 7140.488,
+          "max": 7150.25,
+          "mad": 4.126000000000204
+        },
+        "policy_us_per_frame": {
+          "n": 5,
+          "median": 4.083333333333333,
+          "min": 3.9166666666666665,
+          "max": 4.208333333333333,
+          "mad": 0.08333333333333304
+        },
+        "present_us_per_frame": {
+          "n": 5,
+          "median": 37751.208333333336,
+          "min": 37742.458333333336,
+          "max": 37755.416666666664,
+          "mad": 4.125
+        },
+        "presented": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "object-gate",
+      "board": "huskylens-sen0305",
+      "mode": "tensor-replay",
+      "variant": "python",
+      "image_sha256": "a264debb2777b8f97788c2a4c6e7876b3afce4b7c12fc2ceb5978919187fc53b",
+      "script_sha256": "43d379366ec59cc88619714dfcf949206982b9fa52be76961319922746b153a1",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "detect_us_per_frame": {
+          "n": 5,
+          "median": 57057.666666666664,
+          "min": 56844.416666666664,
+          "max": 57474.291666666664,
+          "mad": 213.25
+        },
+        "entries": {
+          "n": 5,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 7.9239695125273,
+          "min": 7.699963232675564,
+          "max": 8.101066201575454,
+          "mad": 0.10495334390920341
+        },
+        "frames": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        },
+        "kpu_submissions": {
+          "n": 5,
+          "median": 28,
+          "min": 28,
+          "max": 28,
+          "mad": 0
+        },
+        "kpu_us_per_frame": {
+          "n": 5,
+          "median": 12684.416666666666,
+          "min": 12683.666666666666,
+          "max": 12684.583333333334,
+          "mad": 0.16666666666787933
+        },
+        "model_load_ms": {
+          "n": 5,
+          "median": 7508.819,
+          "min": 7501.7,
+          "max": 7635.591,
+          "mad": 7.119000000000597
+        },
+        "policy_us_per_frame": {
+          "n": 5,
+          "median": 101.33333333333333,
+          "min": 101.29166666666667,
+          "max": 101.375,
+          "mad": 0.04166666666665719
+        },
+        "present_us_per_frame": {
+          "n": 5,
+          "median": 42543.416666666664,
+          "min": 42503.25,
+          "max": 42583.916666666664,
+          "mad": 6.041666666664241
+        },
+        "presented": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "object-gate",
+      "board": "sipeed-maix-cube",
+      "mode": "tensor-replay",
+      "variant": "c",
+      "image_sha256": "153f6c4c1addd78b0f82743750a69fa83cd366382b39a74458c26aaf3692c44c",
+      "script_sha256": "43d379366ec59cc88619714dfcf949206982b9fa52be76961319922746b153a1",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "detect_us_per_frame": {
+          "n": 5,
+          "median": 44958.166666666664,
+          "min": 44943.958333333336,
+          "max": 45319.458333333336,
+          "mad": 14.208333333328483
+        },
+        "entries": {
+          "n": 5,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 11.457783319950005,
+          "min": 11.333403222653207,
+          "max": 11.681520856138663,
+          "mad": 0.10071276272953433
+        },
+        "frames": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        },
+        "kpu_submissions": {
+          "n": 5,
+          "median": 28,
+          "min": 28,
+          "max": 28,
+          "mad": 0
+        },
+        "kpu_us_per_frame": {
+          "n": 5,
+          "median": 12685.875,
+          "min": 12685.458333333334,
+          "max": 12686.166666666666,
+          "mad": 0.20833333333393966
+        },
+        "model_load_ms": {
+          "n": 5,
+          "median": 4100.798,
+          "min": 4099.241,
+          "max": 4102.032,
+          "mad": 0.5590000000001965
+        },
+        "policy_us_per_frame": {
+          "n": 5,
+          "median": 3.9583333333333335,
+          "min": 3.75,
+          "max": 4.041666666666667,
+          "mad": 0.08333333333333348
+        },
+        "present_us_per_frame": {
+          "n": 5,
+          "median": 30761.625,
+          "min": 30749.916666666668,
+          "max": 30794.125,
+          "mad": 8.25
+        },
+        "presented": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "object-gate",
+      "board": "sipeed-maix-cube",
+      "mode": "tensor-replay",
+      "variant": "python",
+      "image_sha256": "153f6c4c1addd78b0f82743750a69fa83cd366382b39a74458c26aaf3692c44c",
+      "script_sha256": "43d379366ec59cc88619714dfcf949206982b9fa52be76961319922746b153a1",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "detect_us_per_frame": {
+          "n": 5,
+          "median": 49864.166666666664,
+          "min": 49738.333333333336,
+          "max": 50159.666666666664,
+          "mad": 83.58333333332848
+        },
+        "entries": {
+          "n": 5,
+          "median": 2,
+          "min": 2,
+          "max": 2,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.111312909819262,
+          "min": 9.041833171396613,
+          "max": 9.185562133438662,
+          "mad": 0.06359173807274665
+        },
+        "frames": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        },
+        "kpu_submissions": {
+          "n": 5,
+          "median": 28,
+          "min": 28,
+          "max": 28,
+          "mad": 0
+        },
+        "kpu_us_per_frame": {
+          "n": 5,
+          "median": 12686.666666666666,
+          "min": 12685.708333333334,
+          "max": 12686.791666666666,
+          "mad": 0.04166666666606034
+        },
+        "model_load_ms": {
+          "n": 5,
+          "median": 4724.778,
+          "min": 4722.776,
+          "max": 4765.326,
+          "mad": 0.011000000000422006
+        },
+        "policy_us_per_frame": {
+          "n": 5,
+          "median": 102.33333333333333,
+          "min": 102.29166666666667,
+          "max": 102.375,
+          "mad": 0.04166666666665719
+        },
+        "present_us_per_frame": {
+          "n": 5,
+          "median": 35779.375,
+          "min": 35568.583333333336,
+          "max": 35906.208333333336,
+          "mad": 84.70833333333576
+        },
+        "presented": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 24,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "burst",
+      "variant": "c",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 20.523899910413178,
+          "min": 20.522738784118026,
+          "max": 20.529763709262962,
+          "mad": 0.0008747925557024416
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 48715,
+          "min": 48709,
+          "max": 48746,
+          "mad": 6
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 47521.5,
+          "min": 47512.5,
+          "max": 47522.5,
+          "mad": 1.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "burst",
+      "variant": "combined",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 16.969883604134022,
+          "min": 16.96469200856129,
+          "max": 16.974039168953304,
+          "mad": 0.0041555648192819206
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 58891,
+          "min": 58877,
+          "max": 58915,
+          "mad": 13
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 38689.5,
+          "min": 38669.5,
+          "max": 38699.0,
+          "mad": 9.5
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "burst",
+      "variant": "legacy",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 10.20354022031484,
+          "min": 10.17432450200836,
+          "max": 18.631335857465313,
+          "mad": 0.029215718306479843
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 98979,
+          "min": 45160,
+          "max": 98990,
+          "mad": 11
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 38689.0,
+          "min": 38681.5,
+          "max": 38706.0,
+          "mad": 7.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "input",
+      "variant": "c",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 47501.5,
+          "min": 47501.0,
+          "max": 47503.5,
+          "mad": 0.5
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "input",
+      "variant": "combined",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 42012.0,
+          "min": 41806.0,
+          "max": 42301.0,
+          "mad": 157.0
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "input",
+      "variant": "legacy",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 44128.5,
+          "min": 44094.0,
+          "max": 44272.0,
+          "mad": 34.5
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "logic",
+      "variant": "c",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 6094,
+          "min": 6089,
+          "max": 6100,
+          "mad": 1
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 5377092.2218575645,
+          "min": 5371803.278688525,
+          "max": 5381507.6367219575,
+          "mad": 882.5032368060201
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "logic",
+      "variant": "combined",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 2155852,
+          "min": 2153492,
+          "max": 2156739,
+          "mad": 887
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 15199.559153411274,
+          "min": 15193.308045155209,
+          "max": 15216.216266417521,
+          "mad": 6.251108256064981
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "logic",
+      "variant": "legacy",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 2155850,
+          "min": 2153492,
+          "max": 2156727,
+          "mad": 877
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 15199.573254168889,
+          "min": 15193.392580516682,
+          "max": 15216.216266417521,
+          "mad": 6.1806736522066785
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "memory",
+      "variant": "combined",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "after_gc_bytes": {
+          "n": 5,
+          "median": 10400,
+          "min": 10400,
+          "max": 10400,
+          "mad": 0
+        },
+        "before_bytes": {
+          "n": 5,
+          "median": 10400,
+          "min": 10400,
+          "max": 10400,
+          "mad": 0
+        },
+        "gc_total_bytes": {
+          "n": 5,
+          "median": 130048,
+          "min": 130048,
+          "max": 130048,
+          "mad": 0
+        },
+        "sampled_peak_bytes": {
+          "n": 5,
+          "median": 129024,
+          "min": 129024,
+          "max": 129024,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "memory",
+      "variant": "legacy",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "after_gc_bytes": {
+          "n": 5,
+          "median": 10496,
+          "min": 10496,
+          "max": 10496,
+          "mad": 0
+        },
+        "before_bytes": {
+          "n": 5,
+          "median": 10496,
+          "min": 10496,
+          "max": 10496,
+          "mad": 0
+        },
+        "gc_total_bytes": {
+          "n": 5,
+          "median": 130048,
+          "min": 130048,
+          "max": 130048,
+          "mad": 0
+        },
+        "sampled_peak_bytes": {
+          "n": 5,
+          "median": 129120,
+          "min": 129120,
+          "max": 129120,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "paced",
+      "variant": "c",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 616,
+          "min": 615,
+          "max": 616,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 20.533333333333335,
+          "min": 20.5,
+          "max": 20.533333333333335,
+          "mad": 0.0
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 48757,
+          "min": 48742,
+          "max": 48762.0,
+          "mad": 3
+        },
+        "missed": {
+          "n": 5,
+          "median": 134,
+          "min": 134,
+          "max": 135,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 47575.0,
+          "min": 47551.0,
+          "max": 47580,
+          "mad": 5.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "paced",
+      "variant": "combined",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 509,
+          "min": 508,
+          "max": 510,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 16.966666666666665,
+          "min": 16.933333333333334,
+          "max": 17.0,
+          "mad": 0.0
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 58901,
+          "min": 58857.0,
+          "max": 58914,
+          "mad": 9.0
+        },
+        "missed": {
+          "n": 5,
+          "median": 241,
+          "min": 240,
+          "max": 242,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 38696.0,
+          "min": 38655,
+          "max": 38704.0,
+          "mad": 8.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "huskylens-sen0305",
+      "mode": "paced",
+      "variant": "legacy",
+      "image_sha256": "0d00fab86c7955899a96d39cb5ab492f906cbad5b8f8dc93c8636db25bbde1cc",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 305,
+          "min": 304,
+          "max": 305,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 10.166666666666666,
+          "min": 10.133333333333333,
+          "max": 10.166666666666666,
+          "mad": 0.0
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 98976,
+          "min": 98928.5,
+          "max": 99025,
+          "mad": 47.5
+        },
+        "missed": {
+          "n": 5,
+          "median": 445,
+          "min": 445,
+          "max": 446,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 38690,
+          "min": 38676,
+          "max": 38729,
+          "mad": 14
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "burst",
+      "variant": "c",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 24.606125645767264,
+          "min": 24.603118888175217,
+          "max": 24.616253127289824,
+          "mad": 0.0029078893297693753
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 40649,
+          "min": 40635,
+          "max": 40674,
+          "mad": 13
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 39038.0,
+          "min": 39013.0,
+          "max": 39046.0,
+          "mad": 4.5
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "burst",
+      "variant": "combined",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 19.122746551642923,
+          "min": 19.11998728903245,
+          "max": 19.125666338215222,
+          "mad": 1.4627188615889963e-05
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 52267,
+          "min": 52254,
+          "max": 52277,
+          "mad": 5
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 31664.5,
+          "min": 31653.5,
+          "max": 31673.0,
+          "mad": 2.5
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "burst",
+      "variant": "legacy",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 12.101980973265514,
+          "min": 11.819357665188328,
+          "max": 12.256934769410286,
+          "mad": 0.08898316538800977
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 73274,
+          "min": 73220,
+          "max": 93007,
+          "mad": 54
+        },
+        "missed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 31666.0,
+          "min": 31648.5,
+          "max": 31672.5,
+          "mad": 6.5
+        },
+        "requested": {
+          "n": 5,
+          "median": 300,
+          "min": 300,
+          "max": 300,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "input",
+      "variant": "c",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 38072.0,
+          "min": 38070.0,
+          "max": 38074.0,
+          "mad": 1.5
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "input",
+      "variant": "combined",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 34301.0,
+          "min": 34063.0,
+          "max": 34358.5,
+          "mad": 57.5
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "input",
+      "variant": "legacy",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "input_to_lcd_median_us": {
+          "n": 5,
+          "median": 36413.0,
+          "min": 36273.0,
+          "max": 36455.0,
+          "mad": 42.0
+        },
+        "presses": {
+          "n": 5,
+          "median": 20,
+          "min": 20,
+          "max": 20,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "logic",
+      "variant": "c",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 6108,
+          "min": 6104,
+          "max": 6111,
+          "mad": 1
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 5364767.518009168,
+          "min": 5362133.856979217,
+          "max": 5368283.093053735,
+          "mad": 878.4620137568563
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "logic",
+      "variant": "combined",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 2157591,
+          "min": 2152747,
+          "max": 2157631,
+          "mad": 40
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 15187.308437975502,
+          "min": 15187.026882724618,
+          "max": 15221.482134221997,
+          "mad": 0.2815552508836845
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "logic",
+      "variant": "legacy",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 2157593,
+          "min": 2152027,
+          "max": 2157606,
+          "mad": 13
+        },
+        "steps": {
+          "n": 5,
+          "median": 32768,
+          "min": 32768,
+          "max": 32768,
+          "mad": 0
+        },
+        "steps_per_second": {
+          "n": 5,
+          "median": 15187.294359965017,
+          "min": 15187.202853533036,
+          "max": 15226.574759517422,
+          "mad": 0.09150643198154285
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "memory",
+      "variant": "combined",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "after_gc_bytes": {
+          "n": 5,
+          "median": 10400,
+          "min": 10400,
+          "max": 10400,
+          "mad": 0
+        },
+        "before_bytes": {
+          "n": 5,
+          "median": 10400,
+          "min": 10400,
+          "max": 10400,
+          "mad": 0
+        },
+        "gc_total_bytes": {
+          "n": 5,
+          "median": 130048,
+          "min": 130048,
+          "max": 130048,
+          "mad": 0
+        },
+        "sampled_peak_bytes": {
+          "n": 5,
+          "median": 129024,
+          "min": 129024,
+          "max": 129024,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "memory",
+      "variant": "legacy",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "after_gc_bytes": {
+          "n": 5,
+          "median": 10496,
+          "min": 10496,
+          "max": 10496,
+          "mad": 0
+        },
+        "before_bytes": {
+          "n": 5,
+          "median": 10496,
+          "min": 10496,
+          "max": 10496,
+          "mad": 0
+        },
+        "gc_total_bytes": {
+          "n": 5,
+          "median": 130048,
+          "min": 130048,
+          "max": 130048,
+          "mad": 0
+        },
+        "sampled_peak_bytes": {
+          "n": 5,
+          "median": 129120,
+          "min": 129120,
+          "max": 129120,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "paced",
+      "variant": "c",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 738,
+          "min": 738,
+          "max": 739,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 24.6,
+          "min": 24.6,
+          "max": 24.633333333333333,
+          "mad": 0.0
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 40668,
+          "min": 40613.0,
+          "max": 40679,
+          "mad": 5
+        },
+        "missed": {
+          "n": 5,
+          "median": 12,
+          "min": 11,
+          "max": 12,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 39057.0,
+          "min": 39003,
+          "max": 39078.0,
+          "mad": 14.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "paced",
+      "variant": "combined",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 574,
+          "min": 573,
+          "max": 574,
+          "mad": 0
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 19.133333333333333,
+          "min": 19.1,
+          "max": 19.133333333333333,
+          "mad": 0.0
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 52267,
+          "min": 52259,
+          "max": 52281.0,
+          "mad": 5
+        },
+        "missed": {
+          "n": 5,
+          "median": 176,
+          "min": 176,
+          "max": 177,
+          "mad": 0
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 31668.0,
+          "min": 31655.0,
+          "max": 31678,
+          "mad": 10.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "sky-glide",
+      "board": "sipeed-maix-cube",
+      "mode": "paced",
+      "variant": "legacy",
+      "image_sha256": "985ebd98c65f60828d53e5684b67bca88bde04464ef08a2d5df42eba1b45bf7c",
+      "script_sha256": "1c433b76cecef1f5ec52b3883676ff16c935446c879e4302b7ca63c77c54a101",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "completed": {
+          "n": 5,
+          "median": 362,
+          "min": 360,
+          "max": 366,
+          "mad": 1
+        },
+        "failed": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        },
+        "fps": {
+          "n": 5,
+          "median": 12.066666666666666,
+          "min": 12.0,
+          "max": 12.2,
+          "mad": 0.033333333333333215
+        },
+        "frame_interval_median_us": {
+          "n": 5,
+          "median": 73311,
+          "min": 73242,
+          "max": 92973,
+          "mad": 69
+        },
+        "missed": {
+          "n": 5,
+          "median": 388,
+          "min": 384,
+          "max": 390,
+          "mad": 1
+        },
+        "provider_median_us": {
+          "n": 5,
+          "median": 31666.5,
+          "min": 31657.0,
+          "max": 31674.5,
+          "mad": 8.0
+        },
+        "requested": {
+          "n": 5,
+          "median": 750,
+          "min": 750,
+          "max": 750,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "graph",
+      "variant": "c",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 47.752,
+          "min": 47.736,
+          "max": 47.755,
+          "mad": 0.0030000000000001137
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.633333333333333,
+          "min": 9.633333333333333,
+          "max": 9.633333333333333,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 289,
+          "min": 289,
+          "max": 289,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 104.44200000000001,
+          "min": 104.433,
+          "max": 104.4495,
+          "mad": 0.0034999999999882903
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 11,
+          "min": 11,
+          "max": 11,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 53.445,
+          "min": 53.385,
+          "max": 57.687,
+          "mad": 0.060000000000002274
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "graph",
+      "variant": "python",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 37.408500000000004,
+          "min": 37.3845,
+          "max": 37.428,
+          "mad": 0.006499999999995509
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.2,
+          "min": 9.166666666666666,
+          "max": 9.2,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 276,
+          "min": 275,
+          "max": 276,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 108.499,
+          "min": 108.474,
+          "max": 108.528,
+          "mad": 0.0040000000000048885
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 24,
+          "min": 24,
+          "max": 25,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 77.0195,
+          "min": 76.997,
+          "max": 77.101,
+          "mad": 0.022499999999993747
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "memory",
+      "variant": "python",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 1,
+      "valid": 1,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 1,
+          "median": 37.542,
+          "min": 37.542,
+          "max": 37.542,
+          "mad": null
+        },
+        "fps": {
+          "n": 1,
+          "median": 9.033333333333333,
+          "min": 9.033333333333333,
+          "max": 9.033333333333333,
+          "mad": null
+        },
+        "frames": {
+          "n": 1,
+          "median": 271,
+          "min": 271,
+          "max": 271,
+          "mad": null
+        },
+        "interval_median_ms": {
+          "n": 1,
+          "median": 108.694,
+          "min": 108.694,
+          "max": 108.694,
+          "mad": null
+        },
+        "missing_frames": {
+          "n": 1,
+          "median": 29,
+          "min": 29,
+          "max": 29,
+          "mad": null
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 1,
+          "median": 77.339,
+          "min": 77.339,
+          "max": 77.339,
+          "mad": null
+        },
+        "unmatched_marks": {
+          "n": 1,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": null
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "parse",
+      "variant": "c",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 8461,
+          "min": 8460,
+          "max": 8462,
+          "mad": 0
+        },
+        "packets": {
+          "n": 5,
+          "median": 4096,
+          "min": 4096,
+          "max": 4096,
+          "mad": 0
+        },
+        "packets_per_second": {
+          "n": 5,
+          "median": 484103.5338612457,
+          "min": 484046.32474592293,
+          "max": 484160.75650118204,
+          "mad": 0.0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "parse",
+      "variant": "python",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 3491059,
+          "min": 3489277,
+          "max": 3491221,
+          "mad": 130
+        },
+        "packets": {
+          "n": 5,
+          "median": 4096,
+          "min": 4096,
+          "max": 4096,
+          "mad": 0
+        },
+        "packets_per_second": {
+          "n": 5,
+          "median": 1173.2829493858453,
+          "min": 1173.2285065883827,
+          "max": 1173.8821538100874,
+          "mad": 0.04369231898454018
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "record",
+      "variant": "c",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 48.054500000000004,
+          "min": 48.051,
+          "max": 48.056,
+          "mad": 0.0005000000000023874
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.666666666666666,
+          "min": 9.633333333333333,
+          "max": 9.666666666666666,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 290,
+          "min": 289,
+          "max": 290,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 104.53,
+          "min": 104.492,
+          "max": 104.559,
+          "mad": 0.01999999999999602
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 10,
+          "min": 10,
+          "max": 11,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 55.2425,
+          "min": 53.663,
+          "max": 58.2435,
+          "mad": 1.579500000000003
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "huskylens-sen0305",
+      "mode": "record",
+      "variant": "python",
+      "image_sha256": "9562c478aada9280dd2e38c9441ce58c8e2a945eba6cd99b33a5a8734c9ac4d7",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 37.5305,
+          "min": 37.512,
+          "max": 37.545,
+          "mad": 0.011500000000005173
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.033333333333333,
+          "min": 8.933333333333334,
+          "max": 9.066666666666666,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 271,
+          "min": 268,
+          "max": 272,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 108.6765,
+          "min": 108.655,
+          "max": 108.683,
+          "mad": 0.006500000000002615
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 29,
+          "min": 28,
+          "max": 32,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 77.231,
+          "min": 77.197,
+          "max": 77.268,
+          "mad": 0.017499999999998295
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "graph",
+      "variant": "c",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 6,
+      "valid": 5,
+      "failed": 1,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 37.641999999999996,
+          "min": 37.6145,
+          "max": 37.644,
+          "mad": 0.0020000000000024443
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.866666666666667,
+          "min": 9.866666666666667,
+          "max": 9.866666666666667,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 296,
+          "min": 296,
+          "max": 296,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 101.164,
+          "min": 101.143,
+          "max": 101.167,
+          "mad": 0.0030000000000001137
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 4,
+          "min": 4,
+          "max": 4,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 43.6385,
+          "min": 43.6105,
+          "max": 43.675,
+          "mad": 0.023500000000005627
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "graph",
+      "variant": "python",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 29.9055,
+          "min": 29.878500000000003,
+          "max": 29.913,
+          "mad": 0.007500000000000284
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.666666666666666,
+          "min": 9.666666666666666,
+          "max": 9.666666666666666,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 290,
+          "min": 290,
+          "max": 290,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 102.634,
+          "min": 102.612,
+          "max": 102.644,
+          "mad": 0.010000000000005116
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 10,
+          "min": 10,
+          "max": 10,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 70.27449999999999,
+          "min": 70.2465,
+          "max": 70.277,
+          "mad": 0.002500000000011937
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "memory",
+      "variant": "python",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 1,
+      "valid": 1,
+      "failed": 0,
+      "metrics": {
+        "display_median_ms": {
+          "n": 1,
+          "median": 30.024,
+          "min": 30.024,
+          "max": 30.024,
+          "mad": null
+        },
+        "fps": {
+          "n": 1,
+          "median": 9.533333333333333,
+          "min": 9.533333333333333,
+          "max": 9.533333333333333,
+          "mad": null
+        },
+        "frames": {
+          "n": 1,
+          "median": 286,
+          "min": 286,
+          "max": 286,
+          "mad": null
+        },
+        "interval_median_ms": {
+          "n": 1,
+          "median": 102.807,
+          "min": 102.807,
+          "max": 102.807,
+          "mad": null
+        },
+        "missing_frames": {
+          "n": 1,
+          "median": 14,
+          "min": 14,
+          "max": 14,
+          "mad": null
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 1,
+          "median": 70.545,
+          "min": 70.545,
+          "max": 70.545,
+          "mad": null
+        },
+        "unmatched_marks": {
+          "n": 1,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": null
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "parse",
+      "variant": "c",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 8495,
+          "min": 8434,
+          "max": 8497,
+          "mad": 2
+        },
+        "packets": {
+          "n": 5,
+          "median": 4096,
+          "min": 4096,
+          "max": 4096,
+          "mad": 0
+        },
+        "packets_per_second": {
+          "n": 5,
+          "median": 482165.97998822836,
+          "min": 482052.4891138049,
+          "max": 485653.3080388902,
+          "mad": 113.49087442347081
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "parse",
+      "variant": "python",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 5,
+      "valid": 5,
+      "failed": 0,
+      "metrics": {
+        "active_us": {
+          "n": 5,
+          "median": 3500385,
+          "min": 3500175,
+          "max": 3501455,
+          "mad": 210
+        },
+        "packets": {
+          "n": 5,
+          "median": 4096,
+          "min": 4096,
+          "max": 4096,
+          "mad": 0
+        },
+        "packets_per_second": {
+          "n": 5,
+          "median": 1170.1569970160426,
+          "min": 1169.799411958743,
+          "max": 1170.227202925568,
+          "mad": 0.07020590952538441
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "record",
+      "variant": "c",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 6,
+      "valid": 5,
+      "failed": 1,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 37.906,
+          "min": 37.902,
+          "max": 37.918,
+          "mad": 0.0025000000000048317
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.833333333333334,
+          "min": 9.8,
+          "max": 9.833333333333334,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 295,
+          "min": 294,
+          "max": 295,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 101.48,
+          "min": 101.4755,
+          "max": 101.493,
+          "mad": 0.004500000000007276
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 5,
+          "min": 5,
+          "max": 6,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 43.973,
+          "min": 43.838,
+          "max": 45.11,
+          "mad": 0.134999999999998
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    },
+    {
+      "workload": "uart-logger",
+      "board": "sipeed-maix-cube",
+      "mode": "record",
+      "variant": "python",
+      "image_sha256": "aee201021c902667e85efe47be57865dac4720e6a5aa6e2014bf933bec9f539a",
+      "script_sha256": "ea27d57fb7e31cf77ff53f017ec2d7efde33a78757c577e913673f1dc656d6c4",
+      "attempts": 6,
+      "valid": 5,
+      "failed": 1,
+      "metrics": {
+        "display_median_ms": {
+          "n": 5,
+          "median": 30.019,
+          "min": 30.006,
+          "max": 30.026,
+          "mad": 0.0070000000000014495
+        },
+        "fps": {
+          "n": 5,
+          "median": 9.533333333333333,
+          "min": 9.5,
+          "max": 9.533333333333333,
+          "mad": 0.0
+        },
+        "frames": {
+          "n": 5,
+          "median": 286,
+          "min": 285,
+          "max": 286,
+          "mad": 0
+        },
+        "interval_median_ms": {
+          "n": 5,
+          "median": 102.796,
+          "min": 102.776,
+          "max": 102.805,
+          "mad": 0.009000000000000341
+        },
+        "missing_frames": {
+          "n": 5,
+          "median": 14,
+          "min": 14,
+          "max": 15,
+          "mad": 0
+        },
+        "sample_to_lcd_median_ms": {
+          "n": 5,
+          "median": 70.509,
+          "min": 70.429,
+          "max": 70.517,
+          "mad": 0.007999999999995566
+        },
+        "unmatched_marks": {
+          "n": 5,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "mad": 0
+        }
+      }
+    }
+  ]
+}
