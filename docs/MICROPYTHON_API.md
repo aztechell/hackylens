@@ -384,10 +384,13 @@ HMPY v1 clients can distinguish this recovery path through HELLO capability
 `BOOT_FLAGS` and boot flag `WDT1_RECOVERY`; older v1 clients safely ignore the
 formerly reserved byte.
 
-After normal or cooperative execution, HackyLens deinitializes the VM, releases the
-camera, restores lights and the external connector service, and reports the final state through the app and
-HMPY protocol. The fixed heap and source buffers stay reserved for reuse by the
-next run; no script allocation survives VM deinitialization. An uncaught
+After normal or cooperative execution, HackyLens deinitializes the VM,
+releases the camera, restores lights and the external connector service, and
+reports the final state through the app and HMPY protocol. A new run waits for
+the executor to acknowledge the prior job. Run requests rejected during that
+handoff preserve the prior run's terminal state, exit reason and pending
+output. The fixed heap and source buffers stay reserved for reuse by the next
+run; no script allocation survives VM deinitialization. An uncaught
 exception is reported as an error run and its traceback is sent through stdout.
 The fatal watchdog path restores ownership by resetting the whole SoC because
 asynchronously unwinding an arbitrary native C frame would be unsafe.

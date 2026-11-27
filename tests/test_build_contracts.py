@@ -360,9 +360,11 @@ class BuildContractsTest(unittest.TestCase):
         poll = runtime.split(
             "void micropython_runtime_poll(void)", 1
         )[1].split("void micropython_runtime_get_status", 1)[0]
-        self.assertIn("core1_executor_complete(g_ticket) ||", poll)
-        self.assertIn("!micropython_state_active(shared->state)", poll)
-        self.assertLess(poll.index("g_ticket = 0U;"), poll.index("micropython_capability_bridge_cleanup();"))
+        self.assertIn("uint8_t executor_done = core1_executor_complete(g_ticket);", poll)
+        self.assertIn("g_cleanup_pending && (executor_done || !micropython_state_active(shared->state))", poll)
+        self.assertLess(poll.index("g_cleanup_pending = 0U;"),
+                        poll.index("micropython_capability_bridge_cleanup();"))
+        self.assertRegex(poll, r"if\(executor_done\)\s+g_ticket = 0U;")
 
     def test_micropython_build_date_is_pinned_to_dependency_revision(self):
         with mock.patch.dict(

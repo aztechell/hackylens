@@ -54,6 +54,7 @@ static micropython_shared_t g_shared_storage __attribute__((aligned(64)));
 static uint8_t g_heap[MICROPYTHON_RUNTIME_HEAP_BYTES] __attribute__((aligned(16)));
 static uint8_t g_initialized;
 static uint32_t g_ticket;
+static uint8_t g_cleanup_pending;
 
 static micropython_shared_t *micropython_shared(void)
 {
@@ -243,6 +244,7 @@ uint8_t micropython_runtime_start(const char *source, size_t length,
         shared->state = MICROPYTHON_RUNTIME_ERROR;
         return 0U;
     }
+    g_cleanup_pending = 1U;
     return 1U;
 }
 
@@ -266,23 +268,26 @@ void micropython_runtime_poll(void)
 {
     micropython_shared_t *shared = micropython_shared_init();
 
-    /* The worker publishes a terminal state only after VM deinit and after
-       its final capability access.  That state is therefore the safe cleanup
-       handoff even when the executor completion-ticket store trails it by a
-       few instructions on the other core. */
-    if(g_ticket &&
-       (core1_executor_complete(g_ticket) ||
-        !micropython_state_active(shared->state)))
+    if(g_ticket)
     {
-        g_ticket = 0U;
-        micropython_capability_bridge_cleanup();
-        __sync_synchronize();
-        if(micropython_state_active(shared->state))
+        uint8_t executor_done = core1_executor_complete(g_ticket);
+
+        /* Worker exit permits cleanup. The executor's acknowledgement still
+         * gates admission so a rejected RUN preserves the terminal status. */
+        if(g_cleanup_pending && (executor_done || !micropython_state_active(shared->state)))
         {
-            shared->exit_reason = MICROPYTHON_EXIT_CORE1_FAILURE;
+            g_cleanup_pending = 0U;
+            micropython_capability_bridge_cleanup();
             __sync_synchronize();
-            shared->state = MICROPYTHON_RUNTIME_ERROR;
+            if(micropython_state_active(shared->state))
+            {
+                shared->exit_reason = MICROPYTHON_EXIT_CORE1_FAILURE;
+                __sync_synchronize();
+                shared->state = MICROPYTHON_RUNTIME_ERROR;
+            }
         }
+        if(executor_done)
+            g_ticket = 0U;
     }
     micropython_watchdog_poll(shared);
 }

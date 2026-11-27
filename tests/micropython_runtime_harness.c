@@ -140,10 +140,15 @@ void mp_raise_type(const int *type)
     longjmp(s_test_nlr->jump, 1);
 }
 
-static void run_worker(void)
+static void return_from_worker(void)
 {
     CHECK(s_job != NULL && !s_job_complete);
     s_job(s_job_context);
+}
+
+static void run_worker(void)
+{
+    return_from_worker();
     s_job_complete = 1U;
 }
 
@@ -186,12 +191,21 @@ int main(void)
     micropython_runtime_get_status(&after);
     CHECK(memcmp(&before, &after, sizeof(before)) == 0);
     CHECK(s_cleanup_count == 1U && s_prepare_count == 2U);
-    run_worker();
+    return_from_worker();
     micropython_runtime_get_status(&after);
     CHECK(after.state == MICROPYTHON_RUNTIME_ERROR);
     CHECK(after.exit_reason == MICROPYTHON_EXIT_EXCEPTION);
     CHECK(after.run_id == 2U && after.output_pending == 3U);
     CHECK(s_cleanup_count == 1U);
+    micropython_runtime_poll();
+    CHECK(s_cleanup_count == 2U);
+    before = after;
+    CHECK(micropython_runtime_start("D", 1U, 1000U) == 0U);
+    CHECK(micropython_runtime_start(NULL, 0U, 1000U) == 0U);
+    micropython_runtime_get_status(&after);
+    CHECK(memcmp(&before, &after, sizeof(before)) == 0);
+    CHECK(s_cleanup_count == 2U && s_prepare_count == 2U);
+    s_job_complete = 1U;
     micropython_runtime_poll();
     CHECK(s_cleanup_count == 2U);
 
